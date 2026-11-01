@@ -278,8 +278,8 @@ fun SignInScreen(
                 GoogleButton(enabled = !busy, onClick = ::openGoogle)
             }
         }
-        // Accounts made through Strava have no email or password: always shown, whatever the options say.
-        run {
+        // Accounts made through Strava have no password: on Sign in whatever the options say, not on Create account (lead).
+        if (!creating) {
             HorizontalDivider(color = PsColor.border)
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Email, not the public issue form: people would put their name and email in a report.
@@ -302,8 +302,11 @@ internal const val EMAIL_US = "mailto:privacy@paddlesnitch.com?subject=Moving%20
 internal const val MADE_WITH_STRAVA = "Made your account with Strava? Email us and we’ll move it to your email."
 
 /** For an account made with Strava. False when there's no email app. */
-fun emailUs(context: android.content.Context): Boolean =
-    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO, Uri.parse(EMAIL_US))) }.isSuccess
+fun emailUs(context: android.content.Context, mailto: String = EMAIL_US): Boolean =
+    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO, Uri.parse(mailto))) }.isSuccess
+
+/** Asking us to delete an account made with Strava, which can't sign in again: privately, with its Support ID. */
+fun deleteMailto(supportId: String) = "mailto:privacy@paddlesnitch.com?subject=Delete%20my%20account&body=" + Uri.encode("Support ID: $supportId")
 
 /**
  * Google's own dark button (their branding guidelines: fill #131314, border #8E918F,

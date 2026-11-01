@@ -67,10 +67,15 @@ class AccountApiTest {
 
     @Test fun theContactEmail() = runTest {
         answer(200, fixture("account.contact"))
-        assertEquals("pat@example.com", api.setContact("pat@example.com").contact?.email)
+        // placeholderEmail says the account was made with Strava: Account's contact field and delete path hang on it.
+        val saved = api.setContact("pat@example.com")
+        assertEquals("pat@example.com", saved.contact?.email)
+        assertEquals(false, saved.placeholderEmail)
         assertEquals(Triple("POST", "/api/account/contact", """{"email":"pat@example.com"}"""), sent())
         answer(200, fixture("account.contact.none"))
-        assertNull(api.contact().contact)
+        val none = api.contact()
+        assertNull(none.contact)
+        assertEquals(true, none.placeholderEmail)
         assertEquals(Triple("GET", "/api/account/contact", ""), sent())
         answer(200, """{"ok":true}""")
         api.removeContact()

@@ -93,9 +93,8 @@ time and isn't obvious from the code.
   Numbers and mono labels use `PlexMono`, never `FontFamily.Monospace` (`TypeTest`).
 - Whether Google sign-in is on comes from `GET /att/api/auth/options`, asked each time
   sign-in opens (`loadOptions`, `AccountApi.signInOptions`). A failure says so with Try again.
-  An account made with Strava gets "Email us" (mailto) on sign-in, never the issue form:
-  reports are public. Before deleting, it gets Report an issue, opened through
-  `signedInPage("/account?report=1")` so the report is filed as that account. Screen tests
+  An account made with Strava gets "Email us" (mailto) on sign-in and before deleting, never
+  the issue form: reports are public. Screen tests
   built on MockWebServer must pass their own `loadOptions`, or the options call eats an
   answer meant for the test.
 - A `LaunchedEffect` that waits for other state must wait inside one run
@@ -161,9 +160,11 @@ time and isn't obvious from the code.
 - Strava is gone for good (owner, 2026-11-01): no Strava sign-in, connect, import or route
   calls. Old paddles still decode `sourceType` "strava" and say Strava. `SignInOptions.strava`
   is still decoded (older builds read it) but never used. An account made with Strava has no
-  password: sign-in always shows `MADE_WITH_STRAVA` with Email us, and Account knows it from
-  `Contact.placeholderEmail` (loaded with `me`), which gives it a contact email and Report an
-  issue instead of signing in again to delete.
+  password (lead's decisions, 2026-11-01): the Sign in tab (not Create account) always shows
+  `MADE_WITH_STRAVA` with Email us. Account knows it only from `Contact.placeholderEmail`, its
+  own load (a failure never hides Account), asked again by Delete and Sign out if unknown, never
+  guessed: it gives a contact email field, a question before Sign out (`SIGN_OUT_STRAVA`), and
+  Email us with the Support ID (`deleteMailto`) instead of signing in again to delete.
 - Every sign-in return address can be opened by any app or link. `Intake.arrived` passes a
   Google return on only while this app's verifier for it is waiting
   (`PrefsGoogleVerifierStore.pending`) and nobody is signed in.

@@ -261,14 +261,56 @@ class AccountScreensTest {
     }
 
     // Contact says whether the account was made with Strava, which Delete needs: no guessing.
-    @Test fun anAccountWhoseContactWontLoadCanBeTriedAgain() {
-        val api = FakeAccountApi(failContact = true)
+    // Contact has its own load: when it fails, the rest of Account is still there to use.
+    @Test fun aContactThatWontLoadSaysSoInYourDetailsOnly() {
+        val api = FakeAccountApi(failContact = true, madeWithStrava = true)
         account(api)
-        waitFor("Couldn’t load your account. Please try again.")
-        compose.onNodeWithText("Delete my account").assertDoesNotExist()
+        waitFor("Couldn’t load your contact details. Please try again.")
+        compose.onNodeWithText("Delete my account").assertExists()
         api.failContact = false
         compose.onNodeWithText("Try again").performClick()
+        waitFor("Contact email")
+    }
+
+    // Delete needs to know: still unknown, it asks again, and a failure is never "Sign in again".
+    @Test fun deletingWhileContactIsUnknownNeverOffersSignInAgainToAStravaAccount() {
+        val api = FakeAccountApi(failContact = true, madeWithStrava = true, recentSignIn = false)
+        account(api)
         waitFor("Delete my account")
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor("Couldn’t check your sign-in. Please try again.")
+        compose.onNodeWithText("Sign in again").assertDoesNotExist()
+        api.failContact = false
+        compose.onNodeWithText("Delete my account").performScrollTo().performClick()
+        waitFor(NO_SIGN_IN_AGAIN)
+        compose.onNodeWithText("Sign in again").assertDoesNotExist()
+    }
+
+    @Test fun signOutSignsOutAtOnce() {
+        account(FakeAccountApi())
+        waitFor("Sign out")
+        compose.onNodeWithText("Sign out").performScrollTo().performClick()
+        compose.waitUntil { did == listOf("sign out") }
+    }
+
+    // No password: signing out locks it out until we move it, so it's asked first (lead).
+    @Test fun anAccountMadeWithStravaIsAskedBeforeSigningOut() {
+        account(FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", madeWithStrava = true))
+        waitFor("Sign out")
+        compose.onNodeWithText("Sign out").performScrollTo().performClick()
+        waitFor(SIGN_OUT_STRAVA)
+        assertEquals(emptyList<String>(), did)
+        compose.onNodeWithText("Sign out anyway").performScrollTo()
+        compose.onRoot().captureRoboImage()
+        compose.onNodeWithText("Cancel").performScrollTo().performClick()
+        compose.onNodeWithText(SIGN_OUT_STRAVA).assertDoesNotExist()
+        compose.onNodeWithText("Sign out").performScrollTo().performClick()
+        waitFor(SIGN_OUT_STRAVA)
+        compose.onNodeWithText("Email us").performScrollTo().performClick()
+        assertEquals("mailto:privacy@paddlesnitch.com?subject=Moving%20my%20account%20from%20Strava", Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString())
+        assertEquals(emptyList<String>(), did)
+        compose.onNodeWithText("Sign out anyway").performScrollTo().performClick()
+        assertEquals(listOf("sign out"), did)
     }
 
     @Test fun deletingNeedsDeleteTypedThenSignsOut() {
@@ -459,20 +501,21 @@ class AccountScreensTest {
         compose.onAllNodes(hasText("Strava", substring = true)).assertCountEquals(0)
     }
 
-    // An account made with Strava has no password: it can't sign in again to delete.
-    @Test fun anAccountMadeWithStravaReportsAnIssueInsteadOfSigningInAgain() {
+    // An account made with Strava has no password: it can't sign in again to delete, so it
+    // asks us by email, privately, with its Support ID (lead).
+    @Test fun anAccountMadeWithStravaEmailsUsToDelete() {
         account(FakeAccountApi(email = "strava-12345@noreply.paddlesnitch.com", madeWithStrava = true, recentSignIn = false), fontScale = 2f)
         waitFor("Delete my account")
         compose.onNodeWithText("Delete my account").performScrollTo().performClick()
         waitFor(NO_SIGN_IN_AGAIN)
         compose.onNodeWithText("Sign in again").assertDoesNotExist()
-        compose.onNodeWithText("Report an issue").performScrollTo()
+        compose.onNodeWithText("Email us").performScrollTo()
         compose.onRoot().captureRoboImage()
-        compose.onNodeWithText("Report an issue").performScrollTo().performClick()
+        compose.onNodeWithText("Email us").performScrollTo().performClick()
         assertEquals(emptyList<String>(), did) // never signed out
-        // Signed in on the website, so the report says whose account it is.
-        compose.waitUntil { Shadows.shadowOf(compose.activity).peekNextStartedActivity() != null }
-        assertEquals("https://paddlesnitch.com/account?report=1", Shadows.shadowOf(compose.activity).nextStartedActivity.data.toString())
+        val sent = Shadows.shadowOf(compose.activity).nextStartedActivity
+        assertEquals(android.content.Intent.ACTION_SENDTO, sent.action)
+        assertEquals("mailto:privacy@paddlesnitch.com?subject=Delete%20my%20account&body=Support%20ID%3A%20u-123", sent.data.toString())
     }
 
     // Keyed on the server's flag, not on what the email looks like.

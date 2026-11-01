@@ -110,10 +110,12 @@ class SignInScreenTest {
         compose.onNodeWithText("Email us").assertExists()
     }
 
-    @Test fun creatingAnAccountShowsTheLineToo() {
+    // On Sign in only (lead): someone creating an account needs no way back into an old one.
+    @Test fun creatingAnAccountHasNoStravaLine() {
         show(Reauth(), null, SignInOptions(google = false, strava = false))
-        compose.onNodeWithText("Create account").performClick()
         compose.onNodeWithText(MADE_WITH_STRAVA).assertExists()
+        compose.onNodeWithText("Create account").performClick()
+        compose.onNodeWithText(MADE_WITH_STRAVA).assertDoesNotExist()
     }
 
     @Test fun whenOptionsFailItSaysSoAndCanAskAgain() {

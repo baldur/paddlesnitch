@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
-import com.paddlesnitch.app.auth.NO_BROWSER_REPORT
+import com.paddlesnitch.app.auth.NO_EMAIL_APP
+import com.paddlesnitch.app.auth.deleteMailto
+import com.paddlesnitch.app.auth.emailUs
 import com.paddlesnitch.app.Reauth
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -113,21 +115,30 @@ fun AccountScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var user by remember { mutableStateOf<AuthUser?>(null) }
-    // With the user: whether the account was made through Strava (placeholderEmail), which has no
-    // password, so it gets a contact email and can't sign in again to delete.
+    // Whether the account was made through Strava (placeholderEmail), which has no password, so it
+    // gets a contact email and can't sign in again to delete. Its own load: a failure here never
+    // hides the rest of Account from anyone.
     var contact by remember { mutableStateOf<Contact?>(null) }
+    val contactLoad = remember { Load() }
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(attempt) {
         loadError = null
-        runCatching { (api.me().user ?: throw SignedOut()) to api.contact() }.onSuccess { (u, c) -> contact = c; user = u }
+        runCatching { api.me().user ?: throw SignedOut() }.onSuccess { user = it }
             .onFailure { if (it is SignedOut) onSignedOut() else loadError = it.shown("Couldn’t load your account. Please try again.") }
     }
     /** Runs [work]; a session that has ended goes back to signing in. */
     fun act(fallback: String, onError: (String) -> Unit = { error = it }, work: suspend () -> Unit): Job = scope.launch {
         runCatching { work() }.onFailure { if (it is SignedOut) onSignedOut() else onError(it.shown(fallback)) }
     }
+    LaunchedEffect(user != null, contactLoad.attempt) {
+        if (user == null) return@LaunchedEffect
+        contactLoad.failed = null
+        act("Couldn’t load your contact details. Please try again.", { contactLoad.failed = it }) { contact = api.contact(); contactLoad.done = true }
+    }
+    /** Asked when Delete needs it, so a contact load that failed earlier is tried again then. */
+    suspend fun madeWithStrava(): Boolean = (contact ?: api.contact().also { contact = it }).placeholderEmail == true
     fun open(page: AccountLink) = act("Couldn’t open that page. Please try again.") {
         openTab(context, if (page.signedIn) api.signedInPage(page.path) else BuildConfig.API_BASE_URL + page.path)
     }
@@ -139,8 +150,7 @@ fun AccountScreen(
             TextButton(onClick = onBack, colors = linkColors()) { Text("Done") }
         }
         val u = user
-        val c = contact
-        if (u == null || c == null) {
+        if (u == null) {
             // Nothing below the header until we know whose account this is, so nothing jumps under a finger.
             if (loadError != null) {
                 Message(loadError, red = true)
@@ -148,11 +158,10 @@ fun AccountScreen(
             } else Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@Column
         }
-        val madeWithStrava = c.placeholderEmail == true
-        // A placeholder email isn't one to type in again.
-        fun signInAgain(then: Reauth.After) = onSignInAgain(u.id, u.email.takeUnless { madeWithStrava }, then)
+        // Only an account with a password signs in again (made with Strava, Delete offers Email us).
+        fun signInAgain(then: Reauth.After) = onSignInAgain(u.id, u.email, then)
         Message(error, red = true)
-        Details(api, u, c, ::act)
+        Details(api, u, contact, contactLoad, ::act)
         Divider()
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
@@ -161,13 +170,14 @@ fun AccountScreen(
         Link("Set up or sync a tracker", onClick = onTracker)
         Divider()
         aboutPages.forEach { Link("${it.label} ↗") { open(it) } }
-        Link("Sign out", onClick = onSignOut)
+        // Made through Strava: no password, so signing out locks it out until we move it (lead).
+        SignOut(::act, ::madeWithStrava, onSignOut)
         Divider()
         YourData(api, ::act)
         Divider()
         // Made through Strava: it has no way to sign in again, so signing out would lock it out.
         DeleteAccount(api, ::act, resume == Reauth.After.Delete, onResumed, onSignInAgain = { signInAgain(Reauth.After.Delete) }, onDeleted,
-            canSignInAgain = !madeWithStrava)
+            madeWithStrava = ::madeWithStrava, supportId = u.id)
     }
 }
 
@@ -197,7 +207,7 @@ private fun LoadState(load: Load) {
 }
 
 @Composable
-private fun Details(api: AccountApi, user: AuthUser, contact: Contact, act: Act) {
+private fun Details(api: AccountApi, user: AuthUser, contact: Contact?, load: Load, act: Act) {
     Section("Your details")
     Field("Email", user.email)
     Field("Display name", user.displayName)
@@ -206,6 +216,7 @@ private fun Details(api: AccountApi, user: AuthUser, contact: Contact, act: Act)
         Text("Support ID", color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
         SelectionContainer { Text(user.id) }
     }
+    if (contact == null) { if (load.failed != null) LoadState(load); return }
     if (contact.placeholderEmail != true) return
     var saved by remember { mutableStateOf(contact.contact?.email) }
     var email by remember { mutableStateOf(saved.orEmpty()) }
@@ -218,7 +229,7 @@ private fun Details(api: AccountApi, user: AuthUser, contact: Contact, act: Act)
     }
     OutlinedTextField(email, { email = it }, colors = fieldColors(), label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("you@example.com") },
-        supportingText = { Text("You made this account with Strava, which didn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
+        supportingText = { Text("You made this account with Strava, which didn’t share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(colors = outlinedColors(), enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {
@@ -318,7 +329,36 @@ private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, Rounded
 /** What the Delete account section shows. */
 private enum class Deleting { No, Checking, NeedsSignIn, Confirming }
 
-internal const val NO_SIGN_IN_AGAIN = "An account made with Strava can’t sign in again here. Report an issue asking us to delete your account. We’ll know it’s yours, so leave out your name and email: reports are public."
+internal const val NO_SIGN_IN_AGAIN = "An account made with Strava can’t sign in again here. Email us and we’ll delete it."
+internal const val SIGN_OUT_STRAVA = "You made this account with Strava, so you can’t sign back in until we move it to your email."
+
+/** Sign out; an account made with Strava is asked first, with a way to email us (lead, 2026-11-01). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SignOut(act: Act, madeWithStrava: suspend () -> Boolean, onSignOut: () -> Unit) {
+    val context = LocalContext.current
+    var asking by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val focus = remember { FocusRequester() }
+    Link("Sign out") {
+        message = null
+        act("Couldn’t check your account. Please try again.", { message = it }) { if (madeWithStrava()) asking = true else onSignOut() }
+    }
+    // Always in the layout, so TalkBack reads the question when it appears.
+    Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+        if (asking) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Notice(SIGN_OUT_STRAVA)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp).focusRequester(focus),
+                    onClick = { message = if (emailUs(context)) null else NO_EMAIL_APP }) { Text("Email us") }
+                TextButton(colors = linkColors(), modifier = Modifier.heightIn(min = 48.dp), onClick = onSignOut) { Text("Sign out anyway") }
+                TextButton(colors = linkColors(), modifier = Modifier.heightIn(min = 48.dp), onClick = { asking = false; message = null }) { Text("Cancel") }
+            }
+            LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+        }
+    }
+    Message(message, red = true, tag = "signout-message")
+}
 internal const val RECENT_SIGN_IN = "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
 
 /**
@@ -328,10 +368,11 @@ internal const val RECENT_SIGN_IN = "For your safety, deleting your account need
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed: () -> Unit, onSignInAgain: () -> Unit, onDeleted: () -> Unit,
-    /** False when this account has no way to sign in again (made through Strava): Report an issue instead. */
-    canSignInAgain: Boolean = true) {
+    /** True when this account has no way to sign in again (made through Strava): Email us instead. */
+    madeWithStrava: suspend () -> Boolean = { false }, supportId: String = "") {
     val context = LocalContext.current
     var state by remember { mutableStateOf(Deleting.No) }
+    var canSignInAgain by remember { mutableStateOf(true) }
     var typed by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
@@ -342,14 +383,16 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
     fun check() {
         state = Deleting.Checking; typed = ""; message = null
         act("Couldn’t check your sign-in. Please try again.", { message = it; state = Deleting.No }) {
-            state = if (api.accountStatus().recentSignIn) Deleting.Confirming else Deleting.NeedsSignIn
+            val recent = api.accountStatus().recentSignIn
+            if (!recent) canSignInAgain = !madeWithStrava()
+            state = if (recent) Deleting.Confirming else Deleting.NeedsSignIn
         }
     }
     // Back from signing in again: straight to the check, and the section in view.
     LaunchedEffect(resume) { if (resume) { onResumed(); check(); runCatching { view.bringIntoView() } } }
     Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("Delete account")
-        Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked. A group you own passes to one of its admins or members. This happens at once and can't be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
+        Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are removed. A group you own passes to one of its admins or members. This happens at once and can’t be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
         // Always in the layout, so TalkBack reads the notice when it appears.
         Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
             if (state == Deleting.NeedsSignIn) Notice(if (canSignInAgain) RECENT_SIGN_IN else NO_SIGN_IN_AGAIN)
@@ -362,14 +405,9 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
             Deleting.NeedsSignIn -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (canSignInAgain) OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, colors = outlinedColors(),
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
-                // Signed in on the website, so the report says whose account it is.
-                else OutlinedButton(colors = outlinedColors(), onClick = {
-                    message = null
-                    act("Couldn’t open the issue form. Please try again.", { message = it }) {
-                        if (openTab(context, api.signedInPage("/account?report=1")).isFailure) message = NO_BROWSER_REPORT
-                    }
-                },
-                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text("Report an issue") }
+                // Privately, by email (not the public issue form), with the Support ID so we know whose it is.
+                else OutlinedButton(colors = outlinedColors(), onClick = { message = if (emailUs(context, deleteMailto(supportId))) null else NO_EMAIL_APP },
+                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text("Email us") }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
                 LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
             }
