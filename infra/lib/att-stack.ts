@@ -188,6 +188,13 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // Deleted-account markers (packages/core/src/erased.ts): needed only while
+        // the account's ID tokens can still be valid (24 h).
+        id: 'expire-erased-account-markers',
+        prefix: 'auth/erased/',
+        expiration: cdk.Duration.days(2),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Prepared "Download my data" files: fetched within minutes of being made.
         id: 'expire-account-exports',
         prefix: 'exports/',

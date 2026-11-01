@@ -15,6 +15,7 @@
     "./strava": "./src/strava.ts",
     "./strava-storage": "./src/strava-storage.ts",
     "./devices": "./src/devices.ts",
+    "./erased": "./src/erased.ts",
     "./firmware": "./src/firmware.ts",
     "./rate-limit": "./src/rate-limit.ts",
     "./paddles": "./src/paddles.ts",

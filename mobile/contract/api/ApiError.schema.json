@@ -16,6 +16,10 @@
     "needsCode": {
       "type": "boolean",
       "const": true
+    },
+    "accountDeleted": {
+      "type": "boolean",
+      "const": true
     }
   },
   "required": [
