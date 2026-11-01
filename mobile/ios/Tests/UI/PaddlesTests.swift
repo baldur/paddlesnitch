@@ -27,19 +27,29 @@ final class PaddlesTests: AppTestCase {
     }
 
     /// Data has no rounded corners (design system): the speed legend's bar is
-    /// square, as on Android. Its top-left corner, a third of a point in, is
-    /// the bar's colour, where a rounded end would show the card behind it.
+    /// square, as on Android. It finds the bar's left and top edges in the
+    /// pixels, then reads a third of a point in from that corner: the bar's
+    /// colour when square, the card behind it when the end is rounded.
     func testTheSpeedLegendIsSquare() {
         open("pdl-river")
         let legend = element("speed-legend")
         XCTAssertTrue(legend.appears(timeout: 10))
         let shot = legend.screenshot().image
         guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
-        // The bar starts 16 pt in and 8 pt down (the legend's padding), 6 pt tall.
-        let corner = pixels.at(x: 16.4, y: 8.4)
-        let bar = pixels.at(x: 16.4, y: 11)
-        let card = pixels.at(x: 4, y: 4)
-        XCTAssertFalse(bar.near(card), "the bar is found: \(bar) vs \(card)")
+        let card = pixels.at(x: 2, y: 2)
+        let step = 1 / pixels.scale
+        // The bar is 6 pt tall near the top; scan its middle row for its left edge.
+        let rows = stride(from: 0, to: shot.size.height / 2, by: step)
+        guard
+            let middle = rows.first(where: { y in
+                !pixels.at(x: shot.size.width / 2, y: y).near(card)
+            }).map({ $0 + 3 }),
+            let left = stride(from: 0, to: shot.size.width / 2, by: step)
+                .first(where: { !pixels.at(x: $0, y: middle).near(card) }),
+            let top = rows.first(where: { !pixels.at(x: left + 1, y: $0).near(card) })
+        else { return XCTFail("no bar in the legend") }
+        let bar = pixels.at(x: left + 1, y: middle)
+        let corner = pixels.at(x: left + 0.34, y: top + 0.34)
         XCTAssertTrue(corner.near(bar), "the corner is the bar's colour: \(corner) vs \(bar)")
     }
 
