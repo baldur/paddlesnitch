@@ -60,7 +60,9 @@ The format and upload are fixed by the recording contract in
   one the server won't take (with Report an issue), and a phone removed on
   Devices (with Add phone again). A deleted account (410) has its recordings
   deleted, never uploaded, and the app signs out; a busy server (503) is asked
-  again after `Retry-After`. Recordings are kept per account
+  again after `Retry-After`. The phone's paddles say Phone, never Tracker (the
+  card's "· Phone", "Also recorded by the phone", the paddle page), from the
+  server's `phone: true` (#789). Recordings are kept per account
   (`Documents/Recordings/<user id>`) until the server has them: deleted with
   the account, kept on sign-out, and left out of backups, as on Android
   (#761). A second recording in the same second is `track_<stamp>_1`, the

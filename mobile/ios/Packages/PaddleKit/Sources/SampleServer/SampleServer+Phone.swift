@@ -42,9 +42,21 @@ extension SampleServer {
         var list = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: data)
         if var phone = list.cards.first {
             phone.id = "pdl-phone"
+            phone.sourceType = "device"
+            phone.phone = true
+            phone.sameOuting = nil
             list.cards.insert(phone, at: 0)
         }
         return try JSONEncoder.paddlesnitch.encode(list)
+    }
+
+    /// The phone's paddle, opened from the list: the sample paddle, from the
+    /// phone (`source.phone`, #789).
+    func phonePaddle() throws -> Data {
+        var paddle = try JSONDecoder.paddlesnitch.decode(AnalysisSession.self, from: try fixture("paddles.get"))
+        paddle.id = "pdl-phone"
+        paddle.source.phone = true
+        return try JSONEncoder.paddlesnitch.encode(paddle)
     }
 
     func phone(path: String, request: URLRequest) throws -> (Int, Data) {

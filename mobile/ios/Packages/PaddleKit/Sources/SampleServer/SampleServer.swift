@@ -194,6 +194,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         case "/api/trpc/paddles.get":
             guard signedIn else { return Self.unauthorized }
             let id = try input(ById.self, from: request).id
+            if id == "pdl-phone" { return (200, trpc(try phonePaddle())) }
             let pending = summariesPending && lock.withLock { !written.contains(id) }
             return try paddle(id: id, pending: pending)
         case "/api/trpc/paddles.writeSummary":

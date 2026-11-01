@@ -133,10 +133,11 @@ public enum Format {
         return "\(months[(parts.month ?? 1) - 1]) \(parts.year ?? 0)"
     }
 
-    /// Where a paddle came from, as a card says it. A file says nothing.
-    public static func source(_ type: AnalysisSource.Kind) -> String? {
+    /// Where a paddle came from, as a card says it. A file says nothing. A
+    /// phone's paddle is a `device` with `phone: true` (#789).
+    public static func source(_ type: AnalysisSource.Kind, phone: Bool? = nil) -> String? {
         switch type {
-        case .device: "Tracker"
+        case .device: phone == true ? "Phone" : "Tracker"
         case .strava: "Strava"
         case .trial: "Time trial"
         case .file, .unknown: nil
@@ -144,16 +145,16 @@ public enum Format {
     }
 
     /// The same, from a card's plain `sourceType` string.
-    public static func source(_ type: String) -> String? {
-        source(AnalysisSource.Kind(rawValue: type))
+    public static func source(_ type: String, phone: Bool? = nil) -> String? {
+        source(AnalysisSource.Kind(rawValue: type), phone: phone)
     }
 
     /// The other source in "Also recorded by …".
-    public static func alsoRecordedBy(_ type: String) -> String {
+    public static func alsoRecordedBy(_ type: String, phone: Bool? = nil) -> String {
         switch AnalysisSource.Kind(rawValue: type) {
         case .strava: "Strava"
         case .trial: "a time trial"
-        case .device: "the tracker"
+        case .device: phone == true ? "the phone" : "the tracker"
         case .file, .unknown: "a file"
         }
     }
