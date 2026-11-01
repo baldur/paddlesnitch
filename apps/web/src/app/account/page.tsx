@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import StravaButton from '@/components/strava/StravaButton'
 import PoweredByStrava from '@/components/strava/PoweredByStrava'
+import StravaConnection from '@/components/strava/StravaConnection'
 import { StravaFirstImport, StravaMoreImport } from '@/components/strava/StravaHistoryImport'
 import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
@@ -521,23 +522,17 @@ function AccountPageInner() {
 
               {strava && strava.connected && (
                 <>
-                  <div className={`${cardClass} flex items-center justify-between gap-4 px-4 py-2`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      {STRAVA ? <Badge tone="green">Connected</Badge> : <Badge>Paused</Badge>}
-                      <span className="text-base text-fg truncate">{strava.athlete.name}</span>
-                    </div>
-                    {/* Strava off: an account made through Strava keeps its link, its only way back in once Strava returns. */}
-                    {(STRAVA || !isSyntheticStravaEmail(user.email)) && (
-                      <button
-                        type="button"
-                        onClick={disconnectStrava}
-                        disabled={working === 'strava'}
-                        className={buttonClass('quiet')}
-                      >
-                        {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
-                      </button>
-                    )}
-                  </div>
+                  {/* Disconnect asks first (#712).
+                      Strava off: an account made through Strava keeps its link, its only way back in once Strava returns. */}
+                  <StravaConnection
+                    canDisconnect={STRAVA || !isSyntheticStravaEmail(user.email)}
+                    stravaOnly={isSyntheticStravaEmail(user.email)}
+                    disconnecting={working === 'strava'}
+                    onDisconnect={disconnectStrava}
+                  >
+                    {STRAVA ? <Badge tone="green">Connected</Badge> : <Badge>Paused</Badge>}
+                    <span className="text-base text-fg truncate">{strava.athlete.name}</span>
+                  </StravaConnection>
                   {!STRAVA && <p className={msgClass}>Strava isn’t available right now. Paddles you already brought in stay here.</p>}
                   {STRAVA && (<>
                   {/* Auto-import toggle (default on). New water-sport activities
