@@ -516,6 +516,7 @@ summary { cursor: pointer; }
 @media (max-height: 500px) {
   #clubCards .friends { flex-basis: auto; }
   #clubCards .card small, #clubCards .card svg { display: none; }
+  #clubCards .card.go small { display: block; } /* Try it now says what it is */
 }
 /* An upright phone with Back showing: the cards sit above Back and Start over. */
 @media (orientation: portrait) and (max-width: 600px) {

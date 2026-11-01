@@ -12,6 +12,9 @@ test('nothing to teach on calm water at the start', () => {
 
 test('each lesson comes when its moment does, and names the right controls', () => {
   assert.equal(nextLesson({ ...calm, angle: -40 }, new Set(), keys).key, 'lean');
+  assert.equal(nextLesson({ ...calm, angle: 20 }, new Set(), keys), null); // a little wobble is nothing
+  assert.equal(nextLesson({ ...calm, angle: 30 }, new Set(), keys).now, true); // tipping: up at once
+  assert.equal(nextLesson({ ...calm, draft: 0.5 }, new Set(), keys).now, false);
   assert.match(nextLesson({ ...calm, angle: 40 }, new Set(), keys).text, /A and D/);
   assert.match(nextLesson({ ...calm, angle: 40 }, new Set(), howTo(true)).text, /turn the phone/);
   assert.equal(nextLesson({ ...calm, draft: 0.5 }, new Set(), keys).key, 'wash');
@@ -30,6 +33,10 @@ test('no lean lesson with the balance assist on, none in a scull, none on an out
   assert.equal(nextLesson({ ...calm, angle: 40, assist: true }, new Set(), keys), null);
   assert.equal(nextLesson({ ...calm, angle: 40, scull: true }, new Set(), keys), null);
   assert.equal(nextLesson({ ...calm, angle: 40, draft: 0.5, outing: true }, new Set(), keys), null);
+});
+
+test('no lesson at all in a scull: rowing has none of these', () => {
+  for (const m of [{ angle: 40 }, { draft: 0.5 }, { rhythm: 0.95 }, { time: 25 }]) assert.equal(nextLesson({ ...calm, ...m, scull: true }, new Set(), keys), null, JSON.stringify(m));
 });
 
 test('no sprint lesson while sprinting, tired, stopped or before 20 s', () => {

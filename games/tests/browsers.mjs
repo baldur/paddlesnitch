@@ -104,6 +104,8 @@ async function play(c, page, errors) {
   if (c.site) {
     await page.route('**/api/trpc/**', (r) => r.fulfill({ json: { result: { data: r.request().url().includes('/api/trpc/me') ? { user: { id: 'test', displayName: 'Pat R.' } } : null } } }));
   }
+  // Racing friends: someone who's paddled before (a first visit's bridge leads with Try it now instead).
+  if (c.friends) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:last', 'loop'));
   await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
@@ -248,9 +250,10 @@ async function play(c, page, errors) {
   // At the start the controls are on screen in a line: the phone's on a phone, the keys
   // on a keyboard (where the tap-here L and R aren't shown). Not in a scull on a keyboard, nor on an outing.
   if (!c.row && !c.outing) {
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('touchhelp')).display !== 'none', null, { timeout: 10_000 }).catch(() => {});
     const help = await page.evaluate(() => ({ text: document.getElementById('touchhelp').textContent, shown: getComputedStyle(document.getElementById('touchhelp')).display !== 'none', cue: getComputedStyle(document.querySelector('.cue')).display !== 'none' }));
     if (!help.shown) errors.push('no controls line at the start');
-    if (!(c.touch ? /Tap left/.test(help.text) : /\u2190 \u2192/.test(help.text))) errors.push(`the controls line says "${help.text}"`);
+    if (!(c.touch ? /tap left/i.test(help.text) : /\u2190 \u2192/.test(help.text))) errors.push(`the controls line says "${help.text}"`);
     if (help.cue !== !!c.touch) errors.push(`the L and R tap marks ${help.cue ? 'show' : "don't show"}`);
   }
   await page.evaluate(() => {
@@ -278,6 +281,7 @@ async function play(c, page, errors) {
     window.__best = 0;
     const tick = () => {
       window.__best = Math.max(window.__best, window.kayak.boat.speed);
+      window.__building ||= document.getElementById('flow').textContent === 'building';
       requestAnimationFrame(tick);
     };
     tick();
@@ -293,6 +297,8 @@ async function play(c, page, errors) {
   }
   const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.__best, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
   if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
+  // An even beat fills the rhythm bar, and it says so while it does.
+  if (!c.row && !c.outing && !(await page.evaluate(() => window.__building))) errors.push('the rhythm bar never said "building"');
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);

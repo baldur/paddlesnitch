@@ -7,22 +7,23 @@ export const TAUGHT_KEY = 'snitchmedia:kayak:taught';
 // The lessons, in the order they're checked. `when` sees the moment:
 // { angle (balance needle, degrees), rhythm (0..1), draft (0..1), racing,
 //   time (race seconds), rate (strokes a minute), stamina (0..1), sprinting,
-//   assist (balance assist on), scull, outing }.
+//   assist (balance assist on, or tilt not working yet on a phone), scull, outing }.
 export const LESSONS = [
   {
     key: 'lean',
-    when: (m) => !m.assist && !m.scull && Math.abs(m.angle) > 35,
-    text: (how) => `The boat's tipping: ${how.lean} to keep the needle in the middle`,
+    when: (m) => !m.assist && !m.scull && Math.abs(m.angle) > 25,
+    text: (how) => `The boat's tipping. Keep the needle in the middle: ${how.lean}`,
+    now: true, // before you go in: it doesn't wait behind the starter's words
   },
   {
     key: 'wash',
     when: (m) => !m.scull && m.draft > 0.3,
-    text: () => 'On a wash: you go further for less effort, and your sprint bar fills',
+    text: () => "You're on a wash: you go further for less effort, and your sprint bar fills",
   },
   {
     key: 'rhythm',
     when: (m) => !m.scull && m.rhythm > 0.9,
-    text: () => 'An even beat: the rhythm bar is full, and your flow builds a few percent more speed',
+    text: () => 'An even beat fills the rhythm bar: keep it up for a few percent more speed',
   },
   {
     key: 'sprint',
@@ -35,7 +36,7 @@ export const LESSONS = [
 export function nextLesson(moment, taught, how) {
   if (moment.outing) return null;
   const l = LESSONS.find((x) => !taught.has(x.key) && x.when(moment));
-  return l ? { key: l.key, text: l.text(how) } : null;
+  return l ? { key: l.key, text: l.text(how), now: !!l.now } : null;
 }
 
 // What's been taught, from storage (bad or missing storage teaches again).
