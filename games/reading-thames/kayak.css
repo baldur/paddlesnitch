@@ -601,3 +601,10 @@ summary { cursor: pointer; }
 
 /* Choosing a boat to hire: each card keeps its line (how the boats differ), wrapping, whatever the screen. */
 #clubCards.choice .card small { display: block; white-space: normal; max-width: 11rem; }
+
+/* The finish on a phone: the standings in three short columns, and the buttons
+   always on screen (a signed-out race adds a line that pushed them below). */
+@media (max-height: 500px) {
+  #standings { columns: 3; column-gap: 1rem; font-size: 0.8rem; margin: 0.4rem 0; }
+  #finished form { position: sticky; bottom: 0; background: inherit; padding-block: 0.4rem; }
+}

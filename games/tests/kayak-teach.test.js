@@ -57,3 +57,7 @@ test('what has been taught is kept, and bad storage just teaches again', () => {
   assert.equal(loadTaught({ getItem: () => { throw new Error('blocked'); } }).size, 0);
   saveTaught({ setItem: () => { throw new Error('full'); } }, new Set(['lean'])); // doesn't throw
 });
+
+test("the wash isn't taught on the start line, where boats drift up beside you", () => {
+  assert.equal(nextLesson({ ...calm, racing: false, draft: 0.5 }, new Set(['lean']), keys), null);
+});

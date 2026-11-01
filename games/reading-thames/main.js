@@ -51,10 +51,11 @@ const MODES = {
 for (const [key, m] of Object.entries(MODES)) m.key = key;
 const FORMATS = { mass: 'race', interval: 'time trial' };
 let format = 'mass';
+let asRace = false; // Try it now: this race is a race, whatever format is picked (not saved, not kept)
 try { if (FORMATS[localStorage.getItem(FORMAT_KEY)]) format = localStorage.getItem(FORMAT_KEY); } catch {}
 // Your best on a course, per format (the loop's time trial keeps the key it always had).
 const bestKey = (m, f) => (m.solo || f === 'interval' ? `snitchmedia:kayak:${m.key}` : `snitchmedia:kayak:${m.key}:race`);
-const formatOf = (m) => (m.head ? 'interval' : m.solo || liveRace ? 'mass' : format);
+const formatOf = (m) => (m.head ? 'interval' : m.solo || liveRace || asRace ? 'mass' : format);
 // Practice drills (drills.js), each on one of the courses above: starts, wash
 // hanging and the portage. Picked from the practice page of the menu.
 const DRILL_MODES = {
@@ -76,8 +77,10 @@ const ROW_MODES = {
 };
 for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: true });
 // Your scull and its colour are in the kit (kit.js), so they follow you on the account.
-// Anyone can paddle practice and the drills, and row; the kayak races, the leaderboard and live races need an account.
-const OPEN = new Set(['practice', ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
+// Anyone can paddle practice, the drills and one race (Hasler Div 7-9: Try it now), and row;
+// the other kayak races, the leaderboard and live races need an account.
+const OPEN_RACE = 'hasler79';
+const OPEN = new Set(['practice', OPEN_RACE, ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 // The walk to the club (club.js) is what opens (owner 2026-10-31). #menu opens
@@ -166,7 +169,7 @@ let hints = { left: 3, wait: 8 }; // sprint tips still to give this race (sprint
 let stuck = { left: 2, for: 0, s: 0 }; // back-paddling tips still to give this race, and how long you've been getting nowhere (stuckHint)
 const TOUCH_HELP = document.getElementById('touchhelp').textContent;
 // On your own or in a time trial you wait for the horn (paddle early and you're called back).
-const afterHorn = (line) => (race.racers.length === 1 || race.format === 'interval' ? `After the horn: ${line[0].toLowerCase()}${line.slice(1)}` : line);
+const afterHorn = (line) => (race.racers.length === 1 || race.format === 'interval' || race.easy ? `After the horn: ${line[0].toLowerCase()}${line.slice(1)}` : line);
 // The same line on a keyboard or a pad: the rest is taught as it comes up (teach.js).
 const KEY_HELP = '\u2190 \u2192 (or LT, RT) to paddle, left then right \u00b7 Q E (or the left stick) to steer \u00b7 A D (or the right stick) to lean';
 const taught = (() => { try { return loadTaught(localStorage); } catch { return new Set(); } })();
@@ -193,6 +196,7 @@ function reset() {
     live: liveRace && { players: liveRace.order, you: liveRace.room.you, host: liveRace.room.host },
     // A drill is about the one thing: no swans or other boats in the way.
     birds: !mode.drill, traffic: !mode.drill,
+    easy: asRace,
   });
   drill = mode.drill ? setupDrill(race, mode.drill) : null;
   // Practice also sharpens your feel for the beat.
@@ -576,7 +580,7 @@ menu.addEventListener('close', () => {
   choose(menu.returnValue);
 });
 // Start a race, a drill or a live race by its menu value.
-async function choose(value) {
+async function choose(value, { race = false } = {}) {
   if (value === 'live') return openLive();
   const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value] ?? ROW_MODES[value];
   if (!next) return;
@@ -596,6 +600,7 @@ async function choose(value) {
     }
   }
   mode = next;
+  asRace = race;
   if (!next.outing) try { localStorage.setItem(LAST_KEY, value); } catch {}
   leaveClub();
   if (renderer) useWorld();
@@ -879,10 +884,10 @@ function arrive(place) {
   if (place === 'path' && !hiring && label(club.plan)) {
     spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
-  // Nothing paddled yet: straight onto the water, a short paddle on your own
-  // that teaches as it goes (anyone can, signed in or not; races need an account).
+  // Nothing paddled yet: straight into the open race (anyone can, signed in or
+  // not), always a race, whatever format was last picked; it teaches as it goes.
   else if (place === 'path' && !hiring) {
-    spots.unshift({ card: { name: 'Try it now', line: 'A 1 km paddle on your own' }, act: () => choose('practice'), go: true });
+    spots.unshift({ card: { name: 'Try it now', line: `A 7.9 km race against ${MODES[OPEN_RACE].rivals.length} others` }, act: () => choose(OPEN_RACE, { race: true }), go: true });
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
@@ -1342,14 +1347,17 @@ function showAccount() {
   if (account.user) {
     els.account.textContent = `Signed in as ${account.user.displayName || account.user.email}: your race times go on the leaderboards.`;
   } else {
-    els.account.replaceChildren(link('Sign in', SIGN_IN), ' to race the courses, race friends and get on the leaderboards. Practice is open to everyone.');
+    els.account.replaceChildren(link('Sign in', SIGN_IN), ` to race the other courses, race friends and get on the leaderboards. ${MODES[OPEN_RACE].label} and practice are open to everyone.`);
   }
 }
 
 // A finished race's time goes on the course's leaderboard (signed in only).
 async function submitResult(time) {
   els.ranked.textContent = '';
-  if (!account.user) return;
+  if (!account.user) {
+    if (!account.offline && !mode.row) els.ranked.replaceChildren(link('Sign in', SIGN_IN), ' to put your time on the leaderboard.');
+    return;
+  }
   try {
     const { best, rank } = await call('games.submit', { course: mode.key, time, hull: boardHull(kit, !!mode.row) }, { mutation: true });
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
@@ -1765,7 +1773,7 @@ function react({ events, splashes }) {
     }
     if (e === 'line-up') show(race.start.holds ? 'Come back up to the line' : race.racers.length > 1 ? 'Paddle up into a gap on the line' : 'Wait for the horn', { small: true, hold: 3 });
     if (e === 'nudge') show('Paddle up to the line and stop', { small: true, hold: 3 });
-    if (e === 'ready') show('Are you ready?', { small: true, hold: 1 });
+    if (e === 'ready') show('Are you ready?', { small: true, hold: 1, now: true }); // the horn's only warning with the sound off
     if (e === 'go') {
       state = 'racing';
       show('Go!', { hold: 0.6 });
@@ -2718,7 +2726,11 @@ if (HASH.has('debug')) {
     get lobby() { return lobby; },
     get liveries() { return liveries; },
     get club() { return club; },
+    get mode() { return mode; },
+    get format() { return formatOf(mode); },
     clubAt: (place) => arrive(place),
+    finish, // the finish dialog (tests check it fits a phone)
+    submitResult, // the finish's leaderboard line (tests check it signed out)
     show, // a message, as the race would show it (tests check where it lands)
   };
 }

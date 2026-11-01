@@ -74,10 +74,12 @@ const ON_LINE = 2.5; // a bow this close behind the line is on it
 // starter, everyone on the line) or 'interval' (a time trial: see below).
 // live: a race against other people ({ players: [{ id, name }], you, host }),
 // whose boats are driven over the network (main.js, live.js), not by think().
-export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, traffic = true, format = 'mass', live = null } = {}) {
+// easy: a first race (Try it now): you start on the line in a gap, and your
+// strokes don't move the boat until the horn, so there's no lining up to learn first.
+export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, traffic = true, format = 'mass', live = null, easy = false } = {}) {
   const race = live ? liveRace(course, { seed, you, birds, live })
     : format === 'interval' ? intervalRace(course, { rivals, seed, you, birds })
-      : massRace(course, { rivals, seed, you, birds });
+      : massRace(course, { rivals, seed, you, birds, easy });
   race.traffic = traffic ? createTraffic(course, seed) : null;
   race.gates = [...(course.scenery?.gates ?? [])].sort((a, b) => a.s - b.s);
   race.anglers = createAnglers(course);
@@ -254,7 +256,7 @@ function carry(race, r, dt, input) {
   return 'put-in';
 }
 
-function massRace(course, { rivals, seed, you, birds }) {
+function massRace(course, { rivals, seed, you, birds, easy }) {
   const rand = mulberry32(seed);
   const solo = !rivals.length;
   // The rivals take the line, leaving two gaps (never at the very edge).
@@ -273,7 +275,8 @@ function massRace(course, { rivals, seed, you, birds }) {
   // Hasler courses, home to the club) has the finish in the same water.
   const racer = (name, boat, ai) => ({ name, boat, loc: locate(course, boat.x, boat.z, Math.round(Math.max(0, onLine - BEHIND) / 2)), finish: null, draft: 0, ai });
   // Lining up happens at true speed; the course's speedup starts with the horn.
-  const player = racer('You', createBoat({ ...place(solo ? onLine : onLine - BEHIND, 0, headingAt(course, onLine - BEHIND)), ...you }), null);
+  const gaps = [...open].map((k) => (k - (slots.length - 1) / 2) * LANE);
+  const player = racer('You', createBoat({ ...(solo || easy ? place(onLine, easy ? gaps[0] : 0, heading) : place(onLine - BEHIND, 0, headingAt(course, onLine - BEHIND))), ...you }), null);
   // Who is still on the way: they're a few lengths back in their own lane,
   // in two loose rows, the back row clear of you in the middle.
   const late = new Set();
@@ -305,7 +308,7 @@ function massRace(course, { rivals, seed, you, birds }) {
   return {
     course, racers, player, time: 0, rand, contacts: new Set(),
     birds: birds ? createBirds(course, rand, course.scenery?.birds) : [],
-    gaps: [...open].map((k) => (k - (slots.length - 1) / 2) * LANE),
+    gaps, easy,
     start: { phase: 'line-up', timer: LINE_UP, wait: NUDGE, line: course.start, holds: 0, calls: ['line-up'] },
   };
 }
@@ -390,7 +393,7 @@ function intervalRace(course, { rivals, seed, you, birds }) {
 }
 
 // Whether a racer has been let go (always, in a mass start once the horn's gone).
-export const released = (race, r) => race.format !== 'interval' || race.time >= r.release;
+export const released = (race, r) => (race.format === 'interval' ? race.time >= r.release : !race.easy || r !== race.player || started(race));
 
 // Lets boats go at their times, starts their clocks on the line, and counts
 // you down to yours.

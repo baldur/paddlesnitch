@@ -17,7 +17,7 @@ export const LESSONS = [
   },
   {
     key: 'wash',
-    when: (m) => !m.scull && m.draft > 0.3,
+    when: (m) => !m.scull && m.racing && m.draft > 0.3, // not the boats drifting up beside you on the start line
     text: () => "You're on a wash: you go further for less effort, and your sprint bar fills",
   },
   {

@@ -85,3 +85,19 @@ test("Q and E steer a kayak; in a scull they look round, and the stick or a twis
   assert.equal(input.rudder, -1, 'Q and the twist together: full left');
   assert.equal(input.rudderNoKeys, -0.5, "without the keys (a scull's look): the twist alone, not cancelled");
 });
+
+test('a touch anywhere on the page (the button that starts the race) turns on the balance help', () => {
+  const seen = {};
+  const before = globalThis.addEventListener;
+  globalThis.addEventListener = (type, fn) => { (seen[type] ??= []).push(fn); };
+  try {
+    const c = new Controls(target);
+    assert.equal(c.assist, false);
+    for (const fn of seen.pointerdown ?? []) fn({ pointerType: 'mouse' });
+    assert.equal(c.assist, false, 'not for a mouse');
+    for (const fn of seen.pointerdown ?? []) fn({ pointerType: 'touch' });
+    assert.equal(c.assist, true);
+  } finally {
+    globalThis.addEventListener = before;
+  }
+});
