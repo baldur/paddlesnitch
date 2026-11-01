@@ -83,7 +83,7 @@ fun PaddlesScreen(
             )
         }
         if (list.cards.isEmpty()) {
-            item { Text("No paddles yet. Add one from a GPS file, Strava or a time trial on paddlesnitch.com. A tracker adds its own.", color = PsColor.muted) }
+            item { Text("No paddles yet. Add one from a GPS file or a time trial on paddlesnitch.com. A tracker adds its own.", color = PsColor.muted) }
         } else {
             item { Logbook(list) }
             item { Eyebrow("All paddles") }

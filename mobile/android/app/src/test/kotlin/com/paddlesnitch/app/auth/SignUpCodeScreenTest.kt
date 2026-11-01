@@ -50,10 +50,6 @@ class SignUpCodeScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val server = MockWebServer().apply { start() }
     private val api = Api(server.url("/").toString(), MemoryTokenStore(), "0.1.0")
-    private val strava = StravaSignIn(api, object : VerifierStore {
-        override fun put(verifier: String) {}
-        override fun take(): String? = null
-    })
     private val signedIn = mutableListOf<SignIn>()
 
     @After fun stop() = server.close()
@@ -68,11 +64,11 @@ class SignUpCodeScreenTest {
 
     private fun show(fontScale: Float = 1f) = compose.setContent {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
-            PaddlesnitchTheme { Surface(color = PsColor.bg) { SignInScreen(api, strava, null, onReturnHandled = {},
+            PaddlesnitchTheme { Surface(color = PsColor.bg) { SignInScreen(api,
                 google = GoogleSignIn(api, NoVerifiers), googleReturn = null, onGoogleReturnHandled = {},
                 onSignedIn = { signedIn += it }, onCancel = {},
                 // Not from the server queue, which holds each test's own answers.
-                loadOptions = { com.paddlesnitch.app.api.SignInOptions(google = false, strava = true) }) } }
+                loadOptions = { com.paddlesnitch.app.api.SignInOptions(google = false, strava = false) }) } }
         }
     }
 

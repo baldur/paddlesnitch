@@ -1,6 +1,5 @@
 package com.paddlesnitch.app
 
-import com.paddlesnitch.app.account.isPlaceholderEmail
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,13 +24,5 @@ class ScreenTest {
         assertEquals(Screen.Tracker, screen(tracker = true, trackers = true)) // set up from the list, then back to it
         assertEquals(Screen.Terms, screen(needsTerms = true, trackers = true))
         assertEquals(Screen.Paddles, screen())
-    }
-
-    @Test fun aStravaPlaceholderEmail() {
-        assertTrue(isPlaceholderEmail("strava-12345@noreply.paddlesnitch.com"))
-        assertTrue(isPlaceholderEmail("Strava-12345@NoReply.Paddlesnitch.com"))
-        assertFalse(isPlaceholderEmail("pat@example.com"))
-        assertFalse(isPlaceholderEmail("strava-1@noreply.paddlesnitch.com.evil.net"))
-        assertFalse(isPlaceholderEmail("strava-abc@noreply.paddlesnitch.com"))
     }
 }

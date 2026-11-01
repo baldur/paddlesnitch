@@ -18,23 +18,17 @@ data class Intake(
         data object Nothing : Do
         data object SignIn : Do
         data class Browser(val url: String) : Do
-        data class StravaReturn(val uri: String) : Do
         data class GoogleReturn(val uri: String) : Do
-        data class StravaConnectReturn(val uri: String) : Do
         data class Upload(val uri: String) : Do
     }
 
     /**
      * A link or a file arrived. [name] is the file's name, if the other app gave one.
-     * [googlePending], [stravaPending]: this app started that sign-in and it hasn't come back yet.
+     * [googlePending]: this app started a Google sign-in and it hasn't come back yet.
      */
-    fun arrived(incoming: Incoming, signedIn: Boolean, name: String? = null, googlePending: Boolean = false, stravaPending: Boolean = false): Pair<Intake, Do> = when (incoming) {
-        // Anyone can open this address too: only a Strava sign-in this app started, while signed out, goes on.
-        is Incoming.StravaReturn -> this to if (stravaPending && !signedIn) Do.StravaReturn(incoming.uri) else Do.Nothing
+    fun arrived(incoming: Incoming, signedIn: Boolean, name: String? = null, googlePending: Boolean = false): Pair<Intake, Do> = when (incoming) {
         // Anyone can open this address: only a Google sign-in this app started, while signed out, goes on.
         is Incoming.GoogleReturn -> this to if (googlePending && !signedIn) Do.GoogleReturn(incoming.uri) else Do.Nothing
-        // Only a signed-in account can have started a connect; anything else is ignored.
-        is Incoming.StravaConnectReturn -> this to if (signedIn) Do.StravaConnectReturn(incoming.uri) else Do.Nothing
         is Incoming.OpenOnWeb -> this to Do.Browser(incoming.url)
         is Incoming.OpenPaddle -> copy(pending = incoming) to if (signedIn) Do.Nothing else Do.SignIn
         is Incoming.AddFile -> if (signedIn) copy(pending = null) to Do.Upload(incoming.uri)
