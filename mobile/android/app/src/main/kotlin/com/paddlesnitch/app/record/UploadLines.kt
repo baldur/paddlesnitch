@@ -34,8 +34,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 const val UPLOAD_FAILED = "Couldn’t upload this recording. It’s kept on this phone."
-const val NO_FIX = "No GPS fix, so this didn’t become a paddle"
-const val PHONE_REMOVED = "This phone was removed from your account"
+const val NO_FIX = "No GPS fix, so this didn’t become a paddle."
+const val PHONE_REMOVED = "This phone was removed from your account."
+
+/** "2 recordings are waiting." Every line about recordings is a sentence with a full stop. */
+fun waitingCount(n: Int) = if (n == 1) "1 recording is waiting." else "$n recordings are waiting."
 
 /**
  * The account's recordings that aren't paddles yet, one line each, on Paddles under Record
@@ -67,18 +70,21 @@ fun UploadLinesView(lines: List<UploadLine>, online: Boolean, sending: String?, 
     // Lines and their buttons sit at Record's inset (RecordEntry is a TextButton).
     Column(Modifier.fillMaxWidth().padding(horizontal = INSET), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (line in lines) when (line) {
-            is UploadLine.Waiting -> Text(listOfNotNull(day(line.at), if (online && line.base == sending) "Uploading…" else "Waiting to upload").joinToString(" · "), color = PsColor.muted, modifier = Live)
+            is UploadLine.Waiting -> Text(listOfNotNull(day(line.at), if (online && line.base == sending) "Uploading…" else "Waiting to upload.").joinToString(" · "), color = PsColor.muted, modifier = Live)
             is UploadLine.NoFix -> Column {
                 Text(listOfNotNull(day(line.at), NO_FIX).joinToString(" · "), color = PsColor.fg, modifier = Live)
                 TextButton(onClick = { onDismiss(line.base) }, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
             }
             is UploadLine.Failed -> Column {
                 Text(listOfNotNull(day(line.at), UPLOAD_FAILED).joinToString(" · "), color = PsColor.red, modifier = Live)
-                TextButton(onClick = onReport, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Report an issue") }
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    TextButton(onClick = onReport, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Report an issue") }
+                    TextButton(onClick = { onDismiss(line.base) }, colors = textColors(), contentPadding = Flush, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
+                }
             }
             is UploadLine.PhoneOff -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(line.said ?: PHONE_REMOVED, color = PsColor.fg, modifier = Live)
-                OutlinedButton(onClick = onUploadNow, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Upload now") }
+                Text("${line.said ?: PHONE_REMOVED} ${waitingCount(line.waiting)}", color = PsColor.fg, modifier = Live)
+                OutlinedButton(onClick = onUploadNow, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Add phone again") }
             }
         }
     }

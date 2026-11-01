@@ -23,7 +23,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * [reauth]: the server wants a sign-in from the last few minutes first (deleting the account).
  * [needsCode]: the password was right but the sign-up code was never entered; a new one has gone out.
  */
-class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false, val reauth: Boolean = false, val needsCode: Boolean = false) : Exception(message)
+/** [accountDeleted]: a 410 that says the account was deleted (phone calls, C3), not a proxy's bare 410. */
+class ApiFailure(message: String, val status: Int = 0, val generic: Boolean = false, val reauth: Boolean = false, val needsCode: Boolean = false,
+                 val accountDeleted: Boolean = false) : Exception(message)
 
 /** What to show for a failure: the server's or the app's own words, else [fallback]. Never a status code. */
 fun Throwable.shown(fallback: String): String =
@@ -340,11 +342,12 @@ class Api(
         call(Request.Builder().url(base.newBuilder().addPathSegments(path.trimStart('/')).build()).post(body.toRequestBody(jsonType)).build())
 
     /** An answer read in full, so nothing touches the network on the caller's (main) thread. */
-    class Answer(val code: Int, val body: String, val etag: String? = null) { val ok get() = code in 200..299 }
+    /** [retryAfter]: the Retry-After header, in seconds, when the server sent one (a 503 while an account is being deleted). */
+    class Answer(val code: Int, val body: String, val etag: String? = null, val retryAfter: Long? = null) { val ok get() = code in 200..299 }
 
     private suspend fun call(req: Request): Answer = withContext(Dispatchers.IO) {
         try {
-            http.newCall(req.newBuilder().header(APP_HEADER, "android/$appVersion").build()).execute().use { Answer(it.code, it.body.string(), it.header("ETag")) }
+            http.newCall(req.newBuilder().header(APP_HEADER, "android/$appVersion").build()).execute().use { Answer(it.code, it.body.string(), it.header("ETag"), it.header("Retry-After")?.trim()?.toLongOrNull()) }
         } catch (e: IOException) {
             throw ApiFailure("Couldn’t reach paddlesnitch. Check your connection and try again.")
         }
@@ -361,7 +364,8 @@ class Api(
         val said = error?.error
         // A request over ~4.6 MB is refused before our code sees it (prepareUpload stops short of that).
         if (said == null && res.code == 413) return ApiFailure(com.paddlesnitch.app.paddles.TOO_BIG, 413)
-        return if (said != null) ApiFailure(said, res.code, reauth = error.reauth == true, needsCode = error.needsCode == true) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
+        return if (said != null) ApiFailure(said, res.code, reauth = error.reauth == true, needsCode = error.needsCode == true,
+            accountDeleted = res.code == 410 && error.accountDeleted == true) else ApiFailure("Couldn’t finish that. Please try again.", res.code, generic = true)
     }
 
     private fun str(s: String) = kotlinx.serialization.json.JsonPrimitive(s).toString()

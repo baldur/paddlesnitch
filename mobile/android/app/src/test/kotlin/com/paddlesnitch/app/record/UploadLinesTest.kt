@@ -54,17 +54,17 @@ class UploadLinesTest {
     @Test fun onlyTheRecordingBeingSentSaysUploading() {
         show(listOf(UploadLine.Waiting("a", at), UploadLine.Waiting("b", "2026-11-01T09:00:00Z")), sending = "a")
         compose.onNodeWithText("1 Nov 2026, 07:02 · Uploading…").assertExists()
-        compose.onNodeWithText("1 Nov 2026, 09:00 · Waiting to upload").assertExists()
+        compose.onNodeWithText("1 Nov 2026, 09:00 · Waiting to upload.").assertExists()
     }
 
     @Test fun betweenRetriesEveryRecordingIsWaiting() {
         show(listOf(UploadLine.Waiting("a", at)), sending = null)
-        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload").assertExists()
+        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload.").assertExists()
     }
 
     @Test fun offlineItSaysWaitingToUpload() {
         show(listOf(UploadLine.Waiting("a", at)), online = false, sending = "a")
-        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload").assertExists()
+        compose.onNodeWithText("1 Nov 2026, 07:02 · Waiting to upload.").assertExists()
     }
 
     @Test fun noFixSaysSoUntilDismissed() {
@@ -74,23 +74,46 @@ class UploadLinesTest {
         assertEquals(listOf("track_a"), dismissed)
     }
 
-    @Test fun aRefusedRecordingIsKeptAndCanBeReported() {
+    @Test fun aRefusedRecordingIsKeptAndCanBeReportedOrDismissed() {
         show(listOf(UploadLine.Failed("a", at)))
         compose.onNodeWithText("1 Nov 2026, 07:02 · $UPLOAD_FAILED").assertExists()
         compose.onNodeWithText("Report an issue").performClick()
         assertEquals(1, reports)
+        compose.onNodeWithText("Dismiss").performClick()
+        assertEquals(listOf("a"), dismissed)
     }
 
-    @Test fun aRemovedPhoneOffersUploadNow() {
-        show(listOf(UploadLine.PhoneOff(null)))
-        compose.onNodeWithText(PHONE_REMOVED).assertExists()
-        compose.onNodeWithText("Upload now").performClick()
+    @Test fun dismissingARefusedRecordingHidesTheLineAndKeepsTheFiles() {
+        val dir = java.nio.file.Files.createTempDirectory("acct").toFile()
+        java.io.File(dir, "track_20261101_070211.csv").writeText("x")
+        java.io.File(dir, "track_20261101_070211.failed").writeText("")
+        assertEquals(1, PhoneUploader.lines(dir, null).size)
+        PhoneUploader.dismiss(dir, "track_20261101_070211")
+        assertEquals(emptyList<UploadLine>(), PhoneUploader.lines(dir, null))
+        assertEquals(true, java.io.File(dir, "track_20261101_070211.csv").exists())
+        assertEquals(emptyList<String>(), PhoneUploader.waiting(dir, null))   // and never retried
+        dir.deleteRecursively()
+    }
+
+    // Every line about recordings is a sentence with a full stop (README § Where recordings live).
+    @Test fun everyLineEndsAsASentence() {
+        listOf(NO_FIX, UPLOAD_FAILED, PHONE_REMOVED, waitingCount(1), waitingCount(2), PhoneUploader.PHONE_NOT_ADDED).forEach {
+            assertEquals(it, true, it.endsWith("."))
+        }
+        assertEquals("1 recording is waiting.", waitingCount(1))
+        assertEquals("2 recordings are waiting.", waitingCount(2))
+    }
+
+    @Test fun aRemovedPhoneIsOneLineWithTheCountAndAddPhoneAgain() {
+        show(listOf(UploadLine.PhoneOff(null, 2)))
+        compose.onNodeWithText("This phone was removed from your account. 2 recordings are waiting.").assertExists()
+        compose.onNodeWithText("Add phone again").performClick()
         assertEquals(1, uploadNow)
     }
 
     @Test fun aPhoneTheServerWouldntAddSaysWhyInItsWords() {
-        show(listOf(UploadLine.PhoneOff("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.")))
-        compose.onNodeWithText("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.").assertExists()
+        show(listOf(UploadLine.PhoneOff("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.", 1)))
+        compose.onNodeWithText("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again. 1 recording is waiting.").assertExists()
         compose.onNodeWithText(PHONE_REMOVED).assertDoesNotExist()
     }
 
@@ -100,7 +123,7 @@ class UploadLinesTest {
     }
 
     @Test fun everyKindOfLineAtLargeText() {
-        show(listOf(UploadLine.PhoneOff(null), UploadLine.NoFix("b", at), UploadLine.Failed("c", at)), fontScale = 2f)
+        show(listOf(UploadLine.PhoneOff(null, 2), UploadLine.NoFix("b", at), UploadLine.Failed("c", at)), fontScale = 2f)
         golden("all.large-text")
     }
 

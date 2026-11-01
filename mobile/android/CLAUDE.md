@@ -184,8 +184,14 @@ time and isn't obvious from the code.
 - The install id (`Uploads.installId`) is excluded from backup and device transfer in
   `data_extraction_rules.xml`, beside recordings: a copied id would make a new phone the old
   one on the account.
-- A 410 from either phone call means the account was deleted (on the website or elsewhere):
-  `PhoneUploader` deletes the account's folder and calls `accountDeleted`, `uploadAs` clears
-  only that account's tokens (`PinnedTokenStore`), stops a recording still writing into the
-  folder (`Uploads.accountDeleted`), and App.kt signs out on `Uploads.deleted`. The status alone
-  decides it; `accountDeleted: true` in the body is for people reading it.
+- A 410 from either phone call with `accountDeleted: true` in the body means the account was
+  deleted (on the website or elsewhere). A bare 410 (a proxy) is retry-later, never a delete.
+  `PhoneUploader` deletes the account's folder and calls `accountDeleted` with the server's
+  words, `uploadAs` clears only that account's tokens (`PinnedTokenStore`), stops a recording
+  still writing into the folder (`Uploads.accountDeleted`), and App.kt signs out on
+  `Uploads.deleted` and shows the words on the sign-in screen. A 503 (being deleted, or busy)
+  keeps everything and schedules a new run after `Retry-After` (`Api.Answer.retryAfter`).
+- While a recording runs, `WithRecording` hands App a `bar` ("Recording · h:mm:ss") that goes in
+  the Scaffold's `topBar`, so every screen shows it and its insets are right. It sits outside the
+  Scaffold for that; the recording screen has its own Scaffold.
+- Never rebase a pushed branch: a force-push is refused here. Merge the base in instead.

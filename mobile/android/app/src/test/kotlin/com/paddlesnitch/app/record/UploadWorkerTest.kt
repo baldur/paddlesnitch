@@ -84,15 +84,15 @@ class UploadWorkerTest {
     @Test fun aDeletedAccountSignsOutOnlyThatAccount() {
         recording("track_20261101_070211")
         val tokens = signedInAs("a")
-        var told = 0
+        var told: String? = null
         val deleted = { _: com.paddlesnitch.app.auth.TokenStore -> object : PhoneAccount {
-            override suspend fun addPhone(installId: String): Phone = throw com.paddlesnitch.app.api.ApiFailure("Gone", 410)
+            override suspend fun addPhone(installId: String): Phone = throw com.paddlesnitch.app.api.ApiFailure("This account was deleted, so its recordings on this phone were removed.", 410, accountDeleted = true)
             override suspend fun upload(deviceId: String, filename: String, bytes: ByteArray, part: Int?, parts: Int?, sha256: String?) = UploadReply(201)
             override suspend fun held(deviceId: String, filename: String) = emptyList<Int>()
         } }
-        assertEquals(ListenableWorker.Result.success(), runBlocking { uploadAs("a", tokens, dir, deleted, { "install-id-0123456789" }, accountDeleted = { told++ }) })
+        assertEquals(ListenableWorker.Result.success(), runBlocking { uploadAs("a", tokens, dir, deleted, { "install-id-0123456789" }, accountDeleted = { told = it }) })
         assertEquals(null, tokens.refreshToken)
-        assertEquals(1, told)
+        assertEquals("This account was deleted, so its recordings on this phone were removed.", told)
         assertFalse(dir.exists())
     }
 
@@ -101,9 +101,23 @@ class UploadWorkerTest {
         RecordingService.set(RecordingService.State.Recording(RecordingFiles(File(mine, "t.csv"), File(mine, "t_i10.csv")), MutableStateFlow(null), 0L))
         Uploads.accountDeleted(app, "b")
         assertEquals(null, org.robolectric.Shadows.shadowOf(app).nextStartedService)
-        Uploads.accountDeleted(app, "a")
+        Uploads.accountDeleted(app, "a", "This account was deleted, so its recordings on this phone were removed.")
         assertEquals(RecordingService.ACTION_STOP, org.robolectric.Shadows.shadowOf(app).nextStartedService?.action)
-        assertEquals("a", Uploads.deleted.value)
+        assertEquals(Uploads.Deleted("a", "This account was deleted, so its recordings on this phone were removed."), Uploads.deleted.value)
+    }
+
+    @Test fun aServerThatSaysWhenToComeBackGetsANewRunThen() {
+        recording("track_20261101_070211")
+        val busy = { _: com.paddlesnitch.app.auth.TokenStore -> object : PhoneAccount {
+            override suspend fun addPhone(installId: String) = phone
+            override suspend fun upload(deviceId: String, filename: String, bytes: ByteArray, part: Int?, parts: Int?, sha256: String?) = UploadReply(503, retryAfter = 60)
+            override suspend fun held(deviceId: String, filename: String) = emptyList<Int>()
+        } }
+        val later = mutableListOf<Long>()
+        assertEquals(ListenableWorker.Result.success(),
+            runBlocking { uploadAs("a", signedInAs("a"), dir, busy, { "install-id-0123456789" }, retryLater = { later += it }) })
+        assertEquals(listOf(60L), later)
+        assertTrue(File(dir, "track_20261101_070211.csv").exists())
     }
 
     @Test fun aServerErrorAsksForARetry() {
@@ -123,8 +137,8 @@ class UploadWorkerTest {
         val accountDir = Uploads.dir(app, "a")
         assertEquals(dir.canonicalFile, accountDir.canonicalFile)
         compose.setContent { PaddlesnitchTheme { UploadLines("a", onReport = {}) } }
-        compose.onNodeWithText(PHONE_REMOVED).assertExists()
-        compose.onNodeWithText("Upload now").performClick()
+        compose.onNodeWithText("$PHONE_REMOVED 1 recording is waiting.").assertExists()
+        compose.onNodeWithText("Add phone again").performClick()
         assertFalse(File(accountDir, "phone-off").exists())
     }
 

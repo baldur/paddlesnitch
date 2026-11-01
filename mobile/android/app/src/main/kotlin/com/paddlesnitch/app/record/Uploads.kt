@@ -41,7 +41,9 @@ class ApiPhoneAccount(private val api: Api) : PhoneAccount {
         val a = api.rest("/api/account/devices/$deviceId/sessions", query, bytes, type = "text/csv")
         val o = runCatching { ApiJson.parseToJsonElement(a.body) as? JsonObject }.getOrNull()
         return UploadReply(a.code, (o?.get("error") as? JsonPrimitive)?.takeIf { it.isString }?.content,
-            runCatching { o?.get("missing")?.jsonArray?.mapNotNull { it.jsonPrimitive.intOrNull } }.getOrNull().orEmpty())
+            runCatching { o?.get("missing")?.jsonArray?.mapNotNull { it.jsonPrimitive.intOrNull } }.getOrNull().orEmpty(),
+            accountDeleted = (o?.get("accountDeleted") as? JsonPrimitive)?.content == "true",
+            retryAfter = a.retryAfter)
     }
 
     override suspend fun held(deviceId: String, filename: String): List<Int> {
@@ -69,18 +71,20 @@ object Uploads {
     val sending: StateFlow<String?> = _sending
     internal fun sending(base: String?) { _sending.value = base }
 
-    private val _deleted = MutableStateFlow<String?>(null)
-    /** An account the server said was deleted (410): the app signs out (App.kt). */
-    val deleted: StateFlow<String?> = _deleted
+    /** An account the server said was deleted (410), and the server's words for the sign-in screen. */
+    data class Deleted(val accountId: String, val said: String?)
+    private val _deleted = MutableStateFlow<Deleted?>(null)
+    /** The app signs out and says [Deleted.said] on the sign-in screen (App.kt). */
+    val deleted: StateFlow<Deleted?> = _deleted
 
     /**
      * 410 for [accountId]: its folder is gone; stop a recording still writing into it.
      * Signing out is the caller's (its tokens) and App.kt's (the screen).
      */
-    internal fun accountDeleted(context: Context, accountId: String) {
+    internal fun accountDeleted(context: Context, accountId: String, said: String? = null) {
         val running = RecordingService.state.value as? RecordingService.State.Recording
         if (running != null && running.files.track.parentFile?.canonicalFile == dir(context, accountId).canonicalFile) RecordingService.stop(context)
-        _deleted.value = accountId
+        _deleted.value = Deleted(accountId, said)
     }
 
     internal fun bump(sentTrack: Boolean) { _changed.update { it + 1 }; if (sentTrack) _sent.update { it + 1 } }
@@ -88,9 +92,10 @@ object Uploads {
     /** This account's folder of recordings. */
     fun dir(context: Context, accountId: String): File = RecordingFiles.accountDir(RecordingService.recordingsDir(context), accountId)
 
-    /** Uploads what's waiting for [accountId], now or when there's a network. */
-    fun schedule(context: Context, accountId: String) {
+    /** Uploads what's waiting for [accountId], now (or after [delaySeconds]) or when there's a network. */
+    fun schedule(context: Context, accountId: String, delaySeconds: Long = 0) {
         val work = OneTimeWorkRequestBuilder<UploadWorker>()
+            .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
             .setInputData(workDataOf(ACCOUNT to accountId))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
@@ -100,7 +105,7 @@ object Uploads {
         _changed.update { it + 1 }
     }
 
-    /** Start or Upload now: a removed phone may be added again, then what's waiting goes. */
+    /** Start or Add phone again: a removed phone may be added again, then what's waiting goes. */
     fun allowAddingAndSchedule(context: Context, accountId: String) {
         PhoneUploader.allowAdding(dir(context, accountId))
         schedule(context, accountId)
@@ -153,7 +158,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         return uploadAs(account, KeystoreTokenStore(applicationContext), Uploads.dir(applicationContext, account),
             server = { tokens -> ApiPhoneAccount(Api(BuildConfig.API_BASE_URL, tokens, BuildConfig.VERSION_NAME)) },
             installId = { Uploads.installId(applicationContext) },
-            accountDeleted = { Uploads.accountDeleted(applicationContext, account) })
+            accountDeleted = { said -> Uploads.accountDeleted(applicationContext, account, said) },
+            retryLater = { s -> Uploads.schedule(applicationContext, account, s) })
     }
 }
 
@@ -168,16 +174,23 @@ internal suspend fun uploadAs(
     account: String, tokens: com.paddlesnitch.app.auth.TokenStore, dir: File,
     server: (com.paddlesnitch.app.auth.TokenStore) -> PhoneAccount, installId: () -> String,
     running: () -> File? = ::runningTrack,
-    accountDeleted: () -> Unit = {},
+    accountDeleted: (said: String?) -> Unit = {},
+    /** The server asked to come back in this many seconds (503 Retry-After). */
+    retryLater: (Long) -> Unit = {},
 ): androidx.work.ListenableWorker.Result {
     // Signed out, or someone else signed in: their recordings wait for their own sign-in.
     if (tokens.userId != account) return androidx.work.ListenableWorker.Result.success()
     val pinned = PinnedTokenStore(tokens, account)
     val uploader = PhoneUploader(dir, server(pinned), installId, recording = running, changed = Uploads::bump, sending = Uploads::sending,
         // Signed out here (only this account's tokens), then the app's screen follows (Uploads.deleted).
-        accountDeleted = { pinned.clear(); accountDeleted() })
+        accountDeleted = { said -> pinned.clear(); accountDeleted(said) })
     return try {
-        if (uploader.run()) androidx.work.ListenableWorker.Result.success() else androidx.work.ListenableWorker.Result.retry()
+        when {
+            uploader.run() -> androidx.work.ListenableWorker.Result.success()
+            // Retry-After decides, not our backoff: a new run that long from now.
+            uploader.retryAfter != null -> { retryLater(uploader.retryAfter!!.coerceIn(1, 3600)); androidx.work.ListenableWorker.Result.success() }
+            else -> androidx.work.ListenableWorker.Result.retry()
+        }
     } catch (e: SignedOut) {
         androidx.work.ListenableWorker.Result.success()   // the next sign-in schedules it again
     } finally {

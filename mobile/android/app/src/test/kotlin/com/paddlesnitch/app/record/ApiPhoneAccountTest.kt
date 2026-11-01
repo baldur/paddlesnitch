@@ -81,6 +81,31 @@ class ApiPhoneAccountTest {
         assertEquals(UploadReply(409, "parts_missing", listOf(2, 3)), account.upload("P1", "track_x.csv", ByteArray(1), 4, 4, "ab"))
     }
 
+    // The contract's 410 and 503 fixtures, as Api reads them.
+    @Test fun aDeletedAccountIsSaidInTheBody() = runTest {
+        answer(410, "account.phone-upload.account-deleted.json")
+        val r = account.upload("P1", "track_x.csv", ByteArray(1))
+        assertEquals(410, r.code); assertTrue(r.accountDeleted)
+        assertEquals("This account was deleted, so its recordings on this phone were removed.", r.error)
+        answer(410, "account.phone.account-deleted.json")
+        val e = runCatching { account.addPhone("install-id-0123456789") }.exceptionOrNull() as com.paddlesnitch.app.api.ApiFailure
+        assertTrue(e.accountDeleted)
+        assertEquals("This account was deleted, so its recordings on this phone were removed.", e.message)
+    }
+
+    @Test fun aBare410IsntADeletedAccount() = runTest {
+        server.enqueue(MockResponse.Builder().code(410).body("<html>Gone</html>").build())
+        assertFalse(account.upload("P1", "track_x.csv", ByteArray(1)).accountDeleted)
+        server.enqueue(MockResponse.Builder().code(410).body("""{"error":"gone"}""").build())
+        assertFalse((runCatching { account.addPhone("install-id-0123456789") }.exceptionOrNull() as com.paddlesnitch.app.api.ApiFailure).accountDeleted)
+    }
+
+    @Test fun whileTheAccountIsBeingDeletedTheServerSaysWhenToComeBack() = runTest {
+        server.enqueue(MockResponse.Builder().code(503).addHeader("Retry-After", "60").body(fixtures.resolve("account.phone-upload.erasing.json").readText()).build())
+        val r = account.upload("P1", "track_x.csv", ByteArray(1))
+        assertEquals(503, r.code); assertEquals(60L, r.retryAfter)
+    }
+
     @Test fun theHeldPiecesComeFromTheSameAddress() = runTest {
         answer(200, "account.phone-upload.held.json")
         assertEquals(listOf(1, 2), account.held("P3F2A9C41B7E0D865", "track_x.csv"))
@@ -108,7 +133,7 @@ class ApiPhoneAccountTest {
         answer(409, "account.phone.too-many.json")
         assertTrue(PhoneUploader(dir, account, { "install-id-0123456789" }).run())
         val said = Json.parseToJsonElement(fixtures.resolve("account.phone.too-many.json").readText()).jsonObject.getValue("error").jsonPrimitive.content
-        assertEquals(listOf(UploadLine.PhoneOff(said)), PhoneUploader.lines(dir, null))
+        assertEquals(listOf(UploadLine.PhoneOff(said, 1)), PhoneUploader.lines(dir, null))
         assertTrue(File(dir, "track_20261101_070211.csv").exists())
     }
 
@@ -117,7 +142,7 @@ class ApiPhoneAccountTest {
         File(dir, "phone").writeText("P3F2A9C41B7E0D865")
         answer(404, "account.phone-upload.not-found.json")
         assertTrue(PhoneUploader(dir, account, { "install-id-0123456789" }).run())
-        assertEquals(listOf(UploadLine.PhoneOff(null)), PhoneUploader.lines(dir, null))
+        assertEquals(listOf(UploadLine.PhoneOff(null, 1)), PhoneUploader.lines(dir, null))
         assertFalse(File(dir, "phone").exists())
         assertTrue(File(dir, "track_20261101_070211.csv").exists())
     }

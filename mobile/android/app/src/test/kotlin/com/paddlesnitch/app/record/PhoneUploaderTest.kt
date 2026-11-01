@@ -120,21 +120,21 @@ class PhoneUploaderTest {
         assertTrue(run())
         assertFalse(has("track_20261101_070211.csv"))
         assertTrue(has("track_20261101_070211_i10.csv"))
-        assertEquals(listOf(UploadLine.PhoneOff(null)), PhoneUploader.lines(dir, null))
+        assertEquals(listOf(UploadLine.PhoneOff(null, 1)), PhoneUploader.lines(dir, null))
     }
 
     @Test fun aRefusedAddWithoutWordsSaysSoInTheAppsOwn() {
         recording()
         server.addFails = ApiFailure("Couldn’t finish that. Please try again.", 400, generic = true)
         assertTrue(run())
-        assertEquals(listOf(UploadLine.PhoneOff(PhoneUploader.PHONE_NOT_ADDED)), PhoneUploader.lines(dir, null))
+        assertEquals(listOf(UploadLine.PhoneOff(PhoneUploader.PHONE_NOT_ADDED, 1)), PhoneUploader.lines(dir, null))
     }
 
     @Test fun aBadRequestWhenAddingIsShownNotRetried() {
         recording()
         server.addFails = ApiFailure("Couldn't add this phone. Please update the app.", 400)
         assertTrue(run())
-        assertEquals(listOf(UploadLine.PhoneOff("Couldn't add this phone. Please update the app.")), PhoneUploader.lines(dir, null))
+        assertEquals(listOf(UploadLine.PhoneOff("Couldn't add this phone. Please update the app.", 1)), PhoneUploader.lines(dir, null))
     }
 
     @Test fun aMotionFileThatFailsAfterItsTrackGoesAloneNextTime() {
@@ -156,20 +156,50 @@ class PhoneUploaderTest {
 
     // 410 accountDeleted (README § Calls): delete the account's recordings and sign out, never upload them.
     private var gone = 0
-    private fun goneUploader(account: PhoneAccount = server) = PhoneUploader(dir, account, { "install-id-0123456789" }, accountDeleted = { gone++ })
+    private var goneSaid: String? = null
+    private fun goneUploader(account: PhoneAccount = server) = PhoneUploader(dir, account, { "install-id-0123456789" }, accountDeleted = { gone++; goneSaid = it })
 
     @Test fun aDeletedAccountWhenAddingThePhoneDeletesItsRecordingsAndSignsOut() {
         recording(); recording("track_20261101_090000")
-        server.addFails = ApiFailure("Gone", 410)
+        server.addFails = ApiFailure("This account was deleted, so its recordings on this phone were removed.", 410, accountDeleted = true)
         assertTrue(runBlocking { goneUploader().run() })
         assertEquals(emptyList<String>(), server.sent)
         assertFalse(dir.exists())
         assertEquals(1, gone)
+        assertEquals("This account was deleted, so its recordings on this phone were removed.", goneSaid)
+    }
+
+    // A 410 without accountDeleted isn't ours (a proxy, say): nothing is deleted, try again later.
+    @Test fun aBare410IsTriedAgainLaterAndDeletesNothing() {
+        recording()
+        server.answer("track_20261101_070211.csv", UploadReply(410))
+        assertFalse(runBlocking { goneUploader().run() })
+        assertTrue(has("track_20261101_070211.csv"))
+        assertEquals(0, gone)
+    }
+
+    @Test fun aBare410WhenAddingThePhoneIsTriedAgainLater() {
+        recording()
+        server.addFails = ApiFailure("Couldn’t finish that. Please try again.", 410, generic = true)
+        assertFalse(runBlocking { goneUploader().run() })
+        assertTrue(has("track_20261101_070211.csv"))
+        assertEquals(0, gone)
+    }
+
+    // 503 while the account is being deleted (or the server is busy): keep everything, come back after Retry-After.
+    @Test fun aServiceUnavailableKeepsEverythingAndSaysWhenToComeBack() {
+        recording()
+        server.answer("track_20261101_070211.csv", UploadReply(503, "Couldn't upload right now. Please try again.", retryAfter = 60))
+        val u = goneUploader()
+        assertFalse(runBlocking { u.run() })
+        assertEquals(60L, u.retryAfter)
+        assertTrue(has("track_20261101_070211.csv")); assertTrue(has("track_20261101_070211_i10.csv"))
+        assertEquals(0, gone)
     }
 
     @Test fun aDeletedAccountMidUploadStopsAndDeletesTheRest() {
         recording(); recording("track_20261101_090000")
-        server.answer("track_20261101_070211.csv", UploadReply(410, "gone"))
+        server.answer("track_20261101_070211.csv", UploadReply(410, "This account was deleted, so its recordings on this phone were removed.", accountDeleted = true))
         assertTrue(runBlocking { goneUploader().run() })
         assertEquals(listOf("track_20261101_070211.csv"), server.sent)
         assertFalse(dir.exists())
@@ -178,7 +208,7 @@ class PhoneUploaderTest {
 
     @Test fun aDeletedAccountOnTheMotionFileToo() {
         recording()
-        server.answer("track_20261101_070211_imu.csv", UploadReply(410, "gone"))
+        server.answer("track_20261101_070211_imu.csv", UploadReply(410, "This account was deleted, so its recordings on this phone were removed.", accountDeleted = true))
         assertTrue(runBlocking { goneUploader().run() })
         assertFalse(dir.exists())
         assertEquals(1, gone)
@@ -225,7 +255,7 @@ class PhoneUploaderTest {
         assertEquals(listOf("track_20261101_070211.csv"), server.sent)
         assertTrue(has("track_20261101_070211.csv")); assertTrue(has("track_20261101_090000.csv"))
         assertTrue("its motion file too", has("track_20261101_070211_i10.csv"))
-        assertEquals(listOf(UploadLine.PhoneOff(null)), PhoneUploader.lines(dir, null))
+        assertEquals(listOf(UploadLine.PhoneOff(null, 2)), PhoneUploader.lines(dir, null))
         // Never added again in the background...
         assertTrue(run())
         assertEquals(1, server.sent.size)
@@ -243,7 +273,7 @@ class PhoneUploaderTest {
         server.addFails = ApiFailure("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.", 409)
         assertTrue(run())
         assertEquals(emptyList<String>(), server.sent)
-        assertEquals(listOf(UploadLine.PhoneOff("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.")),
+        assertEquals(listOf(UploadLine.PhoneOff("Couldn't add this phone: your account has 10 already. Remove one on Devices, then try again.", 1)),
             PhoneUploader.lines(dir, null))
     }
 

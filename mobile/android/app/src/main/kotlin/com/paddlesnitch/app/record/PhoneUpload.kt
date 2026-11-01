@@ -5,8 +5,12 @@ import com.paddlesnitch.app.api.Phone
 import java.io.File
 import java.security.MessageDigest
 
-/** One answer to an upload: the status and the contract's `error` word (and `missing` for parts_missing). */
-data class UploadReply(val code: Int, val error: String? = null, val missing: List<Int> = emptyList())
+/**
+ * One answer to an upload: the status and the contract's `error` (and `missing` for parts_missing).
+ * [accountDeleted]: the body said so (a 410 without it isn't ours). [retryAfter]: seconds, from Retry-After.
+ */
+data class UploadReply(val code: Int, val error: String? = null, val missing: List<Int> = emptyList(),
+                       val accountDeleted: Boolean = false, val retryAfter: Long? = null)
 
 /**
  * What uploading a phone recording asks of the server (mobile/contract/README.md § Phone
@@ -30,7 +34,7 @@ interface PhoneAccount {
  *
  * - `phone`: this phone's deviceId on the account (asked again after every sign-in).
  * - `phone-off`: the phone was removed on Devices (empty) or couldn't be added (the server's
- *   words). Nothing uploads until the owner starts a recording or taps Upload now.
+ *   words). Nothing uploads until the owner starts a recording or taps Add phone again.
  * - `track_<stamp>.failed`: the server will never take this one; kept, never retried by itself.
  * - `track_<stamp>.nofix`: the track had no GPS fix, so it didn't become a paddle (until dismissed).
  */
@@ -44,15 +48,20 @@ class PhoneUploader(
     private val changed: (sentTrack: Boolean) -> Unit = {},
     /** The recording being sent now (its base), or null between recordings. */
     private val sending: (String?) -> Unit = {},
-    /** 410: the account is gone. Its folder is already deleted; sign out (README § Calls). */
-    private val accountDeleted: () -> Unit = {},
+    /** 410 accountDeleted: the account is gone. Its folder is already deleted; sign out, saying [said] (README § Calls). */
+    private val accountDeleted: (said: String?) -> Unit = {},
 ) {
+    /** After a run that asks to try again: how long the server asked to wait (Retry-After), if it did. */
+    var retryAfter: Long? = null
+        private set
+    private var goneSaid: String? = null
+
     /** Uploads what's waiting. True when there's nothing more to do for now; false to try again later (backoff). */
     suspend fun run(): Boolean {
         if (offFile(dir).exists()) return true
         val waiting = waiting(dir, recording())
         if (waiting.isEmpty()) return true
-        val deviceId = try { deviceId() } catch (e: AccountGone) { return gone() } ?: return offFile(dir).exists()
+        val deviceId = try { deviceId() } catch (e: AccountGone) { goneSaid = e.said; return gone() } ?: return offFile(dir).exists()
         for (base in waiting) {
             // No network (Api's failure with no status): what's sent so far stays sent; the rest waits.
             sending(base)
@@ -76,11 +85,11 @@ class PhoneUploader(
     private fun gone(): Boolean {
         dir.deleteRecursively()
         changed(false)
-        accountDeleted()
+        accountDeleted(goneSaid)
         return true
     }
 
-    private class AccountGone : Exception()
+    private class AccountGone(val said: String?) : Exception()
 
     /** The phone's id on the account, adding it if this sign-in hasn't yet; null when it couldn't be (see `phone-off`). */
     private suspend fun deviceId(): String? {
@@ -93,7 +102,7 @@ class PhoneUploader(
             phoneFile(dir).writeText(id)
             id
         } catch (e: ApiFailure) {
-            if (e.status == 410) throw AccountGone()
+            if (e.accountDeleted) throw AccountGone(e.message)
             // 409 (ten phones) and 400 say why in their own words; anything else (a server
             // without the call yet, 5xx, no network) is tried again later.
             if (e.status == 400 || e.status == 409) { offFile(dir).writeText(if (e.generic) PHONE_NOT_ADDED else e.message.orEmpty()); changed(false) }
@@ -146,7 +155,10 @@ class PhoneUploader(
                 r.code in 200..299 || r.code == 409 && r.error == "already_uploaded" -> return Sent.Ok
                 r.code == 422 && (r.error == "no_points" || r.error == "no_motion_rows") -> return Sent.NoData
                 r.code == 404 -> return Sent.Removed
-                r.code == 410 -> return Sent.Gone
+                r.code == 410 && r.accountDeleted -> { goneSaid = r.error; return Sent.Gone }
+                r.code == 410 -> return Sent.Retry   // not ours (a proxy): try again later
+                // Being deleted, or busy: keep everything and come back when the server says.
+                r.code == 503 -> { retryAfter = r.retryAfter; return Sent.Retry }
                 r.code == 409 && r.error == "track_not_uploaded" -> return Sent.TrackFirst
                 // The pieces didn't make the file: once more from piece 1, then it's a dead end.
                 r.code == 422 && r.error == "sha256_mismatch" && !fresh -> fresh = true
@@ -179,7 +191,7 @@ class PhoneUploader(
     private enum class Sent { Ok, NoData, Removed, Gone, TrackFirst, Refused, Retry }
 
     companion object {
-        const val PHONE_NOT_ADDED = "Couldn’t add this phone to your account. Tap Upload now to try again."
+        const val PHONE_NOT_ADDED = "Couldn’t add this phone to your account. Tap Add phone again to try again."
 
         /** The tracker's piece size (docs/features/device-uplink.md). */
         const val PIECE = 64 * 1024
@@ -201,18 +213,19 @@ class PhoneUploader(
         /** Signed in again: ask the server for this phone's id before the next upload (README § The phone on the account). */
         fun signedIn(dir: File) { phoneFile(dir).delete() }
 
-        /** The owner started a recording or tapped Upload now: a removed phone may be added again. */
+        /** The owner started a recording or tapped Add phone again: a removed phone may be added again. */
         fun allowAdding(dir: File) { offFile(dir).delete() }
 
         /** What Paddles shows for this account's recordings (README § After Stop). */
         fun lines(dir: File, running: File?): List<UploadLine> = buildList {
             val off = offFile(dir).takeIf { it.exists() }?.readText()
-            if (off != null && waiting(dir, running).isNotEmpty()) add(UploadLine.PhoneOff(off.ifBlank { null }))
+            val count = waiting(dir, running).size
+            if (off != null && count > 0) add(UploadLine.PhoneOff(off.ifBlank { null }, count))
             for (base in recordings(dir) + nofix(dir)) {
                 if (File(dir, "$base.csv") == running) continue
                 val at = startedAt(base)
                 when {
-                    File(dir, "$base.failed").exists() -> add(UploadLine.Failed(base, at))
+                    File(dir, "$base.failed").exists() -> if (!File(dir, "$base.dismissed").exists()) add(UploadLine.Failed(base, at))
                     File(dir, "$base.nofix").exists() && !File(dir, "$base.csv").exists() -> add(UploadLine.NoFix(base, at))
                     off == null -> add(UploadLine.Waiting(base, at))
                 }
@@ -221,8 +234,14 @@ class PhoneUploader(
 
         private fun nofix(dir: File) = dir.list().orEmpty().filter { it.endsWith(".nofix") }.map { it.removeSuffix(".nofix") }
 
-        /** Dismissed: the "No GPS fix" line goes. */
-        fun dismiss(dir: File, base: String) { File(dir, "$base.nofix").delete() }
+        /**
+         * Dismissed: the "No GPS fix" line goes (nothing else is left of it). A refused
+         * recording's line goes too, but its files stay on the phone (README § After Stop).
+         */
+        fun dismiss(dir: File, base: String) {
+            File(dir, "$base.nofix").delete()
+            if (File(dir, "$base.failed").exists()) File(dir, "$base.dismissed").writeText("")
+        }
 
         /** track_20261101_070211(_1) → 2026-11-01T07:02:11Z, the UTC start the name was made from. */
         fun startedAt(base: String): String? = Regex("""^track_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})""").find(base)?.groupValues
@@ -240,6 +259,9 @@ sealed interface UploadLine {
     data class NoFix(val base: String, val at: String?) : UploadLine
     /** "Couldn't upload this recording. It's kept on this phone.", with Report an issue. */
     data class Failed(val base: String, val at: String?) : UploadLine
-    /** Removed on Devices ([said] null), or the server's reason it couldn't be added. Upload now adds it again. */
-    data class PhoneOff(val said: String?) : UploadLine
+    /**
+     * Removed on Devices ([said] null), or the reason it couldn't be added, with the [waiting]
+     * count, as one line. Add phone again adds it and uploads what's waiting.
+     */
+    data class PhoneOff(val said: String?, val waiting: Int) : UploadLine
 }

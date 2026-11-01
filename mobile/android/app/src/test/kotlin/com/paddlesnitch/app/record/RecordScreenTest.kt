@@ -164,14 +164,14 @@ class RecordScreenTest {
         compose.onNodeWithText(RECORD_LOCATION_REFUSED).assertExists()
         compose.onNodeWithText("Start recording").assertDoesNotExist()
         golden("location-refused")
-        compose.onNodeWithText("Open the app’s settings").performClick()
+        compose.onNodeWithText("Open Settings").performClick()
         assertEquals(1, settings)
     }
 
     @Test fun beforeStartWithLocationRefusedItSaysSoInPlaceOfStart() {
         show(RecordingService.State.Idle, location = LocationReady.Refused)
         compose.onNodeWithText(RECORD_LOCATION_REFUSED).assertExists()
-        compose.onNodeWithText("Open the app’s settings").assertExists()
+        compose.onNodeWithText("Open Settings").assertExists()
         compose.onNodeWithText("Start recording").assertDoesNotExist()
     }
 
@@ -197,7 +197,7 @@ class RecordScreenTest {
         show(RecordingService.State.Failed(locationRefused = false))
         golden("start-failed")
         compose.onNodeWithText(RECORD_FAILED).assertExists()
-        compose.onNodeWithText("Open the app’s settings").assertDoesNotExist()
+        compose.onNodeWithText("Open Settings").assertDoesNotExist()
     }
 
     @Test fun paddlesSaysARecordingIsRunning() {
@@ -282,8 +282,9 @@ class RecordScreenTest {
     private fun showApp() = compose.setContent {
         PaddlesnitchTheme {
             Surface(color = PsColor.bg) {
-                WithRecording(signedIn = signedIn, record = { Record(accountId = { "u-77" }) }) { entry ->
+                WithRecording(signedIn = signedIn, record = { Record(accountId = { "u-77" }) }) { entry, bar ->
                     Column {
+                        bar?.invoke()
                         Text(if (signedIn) "Your paddles" else "Sample paddles")
                         entry?.invoke()
                     }
@@ -322,15 +323,32 @@ class RecordScreenTest {
         compose.onNodeWithText("Record a paddle").assertDoesNotExist()
     }
 
-    @Test fun closeHidesTheScreenAndPaddlesLeadsBackToTheRecording() {
+    @Test fun hideHidesTheScreenAndTheLineAtTheTopLeadsBackToTheRecording() {
         RecordingService.set(recording)
         showApp()
         compose.onNodeWithText("Recording ·", substring = true).performClick()
-        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Recording carries on.").assertExists()
+        compose.onNodeWithText("Hide").performClick()
         compose.onNodeWithText("Your paddles").assertExists()
         assertEquals("still recording", recording, RecordingService.state.value)
         compose.onNodeWithText("Recording ·", substring = true).performClick()
         compose.onNodeWithContentDescription("Hold to stop").assertExists()
+    }
+
+    @Test fun whileRecordingTheLineIsAtTheTopNotInPaddles() {
+        RecordingService.set(recording)
+        showApp()
+        compose.onNodeWithText("Record a paddle").assertDoesNotExist()
+        assertEquals(1, compose.onAllNodes(androidx.compose.ui.test.hasText("Recording ·", substring = true)).fetchSemanticsNodes().size)
+    }
+
+    @Test fun withNothingRecordingThereIsNoLineAtTheTopAndCloseGoesBack() {
+        showApp()
+        compose.onNodeWithText("Recording ·", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Record a paddle").performClick()
+        compose.onNodeWithText("Hide").assertDoesNotExist()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Your paddles").assertExists()
     }
 
     @Test fun stoppingGoesBackToPaddles() {

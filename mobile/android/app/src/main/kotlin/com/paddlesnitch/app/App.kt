@@ -135,19 +135,23 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
     fun signedOut() { com.paddlesnitch.app.record.RecordingService.forgetFinished(); signedIn = false; inAccount = false; inTrackers = false; settingUpTracker = false; clearExport(context); clearStravaConnect(context); googleVerifiers.clear(); forgetReauth() }
     // The server said the account was deleted (410, on the website or elsewhere): its
     // recordings are gone from the phone, and so is its sign-in.
+    // The sign-in screen says why, in the server's words.
     val goneAccount by com.paddlesnitch.app.record.Uploads.deleted.collectAsState()
-    LaunchedEffect(goneAccount) { if (goneAccount != null && signedIn && !api.signedIn) signedOut() }
+    LaunchedEffect(goneAccount) {
+        val gone = goneAccount ?: return@LaunchedEffect
+        if (signedIn && !api.signedIn) { signedOut(); resetNotice = gone.said ?: "This account was deleted."; signingIn = true }
+    }
     val screen = screenFor(signingIn = signingIn, signedIn = signedIn, needsTerms = needsTerms, settingUpTracker = settingUpTracker, inTrackers = inTrackers, inAccount = inAccount)
     val onList = screen == Screen.Paddles || screen == Screen.Samples
-    Scaffold(bottomBar = {
+    // Record sits above every screen, so a recording keeps its screen and Hold to stop
+    // through a forced sign-out; while one runs, every screen has its line at the top.
+    com.paddlesnitch.app.record.WithRecording(signedIn = signedIn,
+        record = { com.paddlesnitch.app.record.Record(accountId = { api.accountId() }) }) { recordEntry, recordingBar ->
+    Scaffold(topBar = { recordingBar?.invoke() }, bottomBar = {
         AddPaddleCard(intake.card.takeIf { onList }, onOpen = { intake = intake.openFromCard(it) }, onSignIn = { signingIn = true },
             onClose = { intake = intake.cardClosed() })
     }) { inner ->
         val m = Modifier.padding(inner)
-        // Record sits above every screen, so a recording keeps its screen and Hold to stop
-        // through a forced sign-out.
-        com.paddlesnitch.app.record.WithRecording(signedIn = signedIn, modifier = m,
-            record = { com.paddlesnitch.app.record.Record(accountId = { api.accountId() }) }) { recordEntry ->
         when (screen) {
             Screen.SignIn -> {
                 // Signed in, from the sign-in screen or a password reset.
@@ -164,7 +168,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                     ForgotPasswordScreen(api, forgot, onSignedIn = signedInWith,
                         onPasswordSet = { email -> forgotFor = null; reauthEmail = email; resetNotice = "Your password is set. Please sign in." },
                         onBack = { forgotFor = null }, modifier = m)
-                    return@WithRecording
+                    return@Scaffold
                 }
                 BackHandler { leaveSignIn() }
                 SignInScreen(api, strava, stravaReturn, onReturnHandled = { stravaReturn = null },
