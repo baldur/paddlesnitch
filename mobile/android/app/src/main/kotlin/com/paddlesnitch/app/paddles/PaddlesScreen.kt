@@ -162,7 +162,7 @@ private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit) {
                 Text(
                     buildAnnotatedString {
                         append(fmtWeekday(p.paddledAt))
-                        sourceLabel(p.sourceType)?.let { append(" · $it") }
+                        sourceLabel(p.sourceType, p.phone)?.let { append(" · $it") }
                         p.boatClass?.let { withStyle(SpanStyle(color = PsColor.split)) { append(" · ${it.wire.ifEmpty { "?" }}") } }
                     },
                     color = PsColor.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -180,7 +180,7 @@ private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit) {
         p.sameOuting.orEmpty().forEach { o ->
             HorizontalDivider(color = PsColor.border)
             Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(alsoRecordedBy(o.sourceType), color = PsColor.muted, fontSize = 14.sp)
+                Text(alsoRecordedBy(o.sourceType, o.phone), color = PsColor.muted, fontSize = 14.sp)
                 Spacer(Modifier.weight(1f))
             }
         }

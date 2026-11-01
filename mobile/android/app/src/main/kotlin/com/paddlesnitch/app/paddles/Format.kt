@@ -110,12 +110,16 @@ internal fun num(x: Double) = if (x % 1.0 == 0.0) x.toLong().toString() else x.t
 /** Kilometres with one decimal, as the logbook writes them ("6.3", "0"). */
 fun km1(km: Double): String = if (km % 1.0 == 0.0) km.toLong().toString() else toFixed(km, 1)
 
-/** Where a paddle came from, for its row: null for a plain file. */
-fun sourceLabel(type: String): String? = mapOf("strava" to "Strava", "trial" to "Time trial", "device" to "Tracker")[type]
+/**
+ * Where a paddle came from, for its row: null for a plain file. A phone's paddle is a
+ * `device` with `phone: true`, and says Phone, never Tracker (contract § The phone on the account).
+ */
+fun sourceLabel(type: String, phone: Boolean? = null): String? =
+    if (phone == true) "Phone" else mapOf("strava" to "Strava", "trial" to "Time trial", "device" to "Tracker")[type]
 
 /** "Also recorded by …" for the same outing from another source. */
-fun alsoRecordedBy(type: String): String =
-    "Also recorded by " + (mapOf("strava" to "Strava", "trial" to "a time trial", "device" to "the tracker")[type] ?: "a file")
+fun alsoRecordedBy(type: String, phone: Boolean? = null): String =
+    "Also recorded by " + (if (phone == true) "the phone" else mapOf("strava" to "Strava", "trial" to "a time trial", "device" to "the tracker")[type] ?: "a file")
 
 /** About how many strokes: to the hundred from 1,000, with commas ("12,300"). */
 fun roundStrokes(n: Double): String =

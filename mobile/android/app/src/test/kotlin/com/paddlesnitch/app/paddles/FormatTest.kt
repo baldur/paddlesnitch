@@ -57,4 +57,14 @@ class FormatTest {
         assertEquals("2d ago", fmtAgo("2026-10-23T12:00:00Z", now)) // 48 h
         assertEquals("never", fmtAgo("yesterday", now))
     }
+
+    // #789: only phone: true says Phone; false or missing keeps the source's own name.
+    @Test fun aPhoneSaysPhoneAndNothingElseDoes() {
+        assertEquals("Phone", sourceLabel("device", true))
+        assertEquals("Tracker", sourceLabel("device", false))
+        assertEquals("Tracker", sourceLabel("device"))
+        assertEquals("Also recorded by the phone", alsoRecordedBy("device", true))
+        assertEquals("Also recorded by the tracker", alsoRecordedBy("device", false))
+        assertEquals("Also recorded by Strava", alsoRecordedBy("strava"))
+    }
 }

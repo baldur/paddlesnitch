@@ -129,6 +129,18 @@ class PaddleScreensTest {
         compose.onNodeWithText("Try again").assertExists()
     }
 
+    // #789: the contract's example of a phone's paddle, and a tracker's with the phone's under it.
+    @Test
+    fun phonePaddlesSayPhoneNeverTracker() {
+        val withPhone = ApiJson.decodeFromString(PaddleList.serializer(), fixtures.resolve("api/paddles.list.with-phone.json").readText())
+        show { PaddlesScreen(withPhone, sample = false, action = {}) }
+        compose.onNodeWithText("Sat, 31 Oct 2026 · Phone").assertExists()
+        compose.onNodeWithText("Sat, 24 Oct 2026 · Tracker").assertExists()
+        compose.onNodeWithText("Also recorded by Strava").assertExists()
+        compose.onNodeWithText("Also recorded by the phone").assertExists()
+        compose.onNodeWithText("Also recorded by the tracker").assertDoesNotExist()
+    }
+
     @Test
     fun paddlesList() {
         show { PaddlesScreen(list, sample = true, action = { Text("Sign in") }) }
