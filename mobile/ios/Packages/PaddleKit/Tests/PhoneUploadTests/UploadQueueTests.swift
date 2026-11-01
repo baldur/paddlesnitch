@@ -136,6 +136,23 @@ struct UploadQueueTests {
         #expect(names(in: folder) == ["uploads.json"])
     }
 
+    /// The #767 debug build wrote recordings to the same folder, with no
+    /// uploads.json: a build installed over it shows them waiting at once
+    /// and uploads them, the drop log going with them.
+    @Test func recordingsFromAnEarlierBuildAreUploaded() async throws {
+        let folder = try folder()
+        try record("track_20261101_070211", in: folder)
+        try record("track_20261101_070211_1", in: folder)
+        #expect(!names(in: folder).contains("uploads.json"))
+        let queue = queue(folder)
+        #expect(queue.lines.map(\.id) == ["waiting-track_20261101_070211", "waiting-track_20261101_070211_1"])
+        await queue.signedIn()
+        await queue.pass()
+        #expect(server.uploads.count == 4)
+        #expect(names(in: folder) == ["uploads.json"])
+        #expect(queue.lines.isEmpty)
+    }
+
     @Test func theInstallIDIsMadeOnceAndFitsTheServersRule() throws {
         let defaults = try #require(UserDefaults(suiteName: "install-\(UUID().uuidString)"))
         let id = InstallID.current(in: defaults)

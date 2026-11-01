@@ -32,7 +32,9 @@ extension SampleServer {
             ("GET", "/api/account/devices/sessions") where failsTrackerRecordings:
             return (502, Data("<html>Bad gateway</html>".utf8))
         case ("GET", "/api/account/devices"):
-            var list = try JSONDecoder.paddlesnitch.decode(TrackerList.self, from: try fixture("account.devices"))
+            // The server lists this phone too since C3; the app leaves it out.
+            var list = try JSONDecoder.paddlesnitch.decode(
+                TrackerList.self, from: try fixture("account.devices.with-phone"))
             let removed = lock.withLock { _removedTrackers }
             list.devices.removeAll { removed.contains($0.deviceId) }
             list.summaries = list.summaries.map { summary in

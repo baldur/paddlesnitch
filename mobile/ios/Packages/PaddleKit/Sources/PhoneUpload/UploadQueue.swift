@@ -71,6 +71,8 @@ public final class UploadQueue {
         }
     }
     public private(set) var state: UploadState
+    /// A file is going up now.
+    public var isUploading: Bool { uploading != nil }
 
     let folder: URL
     let client: PaddleClient

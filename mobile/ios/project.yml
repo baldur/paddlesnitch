@@ -44,6 +44,8 @@ targets:
         product: SampleServer
       - package: PaddleKit
         product: Recorder
+      - package: PaddleKit
+        product: PhoneUpload
     info:
       path: App/Info.plist
       properties:

@@ -26,6 +26,10 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _termsAccepted = true
     var _failsAccountDelete = false
     var _removedTrackers: Set<String> = []
+    var _phoneUploads: PhoneUploads = .accepted
+    var _phoneRemoved = false
+    var _phoneRemovedSeen = false
+    var _uploadedRecordings: [String] = []
     var _failsTrackerRemoval = false
     var _failsTrackerList = false
     var _failsTrackerRecordings = false

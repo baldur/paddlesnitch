@@ -149,8 +149,11 @@ final class LargeTextTests: AppTestCase {
         try checkScreen(at: [element("strava-connected"), app.buttons["Disconnect"]])
     }
 
+    /// Ready, recording, then Paddles with the recording waiting to upload
+    /// (the server is down).
     func testRecordAtTheLargestTextSize() throws {
         app.resetAuthorizationStatus(for: .location)  // ends the app
+        app.launchArguments += ["-UploadsDown"]
         app.launch()
         signInAndWait()
         openRecord()
@@ -161,9 +164,10 @@ final class LargeTextTests: AppTestCase {
         let stop = element("record-stop")
         XCTAssertTrue(stop.appears(timeout: 10))
         try checkWholeScreen(last: stop)
-        stop.press(forDuration: 1.5)
-        XCTAssertTrue(app.buttons["record-done"].appears(timeout: 10))
-        try checkWholeScreen(last: app.buttons["record-done"])
+        stop.press(forDuration: 2)
+        let line = element("upload-line")
+        XCTAssertTrue(line.appears(timeout: 10))
+        try checkWholeScreen(last: line)
     }
 
     func testSignInAtTheLargestTextSize() throws {
