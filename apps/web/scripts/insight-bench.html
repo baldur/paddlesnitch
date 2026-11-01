@@ -54,11 +54,13 @@ try { ranks = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(ranks)); } catch {} };
 const ids = DATA.candidates.map(c => c.id);
 const labelOf = Object.fromEntries(DATA.candidates.map(c => [c.id, c.label]));
-// A stable shuffle per paddle, so the letters don't give the model away.
+// A stable shuffle per paddle, so the letters don't give the model away. Uses
+// the generator's high bits: its low bit alternates, which put the same model
+// first on every paddle when there were two (2026-11-01).
 function order(seed) {
   const a = [...ids]; let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  for (let i = a.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = h % (i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  for (let i = a.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = Math.floor((h / 4294967296) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
