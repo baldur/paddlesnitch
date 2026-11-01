@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestUser } from '@/lib/auth'
 import { addPhone } from '@/lib/devices'
+import { erasedAnswer } from '@/lib/erased-answer'
 
 // POST /api/account/devices/phone — AUTHENTICATED (the apps' Bearer token).
 // { installId, model: 'phone-android' | 'phone-ios' } → { deviceId, name, model }.
@@ -10,6 +11,9 @@ import { addPhone } from '@/lib/devices'
 export async function POST(req: Request) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // An account being deleted, or deleted with its token still valid (C3).
+  const erased = await erasedAnswer(user.id)
+  if (erased) return erased
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
   const r = await addPhone(user.id, { installId: body?.installId, model: body?.model })
   if ('error' in r) {

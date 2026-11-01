@@ -23,6 +23,7 @@ import { POST as linkBluetooth } from '@/app/api/account/devices/link-bluetooth/
 import { GET as stagedParts } from '@/app/api/account/devices/[deviceId]/sessions/route'
 import { createHash } from 'crypto'
 import { Uploaded } from '@paddlesnitch/api/contract'
+import { markAccountErased, markAccountErasing, isAccountErased, erasureState } from '@paddlesnitch/core/erased'
 import { publishFirmware, promoteFirmware } from '@/lib/firmware'
 import { deflateSync } from 'zlib'
 import { TEST_DEVICE_PUBKEY, linkProof } from './device-proof'
@@ -314,9 +315,9 @@ describe('a phone upload, the rest of the contract', () => {
 
 // The contract's fixtures (mobile/contract/fixtures/api) are written by hand; the
 // apps test against them. Each must carry exactly the fields the real answer does.
+const fixture = async (name: string) => JSON.parse(await (await import('fs/promises')).readFile(
+  (await import('path')).join(__dirname, '../../../../mobile/contract/fixtures/api', name), 'utf8'))
 describe('the phone fixtures match the real answers', () => {
-  const fixture = async (name: string) => JSON.parse(await (await import('fs/promises')).readFile(
-    (await import('path')).join(__dirname, '../../../../mobile/contract/fixtures/api', name), 'utf8'))
   const keys = (o: object) => Object.keys(o).sort()
 
   it('add, upload a track and its motion, repeats, order, no fix, removed, held pieces', async () => {
@@ -351,5 +352,74 @@ describe('the phone fixtures match the real answers', () => {
 
     await revokeDevice(u.id, phone.deviceId)
     expect(await (await send(u.idToken, phone.deviceId, 'track_20261101_110000.csv', TRACK)).json()).toEqual(await fixture('account.phone-upload.not-found.json'))
+  })
+})
+
+describe('a deleted account', () => {
+  it('answers 410 on both phone calls while its token still works, and writes nothing', async () => {
+    const u = await makeUser('Deleted')
+    const { deviceId } = await (await add(u.idToken)).json()
+    const devicesBefore = await listUserDevices(u.id)
+    await markAccountErased(u.id)
+    const added = await add(u.idToken, { installId: 'another-install-0001', model: 'phone-ios' })
+    expect(added.status).toBe(410)
+    expect(await added.json()).toEqual(await fixture('account.phone.account-deleted.json'))
+    expect(await listUserDevices(u.id)).toEqual(devicesBefore)
+    const up = await send(u.idToken, deviceId, NAME, TRACK)
+    expect(up.status).toBe(410)
+    expect(await up.json()).toEqual(await fixture('account.phone-upload.account-deleted.json'))
+    const piece = await upload(new NextRequest(`http://x/api/account/devices/${deviceId}/sessions?filename=${NAME}&part=1&parts=2`, {
+      method: 'POST', body: 'timestamp,lat,lon\n', headers: { authorization: `Bearer ${u.idToken}`, 'content-type': 'text/csv' },
+    }), params(deviceId))
+    expect(piece.status).toBe(410)
+    expect(await listKeys(`devices/${deviceId}/parts/`)).toEqual([])
+    expect(await listUserDeviceSessions(u.id)).toEqual([])
+  })
+
+  it('refuses a tracker recording relayed by the browser too', async () => {
+    const u = await makeUser('Relay after delete')
+    const tracker = '435AC17C'
+    await putJson(`devices/${tracker}/metadata.json`, { deviceId: tracker, userId: u.id, name: 't', model: 'm', firmware: 'f', linkedAt: '2026-11-01T07:00:00Z', lastSeenAt: '2026-11-01T07:00:00Z', tokenHash: 'a'.repeat(64) })
+    await markAccountErased(u.id)
+    expect((await send(u.idToken, tracker, NAME, TRACK)).status).toBe(410)
+  })
+
+  it('keeps the mark for two days (a token lives 24 h), then forgets it', async () => {
+    const u = await makeUser('Long gone')
+    const at = (h: number) => putJson(`auth/erased/${createHash('sha256').update(u.id).digest('hex')}.json`, { state: 'done', at: new Date(Date.now() - h * 3600_000).toISOString() })
+    await at(47)
+    expect(await isAccountErased(u.id)).toBe(true)
+    await at(49)
+    expect(await isAccountErased(u.id)).toBe(false)
+  })
+
+  it('while the delete runs, the phone calls answer 503 and the app keeps its files', async () => {
+    const u = await makeUser('Being deleted')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await markAccountErasing(u.id)
+    const up = await send(u.idToken, deviceId, NAME, TRACK)
+    expect(up.status).toBe(503)
+    expect(up.headers.get('retry-after')).toBe('60')
+    expect(await up.json()).toEqual(await fixture('account.phone-upload.erasing.json'))
+    expect((await add(u.idToken)).status).toBe(503)
+    expect(await listUserDeviceSessions(u.id)).toEqual([])
+  })
+
+  it('a pending mark from a delete that died counts for 5 minutes only: then the account is live', async () => {
+    const u = await makeUser('Survivor')
+    await putJson(`auth/erased/${createHash('sha256').update(u.id).digest('hex')}.json`, { state: 'pending', at: new Date(Date.now() - 6 * 60_000).toISOString() })
+    expect(await erasureState(u.id)).toBe('none')
+    expect((await add(u.idToken)).status).toBe(201)
+  })
+})
+
+describe('the deleted-account markers expire', () => {
+  it('the bucket rule drops auth/erased/ after 2 days, matching the code', async () => {
+    const fs = await import('fs/promises'); const path = await import('path')
+    const stack = await fs.readFile(path.join(__dirname, '../../../../infra/lib/att-stack.ts'), 'utf8')
+    const { ERASED_PREFIX } = await import('@paddlesnitch/core/erased')
+    const rule = /id: 'expire-erased-account-markers',\s*prefix: '([^']+)',\s*expiration: cdk\.Duration\.days\((\d+)\)/.exec(stack)
+    expect(rule?.[1]).toBe(ERASED_PREFIX)
+    expect(Number(rule?.[2])).toBeGreaterThanOrEqual(2)
   })
 })

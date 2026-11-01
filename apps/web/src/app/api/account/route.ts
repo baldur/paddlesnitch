@@ -14,6 +14,7 @@ import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
 import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
 import { eraseUserDevices } from '@paddlesnitch/core/devices'
+import { markAccountErasing, markAccountErased } from '@paddlesnitch/core/erased'
 import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
@@ -60,6 +61,11 @@ export async function DELETE(req: Request) {
   if (!(await hasRecentSignIn(req, user.id))) {
     return NextResponse.json({ error: REAUTH_TEXT, reauth: true }, { status: 403 })
   }
+
+  // 0. First, so a phone still holding this account's token waits while the rest
+  //    is deleted (C3: phones upload by themselves). Marked done only once the
+  //    sign-in account is gone, so a delete that fails leaves the phone's files.
+  await markAccountErasing(user.id)
 
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
   const createdCourses = (await listCourses()).filter(c => c.adminUserId === user.id && !c.groupId)
@@ -172,6 +178,7 @@ export async function DELETE(req: Request) {
   if (linked) await disconnectGoogle(linked)
   // By sub: a Google account's username isn't its email.
   await deleteUserBySub(user.id)
+  await markAccountErased(user.id)
   // Their times on the game's public leaderboards (games/kayak/leaderboard/;
   // live races expire within a day). After the sign-in is gone, so a game tab
   // still open can't post a time back in between (#742).

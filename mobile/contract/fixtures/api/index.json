@@ -55,7 +55,15 @@
     "call": "GET /api/account/handle",
     "schema": "HandleAvailability"
   },
+  "account.phone-upload.account-deleted.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
   "account.phone-upload.already-uploaded.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
+  "account.phone-upload.erasing.json": {
     "call": "POST /api/account/devices/{deviceId}/sessions",
     "schema": "ApiError"
   },
@@ -85,6 +93,10 @@
   },
   "account.phone-upload.track-not-uploaded.json": {
     "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "ApiError"
+  },
+  "account.phone.account-deleted.json": {
+    "call": "POST /api/account/devices/phone",
     "schema": "ApiError"
   },
   "account.phone.json": {

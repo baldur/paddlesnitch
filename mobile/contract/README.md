@@ -310,8 +310,10 @@ Every other answer to an upload:
 | 409 `track_not_uploaded` (motion file) | its track isn't there yet | send the track, then this again |
 | 409 `parts_missing` (`missing: […]`) | pieces lost on the way | send the missing pieces, then the last again |
 | 422 `sha256_mismatch` | the pieces don't make the file | send the whole file again from piece 1, once; a second mismatch is as below |
-| 5xx, timeout, no network | not our answer | retry later, with backoff |
-| any other 4xx (`bad_filename`, `too_large`, `bad_encoding`, a second `sha256_mismatch`) | the server will never take it | keep the file, stop retrying it, show "Couldn't upload this recording. It's kept on this phone." |
+| 410 with `accountDeleted: true` in the body (either phone call) | the account was deleted, on the website or elsewhere (a 410 without it is not ours: retry later) | delete that account's recordings folder on the phone and sign out; never upload them; show the server's `error` on the sign-in screen |
+| 503 (either phone call) | the account is being deleted, or the server is busy | keep the files; retry later (`Retry-After`) |
+| other 5xx, timeout, no network | not our answer | retry later, with backoff |
+| any other 4xx (`bad_filename`, `too_large`, `bad_encoding`, a second `sha256_mismatch`) | the server will never take it | keep the file, stop retrying it, show "Couldn’t upload this recording. It’s kept on this phone." |
 
 The upload body is the file's bytes (not multipart). Send files of 64 KB or
 more in 64 KB pieces (`&part=N&parts=M&sha256=<hex of the whole file>`, as the
@@ -319,7 +321,7 @@ tracker does), optionally zlib-compressed per piece with `&enc=zlib` and
 `Content-Type: application/octet-stream`. `GET` on the same address with
 `?filename=` answers `HeldParts` `{parts: […]}`: the pieces the server already
 holds from a broken upload, so send only the rest. Fixtures:
-`account.phone*.json`, `account.phone-upload*.json`, `account.devices.with-phone.json`.
+`account.phone*.json`, `account.phone-upload*.json` (each `*.account-deleted.json` is the 410, `account.phone-upload.erasing.json` the 503), `account.devices.with-phone.json`.
 
 ### Files and names
 
@@ -342,9 +344,10 @@ holds from a broken upload, so send only the rest. Fixtures:
 - A 404 on upload means the owner removed the phone on Devices. Stop uploading
   and keep the files. Add the phone again only when the owner next starts a
   recording, then upload what's waiting. Never add it again in the background.
-- A 404 also shows on Paddles, where recordings waiting to upload show: "This phone
-  was removed from your account" with an **Upload now** button that adds the phone
-  again and uploads what's waiting.
+- A 404 also shows on Paddles, where recordings waiting to upload show, as one
+  line with the count: "This phone was removed from your account. 2 recordings
+  are waiting." with an **Add phone again** button that adds the phone and uploads
+  what's waiting.
 - `GET /api/account/devices` lists phones too, with `kind: "phone"` (no firmware,
   never `quiet`). **Both apps leave phones out of their trackers screens** (filter
   on `kind` before the app first calls `…/phone`): phones are listed and removed
@@ -358,35 +361,46 @@ holds from a broken upload, so send only the rest. Fixtures:
   copy); deleting the account in the app deletes it.
 - Out of cloud and device backup. iPhone: encrypted while the phone is locked,
   except while a file is open.
+- Every line on Paddles about recordings is a full sentence with a full stop.
+- The install ID stays out of device backup where the platform allows (iOS:
+  Keychain, this device only; Android: excluded from backup), so a phone restored
+  from a backup is a new phone.
 - Upload on any network, in the background when the platform allows, retrying
   with backoff. Never upload while the recording is still running.
 
 ### After Stop
 
-- Back to Paddles. Each recording waiting to upload shows there in one line
-  ("Uploading…", or "Waiting to upload" while offline) until the server has it;
-  then the paddle appears in the list as any other (`paddles.list`).
+- Back to Paddles. Each recording waiting to upload shows there in one line, with
+  its start before it ("1 Nov 2026, 07:02 · "): "Uploading…" only for the one being
+  sent, "Waiting to upload" for the rest (and while offline or between retries),
+  until the server has it; then the paddle appears in the list as any other
+  (`paddles.list`). The no-GPS line and the couldn’t-upload line each have a
+  Dismiss button. Dates take the website's `fmtDayTime` form: day, short month,
+  year, 24-hour time, in the phone's time zone ("1 Nov 2026, 07:02"), never the
+  system's short date.
 - A track the server refuses with 422 `no_points`: one line in the same place,
-  "No GPS fix, so this didn't become a paddle", until dismissed.
-- Any other 4xx: "Couldn't upload this recording. It's kept on this phone." in the
+  "No GPS fix, so this didn’t become a paddle.", until dismissed.
+- Any other 4xx: "Couldn’t upload this recording. It’s kept on this phone." in the
   same place, with Report an issue. The app never retries that file by itself.
 
 ### Recording screen
 
 Both apps, laid out the same (design-usability, #767):
 
-- Record on Paddles (signed in). The recording screen has a Close (hide) control
-  while it records: it hides the screen and keeps recording. Paddles then shows
-  "Recording · h:mm:ss", and tapping that line opens the screen again.
+- Record on Paddles (signed in). The recording screen has a **Hide** button while
+  it records, with "Recording carries on." muted under it: it hides the screen and
+  keeps recording. Every screen then shows "Recording · h:mm:ss" at the top, and
+  tapping that line opens the recording screen again.
 - Big elapsed time, then stroke rate ("—" until live values arrive; never a
   number the app works out itself), then the GPS line below. A problem (a failed
   write) shows in place of the "Recording" heading.
-- Stop: hold for 1.5 s, the button filling as it goes, with a haptic; a tap says
+- Stop: a filled red button; hold for 1.5 s, a lighter fill sweeping across it as
+  you hold, with a haptic; a tap says
   "Keep holding to stop." Stop in the Android notification needs an unlock
   (`setAuthenticationRequired`). Hold to stop is pinned to the bottom.
 - Hold to stop has a named accessibility action, "Stop recording" (VoiceOver
-  custom action; Android `customActions`), which stops at once. Screen readers
-  hear "Hold to stop" as the hint, not the fill.
+  custom action; Android `customActions`), which stops at once. Its label is
+  "Hold to stop"; screen readers never hear the fill.
 - Start doesn't wait for a GPS fix: the GPS line says "Waiting for GPS".
 - Before Start, without location permission (or with location services off):
   say so in place of Record, with a button to the setting. Recording needs
@@ -394,6 +408,21 @@ Both apps, laid out the same (design-usability, #767):
   iPhone: Always, or While using with background location).
 - No motion sensors: record anyway (GPS only), with "No motion sensors on this
   phone, so no stroke rate" under the stroke rate.
+- Location off on the phone: "Location is off on this phone. Turn it on to record."
+  with the button "Open location settings" (Android) or "Open Settings" (iPhone,
+  which can only open the app's own page).
+- No location permission: iPhone (needs Always): "Recording needs your location
+  all the time. Allow it in Settings."; Android (While using the app, with the
+  foreground service; never asks for background location): "Recording needs your
+  location. Allow it in Settings." Both with the button "Open Settings".
+- Above Start: "Records your route and boat motion. Each recording uploads after
+  you stop it."
+- A failed write, in place of the heading: "Couldn’t save the rest of this
+  recording. Stop to upload what’s saved."
+- Adding the phone failed with no words from the server: on Paddles, in the line
+  of the recordings waiting, which then has Add phone again: "Couldn’t add this
+  phone to your account. Tap Add phone again to try again."
+- "Waiting for GPS" is muted; only "GPS lost…" is red.
 
 GPS line, from `rc_phone_live` ("The GPS state (fix, since_fix_s) is the latest
 tick's, not the latest row written"; `rc_live_values.fix` is "1: the latest row
@@ -418,9 +447,8 @@ never `getAltitude()`. iPhone: `CLLocation.altitude` when `verticalAccuracy > 0`
 
 ### Release
 
-Each app's C3 PR removes the debug switch and makes these changes; it merges only
-after the owner has recorded a real paddle on that platform's phone with the PR's
-build. Android then declares its own location permissions and a foreground
+Each app's C3 PR removes the debug switch and makes these changes. It merges on
+green checks and recorded reviews; the owner tests it live (owner, 2026-11-01). Android then declares its own location permissions and a foreground
 service of type `location`, deletes the release manifest's location removal,
 updates `releasePermissions` and Play's data safety form. iPhone: the background
 location reason, for App Review.
