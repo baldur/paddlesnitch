@@ -41,10 +41,10 @@ Strava. 2026-11-01: phone recording is in (C3).
 - [ ] **Owner:** run `TRACKER-TESTING.md` with a real tracker on a release
       build, before the closed test starts. If it fails, `android` fixes it or
       hides setup in release; the Trackers list stays either way.
-- [ ] **Owner:** record a real paddle with the phone on the C3 PR's build,
-      with the screen off for most of it. The PR merges only after that
-      (`mobile/contract/README.md` § Release). Check that it becomes a paddle
-      with stroke rate and boat motion.
+- [ ] **Owner:** record a real paddle with the phone on a release build, with
+      the screen off for most of it, before the closed test starts. Check that
+      it becomes a paddle with stroke rate and boat motion. (The C3 PR merged
+      without waiting for this: owner, 2026-11-01.)
 
 ## Day 1: the developer account (owner)
 
