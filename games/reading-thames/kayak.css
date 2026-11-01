@@ -272,6 +272,8 @@ header button {
 }
 .cue.left { left: 16px; }
 .cue.right { right: 16px; }
+/* They're where to tap: none with a mouse and keyboard. */
+@media (hover: hover) and (pointer: fine) { .cue { display: none; } }
 
 .gauges { display: grid; justify-items: center; gap: 4px; }
 .rudder { position: relative; width: 90px; height: 6px; border-radius: 3px; background: rgb(0 0 0 / 0.35); }
