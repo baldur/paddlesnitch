@@ -2,7 +2,8 @@
 // Thames at Reading and go from place to place, each a fixed camera shot with
 // doors to tap. Reading Canoe Club (the kayak) is on the north bank: the
 // changing room (your paddler), the boathouse (your boat and paddle), the
-// clubhouse (the plan and the leaderboards) and the pontoon (off to the race).
+// clubhouse (the plan and the leaderboards), the erg room (a kayak erg in front
+// of a mirror) and the pontoon (off to the race).
 // Reading Rowing Club (the single scull) is across the river: its changing
 // room (your all-in-one), boathouse (the sculls), clubhouse (the plan), the erg
 // room (a 500 m on the ergs, under the mural) and the landing stage. Pure: no
@@ -15,10 +16,11 @@ import { groundAt, bridgeBay, BRIDGE } from './world.js';
 // pontoon are in their club, the clubs are off the bridge. `club` says whose.
 export const PLACES = {
   path: { label: 'The Thames at Reading', doors: ['club', 'rclub'], up: null },
-  club: { label: 'Reading Canoe Club', doors: ['changing', 'boathouse', 'clubhouse', 'pontoon', 'path'], up: 'path' },
+  club: { label: 'Reading Canoe Club', doors: ['changing', 'boathouse', 'clubhouse', 'kerg', 'pontoon', 'path'], up: 'path' },
   changing: { label: 'The changing room', doors: ['club'], inside: true, up: 'club' },
   boathouse: { label: 'The boathouse', doors: ['club'], inside: true, up: 'club' },
   clubhouse: { label: 'The clubhouse', doors: ['club'], inside: true, up: 'club' },
+  kerg: { label: 'The erg room', doors: ['club'], inside: true, up: 'club' },
   pontoon: { label: 'The pontoon', doors: ['club'], up: 'club' },
   rclub: { label: 'Reading Rowing Club', doors: ['rchanging', 'rboathouse', 'rclubhouse', 'erg', 'rpontoon', 'path'], up: 'path', club: 'rowing' },
   rchanging: { label: 'The changing room', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
@@ -30,7 +32,7 @@ export const PLACES = {
 export const START = 'path';
 export const DOOR_LABELS = {
   club: 'Reading Canoe Club', rowing: 'Reading Rowing Club', changing: 'Changing room', boathouse: 'Boathouse',
-  clubhouse: 'Clubhouse', pontoon: 'Go to the water', path: 'Back to the path',
+  clubhouse: 'Clubhouse', kerg: 'Erg room', pontoon: 'Go to the water', path: 'Back to the path',
   rclub: 'Reading Rowing Club', rchanging: 'Changing room', rboathouse: 'Boathouse', rclubhouse: 'Clubhouse', erg: 'Erg room', rpontoon: 'Go to the water',
 };
 // Where the walk starts: a race link brings you to the club (the host made the
@@ -54,6 +56,7 @@ export const ROOMS = {
   changing: { at: 0, width: 10, depth: 8, height: 3.4 },
   boathouse: { at: 1, width: 13, depth: 10, height: 3.6 },
   clubhouse: { at: 2, width: 10, depth: 8, height: 3.4 },
+  kerg: { at: 3, width: 7, depth: 6, height: 3.2 },
   // Under the rowing club.
   rchanging: { at: 0, width: 10, depth: 8, height: 3.4, club: 'rowing' },
   rboathouse: { at: 1, width: 14, depth: 10, height: 3.6, club: 'rowing' },
@@ -66,6 +69,14 @@ export const SCULL_RACK = [0.55, 1.25, 1.95];
 // yours is the middle of the front row. Room coordinates (see inRoom).
 export const ERGS = [-3.2, -0.6, 2, 4.6].flatMap((x) => [[x, -2.2], [x, 0.2]]);
 export const MY_ERG = 3; // [-0.6, 0.2]
+// The canoe club's erg room: one kayak erg facing a mirror on the far wall
+// (room coordinates). The mirror is a window onto the room built again behind
+// it, turned inside out (main.js draws you there too, reflected).
+export const KERG_Z = -0.4; // the erg's middle, from the room's centre (the mirror's side is -z)
+export const MIRROR = { x0: -1.6, x1: 1.6, y0: 0.3, y1: 2.5 };
+// The reflection in the mirror, as a matrix (column-major): world z turned
+// about the mirror's plane at `z`.
+export const mirrorMatrix = (z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 2 * z, 1];
 
 const add = (a, b, k = 1) => a.map((v, i) => v + b[i] * k);
 const centre = (shape) => shape.reduce((a, p) => [a[0] + p[0] / shape.length, a[1] + p[1] / shape.length], [0, 0]);
@@ -148,6 +159,7 @@ export function clubShots(course) {
   const canoeSide = add([c.x, 0, c.z], c.toWater, c.toEdge);
   const rStand = p('rchanging', -1.2, HIPS, 0.4);
   const [ex, ez] = ERGS[MY_ERG];
+  const kd = ROOMS.kerg.depth;
   return {
     places: {
       // Along the club's bank, on the side away from the rowing club, near the
@@ -159,6 +171,8 @@ export function clubShots(course) {
       changing: { eye: p('changing', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('changing', -1.2 + 1.85, HIPS + 0.3, 0.4) },
       boathouse: room('boathouse', 1.5),
       clubhouse: room('clubhouse', 1.5),
+      // Behind you on the erg and to the right, looking past you into the mirror: your back, and you facing you.
+      kerg: { eye: p('kerg', 1.1, 1.75, KERG_Z + 1.9), look: p('kerg', -0.2, 1.0, -kd / 2) },
       rclub: { eye: rEntrance, look: at(r.x, r.z, 2.6) },
       rpontoon: { eye: [stage[0], 1.6, stage[2]], look: [canoeSide[0], 0.6, canoeSide[2]] },
       rchanging: { eye: p('rchanging', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('rchanging', -1.2 + 1.85, HIPS + 0.3, 0.4) },
@@ -168,10 +182,11 @@ export function clubShots(course) {
       erg: { eye: p('erg', ex + 0.6, 1.45, ez + 3.6), look: p('erg', ex - 0.2, 1.55, -ROOMS.erg.depth / 2) },
     },
     doors: {
-      club: { changing: entranceDoor(-10), boathouse: entranceDoor(0), clubhouse: entranceDoor(10), pontoon: at(...add([c.x, 0, c.z], c.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back - 2)), c.along, -10).filter((_, i) => i !== 1), 1.4) },
+      club: { changing: entranceDoor(-12), boathouse: entranceDoor(-4), clubhouse: entranceDoor(4), kerg: entranceDoor(12), pontoon: at(...add([c.x, 0, c.z], c.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back - 2)), c.along, -10).filter((_, i) => i !== 1), 1.4) },
       changing: { club: out('changing') },
       boathouse: { club: out('boathouse') },
       clubhouse: { club: out('clubhouse') },
+      kerg: { club: p('kerg', 2.55, 2.35, -kd / 2 + 0.1) }, // its door is beside the mirror
       pontoon: { club: add(c.edge, c.toWater, -8).map((v, i) => (i === 1 ? 1.5 : v)) },
       path: { club: at(c.x, c.z, c.height + 3), rclub: at(r.x, r.z, r.height + 3) },
       rclub: { rchanging: rDoor(-12), rboathouse: rDoor(-4), rclubhouse: rDoor(4), erg: rDoor(12), rpontoon: at(...add([r.x, 0, r.z], r.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([r.x, 0, r.z], r.toWater, -(r.toEdge + PATH.back - 2)), r.along, -10).filter((_, i) => i !== 1), 1.4) },
@@ -189,6 +204,10 @@ export function clubShots(course) {
     boards: { plan: p('clubhouse', -2.3, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1), leaders: p('clubhouse', 2.2, 1.75, -ROOMS.clubhouse.depth / 2 + 0.1) },
     changingStand: stand,
     changeLabel: p('changing', -1.2 + 0.75, HIPS + 0.15, 0.4),
+    // The kayak erg (its frame faces the mirror), its label, and the mirror's plane (world z).
+    kerg: p('kerg', 0, 0, KERG_Z),
+    kergLabel: p('kerg', -1.1, 1.3, KERG_Z),
+    mirrorZ: p('kerg', 0, 0, -kd / 2)[2],
     swan,
     roomAt,
     // The rowing club's: you in your all-in-one, the sculls on the rack and
@@ -259,6 +278,53 @@ function shell(m, o, size, floor) {
   rbox(m, o, [x1 - 0.05, 0, z0 + 1.3], [x1, 2.1, z0 + 2.3], C.dark);
 }
 
+// The canoe club's erg room, or (`mirrored`) its reflection behind the mirror:
+// the same room with z turned about the mirror's plane. The far wall, with the
+// mirror's opening in it, is built once, on the real side. A rubber mat under
+// the erg, a K1 on brackets on the wall behind you and a noticeboard, so the
+// mirror shows something of the room.
+export function ergRoom(m, o, mirrored) {
+  const { width: w, depth: d, height: h } = ROOMS.kerg;
+  const zm = -d / 2;
+  const f = (z) => (mirrored ? 2 * zm - z : z);
+  // (The reflected room a shade darker, as a mirror gives back a little less light.)
+  const box = ([x0, y0, z0], [x1, y1, z1], color) => rbox(m, o, [x0, y0, Math.min(f(z0), f(z1))], [x1, y1, Math.max(f(z0), f(z1))], mirrored ? color.map((v) => v * 0.86) : color);
+  const [x0, x1, z0, z1] = [-w / 2, w / 2, zm, d / 2];
+  box([x0 - 0.2, -0.2, z0], [x1 + 0.2, 0, z1 + 0.2], C.tile);
+  box([x0 - 0.2, h, z0], [x1 + 0.2, h + 0.2, z1 + 0.2], C.white);
+  box([x0 - 0.2, 0, z0], [x0, h, z1 + 0.2], C.wall);
+  box([x1, 0, z0], [x1 + 0.2, h, z1 + 0.2], C.wall);
+  box([x0, 0, z1], [x1, h, z1 + 0.2], C.wall);
+  box([2.1, 0, z0], [3.0, 2.1, z0 + 0.05], C.dark); // the way out, beside the mirror
+  box([-0.9, 0, KERG_Z - 1.6], [0.9, 0.012, KERG_Z + 1.3], C.rubber);
+  // The K1 on the wall behind you, and the noticeboard beside it.
+  box([-2.6, 1.55, z1 - 0.32], [2.6, 1.75, z1 - 0.02], C.locker);
+  for (const x of [-1.6, 1.6]) box([x - 0.04, 1.4, z1 - 0.35], [x + 0.04, 1.55, z1], C.rack);
+  box([-2.9, 0.8, z1 - 0.04], [-1.3, 1.3, z1], C.board);
+  if (mirrored) return;
+  const { x0: a, x1: b, y0: lo, y1: hi } = MIRROR;
+  box([x0, 0, z0 - 0.2], [a, h, z0], C.wall);
+  box([b, 0, z0 - 0.2], [x1, h, z0], C.wall);
+  box([a, 0, z0 - 0.2], [b, lo, z0], C.wall);
+  box([a, hi, z0 - 0.2], [b, h, z0], C.wall);
+  // The mirror's frame, light aluminium, and two faint streaks across the
+  // glass, so it reads as a mirror rather than a hatch into a second room.
+  const t = 0.09;
+  const frame = [0.8, 0.82, 0.85];
+  box([a - t, lo - t, z0], [b + t, lo, z0 + 0.03], frame);
+  box([a - t, hi, z0], [b + t, hi + t, z0 + 0.03], frame);
+  box([a - t, lo, z0], [a, hi, z0 + 0.03], frame);
+  box([b, lo, z0], [b + t, hi, z0 + 0.03], frame);
+  const sheen = [0.78, 0.84, 0.88];
+  const glass = (u, v) => inRoom(o, u, v, z0 + 0.004);
+  for (const [u, w] of [[a + 0.15, 0.16], [a + 0.42, 0.06]]) {
+    const rise = 1.1; // the streak's lean: across this much for its height
+    const [p0, p1, p2, p3] = [glass(u, lo), glass(u + w, lo), glass(u + w + rise, hi), glass(u + rise, hi)];
+    m.triFacing(p0, p1, p2, sheen, [0, 0, -1]);
+    m.triFacing(p0, p2, p3, sheen, [0, 0, -1]);
+  }
+}
+
 // The rooms under both clubs. Your paddler, boats, paddles and the ergs are
 // placed in them by main.js.
 export function clubMesh(shots) {
@@ -274,6 +340,8 @@ export function clubMesh(shots) {
   }
   rbox(m, a, [-2.5, 0.4, back + 0.9], [2.5, 0.48, back + 1.5], C.bench);
   rbox(m, a, [3.2, 0.9, back + 0.51], [4.4, 2.3, back + 0.55], C.mirror);
+  ergRoom(m, roomAt('kerg'), false);
+  ergRoom(m, roomAt('kerg'), true);
   // Boathouse: a timber floor, two racks on the back wall (uprights and arms).
   const b = roomAt('boathouse');
   const wall = -ROOMS.boathouse.depth / 2;

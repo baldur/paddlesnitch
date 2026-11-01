@@ -161,14 +161,14 @@ describe('in the history the AI and the coach profile read', () => {
   const motion = sum('m', { distanceKm: 0, cruiseSpeed: 0, durationS: 1440, noGps: true })
 
   it('a past paddle without a map is its time paddling, never 0 km or a pace', () => {
-    expect(historyBits(motion)).toEqual(['2026-10-01: 24 min paddling (no GPS, so no distance or pace)'])
-    expect(historyBits(sum('a'))).toEqual(['2026-10-01: 6.0km', 'cruise 2:47/500'])
+    expect(historyBits(motion)).toEqual(['1 Oct 2026: 24 min paddling (no GPS, so no distance or pace)'])
+    expect(historyBits(sum('a'))).toEqual(['1 Oct 2026: 6.0km', 'cruise 2:47/500'])
     expect(renderRelevant([{ summary: motion, reason: 'K1' }])).not.toMatch(/0\.0km|\/500/)
   })
 
   it("the plain coach profile's typical distance leaves it out", () => {
-    expect(deterministicProfile([sum('a'), sum('b', { distanceKm: 8 }), motion])).toMatch(/^A paddler with 3 logged paddles, typically around 7\.0 km\./)
-    expect(deterministicProfile([motion, motion, motion])).toMatch(/^A paddler with 3 logged paddles\./)
+    expect(deterministicProfile([sum('a'), sum('b', { distanceKm: 8 }), motion])).toMatch(/^A paddler with 3 saved paddles, typically around 7\.0 km\./)
+    expect(deterministicProfile([motion, motion, motion])).toMatch(/^A paddler with 3 saved paddles\./)
   })
 
   it('earns no pace or distance badges on its own page', () => {

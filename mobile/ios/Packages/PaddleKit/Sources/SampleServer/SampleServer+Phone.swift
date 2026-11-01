@@ -42,6 +42,9 @@ extension SampleServer {
         var list = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: data)
         if var phone = list.cards.first {
             phone.id = "pdl-phone"
+            phone.sourceType = "device"
+            phone.phone = true
+            phone.sameOuting = nil
             list.cards.insert(phone, at: 0)
         }
         return try JSONEncoder.paddlesnitch.encode(list)

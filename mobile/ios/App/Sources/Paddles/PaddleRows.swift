@@ -46,7 +46,7 @@ struct PaddleRowView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "Sun, 13 Sep 2026 · Tracker" in muted, then " · K1" in the split colour.
+    /// "Sun, 13 Sep 2026 · Tracker" (or Phone) in muted, then " · K1" in the split colour.
     private var heading: AttributedString {
         var text = AttributedString(row.heading)
         text.foregroundColor = Palette.muted

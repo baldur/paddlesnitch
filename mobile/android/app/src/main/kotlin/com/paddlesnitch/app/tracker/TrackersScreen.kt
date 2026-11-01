@@ -1,5 +1,6 @@
 package com.paddlesnitch.app.tracker
 
+import com.paddlesnitch.app.ui.PsRadius
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,13 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.paddlesnitch.app.ui.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.paddlesnitch.app.ui.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.paddlesnitch.app.ui.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -259,7 +260,7 @@ private fun RemoveTracker(api: AccountApi, deviceId: String, onRemoved: () -> Un
             modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove tracker") }
         return
     }
-    Column(Modifier.fillMaxWidth().border(1.dp, PsColor.red, RoundedCornerShape(6.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth().border(1.dp, PsColor.red, RoundedCornerShape(PsRadius.control)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Remove this tracker? It stops uploading until you add it again. Its recordings stay yours.")
         Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Assertive }) { error?.let { Text(it, color = PsColor.red) } }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -285,6 +286,6 @@ private fun Header(title: String, onBack: () -> Unit, back: String = "Done") = R
 
 @Composable
 private fun Badge(text: String) = Text(text, color = PsColor.muted, style = MaterialTheme.typography.labelMedium,
-    modifier = Modifier.border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+    modifier = Modifier.border(1.dp, PsColor.borderStrong, RoundedCornerShape(PsRadius.control)).padding(horizontal = 6.dp, vertical = 2.dp))
 
-private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(6.dp)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp))
+private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(PsRadius.control)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(PsRadius.control))

@@ -184,3 +184,21 @@ isn't obvious from the code.
 - An audit of the Paddles list with lines above the logbook reports "All
   paddles" clipped (the header half under the tab bar): those audits skip
   `.textClipped`; LargeTextTests checks clipping on the whole screen.
+- A hand-run `xcodebuild test` takes `-derivedDataPath .build/DerivedData`
+  (the Makefile's `DERIVED`, gitignored), never `build/DerivedData`: that one
+  isn't ignored, `git add -A` takes thousands of files, and GitHub refuses
+  the push. Stage paths by name.
+- Buttons take `.buttonBorderShape(.control)` (the token radius; iOS 26
+  draws bordered buttons as pills). It's set on the window, but a sheet or
+  full-screen cover doesn't inherit it: put it on each new one with app
+  buttons. `ButtonShapeTests` (UI) reads a real button's corner pixels;
+  `ButtonBorderShape.path` outside a button is a plain rectangle, so a
+  unit test can't check the shape.
+  System chrome keeps the system's shape on purpose (design-usability,
+  #793): navigation-bar buttons (Cancel, Close) and the segmented picker.
+- Read a frame of something that comes and goes (the keyboard) with
+  `frameIfThere`, never `exists` then `.frame`: it can go in between and
+  XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
+  "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
+  unless it repeats, then reset the simulator before the CI run, never a
+  retry (lead).

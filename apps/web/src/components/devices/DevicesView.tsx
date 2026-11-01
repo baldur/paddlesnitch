@@ -186,8 +186,10 @@ export default function DevicesView({ initial }: { initial?: DevicesInitial }) {
                         <span className="text-muted"> · seen </span>
                         {/* Written a few seconds apart on the server and in the browser:
                             a minute can tick over in between. */}
+                        {/* Quiet in words too, not by colour alone (as the phone app says it). One
+                            string, so a server/browser difference stays a suppressed text change. */}
                         <span suppressHydrationWarning className={deviceIsQuiet(d.lastSeenAt) ? 'text-red' : 'text-fg'}>
-                          {fmtAgo(d.lastSeenAt)}
+                          {`${fmtAgo(d.lastSeenAt)}${deviceIsQuiet(d.lastSeenAt) ? ' · quiet' : ''}`}
                         </span>
                         {/* Reported by the tracker on the start after the crash. */}
                         {crashNote(d.lastCrash) && <span suppressHydrationWarning className="text-red"> · {crashNote(d.lastCrash)}</span>}

@@ -108,6 +108,13 @@ describe('AnalysisView layout', () => {
     await mount(<AnalysisView data={data} />)
     expect(container.querySelector('[aria-label="Colour scale"]')).not.toBeNull()
   })
+
+  // Data stays square (design-system.md), as on both apps (#826).
+  it('draws the colour scale square, not as a pill', async () => {
+    await mount(<AnalysisView data={data} />)
+    const scale = container.querySelector('[aria-label="Colour scale"]')!
+    expect(scale.innerHTML).not.toMatch(/rounded/)
+  })
 })
 
 // One paddle (one-paddle.md, phase 3): a tracker paddle's boat motion is a

@@ -88,6 +88,31 @@ describe('selectRelevantPaddles', () => {
     expect(renderRelevant(rel)).toContain('comparable past paddles')
   })
 
+  // A lower time per 500 m is faster; the model read "3:15 vs 3:25" backwards
+  // (2026-11-01), so the line says which way it went.
+  it('says whether this paddle was faster or slower than each past one', () => {
+    const past = (id: string, cruiseSpeed: number) => ({ summary: paddle({ id, cruiseSpeed }), reason: 'same spot' })
+    const out = renderRelevant([past('slow', 500 / 205), past('quick', 500 / 185), past('same', 500 / 195)], { cruiseSpeed: 500 / 195 })
+    expect(out).toContain('cruise 3:25/500')
+    expect(out).toMatch(/3:25\/500.*this paddle 10s\/500 faster/)
+    expect(out).toMatch(/3:05\/500.*this paddle 10s\/500 slower/)
+    expect(out).toContain('this paddle the same cruise pace')
+    expect(renderRelevant([past('slow', 500 / 205)])).not.toContain('this paddle')
+  })
+
+  it('works the gap out from the paces as printed, and leaves it out when either has no pace', () => {
+    const past = (id: string, cruiseSpeed: number, over = {}) => ({ summary: paddle({ id, cruiseSpeed, ...over }), reason: 'same spot' })
+    // 3:25.4 is printed 3:25 and 3:15.6 is printed 3:16: the line must say 9, not 10.
+    expect(renderRelevant([past('p', 500 / 205.4)], { cruiseSpeed: 500 / 195.6 })).toMatch(/3:25\/500.*this paddle 9s\/500 faster/)
+    expect(renderRelevant([past('p', 500 / 205)], { cruiseSpeed: 0 })).not.toContain('this paddle')
+    expect(renderRelevant([past('m', 0, { distanceKm: 0, noGps: true })], { cruiseSpeed: 3 })).not.toContain('this paddle')
+  })
+
+  it('writes a gap of a minute or more as a pace, not hundreds of seconds', () => {
+    const past = (id: string, cruiseSpeed: number) => ({ summary: paddle({ id, cruiseSpeed }), reason: 'same spot' })
+    expect(renderRelevant([past('p', 500 / 500)], { cruiseSpeed: 500 / 175 })).toContain('this paddle 5:25/500 faster')
+  })
+
   it('returns nothing when no paddle is relevant', () => {
     const prior = [paddle({ startLat: 40, startLng: 40, boatClass: '8+', distanceKm: 40 })]
     expect(selectRelevantPaddles(current, prior)).toEqual([])

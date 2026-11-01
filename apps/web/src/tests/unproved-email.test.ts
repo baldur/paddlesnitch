@@ -6,11 +6,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 import type { AuthUser } from '@/lib/types'
 
-vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getRequestUser: vi.fn(), getAuthUser: vi.fn() }))
+vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getRequestUser: vi.fn(), getRequestUserEvenIfErased: vi.fn(), getAuthUser: vi.fn() }))
 vi.mock('@/lib/app-signin', async (orig) => ({ ...(await orig<typeof import('@/lib/app-signin')>()), hasRecentSignIn: vi.fn(async () => true) }))
 vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefined, delete: vi.fn(), set: vi.fn() })) }))
 
-import { getRequestUser } from '@/lib/auth'
+import { getRequestUserEvenIfErased } from '@/lib/auth'
 import { verifyIdToken, claimIsTrue } from '@paddlesnitch/core/cognito'
 import { buildAccountExport } from '@/lib/account-export'
 import { saveBetaApplication, getBetaApplication } from '@/lib/beta-signups'
@@ -43,7 +43,7 @@ describe('an email the account never proved', () => {
   })
 
   it('doesn\'t delete someone else\'s beta application with the account', async () => {
-    vi.mocked(getRequestUser).mockResolvedValue(squatter(false))
+    vi.mocked(getRequestUserEvenIfErased).mockResolvedValue(squatter(false))
     const res = await deleteAccount(new Request('http://x', { method: 'DELETE', body: '{}' }))
     expect(res.status).toBe(200)
     expect(await getBetaApplication(victim)).not.toBeNull()

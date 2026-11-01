@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary ranking</title>
+<style>
+  :root { --bg:#0b1220; --surface:#0f172a; --surface2:#1e293b; --border:#1e293b; --strong:#334155; --fg:#e2e8f0; --muted:#94a3b8; --primary:#0369a1; --ptext:#38bdf8; --red:#f87171; --green:#22c55e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 "IBM Plex Sans", system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 96px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .bar { position: sticky; top: 0; background: var(--bg); padding: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--border); z-index: 1; }
+  button { min-height: 44px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--strong); background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .paddle { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 16px; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .note { border-top: 1px solid var(--border); padding: 12px 0; display: grid; grid-template-columns: 32px 1fr; gap: 12px; }
+  .letter { font-family: "IBM Plex Mono", monospace; color: var(--ptext); font-weight: 600; }
+  .ranks { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .ranks label { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 10px; border: 1px solid var(--strong); border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .ranks input { accent-color: var(--ptext); }
+  .reveal { display: none; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  body.revealed .reveal { display: block; }
+  .bad { color: var(--red); }
+  .ok { color: var(--green); }
+  details { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; }
+  #summary { display: none; margin-top: 16px; }
+  body.revealed #summary { display: block; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Summary ranking</h1>
+  <p class="muted">For each paddle, rank the notes 1 (best) to last. Which model wrote each is hidden until you press Reveal. Your rankings stay in this browser.</p>
+  <div class="bar">
+    <button class="primary" id="copy">Copy my rankings</button>
+    <button id="reveal">Reveal</button>
+    <span class="muted" id="done"></span>
+  </div>
+  <section id="summary"></section>
+  <div id="paddles"></div>
+</main>
+<script>
+const DATA = /*DATA*/null;
+const KEY = 'insight-bench-ranks:' + DATA.rows.map(r => r.id).join(',').length;
+let ranks = {};
+try { ranks = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(ranks)); } catch {} };
+const ids = DATA.candidates.map(c => c.id);
+const labelOf = Object.fromEntries(DATA.candidates.map(c => [c.id, c.label]));
+// A stable shuffle per paddle, so the letters don't give the model away. Uses
+// the generator's high bits: its low bit alternates, which put the same model
+// first on every paddle when there were two (2026-11-01).
+function order(seed) {
+  const a = [...ids]; let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  for (let i = a.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = Math.floor((h / 4294967296) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtDay = iso => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const wrap = document.getElementById('paddles');
+DATA.rows.forEach(row => {
+  const el = document.createElement('section');
+  el.className = 'paddle';
+  const sport = row.sport || row.source;
+  let html = `<div class="eyebrow">${esc(fmtDay(row.paddledAt))} · ${esc(sport)}</div><div class="mono">${esc(row.headline)}</div>`;
+  order(row.id).forEach((cid, i) => {
+    const n = row.notes[cid]; if (!n) return;
+    const letter = 'ABCDEFG'[i];
+    const radios = ids.map((_, r) => `<label><input type="radio" name="${row.id}:${cid}" value="${r + 1}" ${ranks[row.id]?.[cid] == r + 1 ? 'checked' : ''}> ${r + 1}</label>`).join('');
+    const probs = n.problems.length ? `<span class="bad">Check: ${esc(n.problems.join('; '))}</span>` : '<span class="ok">Check: passes</span>';
+    const first = n.firstDraftProblems?.length ? `<br>First draft failed: ${esc(n.firstDraftProblems.join('; '))}` : '';
+    html += `<div class="note"><div class="letter">${letter}</div><div><div>${esc(n.text)}</div>
+      <div class="ranks" role="radiogroup" aria-label="Rank for note ${letter}">${radios}</div>
+      <div class="reveal">${esc(labelOf[cid])} · ${n.seconds.toFixed(1)} s · ${n.drafts} draft${n.drafts === 1 ? '' : 's'}${n.fellBack ? ' · plain summary used' : ''}<br>${probs}${first}</div></div></div>`;
+  });
+  html += `<details><summary>What the model was given</summary><pre>${esc(row.prompt)}</pre></details>`;
+  el.innerHTML = html;
+  el.addEventListener('change', e => {
+    const [pid, cid] = e.target.name.split(':');
+    (ranks[pid] ||= {})[cid] = Number(e.target.value); save(); count();
+  });
+  wrap.appendChild(el);
+});
+function count() {
+  const n = DATA.rows.filter(r => ids.every(c => !r.notes[c] || ranks[r.id]?.[c])).length;
+  document.getElementById('done').textContent = `${n} of ${DATA.rows.length} paddles ranked`;
+}
+count();
+document.getElementById('reveal').onclick = () => {
+  document.body.classList.toggle('revealed');
+  const rows = ids.map(c => {
+    const notes = DATA.rows.map(r => r.notes[c]).filter(Boolean);
+    const placed = DATA.rows.map(r => ranks[r.id]?.[c]).filter(Boolean);
+    const avg = placed.length ? (placed.reduce((a, b) => a + b, 0) / placed.length).toFixed(2) : '–';
+    const pass = notes.filter(n => !n.problems.length).length;
+    const plain = notes.filter(n => n.fellBack).length;
+    const secs = (notes.reduce((a, n) => a + n.seconds, 0) / notes.length).toFixed(1);
+    return `<tr><td>${esc(labelOf[c])}</td><td class="mono">${avg}</td><td class="mono">${pass}/${notes.length}</td><td class="mono">${plain}</td><td class="mono">${secs} s</td></tr>`;
+  }).join('');
+  document.getElementById('summary').innerHTML = `<table><thead><tr><th>Candidate</th><th>Average rank</th><th>Passes check</th><th>Plain used</th><th>Average time</th></tr></thead><tbody>${rows}</tbody></table>`;
+};
+document.getElementById('copy').onclick = async () => {
+  const text = JSON.stringify(ranks);
+  try { await navigator.clipboard.writeText(text); document.getElementById('done').textContent = 'Copied. Paste it back to Claude.'; }
+  catch { prompt('Copy this:', text); }
+};
+</script>
+</body>
+</html>

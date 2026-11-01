@@ -1,35 +1,19 @@
 package com.paddlesnitch.app.account
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.paddlesnitch.app.ui.PsRadius
 import android.content.Context
 import android.net.Uri
-import androidx.compose.foundation.layout.widthIn
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.activity.compose.LocalActivity
-import com.paddlesnitch.app.api.StravaHistory
-import com.paddlesnitch.app.api.HistorySpan
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenuItem
+import com.paddlesnitch.app.api.Contact
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
-import com.paddlesnitch.app.auth.VerifierStore
-import com.paddlesnitch.app.auth.NO_BROWSER_REPORT
-import com.paddlesnitch.app.api.StravaStatus
+import com.paddlesnitch.app.auth.NO_EMAIL_APP
+import com.paddlesnitch.app.auth.deleteMailto
+import com.paddlesnitch.app.auth.emailUs
 import com.paddlesnitch.app.Reauth
-import com.paddlesnitch.app.R
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.draw.alpha
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.Image
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
@@ -49,25 +33,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import com.paddlesnitch.app.ui.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.paddlesnitch.app.ui.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.paddlesnitch.app.ui.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -113,50 +95,34 @@ val aboutPages = listOf(
     AccountLink("Terms of Service", "/terms", signedIn = false),
 )
 
-/**
- * The sign-in email of an account made through Strava, which shares no email.
- * TODO(C5 Strava PR): use Contact.placeholderEmail instead (the website's isSyntheticStravaEmail).
- */
-fun isPlaceholderEmail(email: String) = Regex("^strava-\\d+@noreply\\.paddlesnitch\\.com$", RegexOption.IGNORE_CASE).matches(email)
-
 /** Where "Download my data" keeps the file between fetching and saving it. Personal data: [clearExport] whenever it isn't needed. */
 fun exportFile(context: Context) = File(context.cacheDir, "account-export.json")
 fun clearExport(context: Context) { exportFile(context).delete() }
 
 /**
- * Account, as the website's /account: your details, public profile, Strava
- * and trackers (on the website for now), help, signing out, then your data
- * and deleting the account last.
+ * Account, as the website's /account: your details, public profile, trackers,
+ * help, signing out, then your data and deleting the account last.
  */
 @Composable
 fun AccountScreen(
     api: AccountApi, onBack: () -> Unit, onTracker: () -> Unit, onTrackers: () -> Unit, onSignOut: () -> Unit, onSignedOut: () -> Unit, onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Back from signing in again: open Delete account, or show Strava, at once. */
+    /** Back from signing in again: open Delete account at once. */
     resume: Reauth.After? = null, onResumed: () -> Unit = {},
-    /** Sign out and in again (Strava when [strava]), then come back with [resume]. */
-    onSignInAgain: (userId: String, email: String?, strava: Boolean, then: Reauth.After) -> Unit = { _, _, _, _ -> },
-    /** Connecting Strava came back to the app (com.paddlesnitch.app:/account/strava…). */
-    stravaReturn: String? = null, onStravaReturnHandled: () -> Unit = {},
-    /** Keeps the connect verifier; SharedPreferences unless a test gives one. */
-    connectVerifiers: VerifierStore? = null,
+    /** Sign out and in again, then come back with [resume]. */
+    onSignInAgain: (userId: String, email: String?, then: Reauth.After) -> Unit = { _, _, _ -> },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val connect = remember { StravaConnect(api, connectVerifiers ?: PrefsConnectVerifierStore(context)) }
     var user by remember { mutableStateOf<AuthUser?>(null) }
+    // Whether the account was made through Strava (placeholderEmail), which has no password, so it
+    // gets a contact email and can't sign in again to delete. Its own load: a failure here never
+    // hides the rest of Account from anyone.
+    var contact by remember { mutableStateOf<Contact?>(null) }
+    val contactLoad = remember { Load() }
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Strava can be switched off on the server (README, "When strava is false"). Null until known;
-    // a failed check says so and can be tried again, rather than claiming Strava is off.
-    val options = remember { Load() }
-    var stravaOn by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(options.attempt) {
-        options.failed = null
-        runCatching { api.signInOptions().strava }.onSuccess { stravaOn = it; options.done = true }
-            .onFailure { options.failed = it.shown("Couldn’t check Strava. Please try again.") }
-    }
     LaunchedEffect(attempt) {
         loadError = null
         runCatching { api.me().user ?: throw SignedOut() }.onSuccess { user = it }
@@ -166,6 +132,13 @@ fun AccountScreen(
     fun act(fallback: String, onError: (String) -> Unit = { error = it }, work: suspend () -> Unit): Job = scope.launch {
         runCatching { work() }.onFailure { if (it is SignedOut) onSignedOut() else onError(it.shown(fallback)) }
     }
+    LaunchedEffect(user != null, contactLoad.attempt) {
+        if (user == null) return@LaunchedEffect
+        contactLoad.failed = null
+        act("Couldn’t load your contact details. Please try again.", { contactLoad.failed = it }) { contact = api.contact(); contactLoad.done = true }
+    }
+    /** Asked when Delete needs it, so a contact load that failed earlier is tried again then. */
+    suspend fun madeWithStrava(): Boolean = (contact ?: api.contact().also { contact = it }).placeholderEmail == true
     fun open(page: AccountLink) = act("Couldn’t open that page. Please try again.") {
         openTab(context, if (page.signedIn) api.signedInPage(page.path) else BuildConfig.API_BASE_URL + page.path)
     }
@@ -185,31 +158,26 @@ fun AccountScreen(
             } else Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@Column
         }
-        fun signInAgain(then: Reauth.After) { val strava = isPlaceholderEmail(u.email); onSignInAgain(u.id, u.email.takeUnless { strava }, strava, then) }
+        // Only an account with a password signs in again (made with Strava, Delete offers Email us).
+        fun signInAgain(then: Reauth.After) = onSignInAgain(u.id, u.email, then)
         Message(error, red = true)
-        Details(api, u, ::act)
+        Details(api, u, contact, contactLoad, ::act)
         Divider()
         PublicProfile(api, u, ::act, onPreview = { path -> open(AccountLink("", path)) })
         Divider()
-        when (val on = stravaOn) {
-            // Held open with the heading while unknown, so the page below doesn't jump twice.
-            null -> { Section("Strava"); LoadState(options); Divider() }
-            else -> StravaSection(api, ::act, connect, resume == Reauth.After.ConnectStrava, onResumed, stravaReturn, onStravaReturnHandled,
-                onSignInAgain = { signInAgain(Reauth.After.ConnectStrava) }, onSignedOut = onSignedOut,
-                stravaOnly = isPlaceholderEmail(u.email), on = on)
-        }
         Section("Devices")
         Link("Your trackers", onClick = onTrackers)
         Link("Set up or sync a tracker", onClick = onTracker)
         Divider()
         aboutPages.forEach { Link("${it.label} ↗") { open(it) } }
-        Link("Sign out", onClick = onSignOut)
+        // Made through Strava: no password, so signing out locks it out until we move it (lead).
+        SignOut(::act, ::madeWithStrava, onSignOut)
         Divider()
         YourData(api, ::act)
         Divider()
-        // Made through Strava, with Strava off: signing out would leave no way back in.
+        // Made through Strava: it has no way to sign in again, so signing out would lock it out.
         DeleteAccount(api, ::act, resume == Reauth.After.Delete, onResumed, onSignInAgain = { signInAgain(Reauth.After.Delete) }, onDeleted,
-            canSignInAgain = !isPlaceholderEmail(u.email) || stravaOn == true)
+            madeWithStrava = ::madeWithStrava, supportId = u.id)
     }
 }
 
@@ -239,7 +207,7 @@ private fun LoadState(load: Load) {
 }
 
 @Composable
-private fun Details(api: AccountApi, user: AuthUser, act: Act) {
+private fun Details(api: AccountApi, user: AuthUser, contact: Contact?, load: Load, act: Act) {
     Section("Your details")
     Field("Email", user.email)
     Field("Display name", user.displayName)
@@ -248,27 +216,20 @@ private fun Details(api: AccountApi, user: AuthUser, act: Act) {
         Text("Support ID", color = PsColor.muted, style = MaterialTheme.typography.bodySmall)
         SelectionContainer { Text(user.id) }
     }
-    if (!isPlaceholderEmail(user.email)) return
-    val load = remember { Load() }
-    var saved by remember { mutableStateOf<String?>(null) }
-    var email by remember { mutableStateOf("") }
+    if (contact == null) { if (load.failed != null) LoadState(load); return }
+    if (contact.placeholderEmail != true) return
+    var saved by remember { mutableStateOf(contact.contact?.email) }
+    var email by remember { mutableStateOf(saved.orEmpty()) }
     var working by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
-    LaunchedEffect(load.attempt) {
-        load.failed = null
-        act("Couldn’t load your contact email. Please try again.", { load.failed = it }) {
-            saved = api.contact().contact?.email; email = saved.orEmpty(); load.done = true
-        }
-    }
     fun run(fallback: String, ok: String, work: suspend () -> Unit) {
         working = true; message = null
         act(fallback, { message = it; failed = true }) { work(); message = ok; failed = false }.invokeOnCompletion { working = false }
     }
-    if (!load.done) { LoadState(load); return }
     OutlinedTextField(email, { email = it }, colors = fieldColors(), label = { Text("Contact email") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         placeholder = { Text("you@example.com") },
-        supportingText = { Text("You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it.") },
+        supportingText = { Text("We don’t have an email for this account. Add one so we can move your account to it and tell you about changes to our Terms.") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(colors = outlinedColors(), enabled = !working && email.isNotBlank() && email.trim() != saved, modifier = Modifier.testTag("contact-save"), onClick = {
@@ -362,234 +323,42 @@ private fun YourData(api: AccountApi, act: Act) {
     Message(message, red = failed, tag = "data-message")
 }
 
-/**
- * Strava, as the website's Account section: connect (Strava's consent page in a
- * Custom Tab), who is connected, auto-import, older paddles, disconnect.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun StravaSection(
-    api: AccountApi, act: Act, connect: StravaConnect, resume: Boolean, onResumed: () -> Unit,
-    stravaReturn: String?, onReturnHandled: () -> Unit, onSignInAgain: () -> Unit, onSignedOut: () -> Unit,
-    /** The account signs in only with Strava: disconnecting it is asked about first. */
-    stravaOnly: Boolean,
-    /** Strava is switched on: off, the section shows only to an account still connected, as Paused. */
-    on: Boolean = true,
-) {
-    val context = LocalContext.current
-    val load = remember { Load() }
-    var status by remember { mutableStateOf<StravaStatus?>(null) }
-    var working by remember { mutableStateOf(false) }
-    var switching by remember { mutableStateOf(false) }
-    var needsSignIn by remember { mutableStateOf(false) }
-    var leaving by remember { mutableStateOf(false) }
-    var confirmDisconnect by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
-    var failed by remember { mutableStateOf(false) }
-    val view = remember { BringIntoViewRequester() }
-    fun say(text: String?, error: Boolean) { message = text; failed = error }
-    LaunchedEffect(load.attempt) {
-        load.failed = null
-        act("Couldn’t check Strava. Please try again.", { load.failed = it }) { status = api.stravaStatus(); load.done = true }
-    }
-    // Back from Strava: a cue to finish (only a connect this app started), then the server's own status.
-    LaunchedEffect(stravaReturn) {
-        val back = stravaReturn?.let(Uri::parse) ?: return@LaunchedEffect
-        onReturnHandled()
-        working = true
-        say("Connecting Strava…", false)
-        runCatching { view.bringIntoView() }
-        act(stravaConnectResult("exchange_failed"), { say(it, true); working = false }) {
-            try {
-                val now = connect.finish(back.getQueryParameter("code"), back.getQueryParameter("strava"))
-                if (now != null) { status = now; say(stravaConnectResult("connected"), false) } else say(null, false)
-            } catch (e: ApiFailure) {
-                if (!e.reauth) throw e
-                say(null, false); needsSignIn = true
-            }
-            working = false
-        }
-    }
-    LaunchedEffect(resume) { if (resume) { onResumed(); runCatching { view.bringIntoView() } } }
-    fun start() {
-        working = true; say(null, false)
-        act(stravaConnectResult("exchange_failed"), { say(it, true); working = false }) {
-            try {
-                val url = connect.start()
-                if (openTab(context, url).isFailure) say("Couldn’t open Strava. Turn on or install a web browser, then try again.", true)
-            } catch (e: ApiFailure) {
-                if (!e.reauth) throw e
-                needsSignIn = true
-            }
-            working = false
-        }
-    }
-    fun disconnect() {
-        working = true; confirmDisconnect = false; say(null, false)
-        act("Couldn’t disconnect Strava. Please try again.", { say(it, true) }) {
-            api.stravaDisconnect(); status = StravaStatus(connected = false)
-        }.invokeOnCompletion { working = false }
-    }
-
-    if (!on) { PausedStrava(load, status, working, message, failed, stravaOnly, ::disconnect); return }
-    Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section("Strava")
-        Text("Connect Strava to bring in your paddles and trial results without exporting files, and to sign in with Strava. We only read your activities; we never post.", color = PsColor.muted)
-        // Always in the layout, so TalkBack reads what happened.
-        Message(message, red = failed, green = !failed && message != "Connecting Strava…", tag = "strava-message")
-        Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
-            if (needsSignIn) Notice("For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.")
-        }
-        val s = status
-        when {
-            // The notice takes the button's place, as on the website.
-            needsSignIn -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, modifier = Modifier.heightIn(min = 48.dp), colors = outlinedColors()) {
-                    Text(if (leaving) "Sign in again…" else "Sign in again")
-                }
-                TextButton(enabled = !leaving, colors = linkColors(), onClick = { needsSignIn = false }) { Text("Cancel") }
-            }
-            !load.done -> LoadState(load)
-            s == null || !s.connected -> {
-                // Strava's own button, unaltered (their brand guidelines).
-                Image(painterResource(R.drawable.connect_with_strava), contentDescription = "Connect with Strava",
-                    modifier = Modifier.height(48.dp).alpha(if (working) 0.5f else 1f).clickable(enabled = !working, role = Role.Button, onClick = ::start))
-                if (working) CircularProgressIndicator(Modifier.padding(4.dp))
-            }
-            else -> {
-                Column(Modifier.card()) {
-                    // Wraps at large text rather than squeezing the name to a letter a line.
-                    FlowRow(Modifier.fillMaxWidth().padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        itemVerticalAlignment = Alignment.CenterVertically) {
-                        Text("Connected", color = PsColor.green, style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.border(1.dp, PsColor.green, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-                        Text(s.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp))
-                        if (!confirmDisconnect) TextButton(enabled = !working, colors = linkColors(),
-                            onClick = { if (stravaOnly) confirmDisconnect = true else disconnect() }) { Text(if (working) "Disconnecting…" else "Disconnect") }
-                    }
-                    if (confirmDisconnect) Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Strava is this account's only way to sign in.
-                        Text("You sign in with Strava. Once it’s disconnected, you can’t sign in to this account until you connect it again on the website.")
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = ::disconnect, colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.red)) { Text("Disconnect") }
-                            TextButton(colors = linkColors(), onClick = { confirmDisconnect = false }) { Text("Cancel") }
-                        }
-                    }
-                }
-                val on = s.autoImport ?: true
-                Row(Modifier.card().heightIn(min = 48.dp).clickable(enabled = !working && !switching, role = Role.Switch) {
-                    // At once, and back again if the server says no.
-                    status = s.copy(autoImport = !on); say(null, false); switching = true
-                    act("Couldn’t change auto-import. Please try again.", { status = status?.copy(autoImport = on); say(it, true) }) {
-                        status = status?.copy(autoImport = api.setStravaAutoImport(!on).autoImport)
-                    }.invokeOnCompletion { switching = false }
-                }.semantics(mergeDescendants = true) { toggleableState = ToggleableState(on) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text("Auto-import new paddles")
-                        Text("New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.", color = PsColor.muted)
-                    }
-                    Switch(checked = on, onCheckedChange = null, enabled = !working && !switching, colors = switchColors())
-                }
-                StravaImports(api, onSignedOut)
-                // Attribution: this row shows the athlete's Strava profile name.
-                Image(painterResource(R.drawable.powered_by_strava), contentDescription = "Powered by Strava", modifier = Modifier.height(20.dp))
-                Text("You can also sign in with Strava. Disconnecting stops both importing and signing in with Strava.", color = PsColor.muted,
-                    modifier = Modifier.testTag("strava-end"))
-            }
-        }
-        Divider()
-    }
-}
-
-/**
- * Strava switched off: only an account still connected sees it, so it can disconnect (the
- * website's Account). An account made through Strava keeps its link, its only way back in.
- */
-@Composable
-private fun PausedStrava(load: Load, status: StravaStatus?, working: Boolean, message: String?, failed: Boolean, stravaOnly: Boolean, disconnect: () -> Unit) {
-    if (!load.done) { Section("Strava"); LoadState(load); Divider(); return }
-    if (status?.connected != true) return
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section("Strava")
-        Message(message, red = failed, tag = "strava-message")
-        FlowRow(Modifier.card().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            Text("Paused", color = PsColor.muted, style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
-            Text(status.athlete?.name.orEmpty(), modifier = Modifier.weight(1f, fill = true).widthIn(min = 96.dp).padding(vertical = 12.dp))
-            if (!stravaOnly) TextButton(enabled = !working, colors = linkColors(), onClick = disconnect) { Text(if (working) "Disconnecting…" else "Disconnect") }
-        }
-        Text("Strava isn’t available right now. Paddles you already brought in stay here.", color = PsColor.muted)
-        Divider()
-    }
-}
-
-/**
- * The first month by itself, then Older paddles (the website's StravaHistoryImport), kept in
- * [StravaImportModel] so they outlive turning the phone. Leaving Account stops them.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StravaImports(api: AccountApi, onSignedOut: () -> Unit) {
-    val model: StravaImportModel = viewModel { StravaImportModel(api) }
-    val activity = LocalActivity.current
-    DisposableEffect(model) { onDispose { if (activity?.isChangingConfigurations != true) model.stop() } }
-    LaunchedEffect(model) { model.startFirst() }
-    LaunchedEffect(model.signedOut) { if (model.signedOut) onSignedOut() }
-    // "Keep this screen open" means the phone mustn't sleep while Strava makes us wait.
-    val view = LocalView.current
-    DisposableEffect(model.running) { view.keepScreenOn = model.running; onDispose { view.keepScreenOn = false } }
-
-    // The first month: a rule on the left marks it as something happening, as on the website.
-    model.first?.let { p ->
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            Box(Modifier.width(2.dp).fillMaxHeight().background(PsColor.primary))
-            ImportStatus(p, "your last month", "first-import", Modifier.padding(start = 12.dp))
-        }
-    }
-    val spans = listOf(HistorySpan.Months3 to "Last 3 months", HistorySpan.Year to "Last year", HistorySpan.All to "Everything")
-    var picking by remember { mutableStateOf(false) }
-    // One import at a time against Strava's limit.
-    val busy = model.running
-    Column(Modifier.card().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Older paddles", fontWeight = FontWeight.Medium)
-        Text("Bring in paddles you recorded on Strava before you connected it. Ones already here are skipped.", color = PsColor.muted)
-        ExposedDropdownMenuBox(expanded = picking, onExpandedChange = { if (!busy) picking = it }) {
-            OutlinedTextField(spans.first { it.first == model.span }.second, {}, readOnly = true, enabled = !busy, colors = fieldColors(), label = { Text("How far back") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(picking) },
-                modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).testTag("import-span"))
-            ExposedDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
-                spans.forEach { (value, label) -> DropdownMenuItem(text = { Text(label) }, onClick = { model.span = value; picking = false }) }
-            }
-        }
-        OutlinedButton(enabled = !busy, onClick = model::startOlder, modifier = Modifier.heightIn(min = 48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = PsColor.primaryText)) {
-            Text(if (model.olderRunning) "Bringing in…" else "Bring in older paddles")
-        }
-        model.older?.let { ImportStatus(it, "your paddles", "older-import") }
-    }
-}
-
-/**
- * Progress, with TalkBack told only when it starts, waits, stops or ends
- * (importAnnouncement), and at once when it stops.
- */
-@Composable
-private fun ImportStatus(p: ImportProgress, what: String, tag: String, modifier: Modifier = Modifier) {
-    val announce = importAnnouncement(p, what)
-    Text(importStatus(p, what), color = if (p.stopped != null) PsColor.red else PsColor.muted,
-        modifier = modifier.testTag(tag).semantics {
-            contentDescription = announce
-            liveRegion = if (p.stopped != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
-        })
-}
-
 /** A bordered surface box, as the website's cards. */
-private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(6.dp)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp))
+private fun Modifier.card() = fillMaxWidth().background(PsColor.surface, RoundedCornerShape(PsRadius.control)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(PsRadius.control))
 
 /** What the Delete account section shows. */
 private enum class Deleting { No, Checking, NeedsSignIn, Confirming }
 
-internal const val NO_SIGN_IN_AGAIN = "Strava sign-in is off for now, so you can’t sign in again here. Report an issue asking us to delete your account. We’ll know it’s yours, so leave out your name and email: reports are public."
+internal const val NO_SIGN_IN_AGAIN = "An account made with Strava can’t sign in again here. Email us and we’ll delete it."
+internal const val SIGN_OUT_STRAVA = "You made this account with Strava, so you can’t sign back in until we move it to your email."
+
+/** Sign out; an account made with Strava is asked first, with a way to email us (lead, 2026-11-01). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SignOut(act: Act, madeWithStrava: suspend () -> Boolean, onSignOut: () -> Unit) {
+    val context = LocalContext.current
+    var asking by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val focus = remember { FocusRequester() }
+    Link("Sign out") {
+        message = null
+        act("Couldn’t check your account. Please try again.", { message = it }) { if (madeWithStrava()) asking = true else onSignOut() }
+    }
+    // Always in the layout, so TalkBack reads the question when it appears.
+    Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+        if (asking) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Notice(SIGN_OUT_STRAVA)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp).focusRequester(focus),
+                    onClick = { message = if (emailUs(context)) null else NO_EMAIL_APP }) { Text("Email us") }
+                TextButton(colors = linkColors(), modifier = Modifier.heightIn(min = 48.dp), onClick = onSignOut) { Text("Sign out anyway") }
+                TextButton(colors = linkColors(), modifier = Modifier.heightIn(min = 48.dp), onClick = { asking = false; message = null }) { Text("Cancel") }
+            }
+            LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+        }
+    }
+    Message(message, red = true, tag = "signout-message")
+}
 internal const val RECENT_SIGN_IN = "For your safety, deleting your account needs a recent sign-in. Sign in again and you’ll come straight back here."
 
 /**
@@ -599,10 +368,11 @@ internal const val RECENT_SIGN_IN = "For your safety, deleting your account need
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed: () -> Unit, onSignInAgain: () -> Unit, onDeleted: () -> Unit,
-    /** False when this account has no way to sign in again (made through Strava, Strava off): Report an issue instead. */
-    canSignInAgain: Boolean = true) {
+    /** True when this account has no way to sign in again (made through Strava): Email us instead. */
+    madeWithStrava: suspend () -> Boolean = { false }, supportId: String = "") {
     val context = LocalContext.current
     var state by remember { mutableStateOf(Deleting.No) }
+    var canSignInAgain by remember { mutableStateOf(true) }
     var typed by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
@@ -613,14 +383,16 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
     fun check() {
         state = Deleting.Checking; typed = ""; message = null
         act("Couldn’t check your sign-in. Please try again.", { message = it; state = Deleting.No }) {
-            state = if (api.accountStatus().recentSignIn) Deleting.Confirming else Deleting.NeedsSignIn
+            val recent = api.accountStatus().recentSignIn
+            if (!recent) canSignInAgain = !madeWithStrava()
+            state = if (recent) Deleting.Confirming else Deleting.NeedsSignIn
         }
     }
     // Back from signing in again: straight to the check, and the section in view.
     LaunchedEffect(resume) { if (resume) { onResumed(); check(); runCatching { view.bringIntoView() } } }
     Column(Modifier.bringIntoViewRequester(view), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Section("Delete account")
-        Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes to one of its admins or members. This happens at once and can't be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
+        Text("Deletes your account, your paddles and diary notes, your results (leaderboards update without you), your shared links and your tracker recordings. Courses and trials you created go too, unless a group owns them or someone else has a result in them. Your trackers are removed. A group you own passes to one of its admins or members. This happens at once and can’t be undone. This is your right to erasure (UK GDPR Art. 17).", color = PsColor.muted)
         // Always in the layout, so TalkBack reads the notice when it appears.
         Box(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
             if (state == Deleting.NeedsSignIn) Notice(if (canSignInAgain) RECENT_SIGN_IN else NO_SIGN_IN_AGAIN)
@@ -633,14 +405,9 @@ private fun DeleteAccount(api: AccountApi, act: Act, resume: Boolean, onResumed:
             Deleting.NeedsSignIn -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (canSignInAgain) OutlinedButton(enabled = !leaving, onClick = { leaving = true; onSignInAgain() }, colors = outlinedColors(),
                     modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text(if (leaving) "Sign in again…" else "Sign in again") }
-                // Signed in on the website, so the report says whose account it is.
-                else OutlinedButton(colors = outlinedColors(), onClick = {
-                    message = null
-                    act("Couldn’t open the issue form. Please try again.", { message = it }) {
-                        if (openTab(context, api.signedInPage("/account?report=1")).isFailure) message = NO_BROWSER_REPORT
-                    }
-                },
-                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text("Report an issue") }
+                // Privately, by email (not the public issue form), with the Support ID so we know whose it is.
+                else OutlinedButton(colors = outlinedColors(), onClick = { message = if (emailUs(context, deleteMailto(supportId))) null else NO_EMAIL_APP },
+                    modifier = Modifier.heightIn(min = 48.dp).focusRequester(signInFocus)) { Text("Email us") }
                 TextButton(enabled = !leaving, colors = linkColors(), onClick = { state = Deleting.No }) { Text("Cancel") }
                 LaunchedEffect(Unit) { runCatching { signInFocus.requestFocus() } }
             }

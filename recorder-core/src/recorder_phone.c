@@ -7,6 +7,7 @@
  * into the next row, and the replay into this one.
  */
 #include "recorder_phone.h"
+#include "stroke.h"
 
 #if defined(__clang__)
 #pragma STDC FP_CONTRACT OFF
@@ -35,7 +36,7 @@ void rc_phone_init(rc_phone *p, const rc_phone_config *cfg)
     memset(p, 0, sizeof(*p));
     p->cfg = *cfg;
     p->accel_last = p->gyro_last = p->row_last = p->done_ms = -1;
-    p->emitted_ms = p->imu_last = p->tick_last = -1;
+    p->emitted_ms = p->imu_last = p->tick_last = p->first_tick_ms = -1;
     /* Only the battery: a phone's satellite count is often not known, and
        the server drops a row that reads 0 satellites (csv.ts). */
     rc_config core = { cfg->write, cfg->user, cfg->has & RC_HAS_BATT_MV };
@@ -205,6 +206,7 @@ void rc_phone_tick(rc_phone *p, int64_t t_ns, unsigned batt_mv)
     /* The app's timer fired late (it's on a busy queue), after samples or a
        row later than it: write the row after them, never drop it. Its window
        is still exactly the samples a replay puts in it. */
+    if (p->first_tick_ms < 0) p->first_tick_ms = ms;
     if (ms < p->emitted_ms) ms = p->emitted_ms;
     if (ms <= p->row_last) ms = p->row_last + 1;
     while (p->rows_n == RC_PHONE_ROWS) step(p, 1);   /* a sensor stopped */
@@ -234,6 +236,17 @@ void rc_phone_live(const rc_phone *p, rc_live_values *out)
     rc_live(&p->core, out);
     out->fix = p->tick_last >= 0 && p->tick_fix;
     out->since_fix_s = p->tick_fixed ? (float)(p->tick_ms - p->tick_fix_ms) / 1000.0f : NAN;
+}
+
+void rc_phone_trace(const rc_phone *p, rc_trace *out)
+{
+    /* Now is the latest tick, on the rows' clock; before the first tick,
+       the newest sample (or nothing at all: starting). */
+    const rc_stroke *s = &p->core.stroke;
+    uint32_t newest = s->ring_n ? s->ring[(s->ring_head + s->ring_n - 1) % RC_STROKE_RING].ms : 0;
+    uint32_t now = p->tick_last >= 0 ? (uint32_t)p->tick_ms : newest;
+    uint32_t start = p->first_tick_ms >= 0 ? (uint32_t)p->first_tick_ms : now;
+    rcs_trace(s, now, start, out);
 }
 
 uint32_t rc_phone_dropped_late(const rc_phone *p) { return p->dropped_late; }

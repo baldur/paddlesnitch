@@ -11,6 +11,9 @@ public struct GPSLine: Equatable, Sendable {
     public let text: String
     /// What VoiceOver reads: "GPS lost 40 seconds ago".
     public let label: String
+    /// Red only for "GPS lost…"; a fix and "Waiting for GPS" are muted
+    /// (mobile/contract/README.md § Recording screen).
+    public var isWarning: Bool { state == .lost }
 
     public init(_ live: LiveValues) {
         guard let since = live.secondsSinceFix else {

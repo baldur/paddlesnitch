@@ -85,7 +85,8 @@ public struct PaddleSummary: Hashable, Sendable {
     public init(_ paddle: AnalysisSession, summaryFailed: Bool = false) {
         let result = paddle.result
         title = Format.weekday(paddle.paddledAt)
-        let eyebrowParts = [Format.source(paddle.source.type), paddle.boatClass?.rawValue].compactMap { $0 }
+        let eyebrowParts = [Format.source(paddle.source.type, phone: paddle.source.phone), paddle.boatClass?.rawValue]
+            .compactMap { $0 }
         eyebrow = eyebrowParts.isEmpty ? nil : eyebrowParts.joined(separator: " · ")
         stats = result.noGps.map { Self.motionStats(result, noGps: $0) } ?? Self.gpsStats(result)
         conditions = Self.conditions(result.conditions)

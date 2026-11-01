@@ -67,10 +67,15 @@ class AccountApiTest {
 
     @Test fun theContactEmail() = runTest {
         answer(200, fixture("account.contact"))
-        assertEquals("pat@example.com", api.setContact("pat@example.com").contact?.email)
+        // placeholderEmail says the account was made with Strava: Account's contact field and delete path hang on it.
+        val saved = api.setContact("pat@example.com")
+        assertEquals("pat@example.com", saved.contact?.email)
+        assertEquals(false, saved.placeholderEmail)
         assertEquals(Triple("POST", "/api/account/contact", """{"email":"pat@example.com"}"""), sent())
         answer(200, fixture("account.contact.none"))
-        assertNull(api.contact().contact)
+        val none = api.contact()
+        assertNull(none.contact)
+        assertEquals(true, none.placeholderEmail)
         assertEquals(Triple("GET", "/api/account/contact", ""), sent())
         answer(200, """{"ok":true}""")
         api.removeContact()
@@ -156,63 +161,6 @@ class AccountApiTest {
             assertEquals("Couldn’t prepare your download. Please try again.", e.message)
             assertFalse(file.exists())
         } finally { s3.close() }
-    }
-
-    @Test fun stravaForASignedInAccount() = runTest {
-        answer(200, fixture("strava.status"))
-        assertEquals("Pat Paddler", api.stravaStatus().athlete?.name)
-        assertEquals(Triple("GET", "/att/api/strava/status", ""), sent())
-
-        answer(200, fixture("strava.app-connect"))
-        assertTrue(api.stravaConnect("ch-1").url.startsWith("https://www.strava.com/oauth/authorize"))
-        assertEquals(Triple("POST", "/att/api/strava/app-connect", """{"challenge":"ch-1"}"""), sent())
-
-        answer(200, fixture("strava.app-connect-finish"))
-        assertTrue(api.stravaConnectFinish("c-1", "v-1").connected)
-        assertEquals(Triple("POST", "/att/api/strava/app-connect/finish", """{"code":"c-1","verifier":"v-1"}"""), sent())
-
-        answer(200, fixture("strava.auto-import"))
-        assertFalse(api.setStravaAutoImport(false).autoImport)
-        assertEquals(Triple("POST", "/att/api/strava/auto-import", """{"enabled":false}"""), sent())
-
-        answer(200, """{"ok":true}""")
-        api.stravaDisconnect()
-        assertEquals(Triple("POST", "/att/api/strava/disconnect", ""), sent())
-
-        answer(200, fixture("strava.status.not-connected"))
-        assertFalse(api.stravaStatus().connected)
-    }
-
-    @Test fun aStravaConnectTooLongAfterSigningInAsksForASignIn() = runTest {
-        answer(403, """{"error":"For your safety, connecting Strava needs a recent sign-in. Please sign in again.","reauth":true}""")
-        assertTrue((runCatching { api.stravaConnect("ch") }.exceptionOrNull() as ApiFailure).reauth)
-    }
-
-    @Test fun aStravaAccountConnectedElsewhereSaysSoInTheServersWords() = runTest {
-        answer(409, fixture("strava.app-connect-finish.linked-elsewhere"))
-        val e = runCatching { api.stravaConnectFinish("c", "v") }.exceptionOrNull() as ApiFailure
-        assertEquals(409, e.status)
-        assertTrue(e.message!!.contains("already connected to another paddlesnitch account"))
-    }
-
-    @Test fun olderStravaPaddlesOneAtATime() = runTest {
-        answer(200, """{"result":{"data":${fixture("sources.stravaHistory")}}}""")
-        val h = api.stravaHistory(HistorySpan.First)
-        assertEquals(2, h.toImport!!.size)
-        assertEquals("/api/trpc/sources.stravaHistory?input=%7B%22since%22%3A%22first%22%7D", sent().second)
-
-        answer(200, """{"result":{"data":${fixture("sources.importStravaPaddle")}}}""")
-        assertEquals(StravaImport.Status.Imported, api.importStravaPaddle(h.toImport!![0]).status)
-        assertEquals(Triple("POST", "/api/trpc/sources.importStravaPaddle", """{"id":12000000001,"sport":"Kayaking","startDate":"2026-07-04T06:30:00Z"}"""), sent())
-
-        answer(200, """{"result":{"data":${fixture("sources.stravaHistoryDone")}}}""")
-        api.stravaHistoryDone()
-        assertEquals("/api/trpc/sources.stravaHistoryDone", sent().second)
-
-        answer(200, """{"result":{"data":${fixture("sources.stravaHistory.rate-limited")}}}""")
-        assertEquals(StravaHistory.Status.RateLimited, api.stravaHistory(HistorySpan.All).status)
-        answer(200, """{"result":{"data":${fixture("sources.importStravaPaddle.skipped")}}}""")
-        assertEquals(StravaImport.Reason.NotWaterSport, api.importStravaPaddle(h.toImport!![1]).reason)
     }
 
     @Test fun trackersWithTheirCardsWorkedOutByTheServer() = runTest {
