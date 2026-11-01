@@ -45,6 +45,10 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
     /// Pieces held from an earlier upload that broke off.
     var held: [String: [Int: Data]] = [:]
     var phoneAnswer: (Int, Data) = (201, fixture("account.phone"))
+    /// Requests with this token get 401, as an expired one does.
+    var refusesToken: String?
+    /// The next this many requests fail as the network does.
+    var networkFailures = 0
     var phoneRemoved = false
 
     var calls: [Call] { lock.withLock { _calls } }
@@ -61,8 +65,15 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
             method: request.httpMethod ?? "GET", path: url.path, query: query, body: request.httpBody ?? Data(),
             contentType: request.value(forHTTPHeaderField: "Content-Type"),
             authorization: request.value(forHTTPHeaderField: "Authorization"))
+        let failing = lock.withLock { () -> Bool in
+            guard networkFailures > 0 else { return false }
+            networkFailures -= 1
+            return true
+        }
+        if failing { throw URLError(.notConnectedToInternet) }
         let (status, body) = lock.withLock { () -> (Int, Data) in
             _calls.append(call)
+            if let refusesToken, call.authorization == "Bearer \(refusesToken)" { return (401, Data()) }
             return answer(call)
         }
         guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else {
@@ -122,10 +133,11 @@ final class FakeUploadServer: HTTPTransport, @unchecked Sendable {
     }
 }
 
+/// `id-token`, or `fresh-token` when asked to refresh.
 func client(_ server: FakeUploadServer, signedIn: Bool = true) -> PaddleClient {
     PaddleClient(
         baseURL: URL(string: "https://paddlesnitch.test") ?? URL(filePath: "/"), transport: server, app: "ios/test",
-        idToken: { _ in signedIn ? "id-token" : nil })
+        idToken: { refresh in signedIn ? (refresh ? "fresh-token" : "id-token") : nil })
 }
 
 /// A fresh account folder with recordings in it.

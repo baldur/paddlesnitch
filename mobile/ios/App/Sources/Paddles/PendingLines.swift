@@ -29,7 +29,7 @@ struct RecordingLine: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isLink)
-        .accessibilityHint("Opens the recording")
+        .accessibilityHint("Opens the record screen")
         .accessibilityIdentifier("recording-line")
     }
 }
@@ -72,7 +72,7 @@ struct UploadLineView: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                    .accessibilityLabel("Dismiss")
                     .accessibilityIdentifier("upload-line-close")
                 }
             }
@@ -86,8 +86,10 @@ struct UploadLineView: View {
                     }
                 }
                 .disabled(adding)
+                .accessibilityIdentifier("upload-now")
             case .refused:
                 action("Report an issue", run: openReport)
+                    .accessibilityIdentifier("report-issue")
             case .waiting, .noFix, .cannotAdd:
                 EmptyView()
             }
@@ -108,6 +110,5 @@ struct UploadLineView: View {
         }
         .buttonStyle(.bordered)
         .tint(Palette.primaryText)
-        .accessibilityIdentifier("upload-line-action")
     }
 }

@@ -141,6 +141,17 @@ struct RecordingFilesTests {
         #expect(third.track.lastPathComponent == "track_20260918_062422_2.csv")
     }
 
+    /// The uploader never sends a track still being written: it's open from
+    /// the moment the recording starts until its files close.
+    @Test func aTrackIsOpenUntilItsFilesClose() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let files = try RecordingFiles(directory: directory, start: Date(timeIntervalSince1970: 1_789_712_662))
+        #expect(RecordingFiles.isOpen(files.track))
+        #expect(!RecordingFiles.isOpen(files.motion))
+        try files.close(droppedLate: 0, droppedUnpaired: 0)
+        #expect(!RecordingFiles.isOpen(files.track))
+    }
+
     @Test func recordingsAreLeftOutOfBackups() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

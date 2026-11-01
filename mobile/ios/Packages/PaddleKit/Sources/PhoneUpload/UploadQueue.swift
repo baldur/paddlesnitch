@@ -78,6 +78,10 @@ public final class UploadQueue {
     let client: PaddleClient
     let installID: String
     let pause: @Sendable (Duration) async throws -> Void
+    /// Whether a track is still being written (`RecordingFiles.isOpen`): it
+    /// never goes, whatever `recording` says.
+    let isOpen: @Sendable (URL) -> Bool
+    private var stopped = false
     private var uploading: String?
     private var failures = 0
     private var cannotAdd: String?
@@ -90,12 +94,14 @@ public final class UploadQueue {
     ///   - pause: waits between passes; tests make it instant.
     public init(
         folder: URL, client: PaddleClient, installID: String,
-        pause: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        pause: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        isOpen: @escaping @Sendable (URL) -> Bool = { _ in false }
     ) {
         self.folder = folder
         self.client = client
         self.installID = installID
         self.pause = pause
+        self.isOpen = isOpen
         state = UploadState.load(from: folder)
         refreshLines()
     }
@@ -108,6 +114,7 @@ public final class UploadQueue {
 
     /// Stops it (signed out). The files stay.
     public func stop() {
+        stopped = true
         loop?.cancel()
         sleeper?.cancel()
         loop = nil
@@ -146,6 +153,7 @@ public final class UploadQueue {
     func addPhone() async throws -> String {
         do {
             let phone = try await client.addPhone(installID: installID)
+            guard !stopped else { throw CancellationError() }
             state.deviceID = phone.deviceId
             cannotAdd = nil
             save()
@@ -177,12 +185,17 @@ public final class UploadQueue {
     @discardableResult
     func pass() async -> Duration {
         defer { refreshLines() }
-        let waiting = WaitingRecording.all(in: folder).filter { !state.refused.contains($0.stem) }
+        let waiting = WaitingRecording.all(in: folder).filter { !state.refused.contains($0.stem) && !isOpen($0.track) }
         guard !recording, online, !state.removed, cannotAdd == nil, !waiting.isEmpty else { return Self.idle }
         do {
             var deviceID = state.deviceID ?? ""
             if deviceID.isEmpty { deviceID = try await addPhone() }
-            try await send(waiting, with: RecordingSender(client: client, deviceID: deviceID))
+            let mismatched = Mismatches(state.mismatched)
+            defer {
+                state.mismatched = mismatched.all
+                save()
+            }
+            try await send(waiting, with: RecordingSender(client: client, deviceID: deviceID, mismatched: mismatched))
             failures = 0
             return Self.idle
         } catch PaddleAPIError.signedOut {
@@ -207,6 +220,7 @@ public final class UploadQueue {
             refreshLines()
             let outcome = try await sender.send(recording)
             uploading = nil
+            guard !stopped else { return }
             switch outcome {
             case .sent: break
             case .noFix: state.noFix.append(recording.stem)
@@ -223,7 +237,10 @@ public final class UploadQueue {
         .seconds(min(300, 5 << min(failures - 1, 6)))
     }
 
+    /// Not once stopped: a queue of an account signed out of (or deleted)
+    /// writes nothing more.
     private func save() {
+        guard !stopped else { return }
         try? state.save(to: folder)
     }
 

@@ -35,10 +35,11 @@ final class RecordTests: AppTestCase {
         XCTAssertTrue(element("record-recording").exists)
         stop.press(forDuration: 2)
 
-        // Back to Paddles; the sample server takes it, so nothing waits.
+        // Back to Paddles; the sample server takes it and makes a paddle.
         XCTAssertTrue(app.buttons["record"].appears(timeout: 10), "back on Paddles")
         XCTAssertFalse(element("recording-line").exists)
-        XCTAssertTrue(element("upload-line").disappears(timeout: 15), "uploaded")
+        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        XCTAssertFalse(element("upload-line").exists)
     }
 
     /// Close while recording hides the screen and keeps recording: Paddles
@@ -50,7 +51,7 @@ final class RecordTests: AppTestCase {
         let line = element("recording-line")
         XCTAssertTrue(line.appears(timeout: 10))
         XCTAssertTrue(line.label.hasPrefix("Recording · 0:0"), line.label)
-        try audit()
+        try auditPaddles()
         line.tap()
         XCTAssertTrue(element("record-recording").appears(timeout: 10), "the same recording")
         element("record-stop").press(forDuration: 2)
@@ -61,7 +62,7 @@ final class RecordTests: AppTestCase {
         try record(with: "-UploadsDown")
         let line = element("upload-line")
         XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("Waiting to upload") }, line.label)
-        try audit()
+        try auditPaddles()
     }
 
     func testATrackWithNoGPSFixSaysSoUntilClosed() throws {
@@ -76,8 +77,8 @@ final class RecordTests: AppTestCase {
         try record(with: "-UploadsRefused")
         let line = element("upload-line")
         XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("Couldn't upload this recording") })
-        XCTAssertEqual(app.buttons["upload-line-action"].label, "Report an issue")
-        try audit()
+        XCTAssertEqual(app.buttons["report-issue"].label, "Report an issue")
+        try auditPaddles()
     }
 
     /// The owner removed this phone on Devices: the recording stays until
@@ -86,10 +87,25 @@ final class RecordTests: AppTestCase {
         try record(with: "-PhoneRemoved")
         let line = element("upload-line")
         XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("This phone was removed") })
-        let uploadNow = app.buttons["upload-line-action"]
+        let uploadNow = app.buttons["upload-now"]
         XCTAssertEqual(uploadNow.label, "Upload now")
         uploadNow.tap()
-        XCTAssertTrue(line.disappears(timeout: 15), "uploaded")
+        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        XCTAssertFalse(line.exists)
+    }
+
+    /// The next Start adds a removed phone again too, and what was waiting
+    /// goes once that recording stops.
+    func testARemovedPhoneIsAddedAgainAtTheNextStart() throws {
+        try record(with: "-PhoneRemoved")
+        let line = element("upload-line")
+        XCTAssertTrue(poll(timeout: 20) { line.exists && line.label.contains("This phone was removed") })
+        openRecord()
+        app.buttons["record-start"].tap()
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        element("record-stop").press(forDuration: 2)
+        XCTAssertTrue(element("paddle-pdl-phone").appears(timeout: 20), "uploaded, and in the list")
+        XCTAssertFalse(text(containing: "This phone was removed").exists)
     }
 
     /// The app signs out on its own when the server refuses a refresh (a
@@ -117,6 +133,13 @@ final class RecordTests: AppTestCase {
     func testSignedOutThereIsNothingToRecordInto() {
         XCTAssertTrue(element("sample-notice").appears(timeout: 10))
         XCTAssertFalse(app.buttons["record"].exists)
+    }
+
+    /// The Paddles list with a line above the logbook: the "All paddles"
+    /// header sits half under the tab bar, which the audit calls clipped.
+    /// Clipping is LargeTextTests' job, on the whole screen.
+    private func auditPaddles() throws {
+        try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
     }
 
     /// Records a few seconds with the sample server answering uploads as

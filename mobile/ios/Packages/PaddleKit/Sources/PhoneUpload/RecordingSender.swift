@@ -33,6 +33,8 @@ struct RecordingSender {
 
     let client: PaddleClient
     let deviceID: String
+    /// Files with one sha256 mismatch already; a second gives up on it.
+    let mismatched: Mismatches
 
     func send(_ recording: WaitingRecording) async throws -> Outcome {
         let manager = FileManager.default
@@ -93,11 +95,12 @@ struct RecordingSender {
             return .removed
         }
         var queue = Self.order((1...count).filter { !held.contains($0) }, last: count)
-        var mismatches = 0
         var gapRounds = 0
         while true {
             var next: [Int]?
             for number in queue {
+                // Stopped (signed out): not another piece.
+                try Task.checkCancellation()
                 let start = (number - 1) * Self.pieceSize
                 let piece = data.subdata(in: start..<min(start + Self.pieceSize, data.count))
                 let answer = try await client.uploadRecording(
@@ -111,9 +114,9 @@ struct RecordingSender {
                     break
                 }
                 if answer.status == 422 && answer.error == "sha256_mismatch" {
-                    mismatches += 1
                     // Once more from piece 1; a second mismatch is a dead end.
-                    if mismatches > 1 { return .refused }
+                    if mismatched.contains(name) { return .refused }
+                    mismatched.insert(name)
                     next = Array(1...count)
                     break
                 }
@@ -142,4 +145,18 @@ struct RecordingSender {
         default: throw TryLater(reason: "the server answered \(answer.status)")
         }
     }
+}
+
+/// The files that have had a sha256 mismatch, kept by the queue across passes.
+final class Mismatches: @unchecked Sendable {
+    private let lock = NSLock()
+    private var names: Set<String>
+
+    init(_ names: [String]) {
+        self.names = Set(names)
+    }
+
+    var all: [String] { lock.withLock { names.sorted() } }
+    func contains(_ name: String) -> Bool { lock.withLock { names.contains(name) } }
+    func insert(_ name: String) { _ = lock.withLock { names.insert(name) } }
 }
