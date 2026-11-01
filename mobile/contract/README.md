@@ -467,15 +467,20 @@ out nothing.
 | `RC_TRACE_STARTING` | none | Motion sensor: starting |
 | `RC_TRACE_MOTION` | drawn | Motion sensor: working |
 | `RC_TRACE_STILL` | drawn | Motion sensor: not moving |
-| `RC_TRACE_NO_SAMPLES` | none | Motion sensor stopped. No stroke rate from here on. (red) |
+| `RC_TRACE_NO_SAMPLES` | none | Motion sensor stopped. No stroke rate while it's stopped. (red) |
 
 - `STILL` can come back after `MOTION` (the phone put down during a rest), so
-  its words fit either way.
+  its words fit either way. `NO_SAMPLES` can clear too (Android may pause
+  sensor delivery and resume), and stroke rate carries on from the new samples.
 - **Accessibility:** the trace is hidden from screen readers. The status line is
-  read as it is; only "Motion sensor stopped…" is announced, once, like "GPS lost".
-  It isn't a live region otherwise.
-- **No motion sensors on the phone** (known before Start): no trace and no motion
+  read as it is. Like the GPS line, two changes are announced once each time they
+  happen: "Motion sensor stopped" on entering `NO_SAMPLES`, and "Motion sensor
+  back" on leaving it. It isn't a live region otherwise.
+- **No motion sensors on the phone** (the app knows before Start and passes no
+  motion to the core): don't call `rc_phone_trace` and show no trace or motion
   line; the existing "No motion sensors on this phone, so no stroke rate" stays.
+  (The core would report `STARTING`, then `NO_SAMPLES`, which would wrongly read
+  "stopped".)
 - **Tests:** the core's fixtures `trace_phone_flat` and `trace_phone_paddle` (golden
   `trace.csv`, format in `recorder-core/fixtures/README.md`). Each app's fixture
   runner takes the `trace_phone_` prefix and handles the `trace` line, and a
