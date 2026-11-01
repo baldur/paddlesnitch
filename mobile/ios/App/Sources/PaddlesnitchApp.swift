@@ -43,6 +43,8 @@ struct PaddlesnitchApp: App {
         if arguments.contains("-PlaceholderEmail") { server.placeholderEmail = true }
         // UI tests: asking whether the account was made with Strava fails.
         if arguments.contains("-ContactFails") { server.failsContact = true }
+        // UI tests: the 10 minutes run out while DELETE is typed.
+        if arguments.contains("-SignInExpiresOnDelete") { server.signInExpiresOnDelete = true }
         // UI tests: an older server that still says Strava is on, which the app ignores.
         if arguments.contains("-OptionsSayStrava") { server.options = SignInOptions(google: true, strava: true) }
         // UI tests: asking which ways in are on fails.

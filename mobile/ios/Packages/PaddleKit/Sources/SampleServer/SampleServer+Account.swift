@@ -109,7 +109,7 @@ extension SampleServer {
         if lock.withLock({ _failsAccountDelete }) {
             return (500, Data(#"{"error":"Couldn't delete the account."}"#.utf8))
         }
-        guard lock.withLock({ _signInIsRecent }) else {
+        guard lock.withLock({ _signInIsRecent && !_signInExpiresOnDelete }) else {
             let words = "For your safety, deleting your account needs a recent sign-in. Please sign in again."
             return (403, Data(#"{"error":"\#(words)","reauth":true}"#.utf8))
         }

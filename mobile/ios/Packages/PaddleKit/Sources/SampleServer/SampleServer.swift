@@ -39,6 +39,13 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _contact: String?
     var _placeholderEmail = false
     var _failsContact = false
+    var _signInExpiresOnDelete = false
+    /// The recent sign-in runs out between the check and the delete: the
+    /// check says recent, the delete answers 403.
+    public var signInExpiresOnDelete: Bool {
+        get { lock.withLock { _signInExpiresOnDelete } }
+        set { lock.withLock { _signInExpiresOnDelete = newValue } }
+    }
     /// `GET /api/account/contact` fails, as when the server is down.
     public var failsContact: Bool {
         get { lock.withLock { _failsContact } }

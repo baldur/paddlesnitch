@@ -50,14 +50,16 @@ extension AccountModel {
     @discardableResult
     public func askMadeWithStrava() async -> Bool? {
         if let known = madeWithStrava { return known }
-        guard user != nil, let contact = try? await client.send(Endpoints.getAccountContact, NoInput()) else {
-            return nil
-        }
-        noteMadeWithStrava(contact.placeholderEmail == true)
+        guard let asker = user?.id, let contact = try? await client.send(Endpoints.getAccountContact, NoInput())
+        else { return nil }
+        noteMadeWithStrava(contact.placeholderEmail == true, for: asker)
         return madeWithStrava
     }
 
-    func noteMadeWithStrava(_ made: Bool) {
-        madeWithStravaAnswer = user.map { ($0.id, made) }
+    /// Kept for the account that asked, and only while it's still the one
+    /// signed in: an answer that comes back after a switch is dropped.
+    func noteMadeWithStrava(_ made: Bool, for asker: String?) {
+        guard let asker, user?.id == asker else { return }
+        madeWithStravaAnswer = (asker, made)
     }
 }

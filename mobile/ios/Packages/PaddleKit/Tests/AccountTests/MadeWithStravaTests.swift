@@ -70,6 +70,16 @@ import Testing
         #expect(account.madeWithStrava == nil, "another account's answer")
     }
 
+    /// An answer that comes back after another account signed in is
+    /// dropped, not kept for the new one (security-privacy).
+    @Test func aLateAnswerForAnotherAccountIsDropped() async throws {
+        let account = try await signedIn()
+        account.noteMadeWithStrava(false, for: "the-account-that-asked")
+        #expect(account.madeWithStrava == nil)
+        account.noteMadeWithStrava(true, for: account.user?.id)
+        #expect(account.madeWithStrava == true)
+    }
+
     @Test func theWordsAreLeadsDecision() {
         #expect(
             MadeWithStrava.signOutWarning

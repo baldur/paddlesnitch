@@ -122,6 +122,29 @@ final class GoogleSignInTests: AppTestCase {
         XCTAssertFalse(app.buttons["delete-email-us"].exists)
     }
 
+    /// The 10 minutes ran out while DELETE was typed, and the account can't
+    /// be checked: no Sign in again, which could lock it out.
+    func testAnExpiredSignInDuringDeleteWaitsWhenItCantCheckTheAccount() {
+        signInAndWait()
+        app.terminate()
+        app.launchArguments = ["-SampleServer", "-SignInExpiresOnDelete", "-ContactFails"]
+        app.launch()
+        selectTab("You")
+        app.buttons["Account"].tap()
+        XCTAssertTrue(app.navigationBars["Account"].appears(timeout: 10))
+        scrollToElement(app.buttons["Delete my account"]).tap()
+        let forGood = app.buttons["confirm-delete-account"].firstMatch
+        XCTAssertTrue(forGood.appears(timeout: 10), "the check said recent")
+        type("DELETE", into: app.textFields["confirm-delete-text"])
+        forGood.tap()
+        let failed = element("delete-error")
+        XCTAssertTrue(failed.appears(timeout: 10))
+        XCTAssertEqual(failed.label, "Couldn’t check your account. Please try again.")
+        XCTAssertTrue(app.buttons["Try again"].exists)
+        XCTAssertFalse(app.buttons["Sign in again"].exists)
+        XCTAssertFalse(app.buttons["delete-email-us"].exists)
+    }
+
     func testTheSignInSheetPassesTheAccessibilityAudit() throws {
         openSignIn()
         XCTAssertTrue(app.buttons["google-sign-in"].appears(timeout: 10))
