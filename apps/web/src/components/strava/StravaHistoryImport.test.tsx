@@ -20,7 +20,8 @@ vi.mock('@/lib/trpc', () => ({
       sources: { stravaHistory: { fetch: async () => { if (state.more instanceof Error) throw state.more; return state.more } } },
     }),
     sources: {
-      stravaHistory: { useQuery: () => ({ data: state.history }) },
+      // No history yet = the listing is still in flight (react-query v5's isPending).
+      stravaHistory: { useQuery: () => ({ data: state.history ?? undefined, isPending: state.history == null }) },
       importStravaPaddle: { useMutation: () => ({ mutateAsync: async (x: { id: number }) => {
         state.imported.push(x.id)
         if (state.hold) await state.hold
@@ -118,6 +119,35 @@ describe('older paddles from Strava', () => {
     expect(container.querySelector('select')!.disabled).toBe(true)
     state.hold = null; release(); await flush()
     expect(container.textContent).toContain('Added 2 paddles from Strava.')
+    expect(olderButton().disabled).toBe(false)
+    expect(container.querySelector('select')!.disabled).toBe(false)
+  })
+
+  it('cannot start while the first month is still being listed', async () => {
+    state.history = null
+    await mount(<StravaImports />); await flush()
+    expect(olderButton().disabled).toBe(true)
+    expect(container.querySelector('select')!.disabled).toBe(true)
+  })
+
+  it('is disabled from the very first render, before the first month reports in', async () => {
+    state.history = { status: 'ok', toImport: items(1), alreadyIn: 0, firstImportDone: false }
+    state.hold = new Promise(() => {})
+    container = document.createElement('div'); document.body.appendChild(container)
+    root = createRoot(container)
+    // Render without letting effects run: what a quick tap would hit.
+    const { flushSync } = await import('react-dom')
+    flushSync(() => { root.render(<StravaImports />) })
+    expect(olderButton().disabled).toBe(true)
+  })
+
+  it('can start once the first month stops on an error, which reads as an alert', async () => {
+    state.history = { status: 'ok', toImport: items(2), alreadyIn: 0, firstImportDone: false }
+    state.replies = [new Error('network')]
+    await mount(<StravaImports />); await flush()
+    const stopped = container.querySelector('[role="alert"]')
+    expect(stopped?.textContent).toBe('Couldn’t bring in all your Strava paddles (0 of 2). Please try again later.')
+    expect(stopped?.className).toContain('text-red')
     expect(olderButton().disabled).toBe(false)
     expect(container.querySelector('select')!.disabled).toBe(false)
   })

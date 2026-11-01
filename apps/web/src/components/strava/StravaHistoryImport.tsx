@@ -8,7 +8,7 @@ import { cardClass } from '@paddlesnitch/ui/Card'
 // Older Strava paddles (#415). Strava only tells us about paddles recorded
 // after it was connected, so:
 //  - `first`: by itself, once, bring in about the last month;
-//  - `more`: IMPORT OLDER PADDLES, as far back as the paddler picks.
+//  - `more`: Older paddles, as far back as the paddler picks.
 // The open page works through the list one paddle at a time (no background
 // job), so it can show progress; when Strava asks us to slow down it waits for
 // Strava's next quarter hour and carries on. Closing the page just stops: what
@@ -86,7 +86,7 @@ export function StravaFirstImport({ onRunning }: { onRunning?: (running: boolean
   if (!data || data.status !== 'ok' || data.firstImportDone || data.toImport.length === 0) return null
   const p = progress ?? { done: 0, total: data.toImport.length, added: 0 }
   return (
-    <p role="status" className="text-sm text-muted border-l-2 border-primary pl-3">
+    <p role={p.stopped ? 'alert' : 'status'} className={`text-sm ${p.stopped ? 'text-red' : 'text-muted'} border-l-2 border-primary pl-3`}>
       <Status p={p} what="your last month" />
     </p>
   )
@@ -94,7 +94,8 @@ export function StravaFirstImport({ onRunning }: { onRunning?: (running: boolean
 
 /** The first month, then Older paddles: one import at a time against Strava's limit (#716). */
 export function StravaImports() {
-  const [firstRunning, setFirstRunning] = useState(false)
+  // Starts as running: Older paddles must not be pressable before the first month has said otherwise.
+  const [firstRunning, setFirstRunning] = useState(true)
   return (<>
     <StravaFirstImport onRunning={setFirstRunning} />
     <StravaMoreImport waiting={firstRunning} />
@@ -134,7 +135,8 @@ export function StravaMoreImport({ waiting = false }: { waiting?: boolean } = {}
           {busy ? 'Bringing in…' : 'Bring in older paddles'}
         </button>
       </div>
-      {progress && <p role="status" className="text-sm text-muted"><Status p={progress} what="your paddles" /></p>}
+      {/* A stop reads as an error, as on Android and the rest of Account. */}
+      {progress && <p role={progress.stopped ? 'alert' : 'status'} className={`text-sm ${progress.stopped ? 'text-red' : 'text-muted'}`}><Status p={progress} what="your paddles" /></p>}
     </div>
   )
 }
