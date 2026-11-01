@@ -74,6 +74,7 @@ const CASES = [
   { name: 'webkit, desktop, Hasler Div 7-9 race', engine: webkit, ctx: desktop, course: 'hasler79', format: 'mass' },
   { name: 'iphone safari, Hasler Div 1-6 race', engine: webkit, ctx: landscape('iPhone 15'), touch: true, course: 'hasler16', format: 'mass' },
   { name: 'small iphone, Hasler Div 7-9 race', engine: webkit, ctx: landscape('iPhone 13 Mini'), touch: true, course: 'hasler79', format: 'mass' },
+  { name: 'iphone se, Hasler Div 7-9 race', engine: webkit, ctx: landscape('iPhone SE'), touch: true, course: 'hasler79', format: 'mass' },
   { name: 'chrome GPU, desktop, Hasler Div 7-9 race', engine: chromium, launch: gpu, ctx: desktop, gpuOnly: true, course: 'hasler79', format: 'mass', expect: 'webgpu' },
   // A time trial, with interval starts.
   { name: 'webkit, desktop, Time Trial Loop time trial', engine: webkit, ctx: desktop, course: 'loop', format: 'interval' },
@@ -171,6 +172,13 @@ async function play(c, page, errors) {
     const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+    // Try it now says what it is, in full, even on a phone.
+    const tryLine = page.locator('#clubCards .card.go small');
+    if (await tryLine.count()) {
+      await tryLine.first().waitFor({ state: 'visible', timeout: 30_000 });
+      const cut = await tryLine.first().evaluate((el) => el.scrollWidth > el.clientWidth + 1 && el.textContent);
+      if (cut) errors.push(`Try it now's line is cut off: "${cut}"`);
+    }
     for (const [label, place] of steps) {
       // Keys with the picker open: Backspace in one of its fields stays put, Esc goes back.
       if (label === '@backspace') {
@@ -335,7 +343,7 @@ async function play(c, page, errors) {
       const check = (when) => {
         const named = { clock: document.querySelector('.hud-top'), place: $('place'), wash: $('wash'), cue: $('cue'), hint: $('hint'), help: $('touchhelp'), assist: $('assisted'), drill: $('drill'), flash: $('flash'), map: $('map'), near: $('near'), gauges: document.querySelector('.hud-bottom') };
         const boxes = Object.entries(named).map(([n, el]) => [n, box(el)]).filter(([n, b]) => b && (n !== 'flash' || $('flash').classList.contains('show')));
-        boxes.forEach(([n, a], i) => boxes.slice(i + 1).forEach(([m, b]) => { if (hit(a, b)) out.push(`${when}: ${n} overlaps ${m}`); }));
+        boxes.forEach(([n, a], i) => boxes.slice(i + 1).forEach(([m, b]) => { if (hit(a, b)) out.push(`${when}: ${n} overlaps ${m} (${[a, b].map((r) => `${Math.round(r.top)} to ${Math.round(r.bottom)} down`).join(', ')})`); }));
         for (const b of document.querySelectorAll('header button')) if (named.map && hit(named.map.getBoundingClientRect(), b.getBoundingClientRect())) out.push(`${when}: the map is under ${b.textContent}`);
         for (const n of ['flash', 'hint', 'drill']) {
           const r = $(n).getBoundingClientRect();

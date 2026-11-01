@@ -530,6 +530,7 @@ summary { cursor: pointer; }
 #clubDoors .pin { position: absolute; left: 0; top: 0; width: 16px; height: 16px; }
 @media (max-width: 860px) { #clubCards .card { padding: 0.35rem 0.6rem 0.35rem 0.35rem; column-gap: 0.45rem; } #clubCards .long { display: none; } #clubCards .card small { font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; } #clubCards .card svg { width: 50px; height: 34px; } }
 @media (max-width: 640px) { #clubCards .card svg { display: none; } #clubCards .card { grid-template-columns: 1fr; } }
+@media (max-width: 860px) { #clubCards .card.go small { white-space: normal; max-width: 10rem; } } /* Try it now's line in full, on two lines */
 #clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
 #clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
 /* In the club the editors and the plan are a sheet at the side, the room still in view. */
@@ -607,4 +608,21 @@ summary { cursor: pointer; }
 @media (max-height: 500px) {
   #standings { columns: 3; column-gap: 1rem; font-size: 0.8rem; margin: 0.4rem 0; }
   #finished form { position: sticky; bottom: 0; background: inherit; padding-block: 0.4rem; }
+}
+
+/* The narrowest phones on their side (iPhone SE, 568 px): the maps smaller,
+   and the words between them smaller, so the clock row, the big message, the
+   turn cue and the help all fit between the maps. */
+@media (max-height: 500px) and (max-width: 600px) {
+  .hud-top { font-size: 0.95rem; gap: 0.6rem; }
+  #map { width: 112px; }
+  #near { width: 72px; }
+  #flash { font-size: 1.3rem; max-width: calc(100vw - 2 * 136px); }
+  #cue { width: max-content; font-size: 0.75rem; padding-block: 0.15rem; max-width: calc(100vw - 2 * 96px); } /* below the map, between the close-up and the edge */
+  #cue b { font-size: 1.1rem; }
+  /* Full width, below the close-up (it ends 130 px down), so over only the
+     decorative tap marks; above the gauges, which stand taller once racing. */
+  .lane-low, #hud.helping .lane-low { width: calc(100vw - 32px); bottom: 6.9rem; }
+  #touchhelp { font-size: 0.66rem; }
+  #hint { font-size: 0.82rem; }
 }
