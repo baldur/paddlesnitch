@@ -75,7 +75,7 @@ test("the canoe club's erg room: a door from the club, under it, three kayak erg
   assert.deepEqual(shots.kergs[MY_KERG], shots.kerg);
   shots.kergs.forEach((p, i) => {
     const { x0, x1, y0, y1 } = MIRRORS[i];
-    assert.ok(Math.abs(at[0] - p[0] - (x0 + x1) / 2) < 1e-9 && x1 - x0 < 1 && y1 - y0 < 1, `erg ${i}`);
+    assert.ok(Math.abs(at[0] - p[0] - (x0 + x1) / 2) < 1e-9 && x1 - x0 < 1 && y1 - y0 < 1.2, `erg ${i}`);
     if (i) assert.ok(KAYAK_ERGS[i] - KAYAK_ERGS[i - 1] > x1 - x0 + 0.5, 'room between the ergs');
   });
   // You see yourself in your mirror: the line from the eye to your head's

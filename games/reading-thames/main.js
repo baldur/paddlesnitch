@@ -1501,9 +1501,13 @@ function placeKayakErg(l) {
     legs.thigh.push(limb(model, hip, knee));
     legs.shin.push(limb(model, knee, foot));
   }
-  // The shafts: yours in your hands, the others lying across their rails,
-  // one end down, as they were left.
-  const shafts = ergs.map((m, i) => (i === MY_KERG ? multiply(model, shaftAt) : multiply(m, multiply(translation(0, K.rails + 0.08, -0.3), multiply(rotationY(i ? -0.45 : 0.4), rotationZ(i ? 0.12 : -0.12))))));
+  // The shafts: yours in your hands, the others left leaning on their
+  // frames, one end on the floor, along the erg, away from yours.
+  const shafts = ergs.map((m, i) => {
+    if (i === MY_KERG) return multiply(model, shaftAt);
+    const out = i < MY_KERG ? -1 : 1;
+    return multiply(m, multiply(translation(out * 0.2, K.shaft * Math.sin(0.4) + 0.02, -0.5), multiply(rotationY(out * 1.2), rotationZ(0.4))));
+  });
   // The cords: from each erg's pulleys to the ends of its shaft.
   const cords = ergs.flatMap((m, i) => [-1, 1].map((side) => limb(translation(0, 0, 0), apply(m, [side * K.pulleys[0], K.pulleys[1], K.pulleys[2]]), apply(shafts[i], [side * K.shaft, 0, 0]))));
   // The mirrors: z turned about their plane.

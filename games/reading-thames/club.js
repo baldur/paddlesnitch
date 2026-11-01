@@ -74,10 +74,10 @@ export const MY_ERG = 3; // [-0.6, 0.2]
 // front of the kayak racks on the far wall (room coordinates). The mirrors are
 // windows onto the room built again behind them, turned inside out (main.js
 // draws the ergs and you there too, reflected).
-export const KERG_Z = -0.9; // the ergs' middles, from the room's centre (the mirrors' side is -z)
+export const KERG_Z = -1.3; // the ergs' middles, from the room's centre (the mirrors' side is -z)
 export const KAYAK_ERGS = [-1.45, 0, 1.45]; // each erg's x; yours is the middle one
 export const MY_KERG = 1;
-export const MIRRORS = KAYAK_ERGS.map((x) => ({ x0: x - 0.33, x1: x + 0.33, y0: 0.95, y1: 1.75 }));
+export const MIRRORS = KAYAK_ERGS.map((x) => ({ x0: x - 0.4, x1: x + 0.4, y0: 0.7, y1: 1.75 }));
 // The reflection in the mirror, as a matrix (column-major): world z turned
 // about the mirror's plane at `z`.
 export const mirrorMatrix = (z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 2 * z, 1];
@@ -176,7 +176,7 @@ export function clubShots(course) {
       boathouse: room('boathouse', 1.5),
       clubhouse: room('clubhouse', 1.5),
       // Behind you on the erg and a little to the right, looking over you into your mirror: your back, and you facing you.
-      kerg: { eye: p('kerg', 0.45, 1.85, KERG_Z + 2.3), look: p('kerg', -0.1, 1.15, -kd / 2) },
+      kerg: { eye: p('kerg', 0.85, 1.8, KERG_Z + 2.2), look: p('kerg', -0.15, 1.05, -kd / 2) },
       rclub: { eye: rEntrance, look: at(r.x, r.z, 2.6) },
       rpontoon: { eye: [stage[0], 1.6, stage[2]], look: [canoeSide[0], 0.6, canoeSide[2]] },
       rchanging: { eye: p('rchanging', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('rchanging', -1.2 + 1.85, HIPS + 0.3, 0.4) },
@@ -211,7 +211,7 @@ export function clubShots(course) {
     // The kayak ergs (their frames face the mirrors), yours, its label, and the mirrors' plane (world z).
     kergs: KAYAK_ERGS.map((x) => p('kerg', x, 0, KERG_Z)),
     kerg: p('kerg', 0, 0, KERG_Z),
-    kergLabel: p('kerg', -0.75, 1.3, KERG_Z),
+    kergLabel: p('kerg', -1.1, 1.55, KERG_Z),
     mirrorZ: p('kerg', 0, 0, -kd / 2)[2],
     swan,
     roomAt,
@@ -302,10 +302,10 @@ export function ergRoom(m, o, mirrored) {
   // A kayak on a rack, upside down: pointed at both ends, its hull a long
   // diamond that rounds over to the keel on top; along x from `a` to `b` with
   // its middle at z `across`, or (`alongZ`) along z at x `across`.
-  const kayak = (a, b, y, across, color, alongZ = false) => {
+  const kayak = (a, b, y, across, color, alongZ = false, half = 0.23) => {
     const pt = (u, v, yy) => (alongZ ? at(v, yy, u) : at(u, yy, v));
     const mid = (a + b) / 2;
-    const ring = (yy, k, end) => [pt(a + end, across, yy), pt(mid, across - 0.23 * k, yy), pt(b - end, across, yy), pt(mid, across + 0.23 * k, yy)];
+    const ring = (yy, k, end) => [pt(a + end, across, yy), pt(mid, across - half * k, yy), pt(b - end, across, yy), pt(mid, across + half * k, yy)];
     m.prism(ring(y, 0.85, 0.1), ring(y + 0.1, 1, 0), shade(color));
     m.prism(ring(y + 0.1, 1, 0), ring(y + 0.24, 0.45, 0.3), shade(color.map((v) => v * 0.9)));
   };
@@ -315,24 +315,22 @@ export function ergRoom(m, o, mirrored) {
   box([x0 - 0.2, 0, z0], [x0, h, z1 + 0.2], C.block);
   box([x1, 0, z0], [x1 + 0.2, h, z1 + 0.2], C.block);
   box([x0, 0, z1], [x1, h, z1 + 0.2], C.block);
-  // Kayaks racked along the far wall, above and below the mirrors, on arms
-  // out of the wall, through a brick pillar.
+  // Kayaks racked along the far wall above the mirrors, on arms out of the
+  // wall, through a brick pillar (the ergs' fronts come up under the mirrors).
   const K = KAYAK_COLOURS;
-  kayak(-3.5, 1.7, 0.22, z0 + 0.27, K.teal);
   kayak(-3.5, 1.7, 1.98, z0 + 0.27, K.blue);
   kayak(-3.3, 1.9, 2.38, z0 + 0.27, K.white);
-  for (const x of [-3.1, -0.75, 1.35]) for (const y of [0.18, 1.94, 2.34]) box([x - 0.02, y - 0.03, z0], [x + 0.02, y, z0 + 0.5], C.rack);
+  for (const x of [-3.1, -0.75, 1.35]) for (const y of [1.94, 2.34]) box([x - 0.02, y - 0.03, z0], [x + 0.02, y, z0 + 0.5], C.rack);
   box([-2.75, 0, z0], [-2.35, h, z0 + 0.4], C.brick);
   // More along the left-hand wall, four high.
   [[0.35, K.red], [0.85, K.yellow], [1.35, K.white], [1.85, K.light]].forEach(([y, color], i) => {
     kayak(z0 + 0.1 + (i % 2) * 0.4, z0 + 5.3 + (i % 2) * 0.4, y, x0 + 0.27, color, true);
     for (const z of [z0 + 1.2, z0 + 3.9]) box([x0, y - 0.03, z - 0.02], [x0 + 0.5, y, z + 0.02], C.rack);
   });
-  // Rowing boats hung upside down under the ceiling, on straps.
-  for (const [z, x] of [[z0 + 1.2, -0.6], [z0 + 2.1, 1.6]]) {
-    const hull = (y, wide) => [at(x0, y, z - wide), at(x0, y, z + wide), at(x1, y, z + wide), at(x1, y, z - wide)];
-    m.prism(hull(h - 0.55, 0.12), hull(h - 0.3, 0.2), shade(C.white));
-    for (const sx of [x - 1.6, x + 1.6]) box([sx - 0.03, h - 0.33, z - 0.21], [sx + 0.03, h, z + 0.21], C.strap);
+  // Rowing boats hung under the ceiling on straps, pointed at both ends.
+  for (const [z, x] of [[z0 + 1.2, -0.6], [z0 + 2.1, 0.4]]) {
+    kayak(x0 + 0.3, x1 - 0.3, h - 0.5, z, C.white, false, 0.2);
+    for (const sx of [x - 1.6, x + 1.6]) box([sx - 0.03, h - 0.28, z - 0.21], [sx + 0.03, h, z + 0.21], C.strap);
   }
   // Two strip lights, a garden chair by the left-hand erg, a towel on the right-hand one's seat.
   for (const z of [z0 + 2, z0 + 4.4]) box([-0.6, h - 0.06, z - 0.06], [0.6, h, z + 0.06], C.light);
@@ -383,8 +381,8 @@ export function ergRoom(m, o, mirrored) {
     box([b, lo, z0], [b + t, hi, z0 + 0.03], C.white);
     for (const sx of [a + 0.05, b - 0.05]) box([sx - 0.005, hi + t, z0 + 0.012], [sx + 0.005, h, z0 + 0.022], C.string);
     const glass = (u, v) => inRoom(o, u, v, z0 + 0.004);
-    for (const [u, sw] of [[a + 0.08, 0.06], [a + 0.2, 0.025]]) {
-      const rise = 0.3; // the streak's lean: across this much for its height
+    for (const [u, sw] of [[a + 0.03, 0.04], [a + 0.1, 0.02]]) {
+      const rise = 0.1; // the streak's lean: across this much for its height
       const [p0, p1, p2, p3] = [glass(u, lo), glass(u + sw, lo), glass(u + sw + rise, hi), glass(u + rise, hi)];
       m.triFacing(p0, p1, p2, sheen, [0, 0, -1]);
       m.triFacing(p0, p2, p3, sheen, [0, 0, -1]);
