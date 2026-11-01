@@ -186,17 +186,11 @@ actor ScriptedSource: PaddlesSource {
         #expect(river.coachSummary != nil)
     }
 
-    /// `source.phone` from JSON, so a wrong key fails here. Until the contract
-    /// has `paddles.get.with-phone.json` (#804), the sample gets the key.
-    @Test func aPhonesPaddleSaysPhone() throws {
-        let data = try Data(contentsOf: fixtures.appending(path: "paddles.get.json"))
-        var json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        var source = try #require(json["source"] as? [String: Any])
-        source["phone"] = true
-        json["source"] = source
-        let paddle = try JSONDecoder.paddlesnitch.decode(
-            AnalysisSession.self, from: try JSONSerialization.data(withJSONObject: json))
-        #expect(PaddleSummary(paddle).eyebrow == "Phone · K1")
+    /// #789: `source.phone` from the contract's phone paddle, so a wrong key
+    /// fails here.
+    @Test func aPhonesPaddleSaysPhone() async throws {
+        let phone = try await summary("pdl-phone")  // paddles.get.with-phone.json
+        #expect(phone.eyebrow == "Phone · K1")
     }
 
     @Test func aMotionOnlyPaddleExplainsItself() async throws {
