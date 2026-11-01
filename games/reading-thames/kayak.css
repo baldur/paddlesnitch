@@ -597,6 +597,15 @@ summary { cursor: pointer; }
 #ergMon small { font-size: 0.6rem; margin-left: 0.2rem; opacity: 0.75; }
 #ergMon .other { grid-column: 1 / -1; font-size: 0.75rem; }
 #coach[hidden], #ergMon[hidden] { display: none; }
+/* The kayak erg has no screen: its numbers in the game's own dark panel, not
+   a monitor's. While you paddle, Back, Start over and the door make way (Esc
+   and B still leave): they sat under the left thumb. On a short screen the
+   note keeps left of the numbers, bottom right. */
+#ergMon.kayak { background: rgba(10, 18, 18, 0.8); color: #fff; box-shadow: none; border-radius: 10px; font-family: system-ui, sans-serif; }
+#club.kerging #clubNav, #club.kerging #clubDoors .door { visibility: hidden; }
+@media (max-height: 500px) {
+  #club.kerg #clubNote { left: max(16px, env(safe-area-inset-left)); transform: none; max-width: calc(100vw - 290px); }
+}
 /* The rowing club's changing room: no sleeves or buoyancy aid with an all-in-one. */
 #menu.rowing .kayak-only { display: none; }
 /* Rowing: messages above the coach. The coach sits where the low lane is, so

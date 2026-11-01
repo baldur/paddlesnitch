@@ -114,6 +114,6 @@ test('out of legs, rating high pulls little more than rating easy', () => {
 
 test("the result: the time, a new best or the old one, and whether you beat the rower next to you", () => {
   assert.deepEqual(ergResult(118.4, null, 470), { text: '500 m in 1:58.4. You beat the rower next to you.', record: true });
-  assert.deepEqual(ergResult(115.2, 118.4, 500), { text: '500 m in 1:55.2: a new best!', record: true });
+  assert.deepEqual(ergResult(115.2, 118.4, 500), { text: '500 m in 1:55.2, a new best!', record: true });
   assert.deepEqual(ergResult(121, 118.4, 500), { text: '500 m in 2:01.0. Your best: 1:58.4.', record: false });
 });

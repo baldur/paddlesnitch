@@ -215,17 +215,18 @@ private fun SectionTitle(text: String) =
     Text(text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
 
 @Composable
-private fun Efforts(d: PaddleDetail) {
+internal fun Efforts(d: PaddleDetail) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("Efforts and rests")
         if (d.repeats.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Eyebrow("Repeats")
             d.repeats.forEach { Text(it, fontFamily = PlexMono, fontSize = 15.sp) }
         }
-        if (d.efforts.isNotEmpty()) Column(Modifier.fillMaxWidth().card()) {
-            d.efforts.forEachIndexed { i, e ->
-                if (i > 0) HorizontalDivider(color = PsColor.border)
-                Column(Modifier.fillMaxWidth().padding(12.dp).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Data is square: no box, a border above each row, as the website's table (#826).
+        if (d.efforts.isNotEmpty()) Column(Modifier.fillMaxWidth()) {
+            d.efforts.forEach { e ->
+                HorizontalDivider(color = PsColor.border)
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Effort ${e.number} at ${e.at}", color = PsColor.muted, fontSize = 14.sp)
                     Text("${e.lasted} · ${e.pace}/500 · ${e.spm} spm", fontFamily = PlexMono, fontSize = 16.sp)
                     e.trend?.let { Text(it, color = PsColor.split, fontSize = 14.sp) }
@@ -240,10 +241,12 @@ private fun Efforts(d: PaddleDetail) {
 }
 
 @Composable
-private fun Splits(rows: List<SplitRow>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+internal fun Splits(rows: List<SplitRow>) {
+    // The same gap under the heading as Efforts (the website's gap-3).
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("500 m splits")
-        Column(Modifier.fillMaxWidth().card().padding(horizontal = 12.dp)) {
+        // Data is square: no box, a border above each row, as the website's tables (#826).
+        Column(Modifier.fillMaxWidth()) {
             SplitLine("km", "At", "/500", "Spm", header = true)
             rows.forEach {
                 HorizontalDivider(color = PsColor.border)

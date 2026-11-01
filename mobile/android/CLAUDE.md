@@ -32,6 +32,8 @@ time and isn't obvious from the code.
   filled buttons (lead, 2026-10-26).
 - Data is square: no rounded corners on charts, chart keys, tables or maps (design system).
   `SquareDataTest` draws the weekly bars and the speed colour key and checks their corner pixels.
+  Tables (splits, efforts) sit on the ground with a border above each row, like the website's,
+  never in a filled box (#826, `SquareTablesTest`).
 - Buttons have the control radius from the tokens (`PsRadius.control`, 6 dp), not M3's pill (#793).
   M3's `Button`, `OutlinedButton` and `TextButton` take their pill from a fixed full-corner token,
   never from the theme's `Shapes`, so setting `Shapes` changes nothing. Screens import
@@ -78,18 +80,8 @@ time and isn't obvious from the code.
   same "Confirm your email" step. In Compose tests, `compose.mainClock.advanceTimeBy`
   drives a `LaunchedEffect` `delay`, such as the 30-second pause between codes
   (`SignUpCodeScreenTest`).
-- Strava connect (`account/StravaConnect.kt`) ends on
-  `com.paddlesnitch.app:/account/strava`. `Incoming` must match that before the
-  sign-in return, since the manifest's scheme filter catches both. A return with
-  no stored connect verifier is ignored (anyone can open the address), and
-  `Reauth.After.ConnectStrava` brings a fresh sign-in back to Account.
-- Older Strava paddles come in one at a time (`StravaImporter`, plain Kotlin with an
-  injectable clock and sleep). `StravaImportModel` is the app's first ViewModel: it
-  keeps the import through rotation and setting changes. `onDispose` calls `stop()`
-  only when `!activity.isChangingConfigurations`, and keeps the screen on while an
-  import runs. TalkBack hears only start, waiting, stopped and done
-  (`importAnnouncement`). Use `semantics { contentDescription }`, not
-  `clearAndSetSemantics`, so tests can still find the visible text.
+- To give TalkBack shorter words than the screen, use `semantics { contentDescription }`,
+  not `clearAndSetSemantics`, so tests can still find the visible text.
 - Large-text goldens catch rows that squeeze text to a letter per line. Use
   `FlowRow` for a badge, name and action on one line.
 - Forgot password is in the app (`ForgotPasswordScreen`, shown inside signing in).
@@ -103,19 +95,17 @@ time and isn't obvious from the code.
 - Type is IBM Plex, bundled (`res/font`, the same files as iOS; the OFL licence is in
   `assets/licences`). The theme sets Plex Sans for every style (`ui/Type.kt`).
   Numbers and mono labels use `PlexMono`, never `FontFamily.Monospace` (`TypeTest`).
-- Which sign-ins are on comes from `GET /att/api/auth/options`, asked each time sign-in
-  and Account open (`loadOptions`, `AccountApi.signInOptions`). A failure says so with Try
-  again on both screens. It never quietly counts as "Strava off". With Strava off, Account
-  shows Strava only to a connected account, as Paused. On sign-in, an account made with
-  Strava gets "Email us" (mailto), never the issue form: reports are public. Before deleting,
-  it gets Report an issue, opened through `signedInPage("/account?report=1")` so the report
-  is filed as that account. Screen tests built on MockWebServer must pass their own
-  `loadOptions`, or the options call eats an answer meant for the test.
+- Whether Google sign-in is on comes from `GET /att/api/auth/options`, asked each time
+  sign-in opens (`loadOptions`, `AccountApi.signInOptions`). A failure says so with Try again.
+  An account made with Strava gets "Email us" (mailto) on sign-in and before deleting, never
+  the issue form: reports are public. Screen tests
+  built on MockWebServer must pass their own `loadOptions`, or the options call eats an
+  answer meant for the test.
 - A `LaunchedEffect` that waits for other state must wait inside one run
   (`snapshotFlow { … }.first { it }`) and read that state after the wait. Adding the state as
   a key reruns the effect, which wipes the first run's result. A value read into a `val`
   before the effect is the one from first composition.
-- Sign in with Google (`auth/GoogleSignIn.kt`) is PKCE like Strava. The return address is
+- Sign in with Google (`auth/GoogleSignIn.kt`) is PKCE (`auth/Pkce.kt`). The return address is
   `com.paddlesnitch.app:/signin/google`, and App.kt acts on it only while
   `PrefsGoogleVerifierStore` holds a verifier from the last 10 minutes.
 - Boat motion (`paddles/BoatMotionScreen.kt`) is offered only on a tracker paddle
@@ -171,14 +161,17 @@ time and isn't obvious from the code.
   and PLAY-RELEASE.md together.
 - Play takes the `.aab` (`bundleRelease`), not the APK. The steps to publish on Google Play
   are in `PLAY-RELEASE.md`.
-- Release hides Strava (`STRAVA_IN_APP`, a `buildConfigField` per build type). `Api` then
-  reads `strava` as false in `signInOptions`, so the app takes its tested "server switched
-  Strava off" path everywhere. Don't add a second switch in the screens. Debug keeps
-  Strava, so the screen tests still cover it. `checkReleaseStrava` reads the generated
-  release `BuildConfig.java`, because unit tests only build debug.
+- Strava is gone for good (owner, 2026-11-01): no Strava sign-in, connect, import or route
+  calls. Old paddles still decode `sourceType` "strava" and say Strava. `SignInOptions.strava`
+  is still decoded (older builds read it) but never used. An account made with Strava has no
+  password (lead's decisions, 2026-11-01): the Sign in tab (not Create account) always shows
+  `MADE_WITH_STRAVA` with Email us. Account knows it only from `Contact.placeholderEmail`, its
+  own load (a failure never hides Account), asked again by Delete and Sign out if unknown, never
+  guessed: it gives a contact email field, a question before Sign out (`SIGN_OUT_STRAVA`), and
+  Email us with the Support ID (`deleteMailto`) instead of signing in again to delete.
 - Every sign-in return address can be opened by any app or link. `Intake.arrived` passes a
-  Strava or Google return on only while this app's verifier for it is waiting
-  (`PrefsVerifierStore.pending`, `PrefsGoogleVerifierStore.pending`) and nobody is signed in.
+  Google return on only while this app's verifier for it is waiting
+  (`PrefsGoogleVerifierStore.pending`) and nobody is signed in.
 - Phone recordings upload (C3, `record/PhoneUpload.kt`): `PhoneUploader` is plain Kotlin over
   `PhoneAccount`, so `PhoneUploaderTest` covers every row of the contract's table of upload
   answers, and `ApiPhoneAccountTest` replays the contract's fixtures. Its state lives in the

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRequestUser } from '@/lib/auth'
+import { getRequestUser, getRequestUserEvenIfErased } from '@/lib/auth'
 import { getUserDevice, touchDevice, uploadReceipt, stagedUploadParts, isPhone } from '@/lib/devices'
 import { handleSessionUpload } from '@/lib/session-upload'
 import { reportedFirmware, reportedModel } from '@/lib/device-route'
@@ -18,7 +18,7 @@ import { erasedAnswer } from '@/lib/erased-answer'
 // account (POST /api/account/devices/phone) and uploads as its owner. A phone
 // has no tracker token, so its answers carry no receipt.
 async function post(req: Request, { params }: { params: Promise<{ deviceId: string }> }) {
-  const user = await getRequestUser(req)
+  const user = await getRequestUserEvenIfErased(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // An account being deleted, or deleted with its token still valid (C3).
   const erased = await erasedAnswer(user.id)
