@@ -40,7 +40,7 @@ type Candidate = { id: string; label: string; system: 'old' | 'voice'; backend: 
 const CANDIDATES: Candidate[] = [
   { id: 'live', label: 'Live today: Mixtral 8x7B, old prompt, no check', system: 'old', backend: 'bedrock', model: 'mistral.mixtral-8x7b-instruct-v0:1' },
   { id: 'qwen', label: 'Qwen3 Next 80B on Bedrock, new voice + check', system: 'voice', backend: 'bedrock', model: 'qwen.qwen3-next-80b-a3b' },
-  { id: 'qwen-local', label: 'Qwen3 Next 80B on this laptop (Ollama), new voice + check', system: 'voice', backend: 'ollama', model: 'qwen3-next:80b' },
+  { id: 'qwen-local', label: 'Qwen3 Next 80B on this laptop (Ollama), new voice + check', system: 'voice', backend: 'ollama', model: 'qwen3-next:80b-a3b-instruct-q4_K_M' },
 ]
 const only = arg('only')?.split(',')
 const candidates = CANDIDATES.filter(c => !only || only.includes(c.id))
