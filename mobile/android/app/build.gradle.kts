@@ -138,11 +138,9 @@ val generateModels = tasks.register<GenerateModels>("generateModels") {
 
 // The release build declares exactly these permissions, because Play's forms ask
 // about each one. Changing the list is a decision: it changes the Play data safety
-// form and the declarations (PLAY-RELEASE.md). The map library adds fine and coarse
-// location, which src/release/AndroidManifest.xml removes. The app's own manifest
-// may not declare location while that overlay exists, or the overlay would quietly
-// remove it from release too. Phone recording (#761) deletes the overlay and adds
-// its permissions here.
+// form and the declarations (PLAY-RELEASE.md). Phone recording (C3, #761) brought
+// location, the location foreground service and the notification; WorkManager's
+// uploads bring the boot receiver.
 val releasePermissions = setOf(
     "android.permission.INTERNET",
     "android.permission.ACCESS_NETWORK_STATE",           // OkHttp, MapLibre
@@ -151,11 +149,17 @@ val releasePermissions = setOf(
     "android.permission.BLUETOOTH_ADMIN",                // tracker setup, Android 10-11
     "android.permission.BLUETOOTH_CONNECT",              // tracker setup, Android 12+
     "com.paddlesnitch.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",  // androidx, app-internal
+    "android.permission.ACCESS_FINE_LOCATION",           // phone recording (C3)
+    "android.permission.ACCESS_COARSE_LOCATION",         // phone recording: asked with fine, as Android requires
+    "android.permission.FOREGROUND_SERVICE",             // phone recording; WorkManager
+    "android.permission.FOREGROUND_SERVICE_LOCATION",    // phone recording: Play's foreground service declaration
+    "android.permission.WAKE_LOCK",                      // phone recording; WorkManager
+    "android.permission.POST_NOTIFICATIONS",             // the recording's notification, with Stop
+    "android.permission.RECEIVE_BOOT_COMPLETED",         // WorkManager: an upload waiting survives a restart
 )
 
 abstract class CheckReleasePermissions : DefaultTask() {
     @get:InputFile abstract val merged: RegularFileProperty
-    @get:InputFile abstract val appManifest: RegularFileProperty
     @get:Input abstract val allowed: SetProperty<String>
 
     @TaskAction
@@ -167,11 +171,6 @@ abstract class CheckReleasePermissions : DefaultTask() {
         check(extra.isEmpty() && missing.isEmpty()) {
             "The release build's permissions changed: added $extra, gone $missing. " +
                 "Update releasePermissions in app/build.gradle.kts and the Play forms (PLAY-RELEASE.md)."
-        }
-        val own = names.findAll(appManifest.get().asFile.readText()).map { it.groupValues[1] }.filter { "LOCATION" in it }.toList()
-        check(own.isEmpty()) {
-            "src/main/AndroidManifest.xml declares $own, which src/release/AndroidManifest.xml removes from release. " +
-                "Delete that overlay and add the permissions to releasePermissions (#761)."
         }
     }
 }
@@ -195,7 +194,6 @@ androidComponents {
         val cap = variant.name.replaceFirstChar { it.uppercase() }
         val task = tasks.register<CheckReleasePermissions>("check${cap}Permissions") {
             merged.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
-            appManifest.set(layout.projectDirectory.file("src/main/AndroidManifest.xml"))
             allowed.set(releasePermissions)
         }
         val strava = tasks.register<CheckReleaseStrava>("check${cap}Strava") {
@@ -223,6 +221,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.maplibre)
+    implementation(libs.work.runtime)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
@@ -235,6 +234,7 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
     testImplementation(libs.robolectric)
+    testImplementation(libs.work.testing)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)

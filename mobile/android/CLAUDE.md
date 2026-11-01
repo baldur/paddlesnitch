@@ -121,16 +121,14 @@ time and isn't obvious from the code.
   the recorder core's phone layer as Android gives them (m/s², rad/s, `event.timestamp`,
   `elapsedRealtimeNanos`), every call on one HandlerThread. Never convert or sort them here:
   `recorder-core/test/one_implementation.sh` fails on the standard-gravity number or 180/π written
-  anywhere in mobile/, tests and this file included (use `SensorManager.STANDARD_GRAVITY` for a test's input). Behind
-  `BuildConfig.DEBUG` until recordings upload (C3).
+  anywhere in mobile/, tests and this file included (use `SensorManager.STANDARD_GRAVITY` for a test's input). In
+  every build since C3.
 - The JNI library is built twice: by the NDK into the APK, and for the host by `hostRecorder`
   (jni.h copied from the NDK: Android Studio's JDK has no headers), so `RecorderFixturesTest`
   replays recorder-core's fixtures through the real binding. Two traps: the Test task must list
   the library as an input or a changed `.c` file leaves the tests "up to date" (a mutation once
   passed that way); and the JVM loads one library file in one classloader only, so with
   Robolectric's sandbox as a second one, each loads its own temp copy.
-- Recording's permissions and `RecordingService` live in `src/debug/AndroidManifest.xml` until
-  recordings upload. MapLibre's manifest adds fine/coarse location to release builds by itself.
 - The recorder thread's own clock in tests: Robolectric's `idleFor` jumps the clock in one go, so
   step a second at a time to see each tick, and give the recorder a clock that moves
   (`SystemClock.uptimeMillis()`), or the core ignores every tick after the first as a repeat.
@@ -158,10 +156,9 @@ time and isn't obvious from the code.
 - The release build declares exactly the permissions in `releasePermissions`
   (`app/build.gradle.kts`), because Play's forms ask about each one. Every release build
   runs `checkReleasePermissions` (and CI runs it on every change). It fails on any
-  permission added or gone, and if `src/main` declares location. MapLibre adds fine and
-  coarse location, which `src/release/AndroidManifest.xml` removes with
-  `tools:node="remove"`. That overlay would also quietly remove the app's own, so phone
-  recording (#761) deletes it, and until then declares its permissions only in `src/debug`.
+  permission added or gone. A library's manifest adds its own (WorkManager brought
+  `RECEIVE_BOOT_COMPLETED`), so a new dependency can fail it: decide, then update the list
+  and PLAY-RELEASE.md together.
 - Play takes the `.aab` (`bundleRelease`), not the APK. The steps to publish on Google Play
   are in `PLAY-RELEASE.md`.
 - Release hides Strava (`STRAVA_IN_APP`, a `buildConfigField` per build type). `Api` then
@@ -172,3 +169,18 @@ time and isn't obvious from the code.
 - Every sign-in return address can be opened by any app or link. `Intake.arrived` passes a
   Strava or Google return on only while this app's verifier for it is waiting
   (`PrefsVerifierStore.pending`, `PrefsGoogleVerifierStore.pending`) and nobody is signed in.
+- Phone recordings upload (C3, `record/PhoneUpload.kt`): `PhoneUploader` is plain Kotlin over
+  `PhoneAccount`, so `PhoneUploaderTest` covers every row of the contract's table of upload
+  answers, and `ApiPhoneAccountTest` replays the contract's fixtures. Its state lives in the
+  account's folder (`phone`, `phone-off`, `<base>.failed`, `<base>.nofix`), so it goes with
+  the account and survives the process. `UploadWorker` (WorkManager: any network, backoff)
+  only ever uploads as whoever is signed in now. Api's network failure is an `ApiFailure`
+  with status 0: the uploader turns it into "try again later", never a refusal.
+- Never add the phone again in the background after a 404: only Start (`RecordingService`'s
+  `onStarted`) and Upload now clear `phone-off`. Every sign-in deletes `phone`, so the next
+  upload asks the server again.
+- Phones are not trackers: `trackersOnly` keeps summaries whose `kind` is tracker or missing
+  (an older server), so a kind this app doesn't know never shows as a tracker card.
+- The install id (`Uploads.installId`) is excluded from backup and device transfer in
+  `data_extraction_rules.xml`, beside recordings: a copied id would make a new phone the old
+  one on the account.

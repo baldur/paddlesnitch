@@ -85,7 +85,7 @@ fun TrackersScreen(
     LaunchedEffect(attempt) {
         failed = null; recordingsFailed = null
         runCatching { api.trackers() }
-            .onSuccess { list = it }
+            .onSuccess { list = trackersOnly(it) }
             // A failed load is said as such: "no trackers" would tell owners they have none.
             .onFailure { if (it is SignedOut) onSignedOut() else failed = it.shown("Couldn’t load your trackers. Please try again.") }
         // Apart, so a failure here still shows the trackers; it's said on a tracker's own page.
@@ -154,6 +154,16 @@ private fun TrackerCard(s: TrackerSummary, device: Tracker?, now: Long, onOpen: 
     }
     Chevron()
     }
+}
+
+/**
+ * The trackers in the answer, without phones (C3): phones are listed and removed on the
+ * website's Devices page. A kind this app doesn't know yet isn't a tracker either.
+ */
+internal fun trackersOnly(list: TrackerList): TrackerList {
+    val shown = list.summaries.filter { it.kind == null || it.kind == TrackerSummary.Kind.Tracker }
+    val ids = shown.map { it.deviceId }.toSet()
+    return list.copy(summaries = shown, devices = list.devices.filter { it.deviceId in ids })
 }
 
 /** "firmware 0.19.3 · beta · up to date · seen 3m ago · crashed 2h ago (uplink)", coloured as on the website. */

@@ -38,9 +38,13 @@ class RecordingServiceTest {
 
     private var account: String? = "u-77"
     private val made = mutableListOf<File>()
+    private val started = mutableListOf<String>()
+    private val finished = mutableListOf<String>()
 
     private fun service(broken: Boolean = false) = Robolectric.buildService(RecordingService::class.java).create().also {
         it.get().signedInAccount = { account }
+        it.get().onStarted = { _, a -> started += a }
+        it.get().onFinished = { _, a -> finished += a }
         it.get().makeRecorder = { c, folder ->
             made += folder
             PhoneRecorder(c, if (broken) File(File(dir, "taken").apply { writeText("") }, "recordings") else File(dir, folder.name))
@@ -70,6 +74,30 @@ class RecordingServiceTest {
         assertTrue(shadowOf(s.get()).isForegroundStopped)
         assertTrue(shadowOf(s.get()).isStoppedBySelf)
         assertTrue((state as RecordingService.State.Recording).files.track.length() > 0)
+    }
+
+    // C3: Start lets a removed phone be added again; a finished recording goes up, to the account that recorded it.
+    @Test fun aRecordingUploadsOnceItStopsToTheAccountThatRecordedIt() {
+        val s = service()
+        s.startCommand(0, 1)
+        assertEquals(listOf("u-77"), started)
+        assertEquals(emptyList<String>(), finished)   // never while it runs
+        account = "u-78"
+        s.withIntent(Intent(app, RecordingService::class.java).setAction(RecordingService.ACTION_STOP)).startCommand(0, 2)
+        waitFor("stopped") { RecordingService.state.value is RecordingService.State.Stopped }
+        assertEquals(listOf("u-77"), finished)
+    }
+
+    @Test fun aRecordingTheSystemBringsBackIsntAStart() {
+        service().startCommand(0, 1)
+        service().get().onStartCommand(null, 0, 1)
+        assertEquals(listOf("u-77"), started)
+    }
+
+    // This test phone has an accelerometer and no gyroscope: GPS only, and the screen says so.
+    @Test fun withoutBothMotionSensorsItRecordsWithoutMotion() {
+        service().startCommand(0, 1)
+        assertEquals(false, (RecordingService.state.value as RecordingService.State.Recording).motion)
     }
 
     @Test fun aStartThatFailsLetsGoOfEverything() {

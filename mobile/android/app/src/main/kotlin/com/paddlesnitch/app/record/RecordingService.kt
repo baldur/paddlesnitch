@@ -26,8 +26,8 @@ import kotlinx.coroutines.flow.StateFlow
  * Runs a recording (PhoneRecorder) as a foreground service of type location,
  * with a partial wake lock, so it carries on with the screen off
  * (docs/features/android-app.md, Recording). Start it while the app is on
- * screen: Android lets a location service start only then. Declared in the
- * debug manifest only, until recordings upload.
+ * screen: Android lets a location service start only then. Each recording
+ * uploads once it's stopped (Uploads).
  */
 class RecordingService : Service() {
     private var recorder: PhoneRecorder? = null
@@ -40,6 +40,14 @@ class RecordingService : Service() {
 
     /** Who's signed in now; tests swap in their own. */
     internal var signedInAccount: (Context) -> String? = { KeystoreTokenStore(it).userId }
+
+    /** The owner started a recording: a removed phone may be added again, and what's waiting uploads (C3). */
+    internal var onStarted: (Context, String) -> Unit = Uploads::allowAddingAndSchedule
+
+    /** A recording finished: upload it (never while it runs). */
+    internal var onFinished: (Context, String) -> Unit = Uploads::schedule
+
+    private var account: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -72,11 +80,14 @@ class RecordingService : Service() {
         startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         // A backstop: a recording that's never stopped mustn't hold the phone awake for ever.
         wake = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "paddlesnitch:recording").apply { acquire(MAX_RECORDING_MS) }
-        val r = makeRecorder(this, RecordingFiles.accountDir(recordingsDir(this), accountFor(restarted)))
+        val who = accountFor(restarted)
+        val r = makeRecorder(this, RecordingFiles.accountDir(recordingsDir(this), who))
         val files = r.start()   // on failure it has already undone itself
         recorder = r
+        account = who
         startedAt = SystemClock.elapsedRealtime()
-        _state.value = State.Recording(files, r.live, startedAt)
+        _state.value = State.Recording(files, r.live, startedAt, motion = r.motion)
+        if (!restarted) runCatching { onStarted(this, who) }.onFailure { Log.w(TAG, "couldn't schedule uploads", it) }
         true
     } catch (e: Exception) {
         Log.w(TAG, "couldn't start recording", e)
@@ -90,12 +101,16 @@ class RecordingService : Service() {
     private fun stopRecording() {
         val r = recorder ?: run { if (_state.value is State.Recording) _state.value = State.Idle; releaseAndStop(); return }
         recorder = null
+        val who = account
+        account = null
         forgetAccount()
         val elapsed = SystemClock.elapsedRealtime() - startedAt
         Thread({
             val files = runCatching { r.stop() }.onFailure { Log.w(TAG, "couldn't finish the recording", it) }.getOrNull()
             main.post {
                 _state.value = files?.let { State.Stopped(it, elapsed) } ?: State.Idle
+                // Even a recording that didn't finish cleanly has what it wrote: send that.
+                who?.let { a -> runCatching { onFinished(this, a) }.onFailure { Log.w(TAG, "couldn't schedule the upload", it) } }
                 releaseAndStop()
             }
         }, "recorder-stop").start()
@@ -139,7 +154,8 @@ class RecordingService : Service() {
         /** Asked to start; waiting for permission or the service. */
         data object Starting : State
         /** [startedAt] is SystemClock.elapsedRealtime() at the start, for the elapsed time on screen. */
-        data class Recording(val files: RecordingFiles, val live: StateFlow<RecorderCore.Live?>, val startedAt: Long) : State
+        /** [motion]: false on a phone without both motion sensors, which records GPS only. */
+        data class Recording(val files: RecordingFiles, val live: StateFlow<RecorderCore.Live?>, val startedAt: Long, val motion: Boolean = true) : State
         data class Stopped(val files: RecordingFiles, val elapsedMs: Long) : State
         /** [locationRefused]: the person said no to location (Settings can change that). */
         data class Failed(val locationRefused: Boolean) : State

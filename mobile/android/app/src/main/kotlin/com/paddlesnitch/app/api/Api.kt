@@ -219,6 +219,10 @@ class Api(
     override suspend fun removeTracker(deviceId: String): Ok =
         account("DELETE", "api/account/devices", """{"deviceId":${str(deviceId)}}""", Ok.serializer())
 
+    /** This install's phone on the account (C3): the same [installId] and account always get the same deviceId. */
+    suspend fun addPhone(installId: String): Phone =
+        account("POST", "api/account/devices/phone", """{"installId":${str(installId)},"model":"phone-android"}""", Phone.serializer())
+
     override suspend fun stravaHistory(since: HistorySpan): StravaHistory =
         query("sources.stravaHistory", StravaHistory.serializer(), """{"since":${str(since.wire)}}""")
     override suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport =

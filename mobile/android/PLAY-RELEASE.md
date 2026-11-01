@@ -19,10 +19,13 @@ The release build as it is today:
 - Sign-in with email or Google, and Account.
 - Trackers: the list, removing one, and **tracker setup over Bluetooth**
   (pair, add to the account, WiFi, sync).
+- **Phone recording** (C3, #761): Record on Paddles. The phone records GPS
+  and motion with the screen off, then uploads the recording, which becomes a
+  paddle. The phone is added to the account as a device; phones are listed and
+  removed on the website's Devices page, not in the app.
 
 Not in this release:
 
-- **Phone recording:** debug only until C3 (#761).
 - **Strava:** hidden in release (`STRAVA_IN_APP` in `app/build.gradle.kts`).
   The app reads Strava as off whatever the server says, as when the server
   switches it off. Sign-in has no Strava button. An account that signed up
@@ -33,11 +36,15 @@ Not in this release:
   too. `checkReleaseStrava` fails any release build that shows Strava.
 
 Owner decisions (2026-10-31): keep tracker setup and test it first; hide
-Strava.
+Strava. 2026-11-01: phone recording is in (C3).
 
 - [ ] **Owner:** run `TRACKER-TESTING.md` with a real tracker on a release
       build, before the closed test starts. If it fails, `android` fixes it or
       hides setup in release; the Trackers list stays either way.
+- [ ] **Owner:** record a real paddle with the phone on the C3 PR's build,
+      with the screen off for most of it. The PR merges only after that
+      (`mobile/contract/README.md` § Release). Check that it becomes a paddle
+      with stroke rate and boat motion.
 
 ## Day 1: the developer account (owner)
 
@@ -58,8 +65,10 @@ Strava.
       with every build. Don't rename or move `.github/workflows/android.yml`:
       a new file starts the count again, and Play refuses a lower number.
 - [x] **android:** the release build declares exactly the permissions listed
-      in `releasePermissions` (`app/build.gradle.kts`), and no location (#782,
-      lead's decision). Every release build checks it.
+      in `releasePermissions` (`app/build.gradle.kts`). Every release build
+      checks it. Location, the location foreground service and notifications
+      are for phone recording (C3); the boot permission is WorkManager's, so a
+      waiting upload survives a restart. No background location.
 - [ ] **Owner:** in Play Console, **Create app**: name paddlesnitch, app, free.
       The package name `com.paddlesnitch.app` is set by the first upload.
 - [ ] **Owner:** once #782 is merged, make the first upload by hand; Play
@@ -128,6 +137,14 @@ All of these must be done before the closed test can start.
 - [ ] **Owner:** data safety form, with the answers below.
 - [ ] **Owner:** account deletion: in the app (Account → Delete account) and
       on the web at `https://paddlesnitch.com/account`.
+- [ ] **Owner:** **App content → Foreground service permissions**: declare
+      the `location` type for phone recording. Play asks for a short video:
+      start a recording, lock the phone, show the notification with Stop,
+      unlock, and stop with Hold to stop. Describe it as "Records the paddler's
+      route and boat motion with the screen off, until they stop it."
+- [ ] **Owner:** if Play asks about location permissions, the answer is
+      "while the app is in use" only: recording runs as a foreground service
+      the paddler starts, so there's no background location declaration.
 - [ ] **Owner:** content rating questionnaire; target audience 18 and over
       (not children); app category Sports.
 - [ ] **Owner + android:** store listing: name, short description (at most
@@ -156,14 +173,16 @@ All of these must be done before the closed test can start.
   | Personal info → Name | account name; from Google when you sign in with it | Required |
   | Personal info → Email address | sign-in email, contact email | Optional (an account made with Strava on the website may have none) |
   | Personal info → User IDs | account id, public handle, Google account id | Required |
-  | Location → Precise location | the GPS tracks in paddles you add or record with a tracker | Optional (only when you add a paddle) |
-  | Health and fitness → Fitness info | distance, pace, stroke rate and boat motion of those paddles | Optional (only when you add a paddle) |
+  | Location → Precise location | the GPS tracks in paddles you add, record with a tracker, or record on the phone | Optional (only when you add or record a paddle) |
+  | Health and fitness → Fitness info | distance, pace, stroke rate and boat motion of those paddles, including the phone's own motion while it records | Optional (only when you add or record a paddle) |
   | Files and docs | the GPS files you add, processed ephemerally (the server keeps the paddle, not the file) | Optional |
-  | Device or other IDs | the id of each tracker you add to your account | Optional (only with a tracker) |
+  | Device or other IDs | the id of each tracker you add to your account; for a phone that records, an id made from a random number the app keeps (never a hardware or advertising id) | Optional (only with a tracker, or once you record on the phone) |
   | App info and performance → Other diagnostic data | the app's version, sent with each request and kept in server logs for 90 days | Required |
 
-- **Not collected:** contacts, photos, messages, the phone's own location,
-  crash logs, analytics. Heart rate isn't stored even when a FIT or TCX file
+- **The phone's location** is collected only while a recording runs, which the
+  paddler starts and stops. It's kept on the phone until uploaded, then deleted
+  from the phone.
+- **Not collected:** contacts, photos, messages, crash logs, analytics. Heart rate isn't stored even when a FIT or TCX file
   has it, and `/privacy` says so.
 - **WiFi name and password** for a tracker go from the phone to the tracker
   over Bluetooth, never to our server. Nothing to declare.
@@ -175,7 +194,7 @@ All of these must be done before the closed test can start.
 
 - [ ] **Owner + android:** check the release on the owner's phone from the
       internal track. Install from Play, sign in, open a paddle and add a
-      paddle. Sign-in and Account show no way to connect Strava. Then open a
+      paddle. Record a short paddle on the phone and check it becomes a paddle. Sign-in and Account show no way to connect Strava. Then open a
       `paddlesnitch.com/paddles/<id>` link. It should open the app (this needs
       the fingerprint from the Play app signing step).
 - [ ] **Owner:** in Play Console, create the closed testing track, add the
@@ -195,12 +214,6 @@ All of these must be done before the closed test can start.
   interactions**: collected, not shared, required, for Analytics and App
   functionality. Today they are "not collected" only because the Android app
   sends neither yet.
-- **Phone recording**, after C3 (#761) and the 2 h screen-off test:
-  - delete `src/release/AndroidManifest.xml` and add its permissions to
-    `releasePermissions`;
-  - a foreground service of type `location` needs a Play declaration with a
-    short video;
-  - the data safety form gains the phone's location and motion.
 - **Strava back in the app:** set `STRAVA_IN_APP` to true for release, and
   change `checkReleaseStrava` (`app/build.gradle.kts`) with it.
   - Location and Fitness info gain "imported from Strava" as a source; Name
