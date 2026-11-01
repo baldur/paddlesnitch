@@ -23,9 +23,9 @@ extension Format {
     public static func noMotionCopy(reason: String?) -> String {
         if let reason, !reason.isEmpty {
             return "We couldn’t measure boat motion in this recording. "
-                + "The tracker may not have been fixed firmly in the boat."
+                + "The tracker or phone may not have been fixed firmly in the boat."
         }
-        return "Motion data uploads after the GPS track. If this recording is recent, sync the tracker again. "
+        return "Motion data uploads after the GPS track. If this recording is recent, it may still be uploading. "
             + "Older recordings have no motion data."
     }
 }
