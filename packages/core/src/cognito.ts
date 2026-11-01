@@ -7,8 +7,6 @@ import {
   AdminConfirmSignUpCommand,
   AdminUpdateUserAttributesCommand,
   AdminDeleteUserCommand,
-  AdminCreateUserCommand,
-  AdminSetUserPasswordCommand,
   ListUsersCommand,
   InitiateAuthCommand,
   RespondToAuthChallengeCommand,
@@ -27,7 +25,6 @@ import {
   UserNotFoundException,
   InvalidPasswordException,
 } from '@aws-sdk/client-cognito-identity-provider'
-import { randomBytes } from 'crypto'
 import { JwtRsaVerifier } from 'aws-jwt-verify'
 import { SimpleJwksCache } from 'aws-jwt-verify/jwk'
 import type { AuthUser } from './types'
@@ -225,7 +222,7 @@ export async function resendSignUpCode(email: string): Promise<{ ok: true } | { 
 // Ends every session the account has: all its refresh tokens stop working
 // (#702: a password reset must end a squatter's sessions). ID tokens already
 // issued stay valid until they expire (at most 24 h); hasRecentSignIn still
-// refuses them for deleting or connecting Strava. Throws on failure: the
+// refuses them for deleting the account. Throws on failure: the
 // caller decides. (Not in cognito-local, where it does nothing; tests stub it.)
 export async function signOutEverywhere(email: string): Promise<void> {
   try {
@@ -446,8 +443,7 @@ function userSummaryFromAttributes(user: { Username?: string; Attributes?: Array
 }
 
 // Look up an existing user by their verified email. Returns null when the
-// email isn't present. Used by the Strava sign-in flow to auto-link a
-// Strava login to a pre-existing email/password account.
+// email isn't present.
 export async function findUserByEmail(email: string): Promise<UserSummary | null> {
   const client = makeClient()
   // ListUsers with a filter expression is the supported way to search by
@@ -556,85 +552,9 @@ export async function disconnectGoogle(googleId: string): Promise<void> {
   }
 }
 
-// Whether an account with this sub exists. Unlike findUserBySub it never
-// answers "no" on an error: it throws. Use it where "no" leads to deleting
-// something (scripts/strava-index-cleanup.ts).
-export async function userExistsBySub(sub: string): Promise<boolean> {
-  const res = await makeClient().send(new ListUsersCommand({
-    UserPoolId: USER_POOL_ID,
-    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
-    Limit: 1,
-  }))
-  if (res.Users?.length) return true
-  // An exact sub filter never pages; an empty page with more to come isn't a "no".
-  if (res.PaginationToken) throw new Error('userExistsBySub: unexpected pagination')
-  return false
-}
-
-// Create a Cognito user for a Strava sign-in where no pre-existing account
-// was found. We never want the user to see Cognito's invitation email
-// (MessageAction=SUPPRESS) and we set a random permanent password they
-// will never use — sign-in goes through CUSTOM_AUTH instead. Email is
-// marked verified because Strava already verified it.
-export async function adminCreateUserForStrava(
-  email: string,
-  displayName: string,
-): Promise<{ sub: string } | { error: CognitoError }> {
-  const client = makeClient()
-  try {
-    const res = await client.send(new AdminCreateUserCommand({
-      UserPoolId: USER_POOL_ID,
-      Username: email,
-      MessageAction: 'SUPPRESS',
-      UserAttributes: [
-        { Name: 'email', Value: email },
-        { Name: 'email_verified', Value: 'true' },
-        { Name: 'name', Value: displayName },
-      ],
-    }))
-    // Set a permanent, never-used password so the account isn't stuck in
-    // FORCE_CHANGE_PASSWORD state (which would block CUSTOM_AUTH).
-    const random = randomBytes(32).toString('base64') + 'A1!a'
-    await client.send(new AdminSetUserPasswordCommand({
-      UserPoolId: USER_POOL_ID,
-      Username: email,
-      Password: random,
-      Permanent: true,
-    }))
-    const sub = res.User?.Attributes?.find(a => a.Name === 'sub')?.Value
-    if (!sub) return { error: 'unknown' }
-    return { sub }
-  } catch (err) {
-    // Self-heal a half-created user. A prior sign-in attempt can leave a
-    // Cognito user with no athlete-index link (created, then customAuthSignIn
-    // or the index write failed). On retry, AdminCreateUser throws
-    // UsernameExists and Strava sign-in dead-ends on "Could not create an
-    // account from your Strava profile" — forever, because the account can
-    // never be re-created. Recover: resolve the existing user, re-assert a
-    // permanent password (so it isn't stuck in FORCE_CHANGE_PASSWORD, which
-    // blocks CUSTOM_AUTH), and return its sub so the caller can (re)link and
-    // sign in. This makes the create idempotent for the synth-email path,
-    // which deliberately skips the by-email lookup upstream.
-    if (err instanceof UsernameExistsException) {
-      const existing = await findUserByEmail(email)
-      if (existing) {
-        const random = randomBytes(32).toString('base64') + 'A1!a'
-        await client.send(new AdminSetUserPasswordCommand({
-          UserPoolId: USER_POOL_ID,
-          Username: email,
-          Password: random,
-          Permanent: true,
-        })).catch(() => {})
-        return { sub: existing.sub }
-      }
-    }
-    return { error: classify(err) }
-  }
-}
-
-// Sign in via the Custom Auth flow, bypassing the password. The Strava
-// sign-in callback uses this after it has verified the user's identity
-// against Strava. The flow is:
+// Sign in via the Custom Auth flow, bypassing the password. Opening a website
+// page from a signed-in app (auth/web-code) uses this after it has checked the
+// one-use code. The flow is:
 //   1. InitiateAuth(CUSTOM_AUTH) with `presetToken` passed in
 //      ClientMetadata.preset_otp. The CreateAuthChallenge Lambda reads it
 //      and stores it as the expected answer.
@@ -713,7 +633,7 @@ export function signInFromClaims(claims: Record<string, unknown>): SignInClaims 
 /**
  * The sign-in behind an ID token. Cognito keeps the original `auth_time` on a
  * refreshed token (the OpenID rule; cognito-local doesn't), so `signedInAt` is
- * the last time someone typed a password or code or went through Strava.
+ * the last time someone really signed in (a password, a code or Google).
  */
 export async function idTokenSignIn(idToken: string): Promise<SignInClaims | null> {
   try {

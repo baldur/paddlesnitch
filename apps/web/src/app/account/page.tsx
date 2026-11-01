@@ -1,24 +1,18 @@
 'use client'
 import Link from 'next/link'
-import { STRAVA_CONNECT_RESULTS } from '@/lib/strava-connect-results'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
-import StravaButton from '@/components/strava/StravaButton'
-import PoweredByStrava from '@/components/strava/PoweredByStrava'
-import { StravaFirstImport, StravaMoreImport } from '@/components/strava/StravaHistoryImport'
 import LoadingState from '@/components/LoadingState'
 import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import type { AuthUser } from '@/lib/types'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Field, inputClass } from '@paddlesnitch/ui/Form'
-import { Badge, Chevron, EmptyState, cardClass, cardLinkClass } from '@paddlesnitch/ui/Card'
-import { googleSignInOn, stravaOn } from '@/lib/sign-in-options'
+import { Chevron, EmptyState, cardLinkClass } from '@paddlesnitch/ui/Card'
+import { googleSignInOn } from '@/lib/sign-in-options'
 import GoogleConnect from '@/components/GoogleConnect'
 
-// Strava is switched off in some builds (lib/sign-in-options.ts).
-const STRAVA = stravaOn()
 const GOOGLE_SIGNIN = googleSignInOn()
 
 // The page's sections, in order, for the in-page jump list (sm and up).
@@ -26,19 +20,10 @@ const SECTIONS: [string, string][] = [
   ['details', 'Your details'],
   ['profile', 'Public profile'],
   ['google', 'Google'],
-  ['strava', 'Strava'],
   ['devices', 'Devices'],
   ['data', 'Your data'],
   ['delete', 'Delete account'],
 ]
-
-type StravaStatus =
-  | { connected: false }
-  | { connected: true; athlete: { id: number; name: string }; autoImport: boolean }
-
-// Banner copy keyed off the ?strava= query param the callback sets when it
-// finishes. Keeps redirects round-trippable instead of relying on session state.
-const STRAVA_FLASH: Record<string, { tone: 'ok' | 'err'; text: string }> = STRAVA_CONNECT_RESULTS
 
 export default function AccountPage() {
   // Suspense wrapper required because the inner component reads
@@ -54,20 +39,15 @@ export default function AccountPage() {
 
 function AccountPageInner() {
   const searchParams = useSearchParams()
-  const stravaFlashKey = searchParams.get('strava')
-  const stravaFlash = stravaFlashKey ? STRAVA_FLASH[stravaFlashKey] : undefined
-
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
   // Delete account: closed → (check) → 'signin' (needs a fresh sign-in) or 'confirm' (type DELETE).
   const [deleteStep, setDeleteStep] = useState<'closed' | 'checking' | 'signin' | 'confirm'>('closed')
-  // Shown inside the Delete account / Strava sections, where the person is looking.
+  // Shown inside the Delete account section, where the person is looking.
   const [deleteError, setDeleteError] = useState('')
-  const [stravaSignInError, setStravaSignInError] = useState('')
   const [googleSignInError, setGoogleSignInError] = useState('')
   const [confirmText, setConfirmText] = useState('')
-  const [working, setWorking] = useState<'export' | 'delete' | 'strava' | 'google' | 'contact' | null>(null)
+  const [working, setWorking] = useState<'export' | 'delete' | 'google' | 'contact' | null>(null)
   const [error, setError] = useState('')
-  const [strava, setStrava] = useState<StravaStatus | undefined>(undefined)
   const [contactEmail, setContactEmail] = useState<string>('')
   const [contactSaved, setContactSaved] = useState<string | null>(null)
   const [contactMsg, setContactMsg] = useState('')
@@ -94,13 +74,6 @@ function AccountPageInner() {
     document.getElementById('delete')?.scrollIntoView()
     void openDelete()
   }, [user, resumeDelete])
-
-  useEffect(() => {
-    fetch('/att/api/strava/status')
-      .then(r => (r.ok ? r.json() : { connected: false }))
-      .then(setStrava)
-      .catch(() => setStrava({ connected: false }))
-  }, [stravaFlashKey])
 
   useEffect(() => {
     // Only fetch when we know we have a user — saves an unnecessary
@@ -217,35 +190,6 @@ function AccountPageInner() {
     }
   }
 
-  async function disconnectStrava() {
-    setError('')
-    setWorking('strava')
-    try {
-      const res = await fetch('/att/api/strava/disconnect', { method: 'POST' })
-      if (!res.ok) throw new Error('Couldn’t disconnect Strava. Please try again.')
-      setStrava({ connected: false })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Couldn’t disconnect Strava. Please try again.')
-    } finally {
-      setWorking(null)
-    }
-  }
-
-  async function toggleAutoImport(enabled: boolean) {
-    // Optimistic: reflect the choice immediately, revert on failure.
-    setStrava(s => (s?.connected ? { ...s, autoImport: enabled } : s))
-    try {
-      const res = await fetch('/att/api/strava/auto-import', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      })
-      if (!res.ok) throw new Error('Couldn’t change auto-import. Please try again.')
-    } catch (err) {
-      setStrava(s => (s?.connected ? { ...s, autoImport: !enabled } : s))
-      setError(err instanceof Error ? err.message : 'Couldn’t change auto-import. Please try again.')
-    }
-  }
-
   async function downloadExport() {
     setError('')
     setWorking('export')
@@ -280,27 +224,27 @@ function AccountPageInner() {
   }
 
   // Sign out, then sign in again the way this account does, and come back here.
-  async function signInAgain(then: 'delete' | 'strava' | 'google') {
+  async function signInAgain(then: 'delete' | 'google') {
     if (!user) return
-    const setErr = then === 'delete' ? setDeleteError : then === 'google' ? setGoogleSignInError : setStravaSignInError
+    const setErr = then === 'delete' ? setDeleteError : setGoogleSignInError
     setErr('')
-    // Made through Strava, and Strava is off: signing out would leave no way back in.
-    if (!STRAVA && isSyntheticStravaEmail(user.email)) {
-      setErr('Strava sign-in is off for now, so you can’t sign in again here. Report an issue asking us to delete your account. We’ll know it’s yours, so leave out your name and email: reports are public.')
+    // Made with Strava, which is gone: signing out would leave no way back in.
+    // (Delete account offers Email us instead, below.)
+    if (isSyntheticStravaEmail(user.email)) {
+      setErr('You made this account with Strava, so you can’t sign in again until we move it to your email.')
       return
     }
-    setWorking(then === 'delete' ? 'delete' : then === 'google' ? 'google' : 'strava')
-    const back = then === 'delete' ? '/account?resume=delete#delete' : then === 'google' ? '/account#google' : '/account#strava'
+    setWorking(then)
+    const back = then === 'delete' ? '/account?resume=delete#delete' : '/account#google'
     const out = await fetch('/att/api/auth/logout', { method: 'POST' }).catch(() => null)
     if (!out?.ok) {
       setErr('Couldn’t start signing in again. Please try again.')
       setWorking(null)
       return
     }
-    // A full page load either way: the header's user came with the page.
-    window.location.assign(isSyntheticStravaEmail(user.email)
-      ? `/att/api/auth/strava/init?next=${encodeURIComponent(back)}`
-      : `/signin?reason=reauth_${then}&next=${encodeURIComponent(back)}`)
+    // A full page load: the header's user came with the page.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a full load is the point
+    window.location.assign(`/signin?reason=reauth_${then}&next=${encodeURIComponent(back)}`)
   }
 
   async function deleteAccount() {
@@ -348,7 +292,7 @@ function AccountPageInner() {
 
             {/* In-page jump list, from sm up: the page is long. */}
             <nav aria-label="On this page" className="hidden sm:flex flex-wrap gap-x-5 gap-y-1 text-sm -mt-4">
-              {SECTIONS.filter(([id]) => (id !== 'strava' || STRAVA || strava?.connected) && (id !== 'google' || GOOGLE_SIGNIN)).map(([id, label]) => (
+              {SECTIONS.filter(([id]) => id !== 'google' || GOOGLE_SIGNIN).map(([id, label]) => (
                 <a key={id} href={`#${id}`} className="text-muted hover:text-fg">{label}</a>
               ))}
             </nav>
@@ -371,15 +315,15 @@ function AccountPageInner() {
                 <dd className="text-sm text-muted tabular break-all">{user.id}</dd>
               </dl>
 
-              {/* Contact email — only shown to Strava-only accounts (those
-                  with a synthesised email). Email-and-password users already
-                  have a real email and don't need this. */}
+              {/* Contact email — only for accounts made with Strava, whose sign-in
+                  email is a placeholder (lib/strava-account.ts). Everyone else
+                  already has a real email. */}
               {isSyntheticStravaEmail(user.email) && (
                 <form onSubmit={saveContactEmail} className="flex flex-col gap-3 pt-2">
                   <Field
                     label="Contact email"
                     htmlFor="contact-email"
-                    help="You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, invitations and changes to our Terms. We never share it."
+                    help="We don't have an email for this account. Add one so we can move your account to it and tell you about changes to our Terms. We never share it."
                   >
                     <input
                       id="contact-email"
@@ -476,103 +420,6 @@ function AccountPageInner() {
               </>
             )}
 
-            {/* Strava switched off: shown only to people still connected, so they can disconnect. */}
-            {(STRAVA || strava?.connected) && (
-            <section id="strava" className="flex flex-col gap-3 scroll-mt-4">
-              <h2 className="text-lg font-semibold text-fg">Strava</h2>
-              {STRAVA && (
-                <p className="text-base text-muted">
-                  Connect Strava to bring in your paddles and trial results without exporting files,
-                  and to sign in with Strava. We only read your activities; we never post.
-                </p>
-              )}
-
-              {stravaFlash && (
-                <p
-                  role={stravaFlash.tone === 'err' ? 'alert' : 'status'}
-                  className={`rounded-control border px-3 py-2 text-sm ${
-                    stravaFlash.tone === 'ok'
-                      ? 'border-green/50 bg-green/10 text-green'
-                      : 'border-red/50 bg-red/10 text-red'
-                  }`}
-                >
-                  {stravaFlash.text}
-                </p>
-              )}
-              {stravaFlashKey === 'reauth' && (
-                <div className="rounded-control border border-border bg-surface p-4 flex flex-col gap-3">
-                  <p role="status" className="text-sm text-fg">
-                    For your safety, connecting Strava needs a recent sign-in. Sign in again and you’ll come straight back here.
-                  </p>
-                  {stravaSignInError && <p role="alert" className="text-sm text-red">{stravaSignInError}</p>}
-                  <div>
-                    <button type="button" onClick={() => signInAgain('strava')} disabled={working === 'strava'} className={buttonClass('secondary')}>
-                      {working === 'strava' ? 'Sign in again…' : 'Sign in again'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {strava === undefined && <p className={msgClass}>Checking…</p>}
-
-              {strava && !strava.connected && STRAVA && (
-                <div><StravaButton href="/att/api/strava/connect" post /></div>
-              )}
-
-              {strava && strava.connected && (
-                <>
-                  <div className={`${cardClass} flex items-center justify-between gap-4 px-4 py-2`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      {STRAVA ? <Badge tone="green">Connected</Badge> : <Badge>Paused</Badge>}
-                      <span className="text-base text-fg truncate">{strava.athlete.name}</span>
-                    </div>
-                    {/* Strava off: an account made through Strava keeps its link, its only way back in once Strava returns. */}
-                    {(STRAVA || !isSyntheticStravaEmail(user.email)) && (
-                      <button
-                        type="button"
-                        onClick={disconnectStrava}
-                        disabled={working === 'strava'}
-                        className={buttonClass('quiet')}
-                      >
-                        {working === 'strava' ? 'Disconnecting…' : 'Disconnect'}
-                      </button>
-                    )}
-                  </div>
-                  {!STRAVA && <p className={msgClass}>Strava isn’t available right now. Paddles you already brought in stay here.</p>}
-                  {STRAVA && (<>
-                  {/* Auto-import toggle (default on). New water-sport activities
-                      flow into Paddles automatically via the Strava webhook. */}
-                  <label className={`${cardClass} flex items-center justify-between gap-4 px-4 py-3 cursor-pointer`}>
-                    <span>
-                      <span className="block text-base text-fg">Auto-import new paddles</span>
-                      <span className="block text-sm text-muted">
-                        New kayak, canoe, rowing and SUP activities on Strava appear in Paddles by themselves.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      className="accent-primary w-5 h-5 shrink-0"
-                      checked={strava.autoImport}
-                      onChange={e => toggleAutoImport(e.target.checked)}
-                    />
-                  </label>
-                  {/* Older paddles (#415): the last month by itself, then further back on request. */}
-                  <StravaFirstImport />
-                  <StravaMoreImport />
-                  {/* Attribution: this row shows the athlete's Strava profile name. */}
-                  <PoweredByStrava />
-                  </>)}
-                  {STRAVA && (
-                    <p className={msgClass}>
-                      You can also sign in with Strava. Disconnecting stops both importing and signing in
-                      with Strava.
-                    </p>
-                  )}
-                </>
-              )}
-            </section>
-            )}
-
             <section id="devices" className="flex flex-col gap-3 scroll-mt-4">
               <h2 className="text-lg font-semibold text-fg">Devices</h2>
               <Link href="/devices" className={`${cardLinkClass} flex items-center justify-between gap-4 px-4 py-3`}>
@@ -613,7 +460,7 @@ function AccountPageInner() {
               <p className="text-sm text-muted">
                 Deletes your account, your paddles and diary notes, your results (leaderboards update
                 without you), your shared links and your tracker recordings. Courses and trials you created
-                go too, unless a group owns them or someone else has a result in them. Your trackers are unlinked and Strava is disconnected. A group you own passes
+                go too, unless a group owns them or someone else has a result in them. Your trackers are removed. A group you own passes
                 to one of its admins or members. <strong className="text-fg">This happens at once and can&apos;t be undone.</strong> This
                 is your right to erasure (UK GDPR Art. 17).
               </p>
@@ -624,6 +471,22 @@ function AccountPageInner() {
                   <button type="button" onClick={openDelete} disabled={deleteStep === 'checking'} className={buttonClass('danger')}>
                     Delete my account
                   </button>
+                </div>
+              ) : deleteStep === 'signin' && isSyntheticStravaEmail(user.email) ? (
+                // Made with Strava: it can't sign in again, so we delete it by
+                // email. Not Report an issue: reports are public.
+                <div className="rounded-control border border-border bg-surface p-4 flex flex-col gap-3">
+                  <p role="status" className="text-sm text-fg">
+                    An account made with Strava can’t sign in again here. Email us and we’ll delete it.
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <a href={`mailto:privacy@paddlesnitch.com?subject=${encodeURIComponent('Delete my account')}&body=${encodeURIComponent(`Support ID: ${user.id}`)}`} className={buttonClass('primary')}>
+                      Email us
+                    </a>
+                    <button type="button" onClick={() => setDeleteStep('closed')} className={buttonClass('secondary')}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               ) : deleteStep === 'signin' ? (
                 <div className="rounded-control border border-border bg-surface p-4 flex flex-col gap-3">

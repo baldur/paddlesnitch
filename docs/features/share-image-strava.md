@@ -1,6 +1,6 @@
 # Feature: share-card image + Strava share helper (#212)
 
-**Status:** ✅ P1 + P2 shipped (#219). P3 (activity:write auto-append) deferred.
+**Status:** ✅ P1 + P2 shipped (#219). The Strava helper (P2's OPEN MY STRAVA ACTIVITY) was removed with Strava on 2026-11-01; the share card stays. P3 dropped.
 Builds on the opt-in public share link (#202/#203). Since then: a shared paddle
 shows the plain summary, never the AI one (it can repeat diary notes).
 **App:** `apps/web` (`/paddles/shared/[shareId]`; this was `apps/analysis` when written).

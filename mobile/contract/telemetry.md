@@ -30,7 +30,7 @@ Anything else is counted as platform `other`, so a typo shows up as "other"
 on the dashboards rather than as the app. Android already sends it on every
 call (`Api.call`). iOS sends it on sign-in calls; it needs to go on every
 request. With the header alone, every API call and every key action (sign in,
-upload, tracker sync, Strava import) is split by platform and version
+upload, tracker sync) is split by platform and version
 server-side.
 
 ## 2. Events: `POST /att/api/track`

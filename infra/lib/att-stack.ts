@@ -169,14 +169,9 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(1),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
-        // One-time codes from a phone app's Strava sign-in (apps/web/src/lib/
-        // app-signin.ts). Spent within minutes; this sweeps the ones never used.
-        id: 'expire-app-signin-codes',
-        prefix: 'auth/app-codes/',
-        expiration: cdk.Duration.days(1),
-        noncurrentVersionExpiration: cdk.Duration.days(1),
-      }, {
-        // The same, for opening website pages from the apps (one minute, one use).
+        // One-time codes for opening website pages from the apps
+        // (apps/web/src/lib/app-signin.ts): one minute, one use; this sweeps
+        // the ones never used.
         id: 'expire-app-web-codes',
         prefix: 'auth/web-codes/',
         expiration: cdk.Duration.days(1),
@@ -313,7 +308,7 @@ export class AttStack extends cdk.Stack {
       // email to an address nobody has signed up with yet and become that
       // address: the owner's sign-up then fails ("User already exists").
       // Tested on a throwaway pool, 2026-10-26: the change stays pending, the
-      // owner signs up as a separate account, and our admin calls (Strava's
+      // owner signs up as a separate account, and our admin calls (then
       // AdminCreateUser, setting email_verified) still work. Updates in place.
       keepOriginal: { email: true },
       userVerification: {
@@ -520,16 +515,6 @@ export class AttStack extends cdk.Stack {
         // Fine-grained scope: Issues: read/write on baldur/paddlesnitch.
         GITHUB_ISSUES_TOKEN_PARAM: '/att/github-issues-token',
         GITHUB_REPO: 'baldur/paddlesnitch',
-        // Strava API credentials. Both halves live in SSM so deploys never
-        // need GitHub-side variables or secrets — the Lambda fetches them at
-        // runtime via fetchSsmParam() in src/lib/strava.ts. Client ID is a
-        // plain String (it's public); the secret is a SecureString.
-        STRAVA_CLIENT_ID_PARAM: '/att/strava-client-id',
-        STRAVA_CLIENT_SECRET_PARAM: '/att/strava-client-secret',
-        // Strava webhook verify token (shared secret echoed on the subscription
-        // validation handshake). SSM SecureString, fetched at runtime. See
-        // docs/features/strava-auto-import.md.
-        STRAVA_WEBHOOK_VERIFY_TOKEN_PARAM: '/att/strava-webhook-verify-token',
         // The Analyse app is now part of this single server function, so its LLM
         // insight backend (packages/analysis/src/llm.ts) runs here. Bedrock region
         // + model; NODE_ENV=production hard-pins the Bedrock backend. To bump the
@@ -595,16 +580,13 @@ export class AttStack extends cdk.Stack {
       actions: ['ssm:GetParameter'],
       resources: [
         `arn:aws:ssm:${this.region}:${this.account}:parameter/att/github-issues-token`,
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-id`,
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-client-secret`,
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/att/strava-webhook-verify-token`,
       ],
     }))
     // kms:Decrypt is required to actually decrypt SecureString values. Without
     // it, GetParameter(WithDecryption=true) returns the encrypted ciphertext
-    // blob silently, which is what bit us with the Strava client secret —
-    // Strava saw the ~240-char encrypted base64 as "the secret" and rejected
-    // it as Application/invalid. Restrict the grant to the SSM-service KMS
+    // blob silently, which once bit us with a client secret: the other side
+    // saw the ~240-char encrypted base64 as "the secret" and rejected it.
+    // Restrict the grant to the SSM-service KMS
     // context so the role can only decrypt parameters fetched through SSM.
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['kms:Decrypt'],
@@ -619,10 +601,7 @@ export class AttStack extends cdk.Stack {
     // runtime. The public client APIs (InitiateAuth/RespondToAuthChallenge/
     // SignUp/ForgotPassword/ConfirmForgotPassword) authenticate with the app
     // client id, NOT IAM, so they're intentionally absent here.
-    //   ListUsers          — findUserByEmail / findUserBySub (email-merge +
-    //                         Strava sign-in resolving a linked account by sub)
-    //   AdminCreateUser     — create a Cognito user for a new Strava sign-in
-    //   AdminSetUserPassword— set the throwaway password on that created user
+    //   ListUsers          — findUserByEmail / findUserBySub
     //   AdminConfirmSignUp / AdminUpdateUserAttributes — confirm + mark email
     //                         verified at signup so password reset works
     //   AdminGetUser        — read user state
@@ -631,8 +610,6 @@ export class AttStack extends cdk.Stack {
     serverFn.addToRolePolicy(new iam.PolicyStatement({
       actions: [
         'cognito-idp:ListUsers',
-        'cognito-idp:AdminCreateUser',
-        'cognito-idp:AdminSetUserPassword',
         'cognito-idp:AdminConfirmSignUp',
         'cognito-idp:AdminGetUser',
         'cognito-idp:AdminUpdateUserAttributes',
@@ -775,8 +752,8 @@ export class AttStack extends cdk.Stack {
     // be framed, so the account-delete and tracker-add buttons can't be
     // clickjacked. nosniff, and a referrer policy that keeps paths (share
     // links, codes in query strings) off other sites. A Content-Security-Policy
-    // is a separate change: it needs testing against Leaflet tiles, Strava
-    // images and the inline scripts Next emits.
+    // is a separate change: it needs testing against Leaflet tiles and the
+    // inline scripts Next emits.
     // One set of security headers, shared by every response headers policy.
     const securityHeadersBehavior: cloudfront.ResponseSecurityHeadersBehavior = {
       strictTransportSecurity: { accessControlMaxAge: cdk.Duration.days(365), includeSubdomains: false, override: true },
@@ -861,17 +838,6 @@ export class AttStack extends cdk.Stack {
           responseHeadersPolicy: securityHeaders,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-        // Static files under public/ (OpenNext copies public/ into the assets
-        // bundle, deployed to S3 under _assets/). Without an explicit behavior
-        // these hit the default server origin and 404 — which is why the Strava
-        // brand images (public/strava/*.svg) showed as broken in prod (#135).
-        // Add a behavior per public subdirectory the app actually fetches.
-        '/strava/*': {
-          origin: assetsOrigin,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          responseHeadersPolicy: securityHeaders,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
         // The river planner's map data (/plan/data/{version}/{name}): the
         // server marks the live version's network immutable and coverage
         // five minutes, so CloudFront keeps what it says. Saves the Lambda
@@ -885,6 +851,10 @@ export class AttStack extends cdk.Stack {
           responseHeadersPolicy: securityHeaders,
           cachePolicy: planDataCache,
         },
+        // Static files under public/ (OpenNext copies public/ into the assets
+        // bundle, deployed to S3 under _assets/). Without an explicit behavior
+        // these hit the default server origin and 404 (#135).
+        // Add a behavior per public subdirectory the app actually fetches.
         '/data/*': {
           origin: assetsOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -942,7 +912,7 @@ export class AttStack extends cdk.Stack {
     // and making the dependency in (2) a cycle. Invalidation isn't needed anyway:
     // _next/* assets are content-hashed (new deploys = new URLs), so there is
     // nothing stale to purge. The one-off #135 cached-404s are long gone (the
-    // /strava + /data behaviors exist now); if a non-hashed public/ file ever
+    // /data behavior exists now); if a non-hashed public/ file ever
     // changes, invalidate that path manually.
     const deployAssets = new s3deploy.BucketDeployment(this, 'DeployAssets', {
       sources: [
@@ -1381,7 +1351,7 @@ export class AttStack extends cdk.Stack {
     })
     alarm('ActionFailedAlarm', {
       alarmName: 'paddlesnitch-action-failed',
-      alarmDescription: 'A key action (sign in, upload, analyse, tracker sync, Strava import) failed on our side. A refused input is not a failure. Open paddlesnitch-api → "Key actions that did not work".',
+      alarmDescription: 'A key action (sign in, upload, analyse, tracker sync) failed on our side. A refused input is not a failure. Open paddlesnitch-api → "Key actions that did not work".',
       metric: count15('Paddlesnitch/Actions', 'Failures'), ...firstOne,
     })
     alarm('AppCrashAlarm', {

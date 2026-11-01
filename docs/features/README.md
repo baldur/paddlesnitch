@@ -16,9 +16,9 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`similar-sections-compare.md`](similar-sections-compare.md) | ✅ 2026-08 | Compare a section across your paddles |
 | [`weather-and-river-conditions.md`](weather-and-river-conditions.md) | ✅ | Wind + river flow for a paddle |
 | [`single-app-shell.md`](single-app-shell.md) | ✅ 2026-08 | Shared header/shell, one dark theme |
-| [`share-image-strava.md`](share-image-strava.md) | ✅ P1+P2 | Share card image + Strava helper; P3 (activity:write) deferred |
+| [`share-image-strava.md`](share-image-strava.md) | ✅ P1+P2 (Strava helper removed 2026-11) | Share card image; the Strava helper went with Strava; P3 dropped |
 | [`profile-routes.md`](profile-routes.md) | ✅ | Platform-level profile/account routes (account is now `/account`) |
-| [`strava-auto-import.md`](strava-auto-import.md) | ✅ live 2026-10-09 | Strava webhook auto-import |
+| [`strava-auto-import.md`](strava-auto-import.md) | 🗑️ removed 2026-11-01 | Strava webhook auto-import; Strava removed from the platform (history only) |
 | [`device-uplink.md`](device-uplink.md) + [`device-data.md`](device-data.md) | ✅ 2026-09 | Tracker pairing, chunked upload, what the data contains |
 | [`device-ota-and-auth.md`](device-ota-and-auth.md) | ✅ built; rollback seen on hardware | Firmware OTA; every merge to `main` promotes to beta, then the flip to stable |
 | [`device-screen-map.md`](device-screen-map.md) | 📋 reference | Tracker screens and the web pages they lead to |

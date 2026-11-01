@@ -11,7 +11,6 @@ import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 import { claimProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-vi.mock('@paddlesnitch/core/strava', async (orig) => ({ ...(await orig<typeof import('@paddlesnitch/core/strava')>()), revoke: vi.fn() }))
 const slow = vi.hoisted(() => ({ ms: 0, calls: 0 }))
 vi.mock('@paddlesnitch/core/storage', async (orig) => {
   const real = await orig<typeof import('@paddlesnitch/core/storage')>()

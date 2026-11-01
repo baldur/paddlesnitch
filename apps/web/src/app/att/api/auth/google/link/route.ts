@@ -10,7 +10,7 @@ import { isSyntheticStravaEmail } from '@/lib/strava-account'
 import { isEmailProven } from '@/lib/email-proven'
 
 // POST /att/api/auth/google/link — Connect Google, from the button on Account
-// (lib/google-link.ts). Like connecting Strava: POST only from our own page,
+// (lib/google-link.ts). POST only from our own page,
 // never for a browser a web-code link signed in, and only after a recent real
 // sign-in, because it adds a way into the account. Answers are 303.
 export async function POST(req: NextRequest) {

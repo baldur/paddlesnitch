@@ -22,23 +22,5 @@
     "auth": "user",
     "input": "ById",
     "output": "AnalysisSession"
-  },
-  "sources.stravaHistory": {
-    "kind": "query",
-    "auth": "user",
-    "input": "StravaHistoryFor",
-    "output": "StravaHistory"
-  },
-  "sources.importStravaPaddle": {
-    "kind": "mutation",
-    "auth": "user",
-    "input": "StravaPaddleFor",
-    "output": "StravaImport"
-  },
-  "sources.stravaHistoryDone": {
-    "kind": "mutation",
-    "auth": "user",
-    "input": null,
-    "output": "Ok"
   }
 }

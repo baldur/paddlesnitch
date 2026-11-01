@@ -10,7 +10,6 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }))
-vi.mock('@/components/strava/StravaButton', () => ({ default: () => null }))
 
 import { EMAIL_DELIVERY, RESET_EMAIL } from '@/lib/email-delivery'
 import AuthPage from './page'

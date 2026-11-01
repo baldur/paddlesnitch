@@ -40,6 +40,7 @@ const BANNED: [RegExp, string][] = [
   [/\bMy (Paddles|Devices|Profile|Tracker)\b/, 'the pages dropped "My", in prose too'],
   [/\bREVOKE\b|was revoked/, 'plain words: "turn off" a link, "remove" a tracker'],
   [/>not linked</, 'a tracker taken off an account is "removed"'],
+  [/(^|[\s'">])[Uu]nlink(ed)?(?=[\s.,!?])/, 'add/remove, not link/pair/revoke: a tracker is "removed"'],
   [/doesn&apos;t exist, or you can&apos;t see it|doesn't exist, or you can't see it/, "don't blame the reader: \"We can't find this …\""],
   [/📓|🔒|(COPIED|SAVED|saved) ✓/, 'no emoji, and no ticks inside button labels'],
   [/not derivable|motion sidecar|OPEN FULL VIEW|Boat attitude|Rock evenness|no cadence|\bfw \b/, 'tracker pages speak to paddlers, not firmware developers (engineering detail lives under TECHNICAL DETAILS)'],

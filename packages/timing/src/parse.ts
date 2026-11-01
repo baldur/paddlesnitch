@@ -42,7 +42,7 @@ export async function parseTrace(filename: string, data: ArrayBuffer): Promise<P
       return track.length > 0 ? { ok: true, track } : { ok: false, reason: 'empty' }
     }
 
-    // KML is a geometry format: Strava/Google exports carry <coordinates> but no
+    // KML is a geometry format: exports (Google Earth and others) carry <coordinates> but no
     // per-point timestamps, so a race time can't be computed from one. Reject it
     // with a dedicated reason the upload surfaces as "export GPX/FIT/TCX instead"
     // rather than a confusing generic parse error. (Some tools DO emit a

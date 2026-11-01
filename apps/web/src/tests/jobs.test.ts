@@ -11,7 +11,7 @@ const made = vi.hoisted(() => ({ calls: [] as string[], fail: 0 }))
 vi.mock('@paddlesnitch/analysis/tracker-paddle', () => ({
   paddleForRecording: async (_u: string, _d: string, id: string) => {
     made.calls.push(id)
-    if (made.fail > 0) { made.fail--; throw new Error('Strava had a moment') }
+    if (made.fail > 0) { made.fail--; throw new Error('the store had a moment') }
     return { status: 'created', paddleId: `t-${id}` }
   },
 }))
@@ -51,7 +51,7 @@ describe('a job', () => {
     const key = await job()
     let now = Date.now()
     expect(await runJob(key, now)).toBe('retry')
-    expect(await getJson(key.replace('jobs/', 'jobs-state/'))).toMatchObject({ attempts: 1, lastError: 'Strava had a moment' })
+    expect(await getJson(key.replace('jobs/', 'jobs-state/'))).toMatchObject({ attempts: 1, lastError: 'the store had a moment' })
     expect(await runJob(key, now + 30_000)).toBe('not_due')        // backing off
     for (let a = 2; a <= MAX_ATTEMPTS; a++) {
       now += 2 ** (a - 1) * MIN
@@ -59,7 +59,7 @@ describe('a job', () => {
     }
     expect(made.calls).toHaveLength(MAX_ATTEMPTS)
     expect(await listKeys('jobs/')).toEqual([])
-    expect(await getJson(key.replace('jobs/', 'jobs-failed/'))).toMatchObject({ attempts: MAX_ATTEMPTS, lastError: 'Strava had a moment', payload: { deviceSessionId: 's1' } })
+    expect(await getJson(key.replace('jobs/', 'jobs-failed/'))).toMatchObject({ attempts: MAX_ATTEMPTS, lastError: 'the store had a moment', payload: { deviceSessionId: 's1' } })
   })
 
   it('only the attempt that gives up is logged as an error; a retried attempt is a warning', async () => {
@@ -140,10 +140,10 @@ describe('the kicker', () => {
     const calls: [string, string][] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => { calls.push([url, String(init.body)]); return new Response('{"outcome":"done"}') }))
     const { handler } = await import(path.join(root, 'infra/lambdas/jobs-kicker/index.mjs'))
-    await handler({ Records: [{ s3: { object: { key: 'jobs/strava-event/abc-123.json' } } }, { s3: { object: { key: 'users/x.json' } } }] })
+    await handler({ Records: [{ s3: { object: { key: 'jobs/tracker-paddle/abc-123.json' } } }, { s3: { object: { key: 'users/x.json' } } }] })
     await handler({ sweep: true })
     expect(calls).toEqual([
-      ['https://site.test/api/jobs/run', JSON.stringify({ key: 'jobs/strava-event/abc-123.json' })],
+      ['https://site.test/api/jobs/run', JSON.stringify({ key: 'jobs/tracker-paddle/abc-123.json' })],
       ['https://site.test/api/jobs/sweep', '{}'],
     ])
   })
@@ -151,7 +151,7 @@ describe('the kicker', () => {
   it('throws when the server says no, so Lambda tries the announcement again', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 502 })))
     const { handler } = await import(path.join(root, 'infra/lambdas/jobs-kicker/index.mjs'))
-    await expect(handler({ Records: [{ s3: { object: { key: 'jobs/strava-event/a.json' } } }] })).rejects.toThrow(/502/)
+    await expect(handler({ Records: [{ s3: { object: { key: 'jobs/tracker-paddle/a.json' } } }] })).rejects.toThrow(/502/)
   })
 
   it('is wired to new files under jobs/ and to a 5-minute timer', () => {

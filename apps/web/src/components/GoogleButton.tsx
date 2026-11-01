@@ -1,8 +1,8 @@
 // Sign in with Google (#697). Google's branding rules for a sign-in button:
 // their four-colour "G" unaltered, the words "Sign in with Google", and for a
 // dark site their dark style (fill #131314, border #8E918F, text #E3E3E3), so
-// this keeps those colours rather than our tokens, as StravaButton keeps
-// Strava's artwork. https://developers.google.com/identity/branding-guidelines
+// this keeps those colours rather than our tokens.
+// https://developers.google.com/identity/branding-guidelines
 //
 // `post`: hidden fields to POST to `href` in a form, instead of a link.
 const CLASS = 'inline-flex items-center gap-3 h-11 px-4 rounded-control border border-[#8E918F] bg-[#131314] text-[#E3E3E3] text-sm font-medium cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'

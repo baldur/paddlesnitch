@@ -26,7 +26,7 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /                            P  landing for visitors; signed in → /paddles.
                                 ?campaign=<id> serves a campaign landing to everyone
                                 (e.g. ?campaign=betatesters)
-/account                     A  ACCOUNT: details, Strava, pointer to Devices, public
+/account                     A  ACCOUNT: details, pointer to Devices, public
                                 profile + handle (#profile), download, delete
 /devices                     A  DEVICES: one card per tracker, Bluetooth, Add a tracker (#add)
 /devices/bluetooth           A  BLUETOOTH: connect, pair, sync, add to account, WiFi
@@ -51,7 +51,7 @@ Everything else checks deeper (a private resource answers 404, not 403).
 ```
 /paddles                     P/A  PADDLES: totals + every paddle (compare two,
                                   delete). Signed out: sign-in panel
-/paddles/new                 A    ADD A PADDLE: upload / Strava / time trials / tracker
+/paddles/new                 A    ADD A PADDLE: upload / time trials / tracker
 /paddles/[id]                A    one paddle (map, summary, efforts and rests, share,
                                   diary, boat class, pick a section)
 /paddles/[id]/motion         A    BOAT MOTION of a tracker paddle (charts + technical

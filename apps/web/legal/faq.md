@@ -12,8 +12,7 @@ first.
 ## What file formats can I upload?
 
 GPX, FIT, TCX and CSV files, and a Garmin .zip export. NK SpeedCoach CSV
-files work too. You can also import an activity straight from Strava once
-you've connected it. KML files don't work: they have no timestamps.
+files work too. KML files don't work: they have no timestamps.
 
 ## Why wasn't my time recorded?
 
@@ -68,10 +67,10 @@ become its admin, or ask an admin of an existing group to add you.
 
 ## How do I submit my result?
 
-Open the trial page and upload your trace (file, URL, or Strava import). If the
-trial is members-only, you need to be a member of the group running it first —
-the upload page will show a "join this group to submit" link when that's the
-case. Public trials accept anyone; invitational trials accept the people the
+Open the trial page and upload your trace (a file, a link or a tracker
+recording). If the trial is members-only, you need to be a member of the group
+running it first — the upload page will show a "join this group to submit"
+link when that's the case. Public trials accept anyone; invitational trials accept the people the
 organiser invited.
 
 ## How do I join a group?

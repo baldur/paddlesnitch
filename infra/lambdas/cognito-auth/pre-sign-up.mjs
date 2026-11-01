@@ -7,7 +7,7 @@
 //  - a Google sign-up whose email already has an account: the owner's
 //    decision is that Google is linked only from Account, never by email,
 //    because email sign-up doesn't prove who owns the address;
-//  - an email sign-up, or Strava's AdminCreateUser, whose email already
+//  - an email sign-up, or an AdminCreateUser, whose email already
 //    belongs to a Google account.
 // A Google account must also come with an email Google has verified.
 //

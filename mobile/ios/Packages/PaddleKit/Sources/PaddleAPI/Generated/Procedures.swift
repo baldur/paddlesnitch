@@ -14,12 +14,6 @@ public enum Procedures {
         path: "paddles.list", kind: .query, auth: .user)
     public static let paddlesWriteSummary = Procedure<ById, AnalysisSession>(
         path: "paddles.writeSummary", kind: .mutation, auth: .user)
-    public static let sourcesImportStravaPaddle = Procedure<StravaPaddleFor, StravaImport>(
-        path: "sources.importStravaPaddle", kind: .mutation, auth: .user)
-    public static let sourcesStravaHistory = Procedure<StravaHistoryFor, StravaHistory>(
-        path: "sources.stravaHistory", kind: .query, auth: .user)
-    public static let sourcesStravaHistoryDone = Procedure<NoInput, Ok>(
-        path: "sources.stravaHistoryDone", kind: .mutation, auth: .user)
 
     /// Decodes `data` as the output of the procedure at `path`. For the contract tests.
     public static func decodeOutput(of path: String, from data: Data, using decoder: JSONDecoder)
@@ -30,9 +24,6 @@ public enum Procedures {
         case "paddles.get": try decoder.decode(AnalysisSession.self, from: data)
         case "paddles.list": try decoder.decode(PaddleList.self, from: data)
         case "paddles.writeSummary": try decoder.decode(AnalysisSession.self, from: data)
-        case "sources.importStravaPaddle": try decoder.decode(StravaImport.self, from: data)
-        case "sources.stravaHistory": try decoder.decode(StravaHistory.self, from: data)
-        case "sources.stravaHistoryDone": try decoder.decode(Ok.self, from: data)
         default: throw ProcedureError.unknownPath(path)
         }
     }

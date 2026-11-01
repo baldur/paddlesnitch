@@ -7,7 +7,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-vi.mock('@paddlesnitch/core/strava', async (orig) => ({ ...(await orig<typeof import('@paddlesnitch/core/strava')>()), revoke: vi.fn() }))
 // Production storage, on demand: S3 isn't reachable from tests, so the "S3"
 // test swaps in a recorder for the two calls the large-account path makes.
 const s3 = vi.hoisted(() => ({ on: false, puts: [] as { key: string; body: string }[], presigned: [] as unknown[][] }))

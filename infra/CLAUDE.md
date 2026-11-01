@@ -42,27 +42,40 @@ SSO session expires after ~8 h. If CDK says "Unable to resolve AWS account", run
 aws sso login --profile paddlesnitch
 ```
 
-## Strava secrets in SSM
+## Strava: removed (2026-11), and the one-off shutdown
 
-The env var names are in `apps/web/CLAUDE.md` § Strava integration.
+Strava was removed from the platform on 2026-11-01 (the "Remove Strava" PR). The
+server no longer reads the Strava SSM parameters and has no IAM grant for them.
+**Once, after that PR is deployed**, the owner runs the shutdown script, then
+deletes what is left by hand:
 
-Both SSM parameters are set once with the AWS CLI:
 ```bash
-aws ssm put-parameter --name /att/strava-client-id --type String --value '<id>' --overwrite --profile paddlesnitch --region eu-west-1
-
-# IMPORTANT: write the secret to a tempfile with `printf '%s'` so there is
-# NO trailing newline. `grep ... > file` or `echo ... > file` both append
-# a \n, which AWS CLI stores verbatim via `file://`. The Lambda then ships
-# a 41-char "secret" to Strava and gets back 401 Application/""/invalid.
-# Bash $(...) strips trailing newlines on read, so length checks via
-# ${#VAL} will lie. Verify with `wc -c < file`.
-SECRET_FILE=$(mktemp)
-printf '%s' '<the 40-char hex secret>' > "$SECRET_FILE"
-aws ssm put-parameter --name /att/strava-client-secret --type SecureString --value "file://$SECRET_FILE" --overwrite --profile paddlesnitch --region eu-west-1
-rm "$SECRET_FILE"
+# 1. Dry run: counts only, no calls to Strava, nothing deleted.
+cd apps/web && DATA_BUCKET=paddlesnitch-data-prod AWS_PROFILE=paddlesnitch AWS_REGION=eu-west-1 \
+  npx tsx scripts/strava-shutdown.ts
+# 2. For real: deletes the webhook subscription, deauthorizes every stored
+#    token at Strava (refreshing expired ones), deletes users/*/strava.json,
+#    users/*/strava-prefs.json and strava-athletes/*. Never paddles. Prints
+#    counts only. A token that fails (not "already revoked") is kept: run again.
+cd apps/web && DATA_BUCKET=paddlesnitch-data-prod AWS_PROFILE=paddlesnitch AWS_REGION=eu-west-1 \
+  npx tsx scripts/strava-shutdown.ts --apply
+# 3. Only after a clean run (it needs the client id and secret): delete the parameters.
+aws ssm delete-parameters --names /att/strava-client-id /att/strava-client-secret /att/strava-webhook-verify-token --profile paddlesnitch --region eu-west-1
+# 4. The STRAVA_OFF repository variable is unused now.
+gh variable delete STRAVA_OFF
 ```
 
-The Lambda IAM role has `ssm:GetParameter` on the parameter ARNs **and** `kms:Decrypt` on `alias/aws/ssm` (scoped via `kms:ViaService = ssm.<region>.amazonaws.com`). Without the KMS grant, SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`, ~240 chars) instead of failing — which the runtime would then forward to Strava as the "secret".
+Then delete the Strava API application at https://www.strava.com/settings/api.
+Until step 2 has run, account erasure still deletes a user's
+`strava-athletes/{athleteId}.json` (the users/ prefix takes their other files).
+
+**Writing a secret to SSM or Secrets Manager:** write it to a tempfile with
+`printf '%s'` so there is NO trailing newline (`echo`/`grep > file` append one,
+and AWS CLI stores it verbatim via `file://`; a 41-char secret is then refused).
+Verify with `wc -c < file`. The Lambda role needs `kms:Decrypt` (scoped via
+`kms:ViaService = ssm.<region>.amazonaws.com`) next to `ssm:GetParameter`:
+without it SSM **silently returns the encrypted ciphertext blob** (`AQICAH...`,
+~240 chars) instead of failing.
 
 ## Pool email: sign-up codes and resets (#702)
 
@@ -75,7 +88,7 @@ Cognito's hosted sign-in does the Google part; the app only sends people there a
 - **Hosted domain** `paddlesnitch` → `https://paddlesnitch.auth.eu-west-1.amazoncognito.com` (Cognito's own, no certificate). The server gets it as `COGNITO_DOMAIN`.
 - **Google provider** (`GoogleIdp`): scopes `openid email profile`; maps `email`, `email_verified`, `name`.
 - **App client:** only the authorization-code flow (with PKCE), callback `https://paddlesnitch.com/att/api/auth/google/callback`, providers COGNITO + GOOGLE. Until #697 CDK's defaults were live (implicit flow, callback `https://example.com`).
-- **PreSignUp trigger** (`infra/lambdas/cognito-auth/pre-sign-up.mjs`, `att-cognito-pre-sign-up`): **one account per email**. Our sign-ins find people by email, so it refuses any new account (Google, email sign-up, Strava's AdminCreateUser) whose email a confirmed account already has (`ACCOUNT_EXISTS`; owner: Google is linked only from Account), and a Google account without a Google-verified email (`NO_EMAIL`, `EMAIL_UNVERIFIED`). UNCONFIRMED accounts block nobody. Its ListUsers grant is a separate `iam.Policy` on this pool only (the account is shared; the function's own policy would make a dependency cycle).
+- **PreSignUp trigger** (`infra/lambdas/cognito-auth/pre-sign-up.mjs`, `att-cognito-pre-sign-up`): **one account per email**. Our sign-ins find people by email, so it refuses any new account (Google, email sign-up, an AdminCreateUser) whose email a confirmed account already has (`ACCOUNT_EXISTS`; owner: Google is linked only from Account), and a Google account without a Google-verified email (`NO_EMAIL`, `EMAIL_UNVERIFIED`). UNCONFIRMED accounts block nobody. Its ListUsers grant is a separate `iam.Policy` on this pool only (the account is shared; the function's own policy would make a dependency cycle).
 
 **Before the first deploy with it, both must exist** (CloudFormation reads them at deploy time and fails without them):
 
@@ -84,7 +97,7 @@ Cognito's hosted sign-in does the Google part; the app only sends people there a
 aws ssm put-parameter --name /att/google-client-id --type String --value '<id>.apps.googleusercontent.com' --profile paddlesnitch --region eu-west-1
 # Client secret: Secrets Manager, NOT SSM. CloudFormation can't read an SSM SecureString into a
 # Cognito identity provider (ssm-secure works only for a short list of resources), and this
-# way it never appears in the template. Same no-trailing-newline rule as Strava's secret.
+# way it never appears in the template. Same no-trailing-newline rule as above.
 SECRET_FILE=$(mktemp); printf '%s' '<secret from Google>' > "$SECRET_FILE"
 aws secretsmanager create-secret --name paddlesnitch/google-client-secret --secret-string "file://$SECRET_FILE" --profile paddlesnitch --region eu-west-1
 rm "$SECRET_FILE"
@@ -98,8 +111,6 @@ Google Cloud (project `paddlesnitch`, set up 2026-10-25; Google Auth Platform):
 **Connect Google** (Account) goes through the PreSignUp trigger: it reads `auth/google-links/*` in the data bucket (GetObject/DeleteObject on that prefix only, `DATA_BUCKET` env) and may call `AdminLinkProviderForUser` (apps/web/CLAUDE.md § Sign in with Google).
 
 **The button shows only while the `GOOGLE_SIGNIN` repository variable is `1`** (set 2026-10-26; delete it and redeploy to hide the button) (`deploy.yml` passes it as `NEXT_PUBLIC_GOOGLE_SIGNIN`): `gh variable set GOOGLE_SIGNIN --body 1`. Check what's live: `aws cognito-idp list-identity-providers --user-pool-id eu-west-1_BHyKJ0toh` and `describe-user-pool-client`.
-
-**Strava is off while the `STRAVA_OFF` repository variable is `1`** (deploy.yml → `NEXT_PUBLIC_STRAVA_OFF`; apps/web/CLAUDE.md § sign-in flow 6). Delete the variable and redeploy to turn it back on.
 
 **A new email waits for its code** (`keepOriginal: { email: true }`, #713). Email is the pool's username, so without it anyone could change their email (Cognito's public client allows it) to an address nobody had signed up with and *become* that address: AdminGetUser by it finds them, the owner's sign-up fails with "User already exists", and our "set email_verified" call by email lands on them. Proved on a throwaway pool on 2026-10-26, and so was the fix: the change stays pending until the code is entered, the owner signs up separately, and AdminCreateUser and admin email updates still work. Google writes the email on every sign-in; if Google sign-in ever fails with an attribute error, this setting is the first suspect (switching it off updates the pool in place).
 

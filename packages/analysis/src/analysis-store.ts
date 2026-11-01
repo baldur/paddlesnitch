@@ -86,8 +86,8 @@ const key =(userId: string, id: string) => `analysis/${userId}/${id}/session.jso
 // A stable identity for a paddle so re-submitting the same trace is recognised as
 // a duplicate (#178). Derived only from fields every session already stores
 // (paddledAt + duration + distance), so it also fingerprints PRE-EXISTING
-// sessions with no migration. The same file re-uploaded — or the same Strava
-// activity re-imported — analyses to the same start time, duration, and distance,
+// sessions with no migration. The same file re-uploaded — or the same trace
+// analysed twice — analyses to the same start time, duration, and distance,
 // so it collapses to the same fingerprint regardless of source. Distance is
 // rounded to whole metres and duration to whole seconds to absorb float noise.
 export function paddleFingerprint(paddledAt: string, durationS: number, distanceKm: number): string {

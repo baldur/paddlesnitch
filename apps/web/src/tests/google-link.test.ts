@@ -70,7 +70,7 @@ describe('POST /att/api/auth/google/link', () => {
     expect(note!.expiresAt - Date.now()).toBeGreaterThan(9 * 60_000)
   })
 
-  it('needs a recent real sign-in, like connecting Strava', async () => {
+  it('needs a recent real sign-in', async () => {
     vi.mocked(hasRecentSignIn).mockResolvedValue(false)
     expect(to(await post()).search).toBe('?google=reauth')
     expect(await getJson(linkNoteKey('me@example.com'))).toBeNull()

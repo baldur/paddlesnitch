@@ -2,17 +2,13 @@
 // GDPR: account erasure (Art. 17) and export (Art. 15/20) must cover EVERY
 // kind of personal data, not only the time-trial data they started with.
 // Paddles, share links, the coach profile, trackers and their recordings,
-// Strava links and group memberships were all missed before.
+// Strava links and group memberships were all missed before. (Strava itself
+// was removed in 2026-11; its leftover files are planted directly below.)
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 import { claimProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-// The Strava deauthorize call must never leave the test process.
-vi.mock('@paddlesnitch/core/strava', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@paddlesnitch/core/strava')>()),
-  revoke: vi.fn(),
-}))
 
 import { cookies } from 'next/headers'
 import { GET as exportData } from '@/app/api/account/export/route'
@@ -25,7 +21,6 @@ import {
 import {
   createClaim, linkClaim, redeemToken, storeDeviceSession, storeDeviceMotion, listUserDevices,
 } from '@paddlesnitch/core/devices'
-import { putStravaTokens, putAthleteIndex, getUserIdByAthleteId } from '@/lib/strava-storage'
 import { putGroup, getGroup, addUserToGroupIndex, putJoinRequest, putInvitation } from '@/lib/groups'
 import type { GroupMetadata } from '@/lib/types'
 import { GAME_COURSES } from '@paddlesnitch/core/games'
@@ -156,15 +151,19 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await keysMentioning(me.id)).toEqual([])
   })
 
-  it('removes the Strava athlete link so a later Strava sign-in cannot land on the deleted account', async () => {
+  it('removes the old Strava files and athlete index left from before Strava was removed, and nobody else\'s', async () => {
     const me = await makeUser('Me')
-    await putStravaTokens(me.id, { accessToken: 'a', refreshToken: 'r', expiresAt: 0, athleteId: 777 } as never)
-    await putAthleteIndex(777, me.id)
+    await putJson(`users/${me.id}/strava.json`, { accessToken: 'a', refreshToken: 'r', expiresAt: 0, athleteId: 777 })
+    await putJson(`users/${me.id}/strava-prefs.json`, { autoImport: true })
+    await putJson('strava-athletes/777.json', { userId: me.id })
+    await putJson('strava-athletes/888.json', { userId: 'someone-else' })
 
     signInAs(me.idToken)
-    await deleteAccount(new Request('http://x'))
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
 
-    expect(await getUserIdByAthleteId(777)).toBeNull()
+    expect(await getJson('strava-athletes/777.json')).toBeNull()
+    expect(await listKeys(`users/${me.id}/`)).toEqual([])
+    expect(await getJson('strava-athletes/888.json')).toEqual({ userId: 'someone-else' })
   })
 
   it("takes them off every game leaderboard, and leaves everyone else's times (#742)", async () => {
@@ -276,7 +275,8 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     await putJson(`users/${me.id}/contact.json`, { email: 'real@example.com' })
     await putJson(`users/${me.id}/game-kit.json`, { boat: 'kirton-typhoon' })
     await putJson(`users/${me.id}/email-proven.json`, { provenAt: '2026-10-26T00:00:00Z', how: 'sign_up_code' })
-    await putStravaTokens(me.id, { accessToken: 'SECRET-A', refreshToken: 'SECRET-R', expiresAt: 0, athleteId: 777 } as never)
+    // Left from before Strava was removed (2026-11).
+    await putJson(`users/${me.id}/strava.json`, { accessToken: 'SECRET-A', refreshToken: 'SECRET-R', expiresAt: 0, athleteId: 777 })
     await putGroup(group('g1', owner.id, [], [me.id]))
     await addUserToGroupIndex(me.id, 'g1')
     await pairTracker(me.id, 'AABBCCDD')
@@ -308,6 +308,14 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     expect(text).not.toContain('SECRET-A')
     expect(text).not.toContain('SECRET-R')
     expect(text).not.toContain('tokenHash')
+  })
+
+  it('says nothing about Strava for an account that never connected it', async () => {
+    const me = await makeUser('Me')
+    signInAs(me.idToken)
+    const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
+    expect(body.account).not.toHaveProperty('strava')
+    expect(body.account).not.toHaveProperty('stravaAutoImport')
   })
 
   it('exports their buddies and buddy requests (ids only, never emails)', async () => {

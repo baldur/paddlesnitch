@@ -95,7 +95,7 @@ It answers two questions: is anything broken right now, and are people using it?
 | Status | **Alarm status** widget (every alarm, green/red). A text widget with links to the deep dives and to the Play Console / App Store Connect crash pages |
 | Errors today | Server errors · failed actions · app crashes · browser errors: each a single number for the selected range, which should read **0** |
 | API | Requests and server-error count · p95 response time · errors by platform (Logs Insights) |
-| Key actions | Success rate per **action**: sign in, upload a paddle, analyse, tracker sync, Strava import. One line per action; a Logs Insights table breaks each down by platform |
+| Key actions | Success rate per **action**: sign in, upload a paddle, analyse, tracker sync (Strava import removed 2026-11). One line per action; a Logs Insights table breaks each down by platform |
 | Use | Active sessions per day by platform · sign-ups and uploads per day |
 | Apps | Crash count by platform · share of users on the latest app version (once the apps report) |
 | Trackers | Devices active today · crashes today (summary; detail stays on the firmware dashboard) |
@@ -123,7 +123,7 @@ x-paddlesnitch-app: ios/1.0.0 (7)
 - anything else → `{ platform: 'other' }`, so a junk header can't add new values
 
 Server-side callers that aren't a person's client set it themselves: `tracker`
-(the tracker's own upload) and `server` (the Strava webhook's auto-import).
+(the tracker's own upload) and `server` (the Strava webhook's auto-import, until Strava was removed in 2026-11).
 Lines then carry `platform`, plus `appVersion` and `build` for apps.
 
 **Every telemetry line is an EMF document** (like `emitMetric`): CloudWatch
@@ -165,17 +165,16 @@ writes one line:
 
 | Action | Where |
 |---|---|
-| `sign_in` | `POST /att/api/auth/login` and `otp-verify` (wrapped), and the Strava sign-in callback (logs its own outcome). The apps use the same routes |
+| `sign_in` | `POST /att/api/auth/login` and `otp-verify` (wrapped), and the Google callbacks (log their own outcome). The apps use the same routes |
 | `upload` | trial upload and paddle upload (`/paddles/api/analyse`), wrapped |
 | `analyse` | `analyseAndSave`: every paddle analysed, whichever way it came in |
 | `device_sync` | the tracker's upload (`platform: tracker`) and the phone's Bluetooth relay, wrapped. One line per upload request (each part) |
-| `strava_import` | `importStravaActivity`: on-demand import (the client's platform) and webhook auto-import (`server`) |
 
 `outcome` is one of:
 - **`ok`**: it worked (2xx, or a redirect).
 - **`rejected`**: the user's input was refused, which is expected and not
-  counted. Examples: a wrong password, a trace that misses the start line, a
-  Strava activity that isn't a paddle, turning Strava down. Wrapped routes:
+  counted. Examples: a wrong password, a trace that misses the start line,
+  cancelling a Google sign-in. Wrapped routes:
   any 4xx.
 - **`fail`**: we let the user down. Wrapped routes: any 5xx, or a throw.
 

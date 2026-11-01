@@ -15,7 +15,7 @@ let root: Root
 afterEach(async () => { if (root) await act(async () => { root.unmount() }); container?.remove(); vi.unstubAllGlobals() })
 
 const calls = () => vi.mocked(fetch).mock.calls.map(c => String(c[0]))
-async function mount(user: { id: string; displayName: string } | null | undefined, both = false) {
+async function mount(user: { id: string; displayName: string; placeholderEmail?: true } | null | undefined, both = false) {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(
     url.includes('/auth/me') ? { id: 'u9', displayName: 'Asked' } : { result: { data: 0 } },
   ))))
@@ -57,5 +57,48 @@ describe('the account menu', () => {
     expect(calls().filter(u => u.includes('pendingCount'))).toHaveLength(1)
     expect(container.textContent).toContain('Asked')
     expect(container.textContent).toContain('You')
+  })
+
+  // Accounts made with Strava (removed 2026-11) can't sign back in by themselves.
+  describe('signing out an account made with Strava', () => {
+    const openAndSignOut = async () => {
+      const toggle = container.querySelector('button[aria-haspopup="menu"]') as HTMLButtonElement
+      await act(async () => { toggle.click() })
+      const out = [...container.querySelectorAll('button')].find(b => b.textContent === 'Sign out')!
+      await act(async () => { out.click() })
+    }
+    const signedOut = () => calls().some(u => u.includes('/auth/logout'))
+
+    it('asks first, with Email us, Sign out anyway and Cancel, and signs nobody out yet', async () => {
+      await mount({ id: 'u1', displayName: 'Sam', placeholderEmail: true })
+      await openAndSignOut()
+      expect(container.textContent).toContain('You made this account with Strava, so you can’t sign back in until we move it to your email.')
+      expect(container.querySelector('a[href="mailto:privacy@paddlesnitch.com"]')?.textContent).toBe('Email us')
+      expect(signedOut()).toBe(false)
+      const cancel = [...container.querySelectorAll('button')].find(b => b.textContent === 'Cancel')!
+      await act(async () => { cancel.click() })
+      expect(container.textContent).toContain('Sign out')
+      expect(container.textContent).not.toContain('You made this account with Strava')
+      expect(signedOut()).toBe(false)
+    })
+
+    it('Sign out anyway signs out', async () => {
+      const assign = vi.fn()
+      vi.stubGlobal('location', { ...window.location, assign })
+      await mount({ id: 'u1', displayName: 'Sam', placeholderEmail: true })
+      await openAndSignOut()
+      const anyway = [...container.querySelectorAll('button')].find(b => b.textContent === 'Sign out anyway')!
+      await act(async () => { anyway.click() })
+      expect(signedOut()).toBe(true)
+    })
+
+    it('any other account signs out at once', async () => {
+      const assign = vi.fn()
+      vi.stubGlobal('location', { ...window.location, assign })
+      await mount({ id: 'u1', displayName: 'Sam' })
+      await openAndSignOut()
+      expect(container.textContent).not.toContain('You made this account with Strava')
+      expect(signedOut()).toBe(true)
+    })
   })
 })

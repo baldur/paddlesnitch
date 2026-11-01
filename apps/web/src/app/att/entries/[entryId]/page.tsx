@@ -11,7 +11,6 @@ import { inputClass } from '@paddlesnitch/ui/Form'
 import { paceFor500m } from '@/lib/format'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import LoadingState from '@/components/LoadingState'
-import ViewOnStrava from '@/components/strava/ViewOnStrava'
 import { formatTime } from '@/lib/geo'
 import type { CourseMetadata, CrewMember, Split, EntryConditions, LatLng } from '@/lib/types'
 
@@ -30,7 +29,6 @@ type EntryDetail = {
     avgStrokeRate?: number
     trackSegment?: LatLng[]
     conditions?: EntryConditions
-    stravaActivityId?: number
     note?: string
   }
   isOwner: boolean
@@ -127,9 +125,6 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
           description={
             <>
               {entry.runCount && entry.runCount > 1 && <>Best of {entry.runCount} runs in this upload. </>}
-              {entry.stravaActivityId != null && (
-                <>Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" /></>
-              )}
             </>
           }
         />

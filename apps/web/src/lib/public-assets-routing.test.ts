@@ -1,7 +1,7 @@
 // Every folder in public/ needs its own CloudFront behavior pointing at the
 // assets bucket (infra/lib/att-stack.ts). OpenNext puts public files in S3 only;
 // without a behavior the request goes to the server Lambda and 404s in prod
-// while working fine locally. That broke the Strava brand images once (#135)
+// while working fine locally. That broke some brand images once (#135)
 // and nearly shipped the beta testers video the same way.
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'

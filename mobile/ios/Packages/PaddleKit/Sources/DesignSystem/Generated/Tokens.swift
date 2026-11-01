@@ -17,7 +17,6 @@ public enum Palette {
     public static let primaryText = Color(hex: 0x38bdf8)
     public static let red = Color(hex: 0xf87171)
     public static let split = Color(hex: 0xa78bfa)
-    public static let strava = Color(hex: 0xfc4c02)
     public static let surface = Color(hex: 0x0f172a)
     public static let surface2 = Color(hex: 0x1e293b)
     public static let you = Color(hex: 0x38bdf8)

@@ -29,7 +29,6 @@ function sourceFiles(dir: string): string[] {
 // for it. A new host fails the "unlisted" test until it is added here AND to
 // the privacy page.
 const SERVICES: Record<string, string> = {
-  'www.strava.com': 'Strava',
   'api.open-meteo.com': 'Open-Meteo',
   'archive-api.open-meteo.com': 'Open-Meteo',
   'environment.data.gov.uk': 'Environment Agency',
@@ -70,6 +69,8 @@ const NOT_SERVICES = new Set(['paddlesnitch.com', 'www.paddlesnitch.com', 'ico.o
   'kayak.spw.wallonie.be',   // a link to Wallonia's kayak status; nothing is fetched from it
   'schema.org',   // a vocabulary name inside JSON-LD; nothing is fetched from it
   'developers.google.com',   // Google's branding rules, cited in a comment; nothing is fetched from it
+  // The iOS sample server (tests only) until the iOS Strava removal lands; then delete this line.
+  'www.strava.com',
 ])
 // River-planner open data: fetched only by scripts/waterways/* on a developer's
 // machine or the weekly refresh job, so no visitor's data ever reaches these hosts.

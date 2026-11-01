@@ -30,7 +30,7 @@ Where a feature sits decides how loud it is.
 |---|---|---|
 | **Core** | One tap from the bottom bar / header. The screen's primary button. | Paddles list, add a paddle, one paddle · open trials, a leaderboard, submit an entry · plan a route · sign in, profile, account |
 | **Supporting** | One level down, inside the screen it serves. Secondary buttons or links. | Compare two paddles, sections, race a section, buddies · courses, groups, create/manage course and trial · devices, tracker guide, Bluetooth sync · help, privacy, terms · Strava connect, download my data, delete account |
-| **Delight** | Never in navigation. Found in context, next to the thing it acts on, quiet until used. | Share link + share image + "open my Strava activity" · download image · coach summary · boat motion · course record / PB marks · satellite map · plan share link · invite link through the phone's share sheet · tracker drawings in the guide |
+| **Delight** | Never in navigation. Found in context, next to the thing it acts on, quiet until used. | Share link + share image · download image · coach summary · boat motion · course record / PB marks · satellite map · plan share link · invite link through the phone's share sheet · tracker drawings in the guide |
 
 A delight feature should reward the person who finds it, never compete with
 the core task. If people can't find a supporting feature, move it, don't make

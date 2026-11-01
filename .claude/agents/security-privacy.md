@@ -23,7 +23,8 @@ report; the author fixes. The repo is **public**.
   notes, emails). No personal data in logs, metrics, issues or fixtures.
 - **Secrets:** stored hashed where only comparison is needed (`sha256`), never
   logged, never in the repo. SSM values written without a trailing newline.
-- **Strava:** read-only scopes; no `write`.
+- **Strava (removed 2026-11):** nothing calls it now; erasure still deletes
+  a user's leftover `strava-athletes/` index until the one-off shutdown runs.
 - **Infra:** least-privilege IAM; no new public buckets or open origins.
 - **Firmware and apps:** the device token never crosses Bluetooth; builds stay
   signed; nothing trusts a value the client could change.

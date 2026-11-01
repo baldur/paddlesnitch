@@ -10,7 +10,7 @@ The GPS/track domain:
 - `weather` + `river-flow` + `conditions` — real wind (Open-Meteo) + river flow (EA) for a point/time.
 - `types` — track types (`LatLng`, `Line`, `TrackPoint`, `Split`, `ProcessedResult`, `CourseType`, `EntryConditions`).
 
-`core` depends on `timing` (Strava streams → `TrackPoint`); no cycle. The detailed geo/timing and parser behaviour is documented under **App: ATT** (Domain Model, GPS File Formats), since that's where it's exercised most — but the code lives in `timing` and is shared.
+`core` depends on `timing`; no cycle. The detailed geo/timing and parser behaviour is documented under **App: ATT** (Domain Model, GPS File Formats), since that's where it's exercised most — but the code lives in `timing` and is shared.
 
 ## Line Crossing Detection
 Given a GPS track as an ordered array of `[lat, lng, timestamp]` tuples and a line (two `[lat, lng]` points), a crossing is detected when any consecutive pair of track points forms a segment that intersects the line. Intersection uses standard 2D line-segment math (cross-product / parametric form). Haversine is used for distance calculations. All geo math lives in `src/lib/geo.ts`.

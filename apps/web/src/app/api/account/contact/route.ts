@@ -6,7 +6,7 @@ import { isSyntheticStravaEmail } from '@/lib/strava-account'
 // GET /api/account/contact
 // Returns the viewer's optional contact email, plus a flag indicating
 // whether their account email is the synthesised Strava placeholder —
-// the UI uses this to decide whether to show the "add an email" banner.
+// the account page and the apps use it to decide whether to offer "Contact email".
 export async function GET(req: Request) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { buttonClass } from './Button'
 
 // Shared signed-in/out account nav. Presentational + config-driven: the host app
 // fetches the user and passes it in, along with the (app-specific) hrefs and a
@@ -20,7 +21,8 @@ import { useEffect, useRef, useState } from 'react'
 // window event (same contract AppShell used for its old REPORT link).
 const OPEN_FEEDBACK = 'paddlesnitch:open-feedback'
 
-export type NavUser = { id: string; displayName: string }
+/** `placeholderEmail`: the account was made with Strava and has no real email (sign out asks first). */
+export type NavUser = { id: string; displayName: string; placeholderEmail?: true }
 
 // The person icon on the phone's "You" tab.
 export function PersonIcon({ className = '' }: { className?: string }) {
@@ -41,6 +43,7 @@ export default function AccountNav({
   accountHref,
   signInHref,
   onSignOut,
+  signOutConfirm,
   variant = 'menu',
 }: {
   user: NavUser | null | undefined   // undefined = still loading
@@ -52,11 +55,15 @@ export default function AccountNav({
   accountHref: string
   signInHref: string
   onSignOut: () => void
+  // When set, Sign out asks first (an account that can't sign back in): the
+  // words, and where Email us goes. Sign out anyway or Cancel.
+  signOutConfirm?: { text: string; emailHref: string }
   // 'menu': the header dropdown (from sm up). 'tab': the phone's bottom-bar
   // "You" tab, which opens the same items as a bottom sheet.
   variant?: 'menu' | 'tab'
 }) {
   const [open, setOpen] = useState(false)
+  const [confirmingOut, setConfirmingOut] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   // Close on click-outside + Escape.
@@ -112,7 +119,7 @@ export default function AccountNav({
       <button
         role="menuitem"
         type="button"
-        onClick={() => { setOpen(false); onSignOut() }}
+        onClick={() => { if (signOutConfirm) { setConfirmingOut(true); return } setOpen(false); onSignOut() }}
         className={`${item} text-muted hover:bg-surface-2 hover:text-red`}
       >
         Sign out
@@ -120,10 +127,27 @@ export default function AccountNav({
     </>
   )
 
+  // Asked first, inside the menu: the account can't sign back in by itself.
+  const confirmOut = signOutConfirm && (
+    <div role="alertdialog" aria-label="Sign out" className="px-4 py-3 flex flex-col gap-3 max-w-xs">
+      <p className="text-sm text-fg">{signOutConfirm.text}</p>
+      <div className="flex flex-wrap gap-2">
+        <a href={signOutConfirm.emailHref} className={buttonClass('primary')}>Email us</a>
+        <button type="button" onClick={() => { setOpen(false); onSignOut() }} className={buttonClass('secondary')}>
+          Sign out anyway
+        </button>
+        <button type="button" onClick={() => setConfirmingOut(false)} className={buttonClass('quiet')}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+  const shown = confirmingOut && confirmOut ? confirmOut : items
+
   if (tab) {
     return (
       <div ref={ref} className="w-full">
-        <button type="button" onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} className={`${tabClass} ${open ? 'text-fg' : ''}`}>
+        <button type="button" onClick={() => { setOpen(o => !o); setConfirmingOut(false) }} aria-haspopup="menu" aria-expanded={open} className={`${tabClass} ${open ? 'text-fg' : ''}`}>
           <span className="relative">
             <PersonIcon className="w-6 h-6" />
             {badge && <span className="absolute -top-0.5 -right-1">{badge}</span>}
@@ -136,7 +160,7 @@ export default function AccountNav({
             <div role="menu" aria-label="Your account" className="fixed inset-x-0 bottom-0 z-[1200] rounded-t-sheet border-t border-border-strong bg-surface pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2 flex flex-col">
               <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
               <p className="px-4 pb-2 text-sm text-muted truncate">Signed in as <span className="text-fg font-medium">{user.displayName}</span></p>
-              {items}
+              {shown}
             </div>
           </>
         )}
@@ -148,7 +172,7 @@ export default function AccountNav({
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setOpen(o => !o); setConfirmingOut(false) }}
         aria-haspopup="menu"
         aria-expanded={open}
         className="flex items-center gap-1.5 min-h-10 text-sm font-medium text-fg hover:text-primary-text transition-colors"
@@ -161,7 +185,7 @@ export default function AccountNav({
 
       {open && (
         <div role="menu" className="absolute right-0 top-full mt-2 min-w-[12rem] rounded-control border border-border-strong bg-surface shadow-lg z-[1200] flex flex-col py-1">
-          {items}
+          {shown}
         </div>
       )}
     </div>
