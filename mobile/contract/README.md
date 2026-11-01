@@ -456,13 +456,22 @@ From `rc_phone_trace` (recorder-core 0.6.0, `recorder_phone.h`), called after
 each tick. The core decides everything; the app draws what it returns and works
 out nothing.
 
-- **The trace:** full width, 48 dp/pt tall, a single line in primary text blue
-  (`text-primary-text`), no axes, numbers, grid or fill. x is `ago_ms`: newest at
-  the right edge, 10 s across. y is `dps / scale_dps` (−1 to 1, 0 in the middle).
-  Join the samples as they are: no smoothing and no animation between ticks. It
-  moves on in steps as the phone's sensor batches arrive (0.5–2 s); that's
-  expected.
-- **The status line,** muted, under the trace, by `status`:
+- **Order on both apps:** elapsed time, stroke rate, the trace, its status line,
+  then the GPS line. (Android today draws GPS above the stroke rate; it moves
+  under the trace, as iOS has it.)
+- **The trace:** full width, always 48 dp/pt tall, also at large text: the box
+  keeps its space in every status, empty when there's nothing to draw, so nothing
+  below it jumps when the sensor starts or drops out. One line, 2 dp/pt wide with
+  round joins, in primary text blue (`text-primary-text`); no axes, numbers, grid
+  or fill. x is `ago_ms`: newest at the right edge, 10 s across. y is
+  `dps / scale_dps` (−1 to 1, 0 in the middle).
+- Join the samples as they are: no smoothing and no animation between ticks, so
+  Reduce Motion changes nothing. It moves on in steps as the phone's sensor
+  batches arrive (0.5–2 s), and its height is rescaled to the last 10 s each
+  tick, so a gentle wobble and hard paddling look the same size. Both are on
+  purpose: the line says "the sensor sees movement", not how much.
+- **The status line,** under the trace, in the same style and size as the GPS
+  line (muted; wraps at large text), by `status`:
 
 | `status` | Trace | Shown |
 |---|---|---|
@@ -485,8 +494,9 @@ out nothing.
   as a fault.)
 - **Tests:** the core's fixtures `trace_phone_flat` and `trace_phone_paddle` (golden
   `trace.csv`, format in `recorder-core/fixtures/README.md`). Each app's fixture
-  runner takes the `trace_phone_` prefix and handles the `trace` line, and a
-  screenshot test draws each status from a fixture.
+  runner takes the `trace_phone_` prefix and handles the `trace` line. Screenshot
+  tests draw each status from a fixture, plus one at the largest text size and one
+  on the smallest phone each app supports (iPhone SE; Android font scale 2.0).
 
 ### Altitude
 
