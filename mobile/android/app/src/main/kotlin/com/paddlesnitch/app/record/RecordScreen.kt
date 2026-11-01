@@ -80,7 +80,7 @@ import com.paddlesnitch.app.ui.PsRadius
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-const val RECORD_LOCATION_REFUSED = "Recording needs your location all the time. Allow it in Settings."
+const val RECORD_LOCATION_REFUSED = "Recording needs your location. Allow it in Settings."
 const val LOCATION_OFF = "Location is off on this phone. Turn it on to record."
 const val NO_MOTION_SENSORS = "No motion sensors on this phone, so no stroke rate"
 const val WRITE_FAILED = "Couldn’t save the rest of this recording. Stop to upload what’s saved."
