@@ -9,6 +9,12 @@ extension SampleServer {
         if ["/api/account/profile", "/api/account/handle", "/api/account/contact"].contains(path) {
             return try profile(path: path, request: request)
         }
+        if path == "/api/account/devices/phone"
+            || (path.hasPrefix("/api/account/devices/") && path.hasSuffix("/sessions")
+                && path != "/api/account/devices/sessions")
+        {
+            return try phone(path: path, request: request)
+        }
         if path.hasPrefix("/api/account/devices") {
             return try trackers(path: path, request: request)
         }

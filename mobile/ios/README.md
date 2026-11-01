@@ -43,24 +43,31 @@ touches `mobile/ios/` or `mobile/contract/`.
 |---|---|
 | `project.yml` | The Xcode project, as text. `Paddlesnitch.xcodeproj` is generated from it and not committed. |
 | `App/` | The app target: screens and wiring only. |
-| `Packages/PaddleKit/` | Everything testable without a simulator, one target per area (`DesignSystem`, `PaddleAPI`, `Paddles`, `Account`, `SampleServer`, `Recorder` now; `TrackerLink`, `UploadQueue`, `Capabilities` as their phases arrive). `swift test` runs it on the Mac. |
+| `Packages/PaddleKit/` | Everything testable without a simulator, one target per area (`DesignSystem`, `PaddleAPI`, `Paddles`, `Account`, `SampleServer`, `Recorder`, `PhoneUpload` now; `TrackerLink`, `Capabilities` as their phases arrive). `swift test` runs it on the Mac. |
 | `Packages/PaddleKit/Sources/PaddleAPI/` | Generated models (`Generated/`), the hand-mapped `Seat` and `Coordinate`, and `PaddleClient`: `try await client.call(Procedures.paddlesGet, ById(id: id))`. |
 | `Packages/PaddleKit/Sources/ContractGen*` | `contract-gen`: `mobile/contract/` → Swift. |
 | `Packages/PaddleKit/Sources/Paddles/` | The Paddles screens' logic: the web's formatting ported (`Format`, incl. JS `toFixed` rounding), the route colour scale, the list and one-paddle models. Screens in `App/` only draw these. |
 | `Packages/PaddleKit/Sources/Recorder/` | Recording on the phone through the shared C recorder core (`recorder-core/`, a local package): `PhoneRecorder` binds its phone layer (`recorder_phone.h`), `RecordingFiles` writes `track_<stamp>.csv` and `_i10.csv` line by line, `PhoneRecording` feeds it Core Motion and Core Location on one queue. `RecorderTests` replays every `recorder-core/fixtures/phone_*` case byte for byte. |
+| `Packages/PaddleKit/Sources/PhoneUpload/` | Uploading the phone's recordings as a tracker does (C3): `UploadQueue` adds this iPhone to the account, sends each recording (`RecordingSender`: the track, then the motion file as `_imu.csv`, in 64 KB pieces) and acts on each answer as mobile/contract/README.md § Phone recording says; its `lines` are what Paddles shows meanwhile. `PhoneUploadTests` play a fake server that holds pieces and checks the sha. |
 | `Tests/UI/` | XCUITest on the bundled sample paddles: the flows, Apple's accessibility audit on every screen, and `LargeTextTests` at the largest text size. |
 | `scripts/simulator.sh` | Finds or creates an iPhone simulator for an iOS version. |
 
-## Recording (debug builds only)
+## Recording and uploading
 
-Record is on Paddles when signed in, in debug builds only until a recording
-can be uploaded (C3, `docs/features/mobile-apps.md`). The files stay in the
-app's Documents/Recordings. The app passes Core Motion's values and clocks
+Record is on Paddles when signed in. The spec for both apps is
+mobile/contract/README.md § Phone recording (C3). Close while recording hides
+the screen and keeps recording; Paddles then shows "Recording · h:mm:ss".
+After Stop, the recording waits on Paddles until the server has it, then the
+phone's copy is deleted and the paddle shows in the list. The files are in
+Documents/Recordings/<user id>, out of backups. The app passes Core Motion's values and clocks
 untouched; the recorder core converts units and axes, orders the events and
 writes the rows. Every number on the screen comes from the core (stroke rate
 is "—" until its phase 2); the app adds only the elapsed time. The simulator
 has no accelerometer or gyroscope, so there it records the track only;
 `xcrun simctl location <udid> set <lat>,<lon>` gives it a position.
+
+The sample server takes uploads; `-UploadsDown`, `-UploadsNoFix`,
+`-UploadsRefused` and `-PhoneRemoved` play the other answers (RecordTests).
 
 ## Signing in
 

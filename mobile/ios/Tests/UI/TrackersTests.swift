@@ -1,7 +1,8 @@
 import XCTest
 
 /// The trackers screen against the sample server (the account.devices
-/// fixtures: up to date; quiet with an update and a crash; removed).
+/// fixtures: up to date; quiet with an update and a crash; removed; and a
+/// phone, left out).
 final class TrackersTests: AppTestCase {
     private func openTrackers() {
         signInAndWait()
@@ -20,6 +21,9 @@ final class TrackersTests: AppTestCase {
         XCTAssertTrue(text(containing: "crashed").exists)
         XCTAssertTrue(text(containing: "quiet").exists, "in words, not colour alone")
         XCTAssertTrue(scrollToElement(text(containing: "removed")).exists, "a removed tracker with recordings")
+        // The server lists this phone too (C3): never as a tracker card.
+        XCTAssertFalse(element("tracker-P3F2A9C41B7E0D865").exists)
+        XCTAssertFalse(text(containing: "Android phone").exists)
     }
 
     func testARecordingThatBecameAPaddleOpensIt() {

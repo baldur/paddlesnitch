@@ -49,6 +49,12 @@ struct PaddlesnitchApp: App {
         if arguments.contains("-OptionsFail") { server.options = nil }
         // UI tests: Strava was connected before it was switched off.
         if arguments.contains("-StravaConnected") { server.stravaConnected = true }
+        // Phone recordings (C3): what the server does with an upload.
+        let uploads: [String: PhoneUploads] = [
+            "-UploadsDown": .down, "-UploadsRefused": .refused, "-UploadsNoFix": .noFix,
+        ]
+        if let answer = uploads.first(where: { arguments.contains($0.key) })?.value { server.phoneUploads = answer }
+        server.phoneRemoved = arguments.contains("-PhoneRemoved")
         let transport: any HTTPTransport = sample ? server : URLSession.shared
         return AccountModel(
             baseURL: baseURL, transport: transport, app: "ios/\(YouView.shortVersion)", tokens: tokens,

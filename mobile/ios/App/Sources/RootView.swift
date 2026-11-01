@@ -1,6 +1,7 @@
 import Account
 import DesignSystem
 import Paddles
+import PhoneUpload
 import SwiftUI
 
 /// The bottom tab bar. The web's phone layout has Paddles, Trials, Plan and
@@ -12,6 +13,11 @@ struct RootView: View {
     @State private var termsOpen = false
     @State private var selectedTab = "paddles"
     @State private var adding: AddPaddleModel
+    /// The signed-in account's recordings from this phone, uploading.
+    @State private var uploads: UploadQueue?
+    @State private var network = NetworkWatch()
+    @State private var reportPage: URL?
+    @Environment(\.scenePhase) private var scenePhase
 
     init(account: AccountModel, samples: SamplePaddles) {
         self.account = account
@@ -32,7 +38,8 @@ struct RootView: View {
                 source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
                 needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
                 openTerms: { termsOpen = true }, adding: adding, options: account.options,
-                openFile: { url in Task { await open(url) } }
+                openFile: { url in Task { await open(url) } }, uploads: uploads,
+                openReport: { Task { reportPage = try? await account.reportPage() } }
             )
             .tabItem { Label("Paddles", systemImage: "water.waves") }
             .tag("paddles")
@@ -44,6 +51,18 @@ struct RootView: View {
         .onOpenURL { url in Task { await open(url) } }
         .onChange(of: account.user?.id) { _, id in
             if id != nil { Task { await adding.signedIn() } }
+        }
+        .onChange(of: account.user?.id, initial: true) { _, id in uploadRecordings(of: id) }
+        .onChange(of: network.online, initial: true) { _, online in uploads?.online = online }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active: uploads?.kick()
+            case .background: uploads?.keepGoingInBackground()
+            default: break
+            }
+        }
+        .sheet(item: $reportPage) { url in
+            SafariView(url: url).ignoresSafeArea()
         }
         .task { await openLaunchFile() }
         .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in
@@ -93,6 +112,21 @@ struct RootView: View {
             }
             .preferredColorScheme(.dark)
         }
+    }
+
+    /// Signed in: this account's recordings from this phone start uploading.
+    /// Signed out: they stop, and stay on the phone.
+    private func uploadRecordings(of userID: String?) {
+        uploads?.stop()
+        uploads = nil
+        guard let userID else { return }
+        let queue = UploadQueue(
+            folder: AccountModel.recordings(for: userID), client: account.client, installID: InstallID.current())
+        queue.online = network.online
+        uploads = queue
+        queue.start()
+        // After every sign-in: the same phone for the same account and install.
+        Task { await queue.signedIn() }
     }
 
     /// Adds the paddle in a GPS file, or keeps it until sign-in.

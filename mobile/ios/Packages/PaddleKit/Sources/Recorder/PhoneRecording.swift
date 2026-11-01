@@ -26,6 +26,13 @@
         private var background: CLBackgroundActivitySession?
         private let onStatus: @MainActor @Sendable (RecordingStatus) -> Void
 
+        /// An accelerometer and a gyroscope: without both, a recording is GPS
+        /// only and has no stroke rate.
+        public static var hasMotionSensors: Bool {
+            let motion = CMMotionManager()
+            return motion.isAccelerometerAvailable && motion.isGyroAvailable
+        }
+
         /// Starts recording at once. Ask for location permission first.
         public init(directory: URL, onStatus: @escaping @MainActor @Sendable (RecordingStatus) -> Void) throws {
             files = try RecordingFiles(directory: directory, start: Date())
