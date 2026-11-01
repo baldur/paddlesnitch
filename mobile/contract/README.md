@@ -344,7 +344,8 @@ holds from a broken upload, so send only the rest. Fixtures:
   `phone: true` for a phone: label it **Phone** (list: "· Phone"; same outing:
   "Also recorded by the phone"; the paddle's own label: Phone), never Tracker.
   When a tracker and a phone recorded one outing, the tracker's card leads.
-  Example: `fixtures/api/paddles.list.with-phone.json`. The website says the
+  Examples: `fixtures/api/paddles.list.with-phone.json` and
+  `fixtures/api/paddles.get.with-phone.json`. The website says the
   same (#789).
 
 - Add the phone (`POST …/phone`) before the first upload and keep `deviceId`
