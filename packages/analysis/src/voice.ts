@@ -116,8 +116,8 @@ export function voicePrompt(): string {
   return `${VOICE}\n\nExamples of the voice (the facts for your paddle come after):\n\n${ex}`
 }
 
-import { BANNED_PHRASES, UNSUPPORTED_CLAIMS } from './voice-lists'
-export { BANNED_PHRASES, UNSUPPORTED_CLAIMS }
+import { BANNED_PHRASES, UNSUPPORTED_CLAIMS, US_SPELLINGS } from './voice-lists'
+export { BANNED_PHRASES, UNSUPPORTED_CLAIMS, US_SPELLINGS }
 
 const MAX_WORDS = 70
 
@@ -147,6 +147,21 @@ function numberSupported(n: string, facts: string[]): boolean {
   return facts.some(f => !f.includes(':') && Number(Number(f).toFixed(dp)) === x)
 }
 
+// The rules a summary and the profile share: banned words, claims the numbers
+// can't show, and punctuation.
+function styleProblems(t: string): string[] {
+  const out: string[] = []
+  const banned = BANNED_PHRASES.filter(p => hasWord(t, p))
+  if (banned.length) out.push(`it uses words we never use: ${banned.map(b => `"${b}"`).join(', ')}`)
+  const claims = UNSUPPORTED_CLAIMS.filter(p => hasWord(t, p))
+  if (claims.length) out.push(`it describes things the numbers can't show: ${claims.map(c => `"${c}"`).join(', ')}`)
+  if (t.includes('!')) out.push('it has an exclamation mark')
+  if (/[—]|\s[–-]\s|[^\d:/][–]|[–][^\d]/.test(t)) out.push('it uses a dash as punctuation')
+  if (t.includes('?')) out.push('it asks a question')
+  if (/^\s*[-*#]|\n\s*[-*#]/.test(t)) out.push('it uses a list or heading')
+  return out
+}
+
 /**
  * A guard, not a guarantee: a small number can match a different fact by
  * coincidence ("6 seconds" against "6% variation"), and 1 to 3 always pass.
@@ -160,17 +175,42 @@ export function summaryProblems(text: string, facts: string): string[] {
   const out: string[] = []
   const t = text.trim()
   if (!t) return ['it is empty']
-  const banned = BANNED_PHRASES.filter(p => hasWord(t, p))
-  if (banned.length) out.push(`it uses words we never use: ${banned.map(b => `"${b}"`).join(', ')}`)
-  const claims = UNSUPPORTED_CLAIMS.filter(p => hasWord(t, p))
-  if (claims.length) out.push(`it describes things the numbers can't show: ${claims.map(c => `"${c}"`).join(', ')}`)
-  if (t.includes('!')) out.push('it has an exclamation mark')
-  if (/[—]|\s[–-]\s|[^\d:/][–]|[–][^\d]/.test(t)) out.push('it uses a dash as punctuation')
-  if (t.includes('?')) out.push('it asks a question')
-  if (/^\s*[-*#]|\n\s*[-*#]/.test(t)) out.push('it uses a list or heading')
+  out.push(...styleProblems(t))
   if (words(t).length > MAX_WORDS) out.push(`it is longer than ${MAX_WORDS} words`)
   const unknown = numbersNotInFacts(t, facts)
   if (unknown.length) out.push(`it uses numbers that are not in the facts: ${unknown.join(', ')}`)
+  return out
+}
+
+// The athlete profile (athlete-profile.ts) is fed into every paddle summary,
+// so its mistakes repeat. A real one had "2:60/500" and "favoring" (#821).
+export const MAX_PROFILE_WORDS = 120
+export const MAX_PROFILE_CHARS = 900
+
+/** Times and paces with a seconds or minutes part of 60 or more ("2:60"). */
+export function impossibleTimes(text: string): string[] {
+  const times = text.match(/\d+(?::\d{2})+/g) ?? []
+  return [...new Set(times.filter(t => t.split(':').slice(1).some(part => Number(part) >= 60)))]
+}
+
+/**
+ * What's wrong with a draft athlete profile (empty = fine). The summary's
+ * checks, plus times that can't be, US spellings and a longer length cap.
+ * `facts` is the prompt the model was given: any number the draft uses must
+ * be in it.
+ */
+export function profileProblems(text: string, facts: string): string[] {
+  const out: string[] = []
+  const t = text.trim()
+  if (!t) return ['it is empty']
+  out.push(...styleProblems(t))
+  const us = Object.keys(US_SPELLINGS).filter(w => hasWord(t, w))
+  if (us.length) out.push(`it uses US spellings: write ${us.map(w => `"${US_SPELLINGS[w]}", not "${w}"`).join('; ')}`)
+  const bad = impossibleTimes(t)
+  if (bad.length) out.push(`it has times that can't be (a minute has 60 seconds): ${bad.join(', ')}`)
+  if (words(t).length > MAX_PROFILE_WORDS || t.length > MAX_PROFILE_CHARS) out.push(`it is longer than ${MAX_PROFILE_WORDS} words`)
+  const unknown = numbersNotInFacts(t, facts)
+  if (unknown.length) out.push(`it uses numbers that are not in the paddles given: ${unknown.join(', ')}`)
   return out
 }
 
