@@ -133,6 +133,10 @@ Mail to `privacy@paddlesnitch.com` lands via SES receipt rule and gets forwarded
 
 **Outbound delivery problems:** the SES account-level suppression list (BOUNCE + COMPLAINT, console setting) stops repeat sends to bad addresses. Every bounce, complaint and reject on the default configuration set `my-first-configuration-set` (made by hand, referenced by name in CDK) is published to the `paddlesnitch-alerts` SNS topic, and bounce-rate (>5%) and complaint-rate (>0.1%) alarms sit next to the other alerts. Test: `src/tests/ses-delivery-alerts.test.ts`.
 
+### Requests about accounts made with Strava
+
+Since Strava's removal (2026-11), an account made with Sign in with Strava has a placeholder email (`strava-{id}@noreply.paddlesnitch.com`) and can't sign in. The apps and the website send these people to privacy@ to move the account to their email ("Move my account to my email") or to delete it ("Delete my account", Support ID in the body). **A mail is not proof of who is asking**: there is no real email on file to match the sender against. Act only when the sender's address matches the account's saved contact email (`users/{id}/contact.json`, shown as Contact email on Account). Otherwise ask for something only the owner could know before moving or deleting, and keep a short note of how it was checked. Never move an account to an address you haven't checked with a code.
+
 ### One-time activation
 
 SES allows ONE active receipt rule set per region. After the first deploy that creates the rule set, run **once**:
