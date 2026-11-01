@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, mirrorMatrix } from './club.js';
+import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from './kayak-erg.js';
@@ -16,7 +16,7 @@ import { encodeState, decodeState, createTrack, receive, sample, applyState, SEN
 import { buildWorld, groundAt } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, HIRE_BOATS, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
-import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
+import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, strokeTwist, shouldersAt, legPush, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
 import { TRAFFIC, overturned } from './traffic.js';
 import { createRenderer } from './render.js';
 import { perspective, view, basis, multiply, translation, rotationX, rotationY, rotationZ } from './mat4.js';
@@ -1458,15 +1458,17 @@ function placeRowingClub(l) {
 }
 let ergMonAt = null;
 
-// The kayak erg room: you on the erg, paddling (or sat ready, the shaft
-// across your lap), and the same again reflected in the mirror: every
-// matrix turned about the mirror's plane. The renderer doesn't cull, so a
-// reflected (inside-out) mesh draws fine.
+// The kayak erg room: three ergs, you on the middle one, paddling (or sat
+// ready, the shaft across your lap), the others' shafts left lying across
+// their frames; and all of it again reflected in the mirrors: every matrix
+// turned about the mirrors' plane. The renderer doesn't cull, so a reflected
+// (inside-out) mesh draws fine.
 function placeKayakErg(l) {
   const shots = club.shots;
   const K = KAYAK_ERG_SIZE;
   const me = { ...l, key: `${l.key}:erg`, aid: null }; // no buoyancy aid indoors
-  meshes.kerg ??= { erg: renderer.createMesh(kayakErgMesh(), 2), shaft: renderer.createMesh(kayakErgShaftMesh(), 2), cord: renderer.createMesh(cordMesh(), 4), people: new Map() };
+  const n = shots.kergs.length * 2;
+  meshes.kerg ??= { erg: renderer.createMesh(kayakErgMesh(), n), shaft: renderer.createMesh(kayakErgShaftMesh(), n), cord: renderer.createMesh(cordMesh(), 2 * n), people: new Map() };
   const g = meshes.kerg;
   if (!g.people.has(me.key)) {
     g.people.set(me.key, {
@@ -1477,8 +1479,9 @@ function placeKayakErg(l) {
     });
   }
   const set = g.people.get(me.key);
-  // The erg faces the mirror (-z in the room, turned round: inRoom).
-  const erg = basis([-1, 0, 0], [0, 1, 0], [0, 0, -1], shots.kerg);
+  // Each erg faces the mirrors (-z in the room, turned round: inRoom).
+  const ergs = shots.kergs.map((at) => basis([-1, 0, 0], [0, 1, 0], [0, 0, -1], at));
+  const erg = ergs[MY_KERG];
   // The paddler's boat space: hips on the seat.
   const model = multiply(erg, translation(K.seat[0], K.seat[1], 0));
   const run = kergRun?.erg;
@@ -1487,28 +1490,27 @@ function placeKayakErg(l) {
   // At rest the shaft lies across the lap, not up at the chest.
   const shaftAt = stroke.side ? pose.matrix : translation(0, 0.12, SEAT - 0.32);
   const body = multiply(model, multiply(translation(0, 0, SEAT), rotationY(pose.twist)));
-  const sh = shoulderOf(me.body);
-  const shaft = multiply(model, shaftAt);
-  const arms = [-1, 1].map((side) => {
-    const c = Math.cos(pose.twist);
-    const s = Math.sin(pose.twist);
-    return limb(model, [side * sh.x * c, sh.y, SEAT - side * sh.x * s], apply(shaftAt, [side * 0.36, 0, 0]));
-  });
+  const arms = shouldersAt(pose.twist, shoulderOf(me.body)).map((shoulder, i) => limb(model, shoulder, apply(shaftAt, [(2 * i - 1) * 0.36, 0, 0])));
+  // The legs: the stroke side's pushes the footplate (its hip goes back with
+  // the turn and its knee down) while the other knee comes up.
   const legs = { thigh: [], shin: [] };
   for (const side of [-1, 1]) {
-    const hip = [side * 0.1, 0, SEAT];
-    const foot = [side * 0.12, K.feet[1] - K.seat[1] + 0.06, K.feet[2] + 0.04];
+    const hip = [side * 0.1, 0, SEAT + 0.12 * (legPush(side, pose.twist) - 0.5)];
+    const foot = [side * 0.12, K.feet[1] - K.seat[1] + 0.02, K.feet[2] + 0.02];
     const knee = bend(hip, foot, 0.47, [0, 1, 0]);
     legs.thigh.push(limb(model, hip, knee));
     legs.shin.push(limb(model, knee, foot));
   }
-  // The cords: from each pulley to its end of the shaft.
-  const cords = [-1, 1].map((side) => limb(erg, [side * K.pulleys[0], K.pulleys[1], K.pulleys[2]], apply(multiply(translation(0, K.seat[1], 0), shaftAt), [side * K.shaft, 0, 0])));
-  // The mirror: z turned about its plane.
+  // The shafts: yours in your hands, the others lying across their rails,
+  // one end down, as they were left.
+  const shafts = ergs.map((m, i) => (i === MY_KERG ? multiply(model, shaftAt) : multiply(m, multiply(translation(0, K.rails + 0.08, -0.3), multiply(rotationY(i ? -0.45 : 0.4), rotationZ(i ? 0.12 : -0.12))))));
+  // The cords: from each erg's pulleys to the ends of its shaft.
+  const cords = ergs.flatMap((m, i) => [-1, 1].map((side) => limb(translation(0, 0, 0), apply(m, [side * K.pulleys[0], K.pulleys[1], K.pulleys[2]]), apply(shafts[i], [side * K.shaft, 0, 0]))));
+  // The mirrors: z turned about their plane.
   const R = mirrorMatrix(shots.mirrorZ);
   const both = (list) => [...list, ...list.map((m) => multiply(R, m))];
-  renderer.place(g.erg, both([erg]));
-  renderer.place(g.shaft, both([shaft]));
+  renderer.place(g.erg, both(ergs));
+  renderer.place(g.shaft, both(shafts));
   renderer.place(g.cord, both(cords));
   renderer.place(set.body, both([body]));
   renderer.place(set.arms, both(arms));
@@ -2105,7 +2107,7 @@ function rivalPaddle(b) {
     const dip = Math.sin(Math.PI * q);
     const blade = [e * (0.55 + 0.15 * q), -0.08 - 0.14 * dip, Math.min(0.3, -1.0 + Math.max(b.speed * dt, q * 0.9))];
     const centre = [e * 0.1, 0.42 + 0.05 * dip, blade[2] * 0.45 - 0.2];
-    return { axis: normalize(blade.map((v, i) => (v - centre[i]) * e)), blade, e, twist: -e * 0.3 * (1 - 2 * q) };
+    return { axis: normalize(blade.map((v, i) => (v - centre[i]) * e)), blade, e, twist: strokeTwist(e, q) };
   };
   let pose;
   if (p < IN_WATER) {
@@ -2331,13 +2333,7 @@ function placeRacers() {
     const pose = rivalPaddle(r.boat);
     hold(r, multiply(model, pose.matrix));
     renderer.place(set.body, [multiply(model, multiply(translation(0, 0, SEAT), rotationY(pose.twist)))]);
-    const sh = shoulderOf(liveries.get(r)?.body);
-    const arms = [-1, 1].map((side) => {
-      const c = Math.cos(pose.twist);
-      const s = Math.sin(pose.twist);
-      const shoulder = [side * sh.x * c, sh.y, SEAT - side * sh.x * s];
-      return limb(model, shoulder, apply(pose.matrix, [side * 0.36, 0, 0]));
-    });
+    const arms = shouldersAt(pose.twist, shoulderOf(liveries.get(r)?.body)).map((shoulder, i) => limb(model, shoulder, apply(pose.matrix, [(2 * i - 1) * 0.36, 0, 0])));
     renderer.place(set.arms, arms);
   }
   for (const [mesh, where] of paddles) renderer.place(mesh, where);

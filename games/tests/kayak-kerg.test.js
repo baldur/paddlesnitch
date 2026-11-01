@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KAYAK_ERG, createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from '../reading-thames/kayak-erg.js';
+import { SEAT, strokeTwist, shouldersAt, legPush } from '../reading-thames/meshes.js';
 
 const DT = 1 / 60;
 // A 500 m at a steady `rate` (strokes a minute, both sides counted).
@@ -129,4 +130,24 @@ test('mashing at 180 a minute pulls no harder than 120 while the bar lasts', () 
   const capped = at(120);
   assert.ok(fast.stamina > 0 && fast.rate >= 175, `still sprinting: ${fast.rate} a minute, ${fast.stamina} left`);
   assert.ok(fast.metres <= capped.metres * 1.02, `180: ${fast.metres} m, 120: ${capped.metres} m`);
+});
+
+test("through a stroke the paddle side's shoulder goes back and that side's leg pushes, as on the water", () => {
+  const sh = { x: 0.2, y: 0.58 };
+  for (const [e, i] of [[-1, 0], [1, 1]]) {
+    // Forward is -z: the stroke side's shoulder is forward at the catch, back at the exit.
+    const at = (q) => shouldersAt(strokeTwist(e, q), sh)[i][2];
+    assert.ok(at(0) < SEAT && at(1) > SEAT, `${e < 0 ? 'left' : 'right'} shoulder: ${at(0)} at the catch, ${at(1)} at the exit`);
+    assert.ok(at(0.25) < at(0.75), 'and goes back through the pull');
+    // The other shoulder comes forward.
+    const other = (q) => shouldersAt(strokeTwist(e, q), sh)[1 - i][2];
+    assert.ok(other(1) < SEAT);
+    // That side's leg pushes through the pull; the other leg eases off.
+    const push = (q) => legPush(e, strokeTwist(e, q));
+    assert.ok(push(0) < push(0.5) && push(0.5) < push(1) && push(1) === 1, `${push(0)}, ${push(0.5)}, ${push(1)}`);
+    assert.equal(legPush(-e, strokeTwist(e, 1)), 0);
+  }
+  // Sat still, square: both legs half pushed.
+  assert.equal(legPush(-1, 0), 0.5);
+  assert.equal(legPush(1, 0), 0.5);
 });

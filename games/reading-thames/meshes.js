@@ -539,49 +539,83 @@ export function ergHandleMesh() {
 // pulley at each end, and a cord from each pulley to an end of the shaft you
 // hold. No screen. Lengthways along z, the front at -z (you face it), floor at
 // y 0; you sit with your hips at `seat` (the paddler's boat space: y 0 there).
-export const KAYAK_ERG_SIZE = { seat: [0, 0.42, 0.15], feet: [0, 0.34, -0.7], pulleys: [0.62, 0.95, -1.15], shaft: 0.75 };
+// The canoe club's kayak erg, as in its boathouse: two aluminium rails on
+// T-legs, a wooden saddle at the back, a wooden footplate, and at the front a
+// wooden flywheel with a wire fan cage beside it. A cord runs from each end of
+// the shaft (a paddle shaft, no blades) to a pulley either side of the front.
+// Erg space: the paddler faces -z, hips at `seat` (z is SEAT, as in a boat).
+export const KAYAK_ERG_SIZE = { seat: [0, 0.6, 0.15], feet: [0, 0.6, -0.72], pulleys: [0.16, 0.5, -1.3], shaft: 1.05, rails: 0.47 };
 export function kayakErgMesh() {
   const m = new MeshBuilder();
-  const steel = [0.72, 0.74, 0.78];
-  const dark = [0.12, 0.12, 0.14];
-  const red = [0.78, 0.12, 0.1];
-  const [, sy, sz] = KAYAK_ERG_SIZE.seat;
-  m.box([-0.05, 0, -1.25], [0.05, 0.07, 0.75], steel); // the beam
-  m.box([-0.3, 0, 0.62], [0.3, 0.04, 0.72], steel); // its back foot
-  m.box([-0.3, 0, -1.3], [0.3, 0.04, -1.2], steel); // and front
-  m.box([-0.03, 0.07, sz - 0.03], [0.03, sy - 0.08, sz + 0.03], steel); // the seat's post
-  m.box([-0.18, sy - 0.08, sz - 0.2], [0.18, sy - 0.02, sz + 0.18], dark); // the seat
-  m.box([-0.18, sy - 0.08, sz + 0.14], [0.18, sy + 0.12, sz + 0.18], dark); // its back
-  const [, fy, fz] = KAYAK_ERG_SIZE.feet;
-  m.box([-0.03, 0.07, fz - 0.03], [0.03, fy, fz + 0.03], steel); // the foot bar's post
-  m.box([-0.22, fy - 0.04, fz - 0.05], [0.22, fy + 0.04, fz + 0.01], dark); // the foot bar
-  // The flywheel's drum, on its side across the beam.
-  const c = [0, 0.32, -1.05];
-  const n = 16;
-  for (let i = 0; i < n; i++) {
-    const a0 = (i / n) * Math.PI * 2;
-    const a1 = ((i + 1) / n) * Math.PI * 2;
-    const p = (a, x, r = 0.26) => [c[0] + x, c[1] + Math.sin(a) * r, c[2] + Math.cos(a) * r];
-    const out = [0, Math.sin((a0 + a1) / 2), Math.cos((a0 + a1) / 2)];
-    m.triFacing(p(a0, -0.14), p(a1, -0.14), p(a1, 0.14), red, out);
-    m.triFacing(p(a0, -0.14), p(a1, 0.14), p(a0, 0.14), red, out);
-    for (const x of [-0.14, 0.14]) m.triFacing([c[0] + x, c[1], c[2]], p(a0, x), p(a1, x), dark, [Math.sign(x), 0, 0]);
+  const alu = [0.74, 0.76, 0.8];
+  const wood = [0.66, 0.38, 0.18];
+  const ply = [0.62, 0.42, 0.24];
+  const cage = [0.55, 0.56, 0.58];
+  const dark = [0.15, 0.15, 0.17];
+  const r = KAYAK_ERG_SIZE.rails;
+  for (const x of [-0.09, 0.07]) m.box([x, r - 0.04, -1.55], [x + 0.02, r, 0.6], alu); // the rails
+  for (const z of [0.5, -1.45]) {
+    m.box([-0.02, 0, z - 0.02], [0.02, r - 0.04, z + 0.02], alu); // a leg
+    m.box([-0.32, 0, z - 0.025], [0.32, 0.035, z + 0.025], alu); // its foot
+    m.box([-0.1, r - 0.07, z - 0.02], [0.1, r - 0.04, z + 0.02], alu); // and the cross piece
   }
-  // The mast and crossbar, a pulley at each end.
+  m.box([-0.34, 0, 0.42], [-0.22, 0.06, 0.58], ply); // a wooden block under the back foot
+  // The saddle: a short post, the seat, its back lip.
+  const [, sy, sz] = KAYAK_ERG_SIZE.seat;
+  m.box([-0.025, r, sz - 0.025], [0.025, sy - 0.05, sz + 0.025], alu);
+  m.prism([[-0.15, sy - 0.05, sz - 0.18], [0.15, sy - 0.05, sz - 0.18], [0.17, sy - 0.05, sz + 0.14], [-0.17, sy - 0.05, sz + 0.14]],
+    [[-0.12, sy, sz - 0.18], [0.12, sy, sz - 0.18], [0.16, sy + 0.02, sz + 0.12], [-0.16, sy + 0.02, sz + 0.12]], wood);
+  m.box([-0.16, sy - 0.03, sz + 0.1], [0.16, sy + 0.08, sz + 0.15], wood);
+  // The footplate, leant back towards you.
+  const [, fy, fz] = KAYAK_ERG_SIZE.feet;
+  m.prism([[-0.16, r, fz - 0.02], [0.16, r, fz - 0.02], [0.16, r, fz + 0.02], [-0.16, r, fz + 0.02]],
+    [[-0.16, fy + 0.12, fz - 0.14], [0.16, fy + 0.12, fz - 0.14], [0.16, fy + 0.12, fz - 0.1], [-0.16, fy + 0.12, fz - 0.1]], ply);
+  // The flywheel, across the frame at the front: a wooden disc (numbered
+  // with a dark spot) and a wire cage beside it, on two uprights.
+  const c = [0, 0.76, -1.32];
+  const n = 14;
+  const wheel = (x0, x1, rad, side, ends) => {
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2;
+      const a1 = ((i + 1) / n) * Math.PI * 2;
+      const p = (a, x) => [x, c[1] + Math.sin(a) * rad, c[2] + Math.cos(a) * rad];
+      const out = [0, Math.sin((a0 + a1) / 2), Math.cos((a0 + a1) / 2)];
+      m.triFacing(p(a0, x0), p(a1, x0), p(a1, x1), side, out);
+      m.triFacing(p(a0, x0), p(a1, x1), p(a0, x1), side, out);
+      for (const x of [x0, x1]) m.triFacing([x, c[1], c[2]], p(a0, x), p(a1, x), ends, [Math.sign(x - (x0 + x1) / 2), 0, 0]);
+    }
+  };
+  wheel(-0.1, -0.04, 0.25, wood, wood);
+  wheel(-0.04, 0.1, 0.23, cage, dark);
+  m.box([-0.105, c[1] - 0.06, c[2] - 0.05], [-0.099, c[1] + 0.02, c[2] + 0.05], dark); // the disc's number
+  for (const x of [-0.13, 0.11]) m.box([x, r, c[2] - 0.02], [x + 0.02, c[1], c[2] + 0.02], alu);
+  m.box([-0.16, c[1] - 0.02, c[2] - 0.02], [0.16, c[1] + 0.02, c[2] + 0.02], dark); // the axle
+  // The pulleys the cords run through, either side of the front.
   const [px, py, pz] = KAYAK_ERG_SIZE.pulleys;
-  m.box([-0.03, 0.55, pz - 0.03], [0.03, py, pz + 0.03], steel);
-  m.box([-px, py - 0.025, pz - 0.025], [px, py + 0.025, pz + 0.025], steel);
-  for (const x of [-px, px]) m.box([x - 0.05, py - 0.06, pz - 0.05], [x + 0.05, py + 0.04, pz + 0.05], dark);
+  m.box([-px, py - 0.02, pz - 0.02], [px, py + 0.02, pz + 0.02], alu);
+  for (const x of [-px, px]) m.box([x - 0.02, py - 0.05, pz - 0.05], [x + 0.02, py + 0.05, pz + 0.05], dark);
   return m.build();
 }
-// The kayak erg's shaft (no blades: a cord on each end), along x.
+// The kayak erg's shaft (a paddle shaft without blades: a cord on each end),
+// along x: aluminium, with black grips where the hands go and black ends.
 export function kayakErgShaftMesh() {
   const m = new MeshBuilder();
   const w = KAYAK_ERG_SIZE.shaft;
-  m.box([-w, -0.016, -0.016], [w, 0.016, 0.016], [0.1, 0.1, 0.12]);
-  for (const x of [-w, w]) m.box([x - 0.03, -0.022, -0.022], [x + 0.03, 0.022, 0.022], [0.78, 0.12, 0.1]);
+  m.box([-w, -0.015, -0.015], [w, 0.015, 0.015], [0.78, 0.8, 0.83]);
+  for (const [a, b] of [[0.22, 0.5], [0.8, w]]) {
+    for (const s of [-1, 1]) m.box([Math.min(s * a, s * b), -0.018, -0.018], [Math.max(s * a, s * b), 0.018, 0.018], [0.08, 0.08, 0.09]);
+  }
   return m.build();
 }
+// The paddler's turn through a stroke on the `e` side (-1 left, 1 right), `q`
+// of the way through the pull, in radians about y: the stroke side's shoulder
+// is forward at the catch and goes back as the blade comes through.
+export const strokeTwist = (e, q) => e * 0.3 * (1 - 2 * q);
+// The shoulders, [left, right], in boat space for a twist (`sh`: shoulderOf).
+export const shouldersAt = (twist, sh) => [-1, 1].map((side) => [side * sh.x * Math.cos(twist), sh.y, SEAT - side * sh.x * Math.sin(twist)]);
+// How far the `side` leg (-1 left, 1 right) has pushed, 0..1, for a twist: the
+// stroke side's leg drives the footrest as its shoulder goes back.
+export const legPush = (side, twist) => Math.min(1, Math.max(0, 0.5 - (0.5 * side * twist) / 0.3));
 // A cord: unit length along z, thin (placed like a limb: main.js limb()).
 export function cordMesh() {
   const m = new MeshBuilder();
