@@ -30,6 +30,12 @@ time and isn't obvious from the code.
   fields, checkboxes and switches do the same with `fieldColors()`, `checkboxColors()`
   and `switchColors()` (`ui/Fields.kt`). The theme's `primary` stays #0369a1 for
   filled buttons (lead, 2026-10-26).
+- Buttons have the control radius from the tokens (`PsRadius.control`, 6 dp), not M3's pill (#793).
+  M3's `Button`, `OutlinedButton` and `TextButton` take their pill from a fixed full-corner token,
+  never from the theme's `Shapes`, so setting `Shapes` changes nothing. Screens import
+  `com.paddlesnitch.app.ui.Button`/`OutlinedButton`/`TextButton` (`ui/Buttons.kt`, same parameters,
+  shape `ControlShape`). `ButtonShapeTest` fails on an import of material3's, and on a corner
+  that draws as a pill. Corner radii are `PsRadius.*`, never a `6.dp` literal.
 - TalkBack reads a change inside a live region it already knows, not a node
   that has just appeared. Keep the live-region container in the layout even
   when it's empty (`AddPaddleCard(card = null)`).

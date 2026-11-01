@@ -17,4 +17,4 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun Notice(text: String, modifier: Modifier = Modifier) =
     Text(text, color = PsColor.fg, modifier = modifier.fillMaxWidth()
-        .background(PsColor.surface, RoundedCornerShape(6.dp)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(6.dp)).padding(12.dp))
+        .background(PsColor.surface, RoundedCornerShape(PsRadius.control)).border(1.dp, PsColor.borderStrong, RoundedCornerShape(PsRadius.control)).padding(12.dp))
