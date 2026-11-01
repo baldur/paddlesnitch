@@ -35,9 +35,11 @@ public struct TrackerCard: Identifiable, Hashable, Sendable {
     /// What VoiceOver reads: a sentence, times spelled out, without the id.
     public let spoken: String
 
-    /// The cards, in the server's order.
+    /// The cards, in the server's order. Trackers only: a phone (C3), or a
+    /// kind this app doesn't know, is never drawn as a tracker. No kind is a
+    /// tracker (servers before C3).
     public static func cards(from list: TrackerList, now: Date) -> [TrackerCard] {
-        list.summaries.map { summary in
+        list.summaries.filter { ($0.kind ?? .tracker) == .tracker }.map { summary in
             TrackerCard(
                 summary: summary, tracker: list.devices.first { $0.deviceId == summary.deviceId },
                 stable: list.stableVersion, now: now)

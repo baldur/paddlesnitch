@@ -77,6 +77,23 @@ import Testing
         #expect(card.identity == "BADC0DE9")
     }
 
+    /// A phone that records is a device on the account too (C3): it never
+    /// gets a tracker card, with its firmware line and Remove tracker. Nor
+    /// does a kind this app doesn't know yet.
+    @Test func phonesAndUnknownKindsGetNoTrackerCard() throws {
+        var list = try list()
+        list.summaries[0].kind = .phone
+        list.summaries[1].kind = .unknown("watch")
+        list.summaries[2].kind = .tracker
+        #expect(TrackerCard.cards(from: list, now: now).map(\.id) == ["BADC0DE9"])
+    }
+
+    @Test func aSummaryWithoutAKindIsATracker() throws {
+        // Servers before C3 send no kind.
+        #expect(try list().summaries.allSatisfy { $0.kind == nil })
+        #expect(TrackerCard.cards(from: try list(), now: now).count == 3)
+    }
+
     @Test func noTrackersMeansNoCards() throws {
         #expect(TrackerCard.cards(from: try list("account.devices.none"), now: now).isEmpty)
     }
