@@ -79,6 +79,15 @@ import com.paddlesnitch.app.ui.PsColor
 import com.paddlesnitch.app.ui.PsRadius
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 
 const val RECORD_LOCATION_REFUSED = "Recording needs your location. Allow it in Settings."
 const val LOCATION_OFF = "Location is off on this phone. Turn it on to record."
@@ -91,6 +100,49 @@ const val KEEP_HOLDING = "Keep holding to stop."
 
 /** How long "Hold to stop" must be held: long enough that a brush or a drybag doesn't end a paddle. */
 const val HOLD_TO_STOP_MS = 1500
+
+// The motion line (mobile/contract/README.md, "Motion line"): the core's rc_trace_status in the agreed words.
+const val MOTION_STARTING = "Starting motion sensor"
+const val MOTION_WORKING = "Motion sensor working"
+const val MOTION_STILL = "Motion sensor working, phone still"
+const val MOTION_NO_SAMPLES = "Couldn’t read the motion sensor. Stroke rate pauses until it’s back."
+const val MOTION_BACK = "Motion sensor back"
+const val MOTION_TRACE_TAG = "motionTrace"
+
+/** The trace's width in time: recorder_core.h, "x is ago_ms (0 at the right edge, 10,000 at the left)". */
+private const val TRACE_SPAN_MS = 10_000f
+
+/** The status line under the trace, from the core's status; red only when the sensor can't be read. */
+fun motionLine(t: RecorderCore.Trace): Pair<String, Boolean> = when (t.status) {
+    RecorderCore.TraceStatus.STARTING -> MOTION_STARTING to false
+    RecorderCore.TraceStatus.MOTION -> MOTION_WORKING to false
+    RecorderCore.TraceStatus.STILL -> MOTION_STILL to false
+    RecorderCore.TraceStatus.NO_SAMPLES -> MOTION_NO_SAMPLES to true
+}
+
+/** Announced once as the sensor stops ([MOTION_NO_SAMPLES]) and once as it comes back; otherwise nothing. */
+fun motionAnnouncement(before: RecorderCore.Live?, now: RecorderCore.Live?): String? {
+    val was = before?.trace?.status == RecorderCore.TraceStatus.NO_SAMPLES
+    val now = now?.trace?.status ?: return null
+    return when {
+        now == RecorderCore.TraceStatus.NO_SAMPLES && !was -> MOTION_NO_SAMPLES
+        now != RecorderCore.TraceStatus.NO_SAMPLES && was -> MOTION_BACK
+        else -> null
+    }
+}
+
+/** The GPS and motion announcements for one tick, joined when both change at once. */
+fun announcement(before: RecorderCore.Live?, now: RecorderCore.Live?): String? =
+    listOfNotNull(gpsAnnouncement(before, now), motionAnnouncement(before, now)).joinToString(". ").ifEmpty { null }
+
+/**
+ * Where each sample goes in a [w] x [h] box, [inset] in from every edge for the line's
+ * width (Canvas doesn't clip): x from ago_ms (newest at the right, 10 s across), y from dps / scale_dps (−1 at the
+ * bottom, 1 at the top). Nothing smoothed or worked out: the core's samples as they are.
+ */
+fun tracePoints(t: RecorderCore.Trace, w: Float, h: Float, inset: Float): List<Offset> = List(t.n) { i ->
+    Offset(inset + (w - 2 * inset) * (1f - t.agoMs[i] / TRACE_SPAN_MS), h / 2f - (h / 2f - inset) * (t.dps[i] / t.scaleDps))
+}
 
 /** The GPS line: what it shows, and what a screen reader reads for it. */
 data class GpsLine(val shown: String, val spoken: String)
@@ -262,21 +314,46 @@ private fun Recording(state: RecordingService.State.Recording, onStop: () -> Uni
     val view = LocalView.current
     var before by remember { mutableStateOf<RecorderCore.Live?>(null) }
     LaunchedEffect(live) {
-        gpsAnnouncement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
+        // One call: a second announcement straight after the first can cut it off.
+        announcement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
         before = live
     }
+    val spm = liveStrokeRate(live)
+    Tile("Stroke rate", spm, if (spm == "—") "Stroke rate, not measured yet" else "Stroke rate, $spm strokes per minute")
+    // Without motion sensors there's no trace at all; before the first tick, an empty box holds its place.
+    if (!state.motion) Text(NO_MOTION_SENSORS, color = PsColor.muted)
+    else MotionTrace(live?.trace ?: RecorderCore.Trace(RecorderCore.TraceStatus.STARTING, -1, 0f, IntArray(0), FloatArray(0)))
     // Red only once the fix is lost: waiting for the first one is how every paddle starts.
     Text(gps.shown, color = if (gpsLost(live)) PsColor.red else PsColor.muted, fontSize = 18.sp,
         modifier = Modifier.clearAndSetSemantics { contentDescription = gps.spoken })
-    val spm = liveStrokeRate(live)
-    Tile("Stroke rate", spm, if (spm == "—") "Stroke rate, not measured yet" else "Stroke rate, $spm strokes per minute")
-    if (!state.motion) Text(NO_MOTION_SENSORS, color = PsColor.muted)
     Text(
         if (notificationsOn) "Keeps recording with the screen off. Stop here or from the notification." else NOTIFICATIONS_OFF,
         color = PsColor.muted,
     )
     }
     HoldToStop(onStop)
+    }
+}
+
+/**
+ * The live motion trace and its status line. The box is always 48 dp, so nothing below it
+ * moves when the sensor starts or stops; the line is hidden from screen readers, which read
+ * the status line instead.
+ */
+@Composable
+private fun MotionTrace(trace: RecorderCore.Trace) {
+    val (shown, red) = motionLine(trace)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(48.dp).testTag(MOTION_TRACE_TAG).clearAndSetSemantics { }) {
+            val width = 2.dp.toPx()
+            val points = tracePoints(trace, size.width, size.height, width / 2)
+            if (points.size == 1) drawPoints(points, PointMode.Points, PsColor.primaryText, width, StrokeCap.Round)
+            else if (points.size > 1) drawPath(
+                Path().apply { moveTo(points[0].x, points[0].y); points.drop(1).forEach { lineTo(it.x, it.y) } },
+                PsColor.primaryText, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            )
+        }
+        Text(shown, color = if (red) PsColor.red else PsColor.muted, fontSize = 18.sp)
     }
 }
 
