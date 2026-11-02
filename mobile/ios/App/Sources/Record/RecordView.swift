@@ -121,7 +121,8 @@ struct RecordView: View {
         }
     }
 
-    /// Time first, then stroke rate, then the GPS line (the README's layout).
+    /// Time first, then stroke rate, the motion trace and its line, then the
+    /// GPS line (the README's layout).
     @ViewBuilder private var recording: some View {
         // A failed write ends what's saved: the screen says so in place of
         // "Recording", and the clock stops.
@@ -163,7 +164,7 @@ struct RecordView: View {
                     ?? "Stroke rate, not measured yet"
             )
             .accessibilityIdentifier("record-stroke-rate")
-            if !PhoneRecording.hasMotionSensors {
+            if model.status.trace == nil && !PhoneRecording.hasMotionSensors {
                 Text("No motion sensors on this phone, so no stroke rate")
                     .font(.plexSans(.subheadline))
                     .foregroundStyle(Palette.muted)
@@ -172,6 +173,12 @@ struct RecordView: View {
             }
         }
         if model.problem == nil {
+            if let trace = model.status.trace {
+                VStack(alignment: .leading, spacing: 6) {
+                    MotionTraceView(trace: trace)
+                    motionLine(trace)
+                }
+            }
             gpsLine
         }
         // Hides the screen; the recording carries on, and every screen says so.
@@ -200,6 +207,39 @@ struct RecordView: View {
             .foregroundStyle(gps.isWarning ? Palette.red : Palette.muted)
             .accessibilityLabel(gps.label)
             .accessibilityIdentifier("record-gps")
+    }
+
+    /// In the GPS line's style. Not a live region: VoiceOver hears entering
+    /// and leaving "Couldn’t read…" once each (RecordModel).
+    private func motionLine(_ trace: MotionTrace) -> some View {
+        let line = MotionLine(trace.status)
+        return Text(line.text)
+            .font(.plexSans(.body))
+            .foregroundStyle(line.isWarning ? Palette.red : Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("record-motion")
+    }
+}
+
+/// The live motion trace from the recorder core, drawn as it comes: one line,
+/// no axes or numbers, no smoothing or animation. Always 48 pt tall, also at
+/// large text, and empty when there's nothing to draw, so nothing below it
+/// moves when the sensor starts or stops. Hidden from VoiceOver: the line
+/// under it says what it shows.
+private struct MotionTraceView: View {
+    let trace: MotionTrace
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            path.addLines(trace.points(in: size, inset: 1))
+            context.stroke(
+                path, with: .color(Palette.primaryText),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+        .accessibilityHidden(true)
     }
 }
 

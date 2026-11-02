@@ -24,6 +24,7 @@
         private var timer: DispatchSourceTimer?
         private var locations: Task<Void, Never>?
         private var background: CLBackgroundActivitySession?
+        private var sensors = false
         private let onStatus: @MainActor @Sendable (RecordingStatus) -> Void
 
         /// An accelerometer and a gyroscope: without both, a recording is GPS
@@ -58,7 +59,7 @@
         }
 
         private func start() {
-            let sensors = motion.isAccelerometerAvailable && motion.isGyroAvailable
+            sensors = motion.isAccelerometerAvailable && motion.isGyroAvailable
             let recorder = PhoneRecorder(platform: .iPhone, motion: sensors, sink: files)
             self.recorder = recorder
             if sensors {
@@ -90,6 +91,8 @@
             timer.setEventHandler { [weak self] in self?.tick() }
             timer.resume()
             self.timer = timer
+            // "Starting motion sensor" at once, not a second later.
+            report(recorder)
         }
 
         private func received(_ location: CLLocation) {
@@ -102,8 +105,12 @@
         private func tick() {
             guard let recorder else { return }
             recorder.tick(nanoseconds: PhoneRecorder.nanoseconds(ProcessInfo.processInfo.systemUptime))
+            report(recorder)
+        }
+
+        private func report(_ recorder: PhoneRecorder) {
             let status = RecordingStatus(
-                live: recorder.live, droppedLate: recorder.droppedLate,
+                live: recorder.live, trace: sensors ? recorder.trace : nil, droppedLate: recorder.droppedLate,
                 droppedUnpaired: recorder.droppedUnpaired, couldNotSave: files.failure != nil)
             let onStatus = onStatus
             // In order, unlike a Task each.

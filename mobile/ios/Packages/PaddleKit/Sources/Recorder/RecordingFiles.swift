@@ -46,6 +46,8 @@ public final class RecordingFiles: RecordingSink {
     }
 
     public func write(_ line: Data, to stream: RecordingStream) {
+        // Not kept: the server rebuilds stroke rate from the two files.
+        guard stream != .stroke else { return }
         guard failure == nil else {
             failedLines += 1
             return
@@ -54,6 +56,7 @@ public final class RecordingFiles: RecordingSink {
             switch stream {
             case .track: try trackHandle.write(contentsOf: line)
             case .motion: try motionHandle.write(contentsOf: line)
+            case .stroke: break
             }
         } catch {
             failure = error

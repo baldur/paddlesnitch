@@ -89,6 +89,19 @@ struct RecordModelTests {
         #expect(said == ["GPS lost", "GPS back"])
     }
 
+    @Test func announcesAMotionSensorChangeOnce() {
+        let starter = Starter()
+        var said: [String] = []
+        let model = RecordModel(announce: { said.append($0) }, start: starter.start)
+        model.record()
+        for status: MotionTrace.Status in [.starting, .motion, .still, .noSamples, .noSamples, .motion, .motion] {
+            starter.send?(RecordingStatus(trace: MotionTrace(status: status)))
+        }
+        #expect(model.status.trace?.status == .motion)
+        #expect(
+            said == ["Couldn’t read the motion sensor. Stroke rate pauses until it’s back.", "Motion sensor back"])
+    }
+
     @Test func saysSoWhenItCannotStart() {
         let starter = Starter()
         starter.fails = true

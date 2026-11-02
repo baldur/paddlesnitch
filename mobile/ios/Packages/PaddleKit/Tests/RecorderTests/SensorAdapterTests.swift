@@ -128,6 +128,22 @@ struct RecordingFilesTests {
         )
     }
 
+    /// The core's stroke lines aren't kept: the server rebuilds them.
+    @Test func strokeLinesAreNotWritten() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = try RecordingFiles(directory: directory, start: Date())
+        let before = try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
+        let (track, motion) = (try Data(contentsOf: files.track), try Data(contentsOf: files.motion))
+        files.write(Data("session,all,1,ok,1,60.0,60,60\n".utf8), to: .stroke)
+        #expect(try Data(contentsOf: files.track) == track)
+        #expect(try Data(contentsOf: files.motion) == motion)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted() == before)
+        try files.close(droppedLate: 0, droppedUnpaired: 0)
+        files.write(Data("session,all,1,ok,1,60.0,60,60\n".utf8), to: .stroke)
+        #expect(files.failedLines == 0, "not a lost line, even after the files close")
+    }
+
     @Test func aSecondRecordingInTheSameSecondGetsTheTrackersSuffix() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
