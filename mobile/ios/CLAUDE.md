@@ -221,8 +221,8 @@ isn't obvious from the code.
   and didn't stop it. So `setUp` launches once more after a launch
   timeout, and only then (`launchRetryingOnce`, lead's choice). "Failed
   to launch" alone isn't retried: a crash at launch says that too. Each
-  retry prints "warning: Launch timed out in <test>; launching again":
-  grep the CI logs for it, leaving out LaunchingTests' own. A second
+  retry prints "Launch timed out in <test>; launching again": grep the
+  CI logs for that text, leaving out LaunchingTests' own. A second
   timeout or any other failure still fails. Read the xcresult's
   activities for which launch failed: the summary names the test, not
   the step.
@@ -250,6 +250,24 @@ isn't obvious from the code.
   `typeWhenFocused` reads the field back and types again. An empty text
   field reports its placeholder as its value (`typedText(in:)`), so never
   type a value equal to the placeholder ("000000").
+- `make test-app` turns AutoFill Passwords off on its simulator (the
+  `AutoFillPasswords` key in `com.apple.WebUI`), so "Save Password?"
+  shouldn't come at all. Proved on a fresh iOS 26.5 simulator: the sheet
+  came 3 times in 3 sign-ups with the default, 0 in 3 with the key. So the
+  tests see what users see elsewhere, the key goes only on the tests' own
+  simulator ("paddlesnitch-tests-…", `scripts/simulator.sh <ios> tests`),
+  or on CI the job's simulator (`scripts/autofill-off.sh`: into the
+  preferences file before boot, no race with a slow first boot). `make
+  run` keeps the default. `SavePasswordTests` fails on iOS 26 if the
+  sheet comes back; elsewhere `declineSavingPassword` prints "Save
+  Password? came up in <test>": grep the CI logs for that text.
+  xcbeautify rewrites "file:line: warning:" to "⚠️ file:line:", so never
+  grep for "warning:". To turn AutoFill
+  back on in a simulator, use Settings → General → AutoFill & Passwords →
+  AutoFill Passwords and Passkeys. Settings keeps its own copy, so
+  writing the key back alone doesn't change what Settings shows. iOS 27
+  never asks, so check the sheet on an iOS 26 simulator (CI's newest is
+  26.5; a local "latest" may be 27).
 - A late "Save Password?" can also come up during an accessibility audit,
   and the audit reports the system sheet ("Potentially inaccessible
   element", no element; #846's run, EmailCodeStepTests). When an audit

@@ -101,6 +101,9 @@ extension AppTestCase {
         while Date() < deadline {
             for owner in [app, springboard] where owner.buttons["Not Now"].firstMatch.exists {
                 owner.buttons["Not Now"].firstMatch.tap()
+                // `make test-app` turns AutoFill off, so this should never
+                // come: a warning the CI logs are counted by.
+                print("\(#fileID):\(#line): warning: Save Password? came up in \(name); declined")
                 return true
             }
             usleep(200_000)
