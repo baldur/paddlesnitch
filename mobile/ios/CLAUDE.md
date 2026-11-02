@@ -211,7 +211,8 @@ isn't obvious from the code.
 - Read a frame of something that comes and goes (the keyboard) with
   `frameIfThere`, never `exists` then `.frame`: it can go in between and
   XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
-  "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
+  "Failed to terminate com.paddlesnitch.app" (or "Timed out while
+  requesting launch progress", #840's run) is the simulator: leave it
   unless it repeats, then reset the simulator before the CI run, never a
   retry (lead).
 - On the record screen at the largest text, the hold-to-stop bar covers the
@@ -227,3 +228,14 @@ isn't obvious from the code.
   `PADDLESNITCH_MOTION_TRACE` (one block of a recorder-core `trace.csv`)
   is the trace the record screen shows, so the UI tests draw each status
   from the core's own fixtures. A missing status throws, never skips.
+- A CI log where every suite says "0 failures" and then `** TEST FAILED **`
+  still had failures: a failed test restarts the test runner, and the
+  per-suite counts after that cover only the restarted run. Read the
+  "Failing tests:" list above `** TEST FAILED **`, then the xcresult (the
+  run's `ios-test-results-*` artifact) for the line and the screen
+  recording.
+- "Save Password?" can come while the code is being typed and take the
+  keys (#840's run: an empty field, then "Enter the 6-digit code").
+  `typeWhenFocused` reads the field back and types again. An empty text
+  field reports its placeholder as its value (`typedText(in:)`), so never
+  type a value equal to the placeholder ("000000").
