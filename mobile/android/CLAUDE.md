@@ -142,6 +142,13 @@ time and isn't obvious from the code.
   rounds the shortest decimal half up, so it differs on ties. It also compares every case's
   `stroke.csv`. The goldens draw traces replayed from the fixtures (`fixtureTraces`), never
   made-up samples.
+- Test an announcement on the screen, not only its pure function: enable Robolectric's
+  `AccessibilityManager` (`shadowOf(am).setEnabled(true)`) and read `sentAccessibilityEvents` of
+  type `TYPE_ANNOUNCEMENT` (`theScreenAnnouncesTheSensorStoppingAndComingBack`). Two announcements
+  on one tick go in one call, or TalkBack can cut off the first.
+- Don't edit or commit in a worktree while a `tester` review is mutating it: its temporary
+  change went into a commit once (motion trace, 2026-11-02). Wait for the review, or give it its own
+  worktree.
 - A recording's write errors never reach the core: `RecordingFiles.write` catches and counts
   them, and the JNI callback returns early while an exception is pending (CheckJNI aborts a
   debug build that makes JNI calls with one pending).

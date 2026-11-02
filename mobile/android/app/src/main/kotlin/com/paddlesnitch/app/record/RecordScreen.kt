@@ -350,7 +350,7 @@ private fun MotionTrace(trace: RecorderCore.Trace) {
             if (points.size == 1) drawPoints(points, PointMode.Points, PsColor.primaryText, width, StrokeCap.Round)
             else if (points.size > 1) drawPath(
                 Path().apply { moveTo(points[0].x, points[0].y); points.drop(1).forEach { lineTo(it.x, it.y) } },
-                PsColor.primaryText, style = Stroke(width, cap = StrokeCap.Butt, join = StrokeJoin.Miter),
+                PsColor.primaryText, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round),
             )
         }
         Text(shown, color = if (red) PsColor.red else PsColor.muted, fontSize = 18.sp)

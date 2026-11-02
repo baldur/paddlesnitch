@@ -326,6 +326,18 @@ class RecordScreenTest {
         assertEquals(null, announcement(traced(still), traced(moving)))
     }
 
+    // On the screen itself: the sensor stopping and coming back are each announced once, nothing else.
+    @Test fun theScreenAnnouncesTheSensorStoppingAndComingBack() {
+        val am = compose.activity.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+        org.robolectric.Shadows.shadowOf(am).setEnabled(true)
+        val live = MutableStateFlow(traced(still))
+        show(RecordingService.State.Recording(files, live, startedAt = 1_000L))
+        listOf(moving, noSamples, noSamples, moving, still).forEach { live.value = traced(it); compose.waitForIdle() }
+        val said = org.robolectric.Shadows.shadowOf(am).sentAccessibilityEvents
+            .filter { it.eventType == android.view.accessibility.AccessibilityEvent.TYPE_ANNOUNCEMENT }.map { it.text.joinToString("") }
+        assertEquals(listOf(MOTION_NO_SAMPLES, MOTION_BACK), said)
+    }
+
     @Test fun eachSampleIsDrawnWhereTheCoreSaysNewestAtTheRight() {
         val t = RecorderCore.Trace(RecorderCore.TraceStatus.MOTION, 1, 20f, intArrayOf(10_000, 5_000, 0), floatArrayOf(20f, 0f, -20f))
         assertEquals(listOf(Offset(1f, 1f), Offset(500f, 24f), Offset(999f, 47f)), tracePoints(t, 1000f, 48f, 1f))
