@@ -211,10 +211,19 @@ isn't obvious from the code.
 - Read a frame of something that comes and goes (the keyboard) with
   `frameIfThere`, never `exists` then `.frame`: it can go in between and
   XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
-  "Failed to terminate com.paddlesnitch.app" (or "Timed out while
-  requesting launch progress", #840's run) is the simulator: leave it
-  unless it repeats, then reset the simulator before the CI run, never a
-  retry (lead).
+  "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
+  unless it repeats.
+- A launch timeout on a shard's first test ("Failed to launch", "Failed
+  to get launch progress", "Timed out while acquiring background
+  assertion") came four times in two days, always on the first
+  `app.launch()` in `AppTestCase.setUp()`, and the app started anyway.
+  Booting and erasing the simulator first (#845, a draft) cost up to
+  4 min a job and didn't stop it. So `setUp` launches once more after a
+  launch timeout, and only then (`launchRetryingOnce`, lead's choice).
+  Each retry prints "warning: Launch timed out; launching again": grep
+  the CI logs for it. A second timeout or any other failure still fails.
+  Read the xcresult's activities for which launch failed: the summary
+  names the test, not the step.
 - A CI log where every suite says "0 failures" and then `** TEST FAILED **`
   still had failures: a failed test restarts the test runner, and the
   per-suite counts after that cover only the restarted run. Read the

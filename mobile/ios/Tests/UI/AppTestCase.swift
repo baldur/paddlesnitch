@@ -19,7 +19,7 @@ class AppTestCase: XCTestCase {
         // connection"). Every launch below keeps this; tests change arguments.
         app.launchEnvironment["OS_ACTIVITY_MODE"] = "disable"
         app.launchArguments += ["-SampleServer", "-ResetAccount"] + launchArguments
-        app.launch()
+        launchRetryingOnce { app.launch() }  // Launching.swift
     }
 
     /// Opens the sign-in sheet from the Paddles notice and signs in.
