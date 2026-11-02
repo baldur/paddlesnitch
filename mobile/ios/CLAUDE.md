@@ -211,10 +211,21 @@ isn't obvious from the code.
 - Read a frame of something that comes and goes (the keyboard) with
   `frameIfThere`, never `exists` then `.frame`: it can go in between and
   XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
-  "Failed to terminate com.paddlesnitch.app" (or "Timed out while
-  requesting launch progress", #840's run) is the simulator: leave it
-  unless it repeats, then reset the simulator before the CI run, never a
-  retry (lead).
+  "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
+  unless it repeats.
+- A launch timeout on a shard's first test ("Timed out while launching
+  application", "… requesting launch progress", "… acquiring background
+  assertion") came four times in two days, always on the first
+  `app.launch()` in `AppTestCase.setUp()`, and the app started anyway.
+  Booting and erasing the simulator first (#845) cost up to 4 min a job
+  and didn't stop it. So `setUp` launches once more after a launch
+  timeout, and only then (`launchRetryingOnce`, lead's choice). "Failed
+  to launch" alone isn't retried: a crash at launch says that too. Each
+  retry prints "warning: Launch timed out in <test>; launching again":
+  grep the CI logs for it, leaving out LaunchingTests' own. A second
+  timeout or any other failure still fails. Read the xcresult's
+  activities for which launch failed: the summary names the test, not
+  the step.
 - On the record screen at the largest text, the hold-to-stop bar covers the
   foot of the screen. It keeps room for the hidden "Keep holding to stop.".
   `scroll(by:)` starts its drag there, and a drag on the bar doesn't scroll
@@ -239,3 +250,12 @@ isn't obvious from the code.
   `typeWhenFocused` reads the field back and types again. An empty text
   field reports its placeholder as its value (`typedText(in:)`), so never
   type a value equal to the placeholder ("000000").
+- A late "Save Password?" can also come up during an accessibility audit,
+  and the audit reports the system sheet ("Potentially inaccessible
+  element", no element; #846's run, EmailCodeStepTests). When an audit
+  finds anything, `audit()` declines the sheet if it's up and looks
+  again. The audit lives in `Auditing.swift`: `AppTestCase.swift` is at
+  SwiftLint's 400-line limit. The same run had the sheet come just after
+  a 2 s look for it and cover the code field through a 5 s wait: wait
+  with `becomesClear` (decline, wait 3 s, three times), never one look
+  then one wait.
