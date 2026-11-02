@@ -14,8 +14,8 @@ export const UPLOAD_REASONS = [
   'MISSED_GATE',        // a gate course: the next gate wasn't crossed (see `gate`)
   'WRONG_DIRECTION',    // crossed a line or gate, but only the wrong way
   'TOO_SHORT',          // every run was shorter than the course's minimum time
-  'STRAVA_UNAVAILABLE', // the Strava activity has no GPS track or is private
-  'BAD_LINK',           // not a Strava activity link or a direct file link
+  'STRAVA_UNAVAILABLE', // retired: never sent since Strava was removed (2026-11); kept so codes keep their meaning
+  'BAD_LINK',           // not a direct link to a .gpx file
   'FETCH_FAILED',       // the linked file couldn't be fetched
   'FILE_TOO_LARGE',     // the linked file is over 10 MB
 ] as const

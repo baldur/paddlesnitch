@@ -1,6 +1,5 @@
 // Digital Asset Links: tells Android that the paddlesnitch app may open
-// paddlesnitch.com links itself (App Links), which the Strava sign-in needs
-// to come back to the app (docs/features/android-app.md). Lists the SHA-256
+// paddlesnitch.com links itself (App Links; docs/features/android-app.md). Lists the SHA-256
 // of each certificate the app is signed with. Public by design.
 export const ANDROID_PACKAGE = 'com.paddlesnitch.app'
 export const ANDROID_CERT_SHA256 = [

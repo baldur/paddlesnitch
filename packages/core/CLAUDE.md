@@ -8,9 +8,8 @@ Platform primitives:
 - `storage` — S3 (prod) / local-fs (dev) object store: `getJson`/`putJson`/`getObject`/`putObject`/`listKeys`/`deleteObject`.
 - `auth` — `getAuthUser()` (reads the `tt_id` cookie, verifies the JWT, silent-refreshes via `tt_refresh`).
 - `cognito` — Cognito SDK wrapper (signUp, signIn, refresh, revoke, verifyIdToken).
-- `strava` + `strava-storage` — read-only Strava OAuth/API wrapper + per-user token persistence.
 - `url` — URL helpers.
-- `types` — platform types (`AuthUser`, `StravaTokens`, `StravaActivitySummary`) **plus the shared boat-class model** (`BoatClass`, `BOAT_CLASSES`, `BOAT_CLASS_INFO`, `Seat`, `CrewMember`, `expectedSeats`, `seatLabel`, `validateCrew`, `isBoatClass`) — re-exported by att's `types.ts` shim and used by the Analyse app for per-paddle boat metadata.
+- `types` — platform types (`AuthUser`) **plus the shared boat-class model** (`BoatClass`, `BOAT_CLASSES`, `BOAT_CLASS_INFO`, `Seat`, `CrewMember`, `expectedSeats`, `seatLabel`, `validateCrew`, `isBoatClass`) — re-exported by att's `types.ts` shim and used by the Analyse app for per-paddle boat metadata.
 
 ## Buddies (`@paddlesnitch/core/buddies`)
 

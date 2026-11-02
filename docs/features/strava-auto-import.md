@@ -1,5 +1,7 @@
 # Strava auto-import (webhooks)
 
+🗑️ **Removed — 2026-11-01.** Strava was removed from the platform (the "Remove Strava" PR). This record is history; what stays is in `apps/web/CLAUDE.md` § Strava, removed, and the one-off shutdown in `infra/CLAUDE.md`.
+
 ✅ **Shipped — 2026-09-13**, with ONE ops step outstanding: the Strava push subscription must be created once (`pnpm --filter web strava:webhook create`) or nothing arrives in production.
 
 🚧 **Originally in progress — 2026-09-13.** New water-sport activities on a connected

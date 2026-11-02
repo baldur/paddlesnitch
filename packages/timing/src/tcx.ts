@@ -1,6 +1,6 @@
 import type { TrackPoint } from './types'
 
-// TCX (Garmin Training Center XML — exported by Strava, Garmin Connect, and many
+// TCX (Garmin Training Center XML — exported by Garmin Connect and many
 // coaching tools). Parses each <Trackpoint>'s <Time> + <Position>. Stroke rate
 // (cadence) is captured for paddlers (#143): TCX carries it as a direct
 // <Cadence> (bike-style) or an extension <RunCadence>/<ns3:Cadence>. Heart rate

@@ -4,12 +4,8 @@ import { useRouter } from 'next/navigation'
 import AppHeader from '@/components/AppHeader'
 import LoadingState from '@/components/LoadingState'
 import CourseMapClient from '@/components/map/CourseMapClient'
-import StravaButton from '@/components/strava/StravaButton'
-import PoweredByStrava from '@/components/strava/PoweredByStrava'
-import ViewOnStrava from '@/components/strava/ViewOnStrava'
-import { stravaOn } from '@/lib/sign-in-options'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, validateCrew } from '@/lib/types'
-import type { AuthUser, BoatClass, CrewMember, StravaActivitySummary, CourseMetadata, LatLng } from '@/lib/types'
+import type { AuthUser, BoatClass, CrewMember, CourseMetadata, LatLng } from '@/lib/types'
 import { prepareTraceUpload, uploadErrorMessage, TOO_BIG_MESSAGE } from '@/lib/trace-upload'
 import { fmtDay, fmtDayMonth } from '@paddlesnitch/core/format'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
@@ -24,10 +20,7 @@ import { Card, cardClass } from '@paddlesnitch/ui/Card'
 type GateAnalysis = { blocking: { gateNumber: number } | null }
 type UploadDiagnostic = { track: LatLng[]; course: CourseMetadata; gateAnalysis?: GateAnalysis }
 
-// Strava is switched off in some builds (lib/sign-in-options.ts).
-const STRAVA = stravaOn()
-
-// Local helpers used only by the Strava picker.
+// Local helpers used by the tracker picker.
 function formatDistance(metres: number): string {
   if (metres >= 1000) return `${(metres / 1000).toFixed(1)} km`
   return `${Math.round(metres)} m`
@@ -164,18 +157,12 @@ export default function UploadPage({
   // Set when processing fails because the track didn't cross the lines — drives
   // the diagnostic map so the user can see their track against the course.
   const [diagnostic, setDiagnostic] = useState<UploadDiagnostic | null>(null)
-  const [inputMode, setInputMode] = useState<'file' | 'url' | 'strava' | 'tracker'>('file')
+  const [inputMode, setInputMode] = useState<'file' | 'url' | 'tracker'>('file')
   // The signed-in user's tracker recordings, newest first: a tracker owner's
-  // way into a trial (they had none: no file to upload, nothing on Strava).
+  // way into a trial (they had none: no file to upload).
   const [trackerRecordings, setTrackerRecordings] = useState<{ sessionId: string; deviceId: string; startedAt?: string; uploadedAt: string; distanceMetres?: number }[] | undefined>(undefined)
   const [trackerPick, setTrackerPick] = useState<{ deviceId: string; sessionId: string } | null>(null)
   const [activityUrl, setActivityUrl] = useState('')
-  // Strava picker state. `connected` is undefined until status/me come back so
-  // we can keep the loading skeleton off-screen until we know which UI to show.
-  const [stravaConnected, setStravaConnected] = useState<boolean | undefined>(undefined)
-  const [stravaActivities, setStravaActivities] = useState<StravaActivitySummary[] | undefined>(undefined)
-  const [stravaActivityId, setStravaActivityId] = useState<number | null>(null)
-  const [stravaError, setStravaError] = useState('')
   const [boatClass, setBoatClass] = useState<BoatClass | ''>('')
   // Crew is keyed by the boat class. When the class changes we re-initialise
   // crew so seat indexes always match the selected boat.
@@ -218,33 +205,6 @@ export default function UploadPage({
       .then(setSubmitGate)
       .catch(() => setSubmitGate({ canSubmit: false }))
   }, [authUser, trialId, inviteQuery])
-
-  // Strava picker: lazy-load status + activities the first time the tab opens.
-  // We don't fetch on mount — most uploads are still file/URL and there's no
-  // point spending the API quota on users who never click the tab.
-  useEffect(() => {
-    if (inputMode !== 'strava') return
-    if (stravaConnected === undefined) {
-      fetch('/att/api/strava/status')
-        .then(r => (r.ok ? r.json() : { connected: false }))
-        .then(s => setStravaConnected(!!s.connected))
-        .catch(() => setStravaConnected(false))
-    }
-  }, [inputMode, stravaConnected])
-
-  useEffect(() => {
-    if (inputMode !== 'strava' || !stravaConnected || stravaActivities !== undefined) return
-    fetch('/att/api/strava/activities')
-      .then(async r => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body.error ?? 'Couldn’t load your Strava activities. Please try again.')
-        }
-        return r.json()
-      })
-      .then((d: { activities: StravaActivitySummary[] }) => setStravaActivities(d.activities))
-      .catch((err: Error) => setStravaError(err.message))
-  }, [inputMode, stravaConnected, stravaActivities])
 
   // Reset / re-template the crew list whenever the boat class changes.
   // Seat 1 (bow) is pre-filled with the signed-in user's display name so the
@@ -347,29 +307,6 @@ export default function UploadPage({
       await handleUploadResponse(res, 'Couldn’t enter that recording. Please try again.')
     } catch {
       setError('Couldn’t enter that recording. Please try again.')
-      setStatus('error')
-    }
-  }
-
-  const handleStravaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!stravaActivityId) return
-    const err = preflight()
-    if (err) { setError(err); setStatus('error'); return }
-
-    setStatus('uploading')
-    setError('')
-    setDiagnostic(null)
-
-    try {
-      const res = await fetch(`/att/api/trials/${trialId}/upload${inviteQuery}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stravaActivityId, boatClass, crew }),
-      })
-      await handleUploadResponse(res, 'Couldn’t import that activity. Please try again.')
-    } catch {
-      setError('Couldn’t import that activity. Please try again.')
       setStatus('error')
     }
   }
@@ -479,7 +416,6 @@ export default function UploadPage({
               options={[
                 { value: 'file', label: 'File' },
                 { value: 'url', label: 'Link' },
-                ...(STRAVA ? [{ value: 'strava' as const, label: 'Strava' }] : []),
                 ...(trackerRecordings && trackerRecordings.length > 0
                   ? [{ value: 'tracker' as const, label: 'Tracker' }]
                   : []),
@@ -533,15 +469,15 @@ export default function UploadPage({
             {inputMode === 'url' && (
               <form onSubmit={handleUrlSubmit} className="flex flex-col gap-6">
                 <Field
-                  label="Activity link"
+                  label="GPX link"
                   htmlFor="activity-url"
-                  help="A public Strava activity link or a direct link to a .gpx file. The whole session is fine."
+                  help="A direct link to a .gpx file. The whole session is fine."
                 >
                   <input
                     id="activity-url"
                     type="url"
                     required
-                    placeholder="https://www.strava.com/activities/..."
+                    placeholder="https://example.com/session.gpx"
                     value={activityUrl}
                     onChange={e => setActivityUrl(e.target.value)}
                     className={inputClass}
@@ -555,93 +491,6 @@ export default function UploadPage({
 
                 <Button type="submit" variant="primary" disabled={status === 'uploading'} className="self-start">
                   {submitLabel('Submitting…', 'Submit link')}
-                </Button>
-              </form>
-            )}
-
-            {inputMode === 'strava' && (
-              <form onSubmit={handleStravaSubmit} className="flex flex-col gap-6">
-                {stravaConnected === undefined && (
-                  <p className="text-sm text-muted">Checking your Strava connection…</p>
-                )}
-
-                {stravaConnected === false && (
-                  <Card className="flex flex-col gap-3">
-                    <p className="text-base text-fg">
-                      Connect Strava once and you can import any recent paddling activity straight into a trial.
-                    </p>
-                    <StravaButton href="/att/api/strava/connect" className="self-start" post />
-                    <p className="text-sm text-muted">
-                      Strava asks you to approve. You can disconnect any time in your{' '}
-                      <a href="/account" className="tt-link">account</a>.
-                    </p>
-                  </Card>
-                )}
-
-                {stravaConnected && (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-fg">Recent Strava activities</span>
-                    {stravaError && <ErrorBox>{stravaError}</ErrorBox>}
-                    {stravaActivities === undefined && !stravaError && (
-                      <p className="text-sm text-muted">Loading…</p>
-                    )}
-                    {stravaActivities !== undefined && stravaActivities.length === 0 && (
-                      <p className="text-sm text-muted">
-                        No recent kayak, canoe, rowing or SUP activities on your Strava.
-                      </p>
-                    )}
-                    {stravaActivities !== undefined && stravaActivities.length > 0 && (
-                      <ul className={`${cardClass} flex flex-col max-h-72 overflow-y-auto`}>
-                        {stravaActivities.map(a => {
-                          const checked = stravaActivityId === a.id
-                          return (
-                            <li
-                              key={a.id}
-                              className={`border-b border-border last:border-b-0 ${checked ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
-                            >
-                              <label className="flex items-center gap-3 px-3 py-2 min-h-11 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="stravaActivity"
-                                  checked={checked}
-                                  onChange={() => setStravaActivityId(a.id)}
-                                  className="accent-strava"
-                                />
-                                <span className="flex-1 min-w-0">
-                                  <span className="block text-base text-fg truncate">{a.name}</span>
-                                  <span className="block text-sm text-muted tabular">
-                                    {a.sportType} · {formatDate(a.startDate)} · {formatDistance(a.distanceMetres)}
-                                  </span>
-                                </span>
-                              </label>
-                              {/* Attribution link back to the source activity (outside
-                                  the selecting label so it doesn't toggle the radio). */}
-                              <div className="px-3 pb-2 -mt-1 pl-10">
-                                <ViewOnStrava activityId={a.id} className="tt-link text-sm" />
-                              </div>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    )}
-                    {stravaActivities !== undefined && stravaActivities.length > 0 && (
-                      <PoweredByStrava className="mt-2 self-start" />
-                    )}
-                  </div>
-                )}
-
-                <BoatClassPicker boatClass={boatClass} setBoatClass={setBoatClass} />
-                <CrewEditor boatClass={boatClass} crew={crew} updateCrewName={updateCrewName} />
-
-                {status === 'error' && <ErrorBox>{error}</ErrorBox>}
-
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={status === 'uploading' || !stravaConnected || !stravaActivityId}
-                  className="self-start"
-                >
-                  {submitLabel('Importing…', 'Import from Strava')}
                 </Button>
               </form>
             )}

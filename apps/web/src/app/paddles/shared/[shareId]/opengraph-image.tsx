@@ -5,8 +5,7 @@ import { shareCard } from '@paddlesnitch/analysis/share-card'
 // The share-card OG image for a public paddle (docs/features/share-image-strava.md).
 // Server-rendered via the opengraph-image route convention (the shared page is a
 // client component, so its OG meta must come from here). Also the downloadable
-// photo the owner adds to their Strava activity — the actual click-through is the
-// tappable share link they paste into the description (Strava linkifies URLs), so
+// picture the owner can post: the click-through is the share link itself, so
 // the card just needs to catch the eye and carry the brand.
 export const runtime = 'nodejs'
 export const size = { width: 1200, height: 630 }

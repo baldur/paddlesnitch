@@ -63,7 +63,8 @@ export const handler = async (event) => {
     throw new Error('CreateAuthChallenge: user has no email attribute')
   }
 
-  // Server-trusted sign-in path (Strava): the caller pre-generates a one-time
+  // Server-trusted sign-in path (opening a website page from a signed-in app,
+  // auth/web-code): the caller pre-generates a one-time
   // token and stashes it on the user's `custom:auth_preset` attribute right
   // before InitiateAuth, then answers the challenge with the same value. We
   // read it from userAttributes — NOT ClientMetadata — because Cognito does

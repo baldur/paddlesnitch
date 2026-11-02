@@ -6,8 +6,8 @@
 // device serial numbers included, while the privacy page said heart rate is
 // never stored. New uploads keep trace.csv written by trackToCsv (time,
 // position, stroke rate). This rewrites the old ones the same way and deletes
-// the original file. Strava snapshots (trace.json: positions and times only)
-// are left alone. An entry whose file can't be parsed is reported and left.
+// the original file. The snapshots of old Strava imports (trace.json:
+// positions and times only) are left alone. An entry whose file can't be parsed is reported and left.
 //
 // Dry run by default -- prints what would change. Add --apply to write.
 //   DATA_BUCKET=paddlesnitch-data-prod AWS_PROFILE=paddlesnitch AWS_REGION=eu-west-1 \

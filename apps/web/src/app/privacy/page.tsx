@@ -37,17 +37,17 @@ export default function PrivacyPolicy() {
         <Section title="What we collect">
           <p>Only what you give us, or what your GPS files, tracker and phone record:</p>
           <ul className="list-disc pl-5 mt-2 space-y-2">
-            <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. When you sign up with an email, we send a code to it to check it&apos;s yours. We note the last time you proved the address: with that code, an email sign-in code or a password reset. If you sign in with Strava, which doesn&apos;t share your email, you can add a contact email. If you sign in with Google, or connect Google on your account page, Google tells us your name, your email address and an ID for your Google account; we never see your Google password.</li>
+            <li><strong>Account</strong>: your email address, display name and password. Amazon Cognito holds the password; we never see it. When you sign up with an email, we send a code to it to check it&apos;s yours. We note the last time you proved the address: with that code, an email sign-in code or a password reset. If you made your account with Strava, which doesn&apos;t share your email, you can add a contact email so we can move your account to it. If you sign in with Google, or connect Google on your account page, Google tells us your name, your email address and an ID for your Google account; we never see your Google password.</li>
             <li><strong>Public profile</strong>: off unless you turn it on, plus the profile handle if you pick one.</li>
             <li><strong>Time-trial results</strong>: the track from the GPS file you upload (times, positions and stroke rate; we don&apos;t keep the file itself), and your time, 500 m splits, average stroke rate, boat class and crew names.</li>
-            <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, Strava, a time trial, a tracker or one of our phone apps): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
+            <li><strong>Paddles</strong>: the analysis of each paddle you add (from a file, a time trial, a tracker or one of our phone apps, or from Strava before November 2026): your route, speed and stroke rate, plus any diary notes and boat class you add. For files uploaded to Paddles we keep the analysis, not the original file.</li>
             <li><strong>Buddies</strong>: who your buddies are, buddy requests you&apos;ve sent and received, and your invite link. <strong>Your buddies see your paddles</strong> (route, speed, stroke rate and boat class) unless you turn that off on the Buddies page or hide a paddle. They never see your diary notes, your automatic summaries or your email.</li>
             <li><strong>River plans</strong>: plans you save on Plan (start and finish points, start time and pace, and any notes you add to the plan or its stops). They&apos;re private until you share one. <strong>A shared plan can be seen by anyone with its link</strong>, with your display name, and your buddies see it listed. Stop sharing and the link stops working. We also note which locks a saved plan passes and a rough outline of its route (a point about every kilometre), so the gaps page can show which locks and waterways need details most; only counts are shown, never whose plans or their routes.</li>
             <li><strong>Portage details</strong>: where you get out and back in at a lock or weir, and any notes, if you add them on Plan. <strong>They&apos;re public the moment you save them</strong>, released under CC0 (anyone may reuse them, including other open-data projects), and shown with your display name. You can delete one at any time and it stops being shown; copies already downloaded by others can&apos;t be recalled. If people flag one, we may hide it.</li>
             <li><strong>Games</strong>: if you sign in to play, the paddler or rower and the boat you pick (such as body shape, hair and colours) and your best time on each course. <strong>Leaderboards are public</strong> and show your display name shortened (Sam T.), your time, your boat and the date. Players in a live race with you see your shortened name, paddler and boat.</li>
             <li><strong>Trackers</strong>: if you add a paddlesnitch tracker, the recordings it uploads (GPS positions and motion data), and its ID, software version and when it last synced.</li>
             <li><strong>Phone recordings</strong>: if you record a paddle with one of our phone apps, the app uses your phone&apos;s location and motion sensors while it records, even with the screen off. The recording stays on your phone, left out of backups, until it uploads (then the phone deletes its copy) or you delete it. We keep the recording (GPS positions and motion data), as for a tracker. We also keep an ID for that install of the app, whether it&apos;s Android or iPhone, when it was added to your account and when it last uploaded.</li>
-            <li><strong>Strava</strong>: if you connect Strava, a key that lets us read your activities, and the activities you import.</li>
+            <li><strong>Strava</strong>: we stopped using Strava in November 2026. Paddles you brought in from Strava before then stay until you delete them. We&apos;ve ended our access to your Strava account and deleted the keys for it.</li>
             <li><strong>Automatic paddle summaries</strong>: to write the short summary under a paddle, we send that paddle&apos;s numbers, the name of the nearest river gauge, your recent paddles and your diary notes to an AI model on Amazon Bedrock. Please don&apos;t put health details in diary notes. We keep a short written profile of your paddling to make later summaries relevant.</li>
             <li><strong>Issue reports</strong>: what you write, the page you were on and your browser. If you&apos;re signed in, or add an email, we keep your name and email privately so we can reply.</li>
             <li><strong>Beta tester applications</strong>: your name, email, how you paddle (kayak, rowing and so on), and how often. We use it only to choose and contact beta testers, and delete it when the beta ends or when you ask.</li>
@@ -77,8 +77,7 @@ export default function PrivacyPolicy() {
             We keep your data for as long as your account exists. You can delete your account at any time
             from your{' '}
             <Link href="/account" className="tt-link">account page</Link>. That deletes your
-            account, paddles, diary notes, results, river plans, portage details, shared links, buddies, tracker and phone recordings, game times and saved paddler, and disconnects
-            Strava. Courses and trials you created are deleted too, unless a group owns them or someone
+            account, paddles, diary notes, results, river plans, portage details, shared links, buddies, tracker and phone recordings, game times and saved paddler. Courses and trials you created are deleted too, unless a group owns them or someone
             else has a result in them: those stay for the other paddlers, without your results. It
             happens at once and can&apos;t be undone. Our storage keeps earlier copies for 30 days so we
             can recover from mistakes, so deleted data is fully gone 30 days later. Server logs are kept
@@ -106,10 +105,8 @@ export default function PrivacyPolicy() {
           <ul className="list-disc pl-5 mt-2 space-y-2">
             <li><code>tt_id</code>: your sign-in token. Lasts 24 hours.</li>
             <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
-            <li><code>tt_from_link</code>: only when the paddlesnitch app opens the website signed in. It records which account the app signed in, so this browser won’t connect Strava to that account. Connect Strava in the app instead. Lasts 24 hours, or until you sign out.</li>
-            <li><code>strava_state</code>, <code>strava_signin_state</code>, <code>strava_signin_next</code> and <code>strava_signin_app</code>: only while you connect or sign in with Strava, to check the reply really came from Strava and to bring you back to the right page, or to the paddlesnitch app if you started there. Last 10 minutes.</li>
+            <li><code>tt_from_link</code>: only when the paddlesnitch app opens the website signed in. It records which account the app signed in, so this browser can’t connect a Google login to that account. Lasts 24 hours, or until you sign out.</li>
             <li><code>google_signin_state</code>, <code>google_signin_verifier</code>, <code>google_signin_next</code>, <code>google_signin_app</code> and <code>google_signin_link</code>: only while you sign in with Google or connect it on your account page. They check the reply really came from Google, and bring you back to the right page, or to the paddlesnitch app if you started there. They last 10 minutes.</li>
-            <li><code>ps_contact_banner_dismissed</code>: only if you sign in with Strava and hide the &quot;add your email&quot; banner. Lasts 180 days.</li>
           </ul>
           <p className="mt-3">
             Your browser also stores <code>tt_cookie_acked</code> (so this notice isn&apos;t shown twice)
@@ -122,7 +119,6 @@ export default function PrivacyPolicy() {
           <p>We use these services to run the site:</p>
           <ul className="list-disc pl-5 mt-2 space-y-2">
             <li><strong>Amazon Web Services</strong> (eu-west-1, Ireland): hosting, sign-in (Cognito), storage (S3), email (SES, from <code>noreply@paddlesnitch.com</code>) and the AI model that writes paddle summaries (Bedrock). Bedrock doesn&apos;t use your data to train models.</li>
-            <li><strong>Strava</strong> (USA): only if you connect it. We read your activities; we never post.</li>
             <li><strong>Open-Meteo</strong> and the <strong>Environment Agency</strong>: we send them a location and a time to look up the wind and river flow for a paddle. Nothing that identifies you.</li>
             <li><strong>Environment Agency</strong>, <strong>SEPA</strong>, the <strong>OPW</strong> (waterlevel.ie), <strong>Rijkswaterstaat</strong>, <strong>waterinfo.be</strong> (Flanders), <strong>PEGELONLINE</strong> (Germany), <strong>BAFU</strong> (Switzerland), <strong>SMHI</strong> (Sweden) and <strong>GOV.UK</strong>: for river levels and the Thames stream warnings on Plan, our server reads their whole national lists. Your route and your details are never sent to them.</li>
             <li><strong>GitHub</strong> (USA): issue reports are filed there, and <strong>the text you write is public</strong>. Your name and email are not sent.</li>
@@ -131,7 +127,7 @@ export default function PrivacyPolicy() {
             <li><strong>Google</strong> (Gmail, USA): emails you send to privacy@paddlesnitch.com, and beta tester applications, are forwarded to our Gmail inbox so we can answer them.</li>
           </ul>
           <p className="mt-3">
-            Strava, GitHub and Google are in the USA. Everything else we store stays in the EU.
+            GitHub and Google are in the USA. Everything else we store stays in the EU.
           </p>
         </Section>
 

@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 import { ReportIssueButton } from '@paddlesnitch/ui/FeedbackWidget'
-import { stravaOn } from '@/lib/sign-in-options'
 
 // While we can't email reset codes (lib/email-delivery.ts), both reset pages
 // say so plainly and offer the way that works instead of a code that never
@@ -16,7 +15,6 @@ export default function NoEmailReset() {
         <p className="text-base text-muted">
           We can&apos;t email reset codes yet. Report an issue with the email you signed up with, and we&apos;ll reset your password for you.
         </p>
-        {stravaOn() && <p className="text-base text-muted">If you connected Strava, you can sign in with Strava instead.</p>}
         <div className="flex flex-wrap gap-2 pt-2">
           <ReportIssueButton className={buttonClass('primary')} />
           <Link href="/signin" className={buttonClass('secondary')}>Back to sign in</Link>

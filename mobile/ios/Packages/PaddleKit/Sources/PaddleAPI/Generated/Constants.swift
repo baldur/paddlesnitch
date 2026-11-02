@@ -6,6 +6,5 @@ import Foundation
 
 /// Values the server decides, from mobile/contract/api/constants.json.
 public enum Constants {
-    public static let stravaConnectResults: [String: String] = ["connected": "Strava connected.", "denied": "You cancelled connecting Strava.", "exchange_failed": "Couldn’t connect Strava. Please try again.", "linked_elsewhere": "Couldn’t connect Strava. It’s already connected to another paddlesnitch account. Sign in to that account and disconnect it there.", "not_configured": "Couldn’t connect Strava right now. Please try again later.", "state_mismatch": "Couldn’t connect Strava. Please try again.", "use_app": "Couldn’t connect Strava here. Connect it in the paddlesnitch app instead."]
     public static let tosVersion = "002"
 }

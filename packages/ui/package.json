@@ -6,7 +6,6 @@
   "exports": {
     "./AppShell": "./src/AppShell.tsx",
     "./AccountNav": "./src/AccountNav.tsx",
-    "./ContactBanner": "./src/ContactBanner.tsx",
     "./FeedbackWidget": "./src/FeedbackWidget.tsx",
     "./Button": "./src/Button.tsx",
     "./Form": "./src/Form.tsx",

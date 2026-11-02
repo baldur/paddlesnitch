@@ -17,8 +17,6 @@ import { unindexEntries } from '@/lib/entries'
 import { rebuildLeaderboard } from '@/lib/leaderboard'
 import { removeUserFromAllGroups } from '@/lib/groups'
 import { eraseFeedbackContactsForUser } from '@/lib/feedback-contacts'
-import { revoke as revokeStrava } from '@paddlesnitch/core/strava'
-import { getStravaTokens, getUserIdByAthleteId, deleteAthleteIndex } from '@paddlesnitch/core/strava-storage'
 import { eraseUserAnalysis } from '@paddlesnitch/analysis/analysis-store'
 import { eraseUserDevices } from '@paddlesnitch/core/devices'
 import { eraseDerived } from '@paddlesnitch/core/derived'
@@ -31,8 +29,8 @@ import { erasureState, CACHE_MS } from '@paddlesnitch/core/erased'
 
 /**
  * Deletes everything stored under or about this account ID. `athleteIds`:
- * Strava athletes known only from outside the data (a Strava sign-in's email),
- * released if their index still names this account.
+ * Strava athletes known only from outside the data (the placeholder email of an
+ * account made with Strava), released if their index still names this account.
  */
 export async function eraseAccountData(userId: string, { athleteIds = [] }: { athleteIds?: number[] } = {}): Promise<void> {
   // 1. Courses they created (deleted after step 5 if nothing still uses them).
@@ -90,9 +88,10 @@ export async function eraseAccountData(userId: string, { athleteIds = [] }: { at
   )
   await deleteObjects(createdCourses.filter(c => !keptTrialCourses.has(c.id)).map(c => `courses/${c.id}/metadata.json`))
 
-  // 6a. Paddles, trackers, groups, Strava. These live outside users/{userId}/,
-  //     so the prefix wipe below never reached them (GDPR gap until 2026-09).
-  //     Strava goes before the users/ wipe because the tokens live there.
+  // 6a. Paddles, trackers, groups, the old Strava index. These live outside
+  //     users/{userId}/, so the prefix wipe below never reached them (GDPR gap
+  //     until 2026-09). The Strava index goes before the users/ wipe because
+  //     the athlete id is read from there.
   await eraseUserAnalysis(userId)
   await eraseUserDevices(userId)
   // Everything worked out from their data (docs/features/performance.md).
@@ -109,18 +108,23 @@ export async function eraseAccountData(userId: string, { athleteIds = [] }: { at
   await erasePortages(userId)
   await removeUserFromAllGroups(userId)
   await eraseFeedbackContactsForUser(userId)
-  const strava = await getStravaTokens(userId)
-  if (strava) await revokeStrava(strava.accessToken)
+  // Strava was removed (2026-11). Until the one-off clean-up
+  // (scripts/strava-shutdown.ts) has run, an account may still have the
+  // strava-athletes/{athleteId}.json index pointing at it: the athlete id is in
+  // the old users/{id}/strava.json, or in the placeholder email of an account
+  // made with Strava. The users/ wipe below takes the old files themselves.
+  const legacy = await getJson<{ athleteId?: number }>(`users/${userId}/strava.json`)
   const athletes = new Set<number>(athleteIds)
-  if (strava?.athleteId) athletes.add(strava.athleteId)
+  if (legacy?.athleteId) athletes.add(legacy.athleteId)
   for (const id of athletes) {
-    if ((await getUserIdByAthleteId(id)) === userId) await deleteAthleteIndex(id)
+    const key = `strava-athletes/${id}.json`
+    if ((await getJson<{ userId?: string }>(key))?.userId === userId) await deleteObject(key)
   }
 
   // 6b. Release a claimed vanity handle (the usernames/{slug} index lives
   //     outside users/, so it needs an explicit delete) while it still names
   //     this account, then wipe the whole users/{userId}/ prefix — profile,
-  //     contact, groups index, strava tokens, tos-consent. Previously these
+  //     contact, groups index, old Strava files, tos-consent. Previously these
   //     survived erasure (GDPR gap).
   const profile = await getJson<{ handle?: string }>(`users/${userId}/profile.json`)
   if (profile?.handle) {

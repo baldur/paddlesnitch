@@ -323,7 +323,7 @@ export function gateDiagnosisMessage(d: GateDiagnosis): string {
 }
 
 // Try every start-line crossing and pair it with the correct finish crossing for the course type.
-// Return the fastest valid pair — equivalent to Strava's "best effort on segment" behaviour.
+// Return the fastest valid pair — the usual "best effort on a segment" behaviour.
 export type Pass = { startMs: number; finishMs: number; startIndex: number; finishIndex: number }
 
 /**

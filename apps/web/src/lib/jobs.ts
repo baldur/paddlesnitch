@@ -1,7 +1,6 @@
 // Work done after answering (#413, owner's choice: the S3 to-do folder). On
 // our Lambda, Next's after() runs BEFORE the response is sent, so a slow job
-// (importing a Strava paddle, making a tracker recording's paddle) held the
-// caller's request open: Strava wants an answer within ~2 s.
+// (making a tracker recording's paddle) held the caller's request open.
 //
 // Instead the request writes a small job file and answers at once:
 //
@@ -18,7 +17,7 @@
 //
 // Jobs must be safe to run twice: S3 can announce a file twice, and the sweep
 // can meet a job the announcement is still running. Every kind here is
-// (paddles have fixed ids or are de-duplicated; erasure deletes what it finds).
+// (a tracker recording's paddle has a fixed id; erasure deletes what it finds).
 //
 // Local dev has no S3 events, so a new job runs in this process straight away;
 // tests run jobs themselves (runJob / sweepJobs).
@@ -26,7 +25,6 @@ import { nanoid } from 'nanoid'
 import { getJson, putJson, listKeys, deleteObject } from '@/lib/storage'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { recordingReport } from '@/lib/recording-report'
-import { processStravaEvent, type StravaEvent } from '@/lib/strava-webhook'
 import { eraseAccountAgain, type EraseAgainPayload } from '@/lib/account-erasure'
 
 export const MAX_ATTEMPTS = 5
@@ -39,7 +37,6 @@ const SWEEP_BUDGET_MS = 20_000
 
 type Handlers = {
   'tracker-paddle': { userId: string; deviceId: string; deviceSessionId: string }
-  'strava-event': StravaEvent
   'erase-account-again': EraseAgainPayload
 }
 export type JobKind = keyof Handlers
@@ -54,12 +51,11 @@ const HANDLERS: { [K in JobKind]: (p: Handlers[K]) => Promise<void> } = {
     await recordingReport(userId, deviceId, deviceSessionId).catch(err => console.error('[recording-report] warm failed', err))
     console.log(`[tracker-paddle] ${deviceId}/${deviceSessionId}: ${r.status}${'paddleId' in r ? ` ${r.paddleId}` : ` (${r.reason})`}`)
   },
-  'strava-event': processStravaEvent,
   // A deleted account's second pass, ~90 s after DELETE /api/account (#814).
   'erase-account-again': eraseAccountAgain,
 }
 
-const KEY = /^jobs\/(tracker-paddle|strava-event|erase-account-again)\/[\w-]{1,40}\.json$/
+const KEY = /^jobs\/(tracker-paddle|erase-account-again)\/[\w-]{1,40}\.json$/
 const stateKey = (key: string) => key.replace(/^jobs\//, 'jobs-state/')
 const failedKey = (key: string) => key.replace(/^jobs\//, 'jobs-failed/')
 const kickHere = () => process.env.USE_LOCAL_STORAGE === 'true' && !process.env.VITEST

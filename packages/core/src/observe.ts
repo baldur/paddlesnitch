@@ -62,7 +62,7 @@ export function apiCallEmf(call: ApiCall, client?: Client, timestamp: number = D
 // An action is something a user does that we care about succeeding. `rejected` is the
 // user's input being refused (a wrong password, a trace that misses the
 // start line): expected, not counted. `fail` means we let them down.
-export type Action = 'sign_in' | 'upload' | 'analyse' | 'device_sync' | 'strava_import'
+export type Action = 'sign_in' | 'upload' | 'analyse' | 'device_sync'
 export type Outcome = 'ok' | 'rejected' | 'fail'
 
 export function actionEmf(action: Action, outcome: Outcome, opts: { client?: Client; reason?: string } = {}, timestamp: number = Date.now()) {

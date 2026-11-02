@@ -1,6 +1,6 @@
 // The shared "analyse a resolved track and save it to the library" core, used by
-// every way a paddle arrives: the analyse route (file / Strava / trial), the
-// Strava auto-import webhook and tracker recordings. It owns everything after
+// every way a paddle arrives: the analyse route (file / trial / tracker
+// recording) and tracker recordings arriving by themselves. It owns everything after
 // the track is resolved: real conditions, the deterministic analysis, duplicate
 // detection and the save.
 //
@@ -9,8 +9,8 @@
 // (writePendingSummary, below), which then folds the paddle into the athlete
 // profile. On our Lambda, work scheduled with after() still holds the response
 // until it finishes (performance.md), so an AI call here kept someone waiting:
-// the person adding a paddle (5-15 s), Strava's webhook (it wants ~2 s), or a
-// tracker inside its 20 s request timeout.
+// the person adding a paddle (5-15 s), or a tracker inside its 20 s request
+// timeout.
 import { nanoid } from 'nanoid'
 import { logAction } from '@paddlesnitch/core/observe'
 import { getWeatherAt } from '@paddlesnitch/timing/weather'
@@ -127,6 +127,7 @@ export async function writePendingSummary(userId: string, id: string, opts: { no
   try { prior = (await listSessionSummaries(userId)).filter(s => s.id !== id) }
   catch (err) { console.error('[analyse] history read failed', err) }
   const result: AnalysisResult = { ...before.result }
+  // Only paddles imported from Strava (before it was removed, 2026-11) carry a sport.
   const sport = before.source.type === 'strava' ? before.source.sport : undefined
   await narrate(userId, result, before.paddledAt, prior, now, sport)
 

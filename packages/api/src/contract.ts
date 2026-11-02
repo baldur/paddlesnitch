@@ -178,10 +178,9 @@ const SignupConfirm = named('SignupConfirm', z.object({ email: z.string(), code:
 const RefreshToken = named('RefreshToken', z.object({ refreshToken: z.string() }))
 const WebPageFor = named('WebPageFor', z.object({ next: z.string() }))
 export const WebPage = named('WebPage', z.object({ url: z.string() }))
-const StravaAppToken = named('StravaAppToken', z.object({ code: z.string(), verifier: z.string() }))
 /** The code from com.paddlesnitch.app:/signin/google?code= and the verifier behind the challenge. */
 const GoogleAppToken = named('GoogleAppToken', z.object({ code: z.string(), verifier: z.string() }))
-/** Which sign-in buttons to show besides email. */
+/** Which sign-in buttons to show besides email. `strava` is always false; kept so older app builds still decode. */
 export const SignInOptions = named('SignInOptions', z.object({ google: z.boolean(), strava: z.boolean() }))
 // Forgot password: ask for a code by email, then set a new password with it.
 const ResetRequest = named('ResetRequest', z.object({
@@ -368,21 +367,6 @@ export const RecordingMotion = named('RecordingMotion', z.object({
 /** Which tracker: `source.deviceId` from paddles.get. The recording is `source.deviceSessionId`, in the path. */
 const RecordingOf = named('RecordingOf', z.object({ deviceId: z.string() }))
 
-// Strava for a signed-in account: connected or not, auto-import, disconnect,
-// and bringing in older paddles one at a time. Connecting itself is a browser
-// page (README, "Strava, signed in").
-/** `athlete` and `autoImport` only when connected. */
-export const StravaStatus = named('StravaStatus', z.object({
-  connected: z.boolean(),
-  athlete: z.object({ id: z.int(), name: z.string() }).optional(),
-  autoImport: z.boolean().optional(),
-}))
-const StravaAutoImportSet = named('StravaAutoImportSet', z.object({ enabled: z.boolean() }))
-/** A PKCE S256 challenge, as for Strava sign-in. */
-const StravaConnectStart = named('StravaConnectStart', z.object({ challenge: z.string() }))
-/** The code from com.paddlesnitch.app:/account/strava?code= and the verifier behind the challenge. */
-const StravaConnectFinish = named('StravaConnectFinish', z.object({ code: z.string(), verifier: z.string() }))
-export const StravaAutoImport = named('StravaAutoImport', z.object({ autoImport: z.boolean() }))
 
 /**
  * `input: null` is a multipart upload (`file`) on POST (except a phone's
@@ -403,7 +387,6 @@ export const restRoutes = {
   'POST /att/api/auth/otp-verify': { auth: 'public', input: OtpVerify, output: SignIn, errors: [400, 500] },
   'POST /att/api/auth/signup': { auth: 'public', input: Signup, output: CodeSent, errors: [400, 409, 422, 429, 500] },
   'POST /att/api/auth/signup/confirm': { auth: 'public', input: SignupConfirm, output: SignIn, errors: [400, 422, 500] },
-  'POST /att/api/auth/strava/app-token': { auth: 'public', input: StravaAppToken, output: SignIn, errors: [400, 401, 500] },
   'GET /att/api/auth/options': { auth: 'public', input: null, output: SignInOptions, errors: [] },
   'POST /att/api/auth/google/app-token': { auth: 'public', input: GoogleAppToken, output: SignIn, errors: [400, 401] },
   'POST /att/api/auth/web-code': { auth: 'user', input: WebPageFor, output: WebPage, errors: [401] },
@@ -432,33 +415,7 @@ export const restRoutes = {
   'GET /api/account/devices/{deviceId}/sessions': { auth: 'user', input: HeldPartsFor, output: HeldParts, errors: [401, 404] },
   'GET /api/account/devices/sessions': { auth: 'user', input: null, output: RecordingList, errors: [401] },
   'GET /api/account/devices/sessions/{sessionId}': { auth: 'user', input: RecordingOf, output: RecordingMotion, errors: [401, 404] },
-  'GET /att/api/strava/status': { auth: 'user', input: null, output: StravaStatus, errors: [401] },
-  'POST /att/api/strava/app-connect': { auth: 'user', input: StravaConnectStart, output: WebPage, errors: [400, 401, 403, 503] },
-  'POST /att/api/strava/app-connect/finish': { auth: 'user', input: StravaConnectFinish, output: StravaStatus, errors: [400, 401, 403, 409] },
-  'POST /att/api/strava/auto-import': { auth: 'user', input: StravaAutoImportSet, output: StravaAutoImport, errors: [400, 401] },
-  'POST /att/api/strava/disconnect': { auth: 'user', input: null, output: Ok, errors: [401] },
 } satisfies Record<string, Rest>
-
-// Older Strava paddles (sources.stravaHistory → importStravaPaddle per paddle → stravaHistoryDone).
-// One object with a `status` rather than a union, so the apps decode it as one type.
-const HistorySpan = named('HistorySpan', z.enum(['first', 'months3', 'year', 'all']))
-const StravaHistoryFor = named('StravaHistoryFor', z.object({ since: HistorySpan }))
-const HistoryPaddle = named('HistoryPaddle', z.object({ id: z.int(), name: z.string(), sport: z.string(), startDate: timestamp(), distanceMetres: z.number() }))
-/** `ok` with the paddles still to bring in (oldest first) and how many are in already; `rate_limited`: wait for Strava's next quarter hour. */
-export const StravaHistory = named('StravaHistory', z.object({
-  status: z.enum(['ok', 'not_connected', 'rate_limited']),
-  toImport: z.array(HistoryPaddle).optional(),
-  alreadyIn: z.int().optional(),
-  // The automatic first month already happened, so don't offer it again.
-  firstImportDone: z.boolean(),
-}))
-const StravaPaddleFor = named('StravaPaddleFor', z.object({ id: z.int(), sport: z.string(), startDate: timestamp() }))
-/** `imported` or `duplicate` with the paddle's id (`sessionId`), else `skipped` and why; `rate_limited`: wait, then ask again. */
-export const StravaImport = named('StravaImport', z.object({
-  status: z.enum(['imported', 'duplicate', 'skipped']),
-  sessionId: z.string().optional(),
-  reason: z.enum(['no_tokens', 'not_water_sport', 'no_track', 'rate_limited']).optional(),
-}))
 
 type Procedure = { kind: 'query' | 'mutation'; auth: 'public' | 'user'; input: z.ZodType | null; output: z.ZodType }
 
@@ -469,10 +426,6 @@ export const contractProcedures = {
   'paddles.get': { kind: 'query', auth: 'user', input: ById, output: AnalysisSession },
   // Writes the coach summary of a paddle that shows insightPending; the paddle page asks while it says "Writing your summary…".
   'paddles.writeSummary': { kind: 'mutation', auth: 'user', input: ById, output: AnalysisSession },
-  'sources.stravaHistory': { kind: 'query', auth: 'user', input: StravaHistoryFor, output: StravaHistory },
-  'sources.importStravaPaddle': { kind: 'mutation', auth: 'user', input: StravaPaddleFor, output: StravaImport },
-  // Marks the history import done (sets firstImportDone).
-  'sources.stravaHistoryDone': { kind: 'mutation', auth: 'user', input: null, output: Ok },
 } satisfies Record<string, Procedure>
 
 // ---- Drift checks: a schema and its procedure must accept each other's types.
@@ -486,27 +439,9 @@ check<Same<z.infer<typeof AnalysisSession>, Out['paddles']['get']>>()
 check<Same<z.infer<typeof ById>, In['paddles']['get']>>()
 check<Same<z.infer<typeof AnalysisSession>, Out['paddles']['writeSummary']>>()
 check<Same<z.infer<typeof ById>, In['paddles']['writeSummary']>>()
-// The Strava answers are unions in the code and one object here: every answer
-// must fit the schema, and the schema may name only fields the code sends.
-type Fits<A, B> = [A] extends [B] ? true : false
-type KeysOf<T> = T extends unknown ? keyof T : never
-check<Fits<Out['sources']['stravaHistory'], z.infer<typeof StravaHistory>>>()
-check<Same<keyof z.infer<typeof StravaHistory>, KeysOf<Out['sources']['stravaHistory']>>>()
-type HistoryItem = NonNullable<Extract<Out['sources']['stravaHistory'], { toImport: unknown }>['toImport']>[number]
-check<Same<keyof z.infer<typeof HistoryPaddle>, keyof HistoryItem>>()
-check<Fits<Out['sources']['importStravaPaddle'], z.infer<typeof StravaImport>>>()
-check<Same<keyof z.infer<typeof StravaImport>, KeysOf<Out['sources']['importStravaPaddle']>>>()
-check<Same<z.infer<typeof StravaHistoryFor>, In['sources']['stravaHistory']>>()
-check<Same<z.infer<typeof StravaPaddleFor>, In['sources']['importStravaPaddle']>>()
-check<Same<Out['sources']['stravaHistoryDone'], z.infer<typeof Ok>>>()
 // Boat motion is exactly what the timing package works out.
 check<Same<z.infer<typeof BoatMotion>, AttitudeReport>>()
 check<Same<z.infer<typeof MotionStrokeRate>, CadenceReport>>()
-// And no status or reason the code never sends (Fits alone lets the schema list extra ones).
-type ImportOut = Out['sources']['importStravaPaddle']
-check<Same<z.infer<typeof StravaHistory>['status'], Out['sources']['stravaHistory']['status']>>()
-check<Same<z.infer<typeof StravaImport>['status'], ImportOut['status']>>()
-check<Same<NonNullable<z.infer<typeof StravaImport>['reason']>, Extract<ImportOut, { reason: unknown }>['reason']>>()
 
 // ---- What `pnpm mobile:contract` writes to mobile/contract/api/ ----
 

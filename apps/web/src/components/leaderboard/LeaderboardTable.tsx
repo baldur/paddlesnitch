@@ -10,8 +10,6 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Badge, EmptyState } from '@paddlesnitch/ui/Card'
 import { eyebrowClass } from '@paddlesnitch/ui/Layout'
 import { selectClass } from '@paddlesnitch/ui/Form'
-import PoweredByStrava from '@/components/strava/PoweredByStrava'
-import ViewOnStrava from '@/components/strava/ViewOnStrava'
 
 // Compass point for a wind direction in degrees (meteorological "from"). #106.
 function compass(deg: number): string {
@@ -136,12 +134,11 @@ export default function LeaderboardTable({
               const hasSplits = entry.splits.length > 0
               // The row expands when there's ANYTHING to show — not just splits.
               // Short (<500 m) entries have no splits but can still carry crew,
-              // conditions (#106), a Strava link (#107), or a runCount note.
+              // conditions (#106), or a runCount note.
               const hasDetail =
                 hasSplits ||
                 (entry.crew?.length ?? 0) > 1 ||
                 !!entry.conditions ||
-                entry.stravaActivityId != null ||
                 entry.avgStrokeRate != null ||
                 (entry.runCount ?? 0) > 1
               const isOpen = expanded === entry.entryId
@@ -187,11 +184,6 @@ export default function LeaderboardTable({
                         <div className="mb-3 text-sm">
                           <Link href={`/att/entries/${entry.entryId}`} className="tt-link">View entry</Link>
                         </div>
-                        {entry.stravaActivityId != null && (
-                          <div className="mb-3 text-sm text-muted">
-                            Imported from Strava · <ViewOnStrava activityId={entry.stravaActivityId} className="tt-link" />
-                          </div>
-                        )}
                         {entry.runCount && entry.runCount > 1 && (
                           <div className="mb-3 text-sm text-muted">
                             Best of {entry.runCount} runs in this upload — the fastest is shown.
@@ -300,12 +292,6 @@ export default function LeaderboardTable({
             })}
           </tbody>
         </table>
-        {entries.some(e => e.stravaActivityId != null) && (
-          // Attribution required wherever we display Strava-imported data (#107).
-          <div className="mt-3 flex justify-end">
-            <PoweredByStrava />
-          </div>
-        )}
       </div>
     </div>
   )

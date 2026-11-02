@@ -10,7 +10,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('isPublicHttpsUrl', () => {
   it('allows ordinary https links', () => {
     expect(isPublicHttpsUrl('https://example.com/ride.gpx')).toBe(true)
-    expect(isPublicHttpsUrl('https://www.strava.com/activities/1/export_gpx')).toBe(true)
+    expect(isPublicHttpsUrl('https://files.example.org/activities/1/export.gpx')).toBe(true)
   })
   it.each([
     'http://example.com/ride.gpx',

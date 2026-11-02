@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server'
 // raw Function URL (xxxx.lambda-url.eu-west-1.on.aws), not paddlesnitch.com.
 // Any redirect built with `new URL(..., req.url)` would therefore send the
 // user to the function URL — visible in their address bar and unstable.
-// For server-built absolute URLs (Strava redirect_uri, OAuth callbacks,
+// For server-built absolute URLs (OAuth redirect_uri and callbacks,
 // confirmation emails, etc.) always derive the base from this helper.
 export function canonicalBaseUrl(req: NextRequest): string {
   const fromEnv = process.env.NEXT_PUBLIC_BASE_URL

@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 //   - every paddle, the coach profile, and the share link of any shared paddle
 //   - every river plan and the link of any shared plan
 //   - every tracker they own (signed out) and every recording they uploaded
-//   - their Strava link (deauthorised, and the athlete -> account index)
+//   - a Strava athlete -> account index left from before Strava was removed
 //   - their place in groups; a group they own passes to an admin or member
 //   - the private contact records behind issue reports they filed
 //   - a beta tester application made with their account email
@@ -44,7 +44,8 @@ export async function GET(req: Request) {
 //
 // Deleting needs a real sign-in from the last 10 minutes (owner, 2026-10-25):
 // a stolen or left-open session must not be able to erase everything. Not a
-// password prompt, because accounts made through Strava have none.
+// password prompt, because accounts made with Google (or, before 2026-11,
+// Strava) have none.
 export async function DELETE(req: Request) {
   // Even a deleted account's token: asking again after the first answer was
   // lost must succeed. It answers done without running again, so it never
@@ -79,9 +80,9 @@ export async function DELETE(req: Request) {
   await enqueueJob('erase-account-again', { userId: user.id },
     { notBefore: new Date(Date.now() + ERASE_AGAIN_AFTER_MS) })
 
-  // 1–6. Everything keyed by the account ID. A Strava sign-in account may have
-  //      no tokens left, but its synthetic email still names the athlete.
-  const synthetic = /^strava-(\d+)@noreply\.paddlesnitch\.com$/.exec(user.email)
+  // 1–6. Everything keyed by the account ID. An account made with Strava still
+  //      names its athlete in its placeholder email.
+  const synthetic = /^strava-(\d+)@noreply\.paddlesnitch\.com$/i.exec(user.email)
   await eraseAccountData(user.id, { athleteIds: synthetic ? [Number(synthetic[1])] : [] })
   // Keyed by email: only an address the account has proved is theirs (#713).
   // Not in the second pass: the form is open to anyone, so by then a record

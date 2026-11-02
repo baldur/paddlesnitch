@@ -118,7 +118,7 @@ Claude Code loads this file in every session, and a nested `CLAUDE.md` when the 
 | File | Covers |
 |---|---|
 | [`apps/web/CLAUDE.md`](apps/web/CLAUDE.md) | The site: routes, sign-in and sessions, Trials (courses, trials, entries, groups, profiles, Terms, permissions), Paddles, local dev and seed data, testing (vitest + Playwright), analytics, performance, jobs, telemetry, payload sizes, campaigns, maps, and the tracker-server rules |
-| [`packages/core/CLAUDE.md`](packages/core/CLAUDE.md) | Platform primitives (storage, auth, Cognito, Strava, types) and buddies (`canViewPaddle`) |
+| [`packages/core/CLAUDE.md`](packages/core/CLAUDE.md) | Platform primitives (storage, auth, Cognito, types) and buddies (`canViewPaddle`) |
 | [`packages/timing/CLAUDE.md`](packages/timing/CLAUDE.md) | GPS files and parsers, line crossing and splits, tracker data diagnostics, stroke rate, boat attitude |
 | [`packages/analysis/CLAUDE.md`](packages/analysis/CLAUDE.md) | Rules for the Paddles domain package (engine, store, summary); the rest is in `apps/web` |
 | [`packages/api/CLAUDE.md`](packages/api/CLAUDE.md) | Rules for the tRPC router (mobile contract, projections, telemetry) |
@@ -144,7 +144,7 @@ Claude Code loads this file in every session, and a nested `CLAUDE.md` when the 
 apps/
   web/        (pkg "web")             — the whole web app: /att (Trials) + /paddles (Paddles, formerly /analyse) + /profile + /api/trpc. Next, NO basePath; /att and /paddles are baked into src/app/att/ and src/app/paddles/. The header tabs are TRIALS and PADDLES. Old /analyse URLs 301-redirect to /paddles (next.config redirects). The Analyse *domain package* stays @paddlesnitch/analysis and the upload route stays /paddles/api/analyse — only the user-facing section prefix moved.
 packages/
-  core/       @paddlesnitch/core      — platform primitives (auth, storage, cognito, strava, url, shared types, paddles/paddle-store)
+  core/       @paddlesnitch/core      — platform primitives (auth, storage, cognito, url, shared types, paddles/paddle-store)
   timing/     @paddlesnitch/timing    — GPS/track domain (geo incl. projectRoute, parsers, weather/flow/conditions, track types)
   analysis/   @paddlesnitch/analysis  — the Analyse domain/service layer (analysis engine, analysis-store, similar, trials, device-sessions, llm, share-card, history-stats, athlete-profile)
   api/        @paddlesnitch/api       — the shared, typed tRPC router (over core/timing/analysis); consumed by web (SSR + client) and, later, mobile
@@ -185,7 +185,7 @@ Shipped and planned specs are in `docs/features/`, indexed in [`docs/features/RE
 | Maps | Leaflet + react-leaflet v5 | Free, no API key |
 | Map drawing | Custom click-to-place | 2 clicks per line; no Leaflet.draw dependency |
 | Auth (local dev) | cognito-local emulator on port 9229 | Same Cognito SDK calls as prod — only the endpoint URL differs |
-| Auth (production) | AWS Cognito User Pool `paddlesnitch-users` (eu-west-1_BHyKJ0toh) | Email/password, email code (OTP, via SES), Sign in with Strava and Sign in with Google (Cognito hosted sign-in, #697; button behind the `GOOGLE_SIGNIN` variable); magic link is disabled; Apple not wired |
+| Auth (production) | AWS Cognito User Pool `paddlesnitch-users` (eu-west-1_BHyKJ0toh) | Email/password, email code (OTP, via SES) and Sign in with Google (Cognito hosted sign-in, #697; button behind the `GOOGLE_SIGNIN` variable); magic link is disabled; Apple not wired |
 | Storage (local dev) | Filesystem under `apps/web/.local-data/` | `@paddlesnitch/core/storage` (app shim `src/lib/storage.ts`) |
 | Storage (production) | Amazon S3 | Same interface, different backing |
 | API | tRPC (`/api/trpc`, `packages/api`) for JSON; Next route handlers for uploads, auth, account, devices | Same handlers in local dev and prod |

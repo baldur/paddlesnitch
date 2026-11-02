@@ -8,14 +8,14 @@ describe('parseFaq', () => {
       'No — upload your whole session.',
       '',
       '## What formats can I upload?',
-      'GPX, FIT, CSV, or a direct Strava import.',
+      'GPX, FIT, CSV, or a tracker recording.',
       '',
     ].join('\n')
 
     const faq = parseFaq(md)
     expect(faq).toEqual([
       { question: 'Do I need to trim my GPS file?', answer: 'No — upload your whole session.' },
-      { question: 'What formats can I upload?', answer: 'GPX, FIT, CSV, or a direct Strava import.' },
+      { question: 'What formats can I upload?', answer: 'GPX, FIT, CSV, or a tracker recording.' },
     ])
   })
 

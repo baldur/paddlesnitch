@@ -63,8 +63,8 @@ export default async function ProfilePage({
 
   // Your paddling: from Paddles, so a tracker tester without races doesn't
   // see an empty page. Paddles are private, so it's computed for the owner
-  // only, whatever the profile's setting. One outing recorded twice (tracker
-  // and Strava) counts once.
+  // only, whatever the profile's setting. One outing recorded twice (say, a
+  // tracker and a watch file) counts once.
   const ownPaddles = isOwner ? groupSameOuting(await listSessionSummaries(userId).catch(() => [])).map(g => g.lead) : []
   const paddling = ownPaddles.length ? paddlingSummary(ownPaddles, new Date()) : null
 

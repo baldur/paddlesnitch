@@ -9,8 +9,8 @@ import { createWebCode, redeemWebCode, markLinkSession, FROM_LINK_COOKIE } from 
 //
 // Pages only, never a server route: a link anyone can make (from their own
 // app) signs the browser that opens it in as THEM, so it must not be able to
-// start anything by itself, such as connecting the opener's Strava to their
-// account (security review, C5). A route as `next` goes to the home page.
+// start anything by itself, such as connecting the opener's Google login to
+// their account (security review, C5). A route as `next` goes to the home page.
 // Checked on the path as the browser will resolve it (`/att/./api`, `%2e`,
 // `/x/../att/api` and backslashes all normalise), and that resolved path is
 // what we send on.
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(new URL(next, base))
   setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
   // Marks this browser as signed in by a link: whoever opened it may not be the
-  // account's owner, so connecting Strava refuses here (it's done in the app).
+  // account's owner, so connecting Google refuses here.
   res.cookies.set(FROM_LINK_COOKIE, account.userId, {
     httpOnly: true, sameSite: 'lax', path: '/', maxAge: 24 * 60 * 60, secure: process.env.NODE_ENV === 'production',
   })

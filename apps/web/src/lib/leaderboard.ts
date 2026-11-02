@@ -15,14 +15,6 @@ type StoredEntry = {
   conditions?: EntryConditions
 }
 
-// Strava imports save their trace as `strava-{activityId}.json` (see the upload
-// route). Recover that id so the leaderboard can link "View on Strava" back to
-// the source activity (#107). Returns undefined for file/URL uploads.
-export function stravaActivityIdFromFilename(filename: string): number | undefined {
-  const m = /^strava-(\d+)\.json$/.exec(filename)
-  return m ? Number(m[1]) : undefined
-}
-
 // Reads every entry under the trial and writes a fresh leaderboard.json.
 // Used by the upload flow (after a new entry) and the account-delete flow
 // (after pulling someone's entries out).
@@ -46,9 +38,6 @@ export async function rebuildLeaderboard(trialId: string): Promise<void> {
       splits: e.result.splits,
       ...(e.result.runCount && e.result.runCount > 1 ? { runCount: e.result.runCount } : {}),
       ...(e.result.avgStrokeRate != null ? { avgStrokeRate: e.result.avgStrokeRate } : {}),
-      ...(stravaActivityIdFromFilename(e.filename) !== undefined
-        ? { stravaActivityId: stravaActivityIdFromFilename(e.filename) }
-        : {}),
       ...(e.conditions ? { conditions: e.conditions } : {}),
     }))
     .sort((a, b) => a.totalElapsedSeconds - b.totalElapsedSeconds)

@@ -7,7 +7,6 @@
 // user's OWN entries are ever listed or loaded (userId is in the key), so this
 // exposes nothing another paddler couldn't already download themselves.
 import { getJson, getObject, listKeys } from '@paddlesnitch/core/storage'
-import { streamsToTrack } from '@paddlesnitch/core/strava'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import type { TrackPoint } from '@paddlesnitch/timing/types'
 import { listUserEntryResultKeys } from '@paddlesnitch/core/catalogue'
@@ -82,7 +81,8 @@ export async function listUserTrialEntries(userId: string): Promise<TrialEntrySu
 
 // The full parsed track for one of the user's entries, or null if the entry
 // (or its raw trace) can't be found. Handles both raw uploads (parseTrace) and
-// Strava-import snapshots (trace.json → streamsToTrack).
+// the trace.json snapshots of entries imported from Strava before it was
+// removed (2026-11): { latlng, time (s from start), startDate }.
 export async function loadTrialEntryTrack(
   userId: string,
   trialId: string,
@@ -96,13 +96,17 @@ export async function loadTrialEntryTrack(
   if (!buf) return null
 
   if (traceKey.endsWith('.json')) {
-    // Strava-import snapshot { latlng, time, startDate }.
     try {
       const snap = JSON.parse(buf.toString()) as {
         latlng?: [number, number][]; time?: number[]; startDate?: string
       }
       if (!snap.latlng || !snap.time || !snap.startDate) return null
-      const track = streamsToTrack(snap.latlng, snap.time, snap.startDate)
+      const start = new Date(snap.startDate).getTime()
+      const n = Math.min(snap.latlng.length, snap.time.length)
+      const track: TrackPoint[] = []
+      for (let i = 0; i < n; i++) {
+        track.push({ lat: snap.latlng[i][0], lng: snap.latlng[i][1], timestamp: new Date(start + snap.time[i] * 1000) })
+      }
       return track.length >= 2 ? track : null
     } catch {
       return null

@@ -18,7 +18,7 @@ firmware, the phone apps and the games, which live outside it.
 
 ```
 apps/web            the whole web app — /att, /paddles, /profile, /api/trpc
-packages/core       auth, storage, cognito, strava, shared types
+packages/core       auth, storage, cognito, shared types
 packages/timing     GPS domain — geo, parsers, weather/flow, stroke rate, attitude
 packages/analysis   the analysis engine, store, LLM, share cards
 packages/api        the typed tRPC router the website and the phone apps share

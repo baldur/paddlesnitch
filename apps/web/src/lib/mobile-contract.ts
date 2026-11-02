@@ -3,7 +3,6 @@
 // @paddlesnitch/api/contract and the design tokens from @paddlesnitch/ui's
 // tokens.css. Pure, so the contract test can compare it with what's committed.
 import { apiContractFiles } from '@paddlesnitch/api/contract'
-import { STRAVA_CONNECT_RESULTS } from './strava-connect-results'
 import { CURRENT_TOS_VERSION } from './types'
 import { fmtDur, fmtClock, split500, roundStrokes } from '@paddlesnitch/analysis/analysis'
 import { fmtWeekday, fmtMonth, compassPoint, fmtDayTime } from '@paddlesnitch/core/format'
@@ -113,8 +112,6 @@ export function mobileContractFiles(tokensCss: string): Record<string, string> {
   // new account agrees to (sign-up refuses any other with a 422).
   files['api/constants.json'] = JSON.stringify({
     tosVersion: CURRENT_TOS_VERSION,
-    // How connecting Strava can end, with the website's words for each.
-    stravaConnectResults: Object.fromEntries(Object.entries(STRAVA_CONNECT_RESULTS).map(([k, v]) => [k, v.text])),
   }, null, 2) + '\n'
   files['tokens/tokens.json'] = JSON.stringify(tokensFromCss(tokensCss), null, 2) + '\n'
   files['format/format.json'] = JSON.stringify(formatCases(), null, 2) + '\n'

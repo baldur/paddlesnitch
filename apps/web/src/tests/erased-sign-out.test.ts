@@ -11,7 +11,6 @@ import { createHash } from 'crypto'
 import { makeDataDir, cleanDataDir, makeUser, type TestUser } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-vi.mock('@paddlesnitch/core/strava', async (orig) => ({ ...(await orig<typeof import('@paddlesnitch/core/strava')>()), revoke: vi.fn() }))
 
 import { cookies } from 'next/headers'
 import { POST as trpcPost } from '@/app/api/trpc/[trpc]/route'

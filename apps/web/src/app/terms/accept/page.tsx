@@ -8,7 +8,7 @@ import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
 
 // Accept the current Terms, then carry on. Reached after signing in when the
-// account hasn't accepted them: an email-code or Strava sign-up (only the
+// account hasn't accepted them: an email-code or Google sign-up (only the
 // password sign-up form had the Terms box), or an account from before this
 // version (audit decision 2026-09).
 
