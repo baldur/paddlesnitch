@@ -45,13 +45,13 @@ endif
 # A test that hangs fails after 6 minutes (with a spindump in the results)
 # instead of running into CI's job timeout. The slowest passes in about 3.5 minutes on CI.
 # AutoFill Passwords off on the test simulator: otherwise iOS 26 offers
-# "Save Password?" after every sign-in, late and over the next screen.
-# `boot` returns at once; the write lands, and xcodebuild waits for the rest.
+# "Save Password?" after every sign-in, late and over the next screen. A
+# failed write doesn't stop the run: the helpers still decline the sheet,
+# and SavePasswordTests fails on iOS 26 if it comes.
 test-app: project
 	@case "$(SHARD)" in ""|1|2) ;; *) echo "SHARD is 1, 2 or unset"; exit 1;; esac
 	set -o pipefail && udid=$$(scripts/simulator.sh $(IOS) $(TEST_SIM)) \
-	  && { xcrun simctl boot "$$udid" 2>/dev/null || true; } \
-	  && xcrun simctl spawn "$$udid" defaults write com.apple.WebUI AutoFillPasswords -bool false \
+	  && { scripts/autofill-off.sh "$$udid" || echo "warning: couldn't turn AutoFill off on $$udid"; } \
 	  && xcodebuild test \
 	  -project Paddlesnitch.xcodeproj -scheme Paddlesnitch \
 	  -destination "platform=iOS Simulator,id=$$udid" \
