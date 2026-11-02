@@ -220,8 +220,8 @@ isn't obvious from the code.
   Booting and erasing the simulator first (#845, a draft) cost up to
   4 min a job and didn't stop it. So `setUp` launches once more after a
   launch timeout, and only then (`launchRetryingOnce`, lead's choice).
-  Each retry prints "warning: Launch timed out; launching again": grep
-  the CI logs for it. A second timeout or any other failure still fails.
+  Each retry prints "warning: Launch timed out in <test>; launching
+  again": grep the CI logs for it, leaving out LaunchingTests' own. A second timeout or any other failure still fails.
   Read the xcresult's activities for which launch failed: the summary
   names the test, not the step.
 - A CI log where every suite says "0 failures" and then `** TEST FAILED **`

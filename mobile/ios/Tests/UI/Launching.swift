@@ -45,8 +45,9 @@ extension XCTestCase {
         XCTExpectFailure("The simulator was too slow to start the app", options: options) { launch() }
         continueAfterFailure = stopOnFailure
         guard timedOut.isSet else { return }
-        // As a warning, or xcbeautify drops it. CI logs are counted by this.
-        print("\(#fileID):\(#line): warning: Launch timed out; launching again")
+        // As a warning, or xcbeautify drops it. CI logs are counted by this,
+        // leaving out LaunchingTests' own.
+        print("\(#fileID):\(#line): warning: Launch timed out in \(name); launching again")
         XCTContext.runActivity(named: "Launch again after a launch timeout") { _ in launch() }
     }
 }
