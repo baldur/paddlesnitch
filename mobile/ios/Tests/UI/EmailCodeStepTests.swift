@@ -36,9 +36,22 @@ final class EmailCodeStepTests: AppTestCase {
 
     func testAWrongCodeSaysSo() {
         startAccount()
-        typeWhenFocused("000000", into: app.textFields["code-field"])
+        // Not "000000": that's the placeholder, so it can't be read back.
+        typeWhenFocused("999999", into: app.textFields["code-field"])
         tapWhenClear(app.buttons["sign-in-submit"])
         XCTAssertTrue(text(containing: "That code is not valid.").appears(timeout: 10))
+    }
+
+    /// A field that doesn't read back as the code is cleared and typed
+    /// again, as after keys taken by a late "Save Password?" (CI on #840).
+    /// Stray digits make it not match here: the system's prompt can't be
+    /// faked, so the prompt itself and lost keys are proved only by CI.
+    func testACodeThatDidNotAllGoInIsTypedAgain() {
+        startAccount()
+        let field = app.textFields["code-field"]
+        typeWhenFocused("12", into: field)
+        typeWhenFocused("999999", into: field)
+        XCTAssertEqual(typedText(in: field), "999999")
     }
 
     func testChangeEmailGoesBackToCreateAccount() {
