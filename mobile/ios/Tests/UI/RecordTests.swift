@@ -29,6 +29,7 @@ final class RecordTests: AppTestCase {
         XCTAssertTrue(text(containing: "—").exists)
         // The simulator has no motion sensors: GPS only, and it says so.
         XCTAssertTrue(element("record-no-motion").exists)
+        XCTAssertFalse(element("record-motion").exists, "and no motion line: the core would read as a fault")
         try audit()
 
         let stop = element("record-stop")

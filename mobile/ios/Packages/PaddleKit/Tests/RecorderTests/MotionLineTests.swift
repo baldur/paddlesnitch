@@ -4,7 +4,7 @@ import Recorder
 import Testing
 
 /// The status line's words under the trace, when they're announced, and
-/// where the trace's samples go (mobile/contract/README.md § Motion line).
+/// where the trace's samples go (mobile/contract/README.md § Motion line (live trace)).
 struct MotionLineTests {
     @Test func theWordsForEachStatus() {
         #expect(MotionLine(.starting).text == "Starting motion sensor")
@@ -34,8 +34,9 @@ struct MotionLineTests {
         #expect(MotionLine.announcement(before: nil, now: nil) == nil)
     }
 
-    /// Newest at the right edge, 10 s back at the left; 0 in the middle and
-    /// ±scale half the line's width in from the edges.
+    /// Newest at the right, 10 s back at the left, 0 in the middle and
+    /// ±scale at the top and bottom, all half the line's width in from the
+    /// edges.
     @Test func whereEachSampleGoes() {
         let trace = MotionTrace(
             status: .motion, axis: 1, scaleDps: 20,
@@ -43,12 +44,12 @@ struct MotionLineTests {
                 .init(agoMilliseconds: 10_000, dps: 20), .init(agoMilliseconds: 5_000, dps: 0),
                 .init(agoMilliseconds: 0, dps: -20),
             ])
-        let points = trace.points(in: CGSize(width: 300, height: 48), inset: 1)
-        #expect(points == [CGPoint(x: 0, y: 1), CGPoint(x: 150, y: 24), CGPoint(x: 300, y: 47)])
+        let points = trace.points(in: CGSize(width: 302, height: 48), inset: 1)
+        #expect(points == [CGPoint(x: 1, y: 1), CGPoint(x: 151, y: 24), CGPoint(x: 301, y: 47)])
         #expect(MotionTrace(status: .starting).points(in: CGSize(width: 300, height: 48), inset: 1).isEmpty)
     }
 
-    @Test func theCoreTracesOnlyARecordingWithMotion() {
+    @Test func beforeAnySampleItIsStartingOnTheFloor() {
         let recorder = PhoneRecorder(platform: .iPhone, motion: true, sink: MemorySink())
         #expect(recorder.trace == MotionTrace(status: .starting, axis: nil, scaleDps: 5), "before any sample")
     }

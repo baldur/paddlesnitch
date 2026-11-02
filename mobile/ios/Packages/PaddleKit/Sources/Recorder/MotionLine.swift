@@ -1,7 +1,7 @@
 import Foundation
 
 /// The status line under the motion trace, in the words agreed for both apps
-/// (mobile/contract/README.md § Motion line).
+/// (mobile/contract/README.md § Motion line (live trace)).
 public struct MotionLine: Equatable, Sendable {
     public static let noSamples = "Couldn’t read the motion sensor. Stroke rate pauses until it’s back."
     public static let back = "Motion sensor back"

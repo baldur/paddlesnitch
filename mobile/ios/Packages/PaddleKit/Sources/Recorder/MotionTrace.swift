@@ -64,15 +64,16 @@ public struct MotionTrace: Sendable, Equatable {
         samples = zip(ago, dps).map { Sample(agoMilliseconds: $0, dps: $1) }
     }
 
-    /// Where each sample goes in a box this size: the newest at the right
-    /// edge, `span` back at the left, 0 deg/s in the middle and ±`scaleDps`
-    /// `inset` in from the top and bottom (half the line's width, so the line
-    /// isn't cut off). Joined as they are: no smoothing.
+    /// Where each sample goes in a box this size, `inset` in from every edge
+    /// (half the line's width, so its round ends aren't cut off): the newest
+    /// at the right, `span` back at the left, 0 deg/s in the middle and
+    /// ±`scaleDps` at the top and bottom. Joined as they are: no smoothing.
     public func points(in size: CGSize, inset: CGFloat) -> [CGPoint] {
         let middle = size.height / 2
         let reach = max(middle - inset, 0)
+        let width = max(size.width - 2 * inset, 0)
         return samples.map { sample in
-            let x = size.width * (1 - CGFloat(sample.agoMilliseconds) / CGFloat(Self.span))
+            let x = inset + width * (1 - CGFloat(sample.agoMilliseconds) / CGFloat(Self.span))
             let y = middle - reach * CGFloat(sample.dps / scaleDps)
             return CGPoint(x: x, y: y)
         }

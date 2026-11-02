@@ -203,12 +203,14 @@ isn't obvious from the code.
   unless it repeats, then reset the simulator before the CI run, never a
   retry (lead).
 - On the record screen at the largest text, the hold-to-stop bar covers the
-  foot of the screen (it keeps room for the hidden "Keep holding to stop.").
+  foot of the screen. It keeps room for the hidden "Keep holding to stop.".
   `scroll(by:)` starts its drag there, and a drag on the bar doesn't scroll
   the page. `isHittable` doesn't count the bar either: it said yes to text
   under it. MotionTraceLargeTextTests drags from just above the bar and
   works out where the bar starts (`barTop`). Look at the iPhone SE
-  screenshots: the 6.1-inch phone hid this.
+  screenshots: the 6.1-inch phone hid this. CI runs only a standard
+  iPhone, so the SE run is by hand: before a PR that changes the record
+  screen, run MotionTraceTests on an iPhone SE (3rd generation) simulator.
 - The simulator has no motion sensors. With `-SampleServer`,
   `PADDLESNITCH_MOTION_TRACE` (one block of a recorder-core `trace.csv`)
   is the trace the record screen shows, so the UI tests draw each status

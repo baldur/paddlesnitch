@@ -1,7 +1,7 @@
 import XCTest
 
 /// The live motion trace and its line on the record screen (mobile/contract
-/// README § Motion line), each status drawn from a block of the recorder
+/// README § Motion line (live trace)), each status drawn from a block of the recorder
 /// core's own fixtures (`trace_phone_flat`, `trace_phone_paddle`). The
 /// simulator has no motion sensors, so the app shows the block it's handed
 /// (`PADDLESNITCH_MOTION_TRACE`) in place of the core's. Run on an iPhone SE
