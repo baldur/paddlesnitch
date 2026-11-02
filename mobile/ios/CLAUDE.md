@@ -250,3 +250,9 @@ isn't obvious from the code.
   `typeWhenFocused` reads the field back and types again. An empty text
   field reports its placeholder as its value (`typedText(in:)`), so never
   type a value equal to the placeholder ("000000").
+- A late "Save Password?" can also come up during an accessibility audit,
+  and the audit reports the system sheet ("Potentially inaccessible
+  element", no element; #846's run, EmailCodeStepTests). When an audit
+  finds anything, `audit()` declines the sheet if it's up and looks
+  again. The audit lives in `Auditing.swift`: `AppTestCase.swift` is at
+  SwiftLint's 400-line limit.

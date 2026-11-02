@@ -91,8 +91,9 @@ extension AppTestCase {
 
     /// iOS 26 asks "Save Password?" once a password is sent, for any secure
     /// field (an autofill type or none), covering the next screen's buttons.
-    /// Not now. iOS 27 doesn't ask there.
-    func declineSavingPassword() {
+    /// Not now, and whether it was there. iOS 27 doesn't ask there.
+    @discardableResult
+    func declineSavingPassword() -> Bool {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         // One short look at both, not a wait on each: on iOS 27 it never
         // comes, and every second here is paid in every such test.
@@ -100,10 +101,11 @@ extension AppTestCase {
         while Date() < deadline {
             for owner in [app, springboard] where owner.buttons["Not Now"].firstMatch.exists {
                 owner.buttons["Not Now"].firstMatch.tap()
-                return
+                return true
             }
             usleep(200_000)
         }
+        return false
     }
 }
 
