@@ -12,6 +12,9 @@
 
 PACKAGE := Packages/PaddleKit
 IOS ?= latest
+# The app tests' own simulator locally; on CI the job's simulator, which
+# nobody uses by hand (a new device's first boot costs minutes there, #845).
+TEST_SIM ?= $(if $(CI),,tests)
 DERIVED := .build/DerivedData
 
 .PHONY: generate project test test-packages test-app check-shards lint format open run clean
@@ -41,11 +44,17 @@ endif
 
 # A test that hangs fails after 6 minutes (with a spindump in the results)
 # instead of running into CI's job timeout. The slowest passes in about 3.5 minutes on CI.
+# AutoFill Passwords off on the test simulator: otherwise iOS 26 offers
+# "Save Password?" after every sign-in, late and over the next screen.
+# `boot` returns at once; the write lands, and xcodebuild waits for the rest.
 test-app: project
 	@case "$(SHARD)" in ""|1|2) ;; *) echo "SHARD is 1, 2 or unset"; exit 1;; esac
-	set -o pipefail && xcodebuild test \
+	set -o pipefail && udid=$$(scripts/simulator.sh $(IOS) $(TEST_SIM)) \
+	  && { xcrun simctl boot "$$udid" 2>/dev/null || true; } \
+	  && xcrun simctl spawn "$$udid" defaults write com.apple.WebUI AutoFillPasswords -bool false \
+	  && xcodebuild test \
 	  -project Paddlesnitch.xcodeproj -scheme Paddlesnitch \
-	  -destination "platform=iOS Simulator,id=$$(scripts/simulator.sh $(IOS))" \
+	  -destination "platform=iOS Simulator,id=$$udid" \
 	  -derivedDataPath $(DERIVED) \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 360 \
 	  $(SHARD_TESTS) \
