@@ -5,6 +5,8 @@
 #   make test        package tests + app tests on the newest simulator
 #   make test-app IOS=17   app tests on an iOS 17 simulator
 #   make test-app SHARD=1  one half of the app tests (CI runs both at once)
+#   make test-app ERASE=1  on an erased simulator (CI always; not while
+#                          another run uses the same simulator)
 #   make lint
 #   make open        generate the project and open it in Xcode
 #   make run         build, install and launch the app in the simulator
@@ -12,6 +14,14 @@
 
 PACKAGE := Packages/PaddleKit
 IOS ?= latest
+# The first app launch of a CI job timed out three times ("Timed out while
+# launching application", "…requesting launch progress": runs 41346904604,
+# 41367784572, 41371378132), always the shard's first test on the newest
+# iOS: the job's fresh simulator was still booting inside that launch. So
+# test-app boots the simulator and waits until it's ready before the tests,
+# and on CI erases it first (lead: a repeat gets a reset, never a retry).
+# GitHub sets CI=true. ERASE=1 or true erases locally too.
+ERASE ?= $(CI)
 DERIVED := .build/DerivedData
 
 .PHONY: generate project test test-packages test-app check-shards lint format open run clean
@@ -43,9 +53,16 @@ endif
 # instead of running into CI's job timeout. The slowest passes in about 3.5 minutes on CI.
 test-app: project
 	@case "$(SHARD)" in ""|1|2) ;; *) echo "SHARD is 1, 2 or unset"; exit 1;; esac
-	set -o pipefail && xcodebuild test \
+	set -o pipefail && udid=$$(scripts/simulator.sh $(IOS)) && start=$$(date +%s) \
+	  && case "$(ERASE)" in 1|true) \
+	       { xcrun simctl shutdown "$$udid" 2>/dev/null || true; } && xcrun simctl erase "$$udid" \
+	       && echo "Erased simulator $$udid in $$(( $$(date +%s) - start )) s";; esac \
+	  && { xcrun simctl boot "$$udid" 2>/dev/null || true; } \
+	  && xcrun simctl bootstatus "$$udid" -b >/dev/null \
+	  && echo "Simulator $$udid ready after $$(( $$(date +%s) - start )) s" \
+	  && xcodebuild test \
 	  -project Paddlesnitch.xcodeproj -scheme Paddlesnitch \
-	  -destination "platform=iOS Simulator,id=$$(scripts/simulator.sh $(IOS))" \
+	  -destination "platform=iOS Simulator,id=$$udid" \
 	  -derivedDataPath $(DERIVED) \
 	  -test-timeouts-enabled YES -default-test-execution-time-allowance 360 \
 	  $(SHARD_TESTS) \
