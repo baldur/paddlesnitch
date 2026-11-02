@@ -70,7 +70,7 @@ class AppTestCase: XCTestCase {
     /// waits for that, however late it comes (after "Save Password?" closes,
     /// iOS gives the keyboard back), and never taps it. Tapping a field while
     /// it takes the keyboard fails as "not hittable" on a slow simulator.
-    func typeWhenFocused(_ text: String, into field: XCUIElement) {
+    func typeWhenFocused(_ text: String, into field: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(field.appears(timeout: 10))
         if !field.waitForKeyboardFocus(timeout: 5) {
             // It didn't come back by itself: tap, and wait again, or the
@@ -83,6 +83,28 @@ class AppTestCase: XCTestCase {
             XCTAssertTrue(field.waitForKeyboardFocus(timeout: 5), "the field has the keyboard")
         }
         field.typeText(text)
+        // "Save Password?" can also come while the keys go in, and take them
+        // (CI on #840: an empty field, then "Enter the 6-digit code"). So
+        // read it back, and if it isn't all there: away with the prompt,
+        // clear what's there and type it again.
+        guard typedText(in: field) != text else { return }
+        declineSavingPassword()
+        if !field.waitForKeyboardFocus(timeout: 2) {
+            XCTAssertTrue(field.becomesHittable(timeout: 5), "nothing over the field")
+            field.tap()
+            XCTAssertTrue(field.waitForKeyboardFocus(timeout: 5), "the field has the keyboard")
+        }
+        // Nothing to delete when every key was lost (the flake's case).
+        let stray = typedText(in: field).count
+        if stray > 0 { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: stray)) }
+        field.typeText(text)
+        XCTAssertEqual(typedText(in: field), text, "typed", file: file, line: line)
+    }
+
+    /// What's in a text field: an empty one reports its placeholder as its value.
+    func typedText(in field: XCUIElement) -> String {
+        let value = field.value as? String ?? ""
+        return value == field.placeholderValue ? "" : value
     }
 
     /// Puts the keyboard away: the keyboard's Done (the code step's number
