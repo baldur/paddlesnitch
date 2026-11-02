@@ -131,13 +131,17 @@ fun motionAnnouncement(before: RecorderCore.Live?, now: RecorderCore.Live?): Str
     }
 }
 
+/** The GPS and motion announcements for one tick, joined when both change at once. */
+fun announcement(before: RecorderCore.Live?, now: RecorderCore.Live?): String? =
+    listOfNotNull(gpsAnnouncement(before, now), motionAnnouncement(before, now)).joinToString(". ").ifEmpty { null }
+
 /**
- * Where each sample goes in a [w] x [h] box, [inset] in from the top and bottom for the line's
- * width: x from ago_ms (newest at the right, 10 s across), y from dps / scale_dps (−1 at the
+ * Where each sample goes in a [w] x [h] box, [inset] in from every edge for the line's
+ * width (Canvas doesn't clip): x from ago_ms (newest at the right, 10 s across), y from dps / scale_dps (−1 at the
  * bottom, 1 at the top). Nothing smoothed or worked out: the core's samples as they are.
  */
 fun tracePoints(t: RecorderCore.Trace, w: Float, h: Float, inset: Float): List<Offset> = List(t.n) { i ->
-    Offset(w * (1f - t.agoMs[i] / TRACE_SPAN_MS), h / 2f - (h / 2f - inset) * (t.dps[i] / t.scaleDps))
+    Offset(inset + (w - 2 * inset) * (1f - t.agoMs[i] / TRACE_SPAN_MS), h / 2f - (h / 2f - inset) * (t.dps[i] / t.scaleDps))
 }
 
 /** The GPS line: what it shows, and what a screen reader reads for it. */
@@ -310,8 +314,8 @@ private fun Recording(state: RecordingService.State.Recording, onStop: () -> Uni
     val view = LocalView.current
     var before by remember { mutableStateOf<RecorderCore.Live?>(null) }
     LaunchedEffect(live) {
-        gpsAnnouncement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
-        motionAnnouncement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
+        // One call: a second announcement straight after the first can cut it off.
+        announcement(before, live)?.let { @Suppress("DEPRECATION") view.announceForAccessibility(it) }
         before = live
     }
     val spm = liveStrokeRate(live)
@@ -346,7 +350,7 @@ private fun MotionTrace(trace: RecorderCore.Trace) {
             if (points.size == 1) drawPoints(points, PointMode.Points, PsColor.primaryText, width, StrokeCap.Round)
             else if (points.size > 1) drawPath(
                 Path().apply { moveTo(points[0].x, points[0].y); points.drop(1).forEach { lineTo(it.x, it.y) } },
-                PsColor.primaryText, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                PsColor.primaryText, style = Stroke(width, cap = StrokeCap.Butt, join = StrokeJoin.Miter),
             )
         }
         Text(shown, color = if (red) PsColor.red else PsColor.muted, fontSize = 18.sp)

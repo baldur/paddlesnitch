@@ -319,9 +319,16 @@ class RecordScreenTest {
         assertEquals(null, motionAnnouncement(notReady, notReady))                 // no motion sensors: no trace
     }
 
+    @Test fun gpsAndMotionChangingOnOneTickAreOneAnnouncement() {
+        assertEquals("GPS lost. $MOTION_NO_SAMPLES", announcement(fixed.copy(trace = still), lost(0.2f).copy(trace = noSamples)))
+        assertEquals("GPS back", announcement(lost(12f).copy(trace = still), fixed.copy(trace = still)))
+        assertEquals(MOTION_BACK, announcement(traced(noSamples), traced(moving)))
+        assertEquals(null, announcement(traced(still), traced(moving)))
+    }
+
     @Test fun eachSampleIsDrawnWhereTheCoreSaysNewestAtTheRight() {
         val t = RecorderCore.Trace(RecorderCore.TraceStatus.MOTION, 1, 20f, intArrayOf(10_000, 5_000, 0), floatArrayOf(20f, 0f, -20f))
-        assertEquals(listOf(Offset(0f, 1f), Offset(500f, 24f), Offset(1000f, 47f)), tracePoints(t, 1000f, 48f, 1f))
+        assertEquals(listOf(Offset(1f, 1f), Offset(500f, 24f), Offset(999f, 47f)), tracePoints(t, 1000f, 48f, 1f))
         assertEquals(emptyList<Offset>(), tracePoints(noSamples, 1000f, 48f, 1f))
     }
 
@@ -332,7 +339,10 @@ class RecordScreenTest {
     @Test fun motionAtLargeText() { show(recordingWith(moving), fontScale = 2f); golden("recording.motion.large-text") }
     @Test @Config(qualifiers = "w320dp-h568dp") fun motionOnASmallPhoneAtLargeText() {
         show(recordingWith(noSamples), fontScale = 2f)
-        compose.onNodeWithText(MOTION_NO_SAMPLES).performScrollTo()   // below the fold here: the line wraps, nothing clips
+        // Below the fold here: the empty box keeps its place and the line wraps, nothing clips.
+        compose.onNodeWithText(MOTION_NO_SAMPLES).performScrollTo()
+        val box = traceNode().fetchSemanticsNode().boundsInRoot
+        assertTrue("the box is on screen: $box", box.top >= 0f)
         golden("recording.motion.small-phone")
     }
 
