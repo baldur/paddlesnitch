@@ -1,14 +1,16 @@
 import Foundation
 import RecorderCore
 
-/// Which file a line goes in. The recorder core also has the tracker's raw
-/// motion stream (never on a phone) and, from phase 4, stroke lines; neither
-/// is written here.
+/// Which stream a line belongs to. The recorder core also has the tracker's
+/// raw motion stream, never on a phone.
 public enum RecordingStream: Sendable, Equatable {
     /// `track_<stamp>.csv`: one row a second.
     case track
     /// `track_<stamp>_i10.csv`: motion, about 12 rows a second.
     case motion
+    /// Stroke rate as the core measures it. Not a file: the server rebuilds
+    /// it from the other two (recorder_core.h, RC_STROKE).
+    case stroke
 }
 
 /// Where a recording's lines go. Each line ends in a newline.
@@ -53,6 +55,7 @@ public final class PhoneRecorder {
             switch stream {
             case RC_TRACK: target = .track
             case RC_MOTION: target = .motion
+            case RC_STROKE: target = .stroke
             default: return
             }
             recorder.sink.write(Data(bytes: line, count: length), to: target)
@@ -121,6 +124,14 @@ public final class PhoneRecorder {
         var values = rc_live_values()
         rc_phone_live(phone, &values)
         return LiveValues(values)
+    }
+
+    /// The live motion trace as of the latest tick. Only for a recording
+    /// with motion: without it the core would read as a fault.
+    public var trace: MotionTrace {
+        var trace = rc_trace()
+        rc_phone_trace(phone, &trace)
+        return MotionTrace(trace)
     }
 
     /// A Core Motion or uptime time in seconds, as the layer's nanoseconds.

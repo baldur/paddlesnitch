@@ -121,7 +121,8 @@ struct RecordView: View {
         }
     }
 
-    /// Time first, then stroke rate, then the GPS line (the README's layout).
+    /// Time first, then stroke rate, the motion trace and its line, then the
+    /// GPS line (the README's layout).
     @ViewBuilder private var recording: some View {
         // A failed write ends what's saved: the screen says so in place of
         // "Recording", and the clock stops.
@@ -163,7 +164,7 @@ struct RecordView: View {
                     ?? "Stroke rate, not measured yet"
             )
             .accessibilityIdentifier("record-stroke-rate")
-            if !PhoneRecording.hasMotionSensors {
+            if model.status.trace == nil && !PhoneRecording.hasMotionSensors {
                 Text("No motion sensors on this phone, so no stroke rate")
                     .font(.plexSans(.subheadline))
                     .foregroundStyle(Palette.muted)
@@ -172,7 +173,14 @@ struct RecordView: View {
             }
         }
         if model.problem == nil {
-            gpsLine
+            // The two status lines read as one group under the trace.
+            VStack(alignment: .leading, spacing: 6) {
+                if let trace = shownTrace {
+                    MotionTraceView(trace: trace)
+                    motionLine(trace)
+                }
+                gpsLine
+            }
         }
         // Hides the screen; the recording carries on, and every screen says so.
         VStack(alignment: .leading, spacing: 6) {
@@ -191,6 +199,13 @@ struct RecordView: View {
         }
     }
 
+    /// The core's trace. Until its first status arrives, a phone with motion
+    /// sensors shows what the core says before any sample (starting), so the
+    /// box is there from the first frame and nothing below it moves.
+    private var shownTrace: MotionTrace? {
+        model.status.trace ?? (PhoneRecording.hasMotionSensors ? MotionTrace(status: .starting) : nil)
+    }
+
     /// Not a live region: VoiceOver hears a change once (RecordModel).
     /// Muted ("Waiting for GPS", "GPS fix"); only "GPS lost…" red.
     private var gpsLine: some View {
@@ -198,8 +213,50 @@ struct RecordView: View {
         return Text(gps.text)
             .font(.plexSans(.body))
             .foregroundStyle(gps.isWarning ? Palette.red : Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(gps.label)
             .accessibilityIdentifier("record-gps")
+    }
+
+    /// In the GPS line's style. Not a live region: VoiceOver hears entering
+    /// and leaving "Couldn’t read…" once each (RecordModel).
+    private func motionLine(_ trace: MotionTrace) -> some View {
+        let line = MotionLine(trace.status)
+        return Text(line.text)
+            .font(.plexSans(.body))
+            .foregroundStyle(line.isWarning ? Palette.red : Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("record-motion")
+    }
+}
+
+/// The live motion trace from the recorder core, drawn as it comes: one line,
+/// no axes or numbers, no smoothing or animation. Always 48 pt tall, also at
+/// large text, and empty when there's nothing to draw, so nothing below it
+/// moves when the sensor starts or stops. Hidden from VoiceOver: the line
+/// under it says what it shows.
+private struct MotionTraceView: View {
+    let trace: MotionTrace
+
+    var body: some View {
+        Canvas { context, size in
+            let points = trace.points(in: size, inset: 1)
+            // One sample alone: a dot the line's width.
+            if points.count == 1, let point = points.first {
+                context.fill(
+                    Path(ellipseIn: CGRect(x: point.x - 1, y: point.y - 1, width: 2, height: 2)),
+                    with: .color(Palette.primaryText))
+                return
+            }
+            var path = Path()
+            path.addLines(points)
+            context.stroke(
+                path, with: .color(Palette.primaryText),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+        .accessibilityHidden(true)
     }
 }
 
