@@ -28,6 +28,8 @@ samples first on a tie, would put samples in other rows.
 | `phone_timing` | Two ticks delivered over a second late, after later samples (each still gets a row, just after them); a gyroscope timestamp 1 ms before the previous one (late); a tick exactly on a sample whose timestamp repeats in the next batch (the row waits for it) |
 | `phone_buffer_full` | 45 s of accelerometer before any gyroscope event: the 2048-sample buffer full, the oldest going on unpaired, gyroscope readings older than them dropped as late |
 | `stroke_paddle` | Real stroke windows on every platform's float maths: parked, 56 spm, an 80 s rest drifting, 62 spm (each stretch reads its own rate); samples ~80 ms apart with the tracker's jitter, so the rate must come from each window's mean spacing, not the median gap; known answers in `expect_*` lines |
+| `trace_phone_flat` | The live trace (`rc_phone_trace`) on a phone lying flat: `starting` before any sample; `still` on noise (~0.13 deg/s rms), drawn on the 5 deg/s floor; both sensors stop at 20 s: the last 10 s held at 26.5 s (6.5 s without a sample), `no_samples` at 28.5 s with nothing to draw |
+| `trace_phone_paddle` | The live trace while paddling 60 spm alternating at 8 km/h: `motion` on y (the roll, the axis with the most variance), scaled to its peak; the same samples read 60 spm (`expect_session`) |
 | `phone_track_only` | No gyroscope (`motion` 0): rows aren't held and sensor events are ignored; a tick before any location; a fix 2.999 s old counts and 3.000 s doesn't, with its clock running on; 29 Feb; a repeated tick ignored; a location with no time (0) and one dated 2024 aren't fixes |
 
 ## `calls.csv`
@@ -70,10 +72,15 @@ accel,t_ns,x,y,z
 gyro,t_ns,x,y,z
 location,t_ns,utc_ms,lat,lon,alt_m,speed_ms,course_deg
 tick,t_ns,batt_mv
+trace
 finish
 expect,dropped_late,<n>,dropped_unpaired,<n>
 ```
 
+- `trace` → `rc_phone_trace`, written to `trace.csv` (expected only when a
+  case calls it) as `trace,<starting|no_samples|still|motion>,<x|y|z|->,<n>,<scale_dps>`
+  and then one `<ago_ms>,<dps>` line per sample, oldest first. Only the
+  `trace_phone_*` cases use it (`recorder-core/CLAUDE.md`).
 - `phone` → `rc_phone_init`. Flags as `config`'s, but only `batt_mv` means
   anything on a phone (satellites stay blank).
 - An **empty** `alt_m`, `speed_ms` or `course_deg` means the platform didn't

@@ -67,7 +67,7 @@ extension View {
     func recordScreen(_ session: RecordingSession, starting: @escaping () -> Void) -> some View {
         @Bindable var session = session
         return fullScreenCover(isPresented: $session.showing) {
-            if let model = session.model { RecordView(model: model, starting: starting) }
+            if let model = session.model { RecordView(model: model, starting: starting).buttonBorderShape(.control) }
         }
     }
 }

@@ -46,12 +46,8 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            buildConfigField("boolean", "STRAVA_IN_APP", "true")
         }
         release {
-            // The first Play release hides Strava (PLAY-RELEASE.md). Turning it on is
-            // an app release, and the Play data safety form changes with it.
-            buildConfigField("boolean", "STRAVA_IN_APP", "false")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             if (uploadKeystore != null) signingConfig = signingConfigs.getByName("upload")
@@ -175,20 +171,6 @@ abstract class CheckReleasePermissions : DefaultTask() {
     }
 }
 
-// Release hides Strava (PLAY-RELEASE.md): the Play data safety form says so. Turning it
-// on is a decision, so it means changing this check as well as the buildConfigField.
-abstract class CheckReleaseStrava : DefaultTask() {
-    @get:InputFiles abstract val buildConfig: ConfigurableFileCollection
-
-    @TaskAction
-    fun check() {
-        val source = buildConfig.asFileTree.matching { include("**/BuildConfig.java") }.singleFile.readText()
-        check("STRAVA_IN_APP = false;" in source) {
-            "The release build shows Strava. Change the Play data safety form first (PLAY-RELEASE.md, Later releases), then this check."
-        }
-    }
-}
-
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
         val cap = variant.name.replaceFirstChar { it.uppercase() }
@@ -196,12 +178,9 @@ androidComponents {
             merged.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
             allowed.set(releasePermissions)
         }
-        val strava = tasks.register<CheckReleaseStrava>("check${cap}Strava") {
-            buildConfig.from(tasks.named("generate${cap}BuildConfig"))
-        }
-        tasks.named("check") { dependsOn(task, strava) }
-        // Every release build runs them, including one built by hand for Play.
-        tasks.matching { it.name == "assemble$cap" || it.name == "bundle$cap" }.configureEach { dependsOn(task, strava) }
+        tasks.named("check") { dependsOn(task) }
+        // Every release build runs it, including one built by hand for Play.
+        tasks.matching { it.name == "assemble$cap" || it.name == "bundle$cap" }.configureEach { dependsOn(task) }
     }
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateTokens, GenerateTokens::outputDir)

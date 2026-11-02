@@ -22,7 +22,8 @@ test/stroke_known.c       stroke rate on synthetic signals with known answers, e
                           also replayed (streaming = batch)
 test/gen_stroke_fixture.py  writes fixtures/stroke_paddle/calls.csv
 test/stroke_rules.c       the stroke rules at their edges (compiles stroke.c into itself)
-test/live_values.c        rc_live / rc_phone_live: the GPS state a screen shows
+test/live_values.c        rc_live / rc_phone_live: the GPS state a screen shows;
+                          rc_phone_trace on a phone with no gyroscope
 fixtures/                 golden cases (format: fixtures/README.md)
 Package.swift             iPhone: add the folder as a local package, `import RecorderCore`
 CMakeLists.txt            Android: add_subdirectory(...) + link `recorder_core`
@@ -102,6 +103,19 @@ core works them out again.
   the latest row (the tracker) or the latest tick (phones, whose rows wait
   for late samples), so a recording screen can say "waiting for GPS" or
   "GPS lost" without the app working it out (`test/live_values.c`).
+- **The live motion trace (0.6.0)** is the stroke stream's own samples, on
+  the axis the stroke windows would pick (one function, `pick_axis`), so the
+  trace and the rate can't disagree. The core decides its status
+  (`starting`, `no_samples`, `still`, `motion`) and its scale; the apps draw
+  what they get and add no thresholds. Its numbers: 10 s back from the
+  newest sample (the series windows keep at least that in the ring, and
+  `stroke_rules` checks every trace after the first 10 s has all 125);
+  still under 1 deg/s rms (the 13 Sep capture parked: 0.15-0.25; moving
+  at >= 4 km/h: 10 and up); no samples after 7 s (above a phone's batching);
+  drawn on at least +-5 deg/s, so a still phone draws flat. Its fixtures are
+  `trace_phone_*`, not `phone_*`: the apps' runners take every `phone_*`
+  case and fail on a line they don't know, so they add `trace_phone_` when
+  they bind the call.
 - **Phone altitude is above sea level,** as the tracker's GGA: Android only
   with `hasMslAltitude()` (API 34+), else not valid; never the ellipsoid
   height (`recorder_phone.h`).

@@ -26,6 +26,7 @@ describe("the kayak game's analytics events pass the server's rules untouched", 
       { mode: { key: 'row-practice', solo: true }, o: {} },
       { mode: { key: 'row-head' }, o: { format: 'interval' } },
       { mode: { key: 'erg', solo: true }, o: {} },
+      { mode: { key: 'kayak-erg', solo: true }, o: {} },   // the kayak erg at Reading Canoe Club (#825)
     ]
     for (const { mode, o } of modes) {
       for (const from of ['walk', 'menu']) {

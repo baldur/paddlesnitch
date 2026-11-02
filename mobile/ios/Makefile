@@ -32,7 +32,7 @@ test-packages:
 # ~47 minutes); shard 2 is every other class, so a new one is never left
 # out. No SHARD: all of them. Rebalance from the per-test times in a CI log
 # when one job runs much longer than the other.
-SHARD_1 := LargeTextTests AccountTests StravaTests PendingSummaryTests
+SHARD_1 := LargeTextTests AccountTests PendingSummaryTests
 ifeq ($(SHARD),1)
   SHARD_TESTS := $(foreach c,$(SHARD_1),-only-testing:PaddlesnitchUITests/$(c))
 else ifeq ($(SHARD),2)

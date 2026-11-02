@@ -1,0 +1,10 @@
+<resources>
+    <!-- copy-style.test.ts: lines 4 and 8 are caught; this comment is not. Not a real app file.
+    <string name="old">YOUR ACCOUNT</string> -->
+    <string name="account_title">YOUR ACCOUNT</string>
+    <string name="your_account_key">Account</string>
+    <plurals name="paddles">
+        <item quantity="one">One paddle</item>
+        <item quantity="other">MY PADDLES</item>
+    </plurals>
+</resources>

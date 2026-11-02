@@ -69,11 +69,13 @@ public final class ProfileForm {
     }
 
     public func load() async {
+        let asker = account.user?.id
         do {
             let profile = try await account.client.send(Endpoints.getAccountProfile, NoInput())
             let contact = try await account.client.send(Endpoints.getAccountContact, NoInput())
             show(profile)
             needsContactEmail = contact.placeholderEmail == true
+            account.noteMadeWithStrava(needsContactEmail, for: asker)
             contactSaved = contact.contact?.email
             contactInput = contactSaved ?? ""
             loadFailure = nil

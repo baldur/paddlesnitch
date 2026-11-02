@@ -48,7 +48,7 @@ class GoogleSignInTest {
         google.start()
         val verifier = verifiers.kept
         server.enqueue(MockResponse.Builder().body(fixture("auth.login.json")).build())
-        val signedIn = google.finish("the-code", null, strava = false)!!
+        val signedIn = google.finish("the-code", null)!!
         val req = server.takeRequest()
         assertEquals("/att/api/auth/google/app-token", req.url.encodedPath)
         assertEquals("""{"code":"the-code","verifier":"$verifier"}""", req.body!!.utf8())
@@ -59,13 +59,13 @@ class GoogleSignInTest {
     @Test fun aSpentCodeSaysTryAgain() = runTest {
         google.start()
         server.enqueue(MockResponse.Builder().code(401).body("""{"error":"Couldn’t finish signing in. Please try again."}""").build())
-        val e = runCatching { google.finish("old", null, strava = false) }.exceptionOrNull() as ApiFailure
+        val e = runCatching { google.finish("old", null) }.exceptionOrNull() as ApiFailure
         assertEquals("Couldn’t sign in with Google. Please try again.", e.message)
     }
 
     @Test fun eachErrorKeyInTheWebsitesWords() = runTest {
         val said = listOf("google_account_exists", "google_no_email", "google_denied", "google_failed", "google_not_configured", "something_new").map {
-            google.start(); (runCatching { google.finish(null, it, strava = false) }.exceptionOrNull() as ApiFailure).message
+            google.start(); (runCatching { google.finish(null, it) }.exceptionOrNull() as ApiFailure).message
         }
         assertEquals(listOf(
             "You already have an account with this email. Sign in with your email instead.",
@@ -75,23 +75,18 @@ class GoogleSignInTest {
             "Google sign-in isn’t available right now.",
             "Couldn’t sign in with Google. Please try again.",
         ), said)
-        assertEquals("You already have an account with this email. Sign in with your email or Strava instead.", googleErrorMessage("google_account_exists", strava = true))
         assertEquals(0, server.requestCount)
     }
 
     @Test fun aReturnThisAppDidntStartIsIgnored() = runTest {
-        assertNull(google.finish("someone-elses-code", null, strava = false))
-        assertNull(google.finish(null, "google_denied", strava = false))
+        assertNull(google.finish("someone-elses-code", null))
+        assertNull(google.finish(null, "google_denied"))
         assertEquals(0, server.requestCount)
     }
 
-    // The first Play release hides Strava (mobile/android/PLAY-RELEASE.md): the release
-    // build reads it as off whatever the server says, so it takes the "Strava off" path.
-    @Test fun aBuildWithoutStravaReadsItAsOffWhateverTheServerSays() = runTest {
-        val noStrava = Api(server.url("/").toString(), tokens, "0.1.0", stravaInApp = false)
+    // Older builds read strava, so the server still sends it: it decodes, and nothing uses it.
+    @Test fun optionsWithStravaStillDecode() = runTest {
         server.enqueue(MockResponse.Builder().body("""{"google":true,"strava":true}""").build())
-        server.enqueue(MockResponse.Builder().body("""{"google":true,"strava":true}""").build())
-        assertEquals(SignInOptions(google = true, strava = false), noStrava.signInOptions())
         assertEquals(SignInOptions(google = true, strava = true), api.signInOptions())
     }
 
@@ -119,14 +114,14 @@ class GoogleSignInTest {
 
     @Test fun aReturnWithNeitherCodeNorErrorSaysTryAgain() = runTest {
         google.start()
-        val e = runCatching { google.finish(null, null, strava = false) }.exceptionOrNull() as ApiFailure
+        val e = runCatching { google.finish(null, null) }.exceptionOrNull() as ApiFailure
         assertEquals("Couldn’t sign in with Google. Please try again.", e.message)
     }
 
     @Test fun aRefusedSwapUsesTheVerifierUpAndSaysTryAgain() = runTest {
         google.start()
         server.enqueue(MockResponse.Builder().code(400).body("""{"error":"Couldn’t finish signing in. Please try again."}""").build())
-        val e = runCatching { google.finish("x", null, strava = false) }.exceptionOrNull() as ApiFailure
+        val e = runCatching { google.finish("x", null) }.exceptionOrNull() as ApiFailure
         assertEquals("Couldn’t sign in with Google. Please try again.", e.message)
         assertNull(verifiers.kept)
     }
@@ -134,7 +129,7 @@ class GoogleSignInTest {
     @Test fun theServersOwnWordsForAnythingElsePassThrough() = runTest {
         google.start()
         server.enqueue(MockResponse.Builder().code(429).body("""{"error":"Too many attempts. Please wait a minute."}""").build())
-        val e = runCatching { google.finish("x", null, strava = false) }.exceptionOrNull() as ApiFailure
+        val e = runCatching { google.finish("x", null) }.exceptionOrNull() as ApiFailure
         assertEquals("Too many attempts. Please wait a minute.", e.message)
     }
 

@@ -18,25 +18,24 @@ class GoogleSignIn(private val api: Api, private val verifiers: VerifierStore) {
     /** The page never opened: forget the verifier, so nothing is pending. */
     fun cancel() { verifiers.take() }
 
-    /** Null when this app didn't start a Google sign-in. [strava]: whether Strava sign-in is on, for the words. */
-    suspend fun finish(code: String?, error: String?, strava: Boolean): SignIn? {
+    /** Null when this app didn't start a Google sign-in. */
+    suspend fun finish(code: String?, error: String?): SignIn? {
         val verifier = verifiers.take() ?: return null
-        if (error != null || code == null) throw ApiFailure(googleErrorMessage(error.orEmpty(), strava))
+        if (error != null || code == null) throw ApiFailure(googleErrorMessage(error.orEmpty()))
         return try { api.googleSignIn(code, verifier) } catch (e: ApiFailure) {
             // Spent, expired or not ours: start again, in the website's words.
-            if (e.status == 400 || e.status == 401 || e.generic) throw ApiFailure(googleErrorMessage("google_failed", strava), e.status) else throw e
+            if (e.status == 400 || e.status == 401 || e.generic) throw ApiFailure(googleErrorMessage("google_failed"), e.status) else throw e
         }
     }
 
     companion object {
-        const val RETURN = "${StravaSignIn.SCHEME}:/signin/google"
+        const val RETURN = "$RETURN_SCHEME:/signin/google"
     }
 }
 
 /** The website's /signin wording for the same `?error=` keys (README § Google). */
-fun googleErrorMessage(key: String, strava: Boolean): String = when (key) {
-    "google_account_exists" -> if (strava) "You already have an account with this email. Sign in with your email or Strava instead."
-        else "You already have an account with this email. Sign in with your email instead."
+fun googleErrorMessage(key: String): String = when (key) {
+    "google_account_exists" -> "You already have an account with this email. Sign in with your email instead."
     "google_no_email" -> "Couldn’t sign in with Google, because Google didn’t share a confirmed email address. Please sign up with your email instead."
     "google_denied" -> "You cancelled the Google sign-in."
     "google_not_configured" -> "Google sign-in isn’t available right now."

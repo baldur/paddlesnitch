@@ -7,8 +7,8 @@
  *
  * A fixture directory holds the input, either calls.csv (calls to the core)
  * or phone.csv (events into the phone layer, recorder_phone.h), and the
- * expected output: track.csv, motion.csv and, when the config has
- * raw_motion, motion_raw.csv. Formats are in fixtures/README.md. The apps'
+ * expected output: track.csv, motion.csv, stroke.csv, motion_raw.csv when
+ * the config has raw_motion, and trace.csv when a phone case calls trace. Formats are in fixtures/README.md. The apps'
  * unit tests and the WASM build replay the same files.
  */
 #include "recorder_core.h"
@@ -23,8 +23,8 @@
 #define MAX_FIELDS 32
 
 typedef struct {
-    char  *buf[4];
-    size_t len[4];
+    char  *buf[5];   /* the four streams, then trace.csv */
+    size_t len[5];
     int    overflow;
     /* Replay order: a sample written after a row must be later than it,
        and a row no earlier than the samples before it, or a replay of the
@@ -102,7 +102,8 @@ static int set_d(const char *s, int *valid, double *v)
     return *valid;
 }
 
-static const char *const FILES[4] = { "track.csv", "motion.csv", "motion_raw.csv", "stroke.csv" };
+static const char *const FILES[5] = { "track.csv", "motion.csv", "motion_raw.csv", "stroke.csv", "trace.csv" };
+#define TRACE_OUT 4
 
 static char *slurp(const char *path, size_t *len)
 {
@@ -136,16 +137,18 @@ static void report_diff(const char *name, const char *got, size_t glen, const ch
 
 static outputs g_out;
 static int g_finished;
+static int g_traced;   /* the case calls trace: trace.csv is expected */
 
 static void reset_outputs(void)
 {
-    for (int s = 0; s < 4; s++) {
+    for (int s = 0; s < 5; s++) {
         if (!g_out.buf[s]) g_out.buf[s] = malloc(MAX_OUT);
         g_out.len[s] = 0;
     }
     g_out.overflow = 0;
     g_out.have_row = g_out.have_sample = 0;
     g_finished = 0;
+    g_traced = 0;
     g_out.order_errors = 0;
 }
 
@@ -363,6 +366,32 @@ void rc_second_seen(rc_state *rc, uint32_t t_ms, const rc_gps *gps, const rc_ext
     rc_second(rc, t_ms, gps, extras);
 }
 
+/* `trace`: rc_phone_trace, written to trace.csv as
+     trace,<starting|no_samples|still|motion>,<x|y|z|->,<n>,<scale_dps>
+   then one line per sample, oldest first: <ago_ms>,<dps>. */
+static void add_trace(const char *line, int n)
+{
+    if (g_out.len[TRACE_OUT] + (size_t)n > MAX_OUT) { g_out.overflow = 1; return; }
+    memcpy(g_out.buf[TRACE_OUT] + g_out.len[TRACE_OUT], line, (size_t)n);
+    g_out.len[TRACE_OUT] += (size_t)n;
+}
+
+static void put_trace(const rc_phone *p)
+{
+    static const char *const STATUS[] = { "starting", "no_samples", "still", "motion" };
+    static rc_trace tr;
+    rc_phone_trace(p, &tr);
+    g_traced = 1;
+    char line[96];
+    int n = snprintf(line, sizeof(line), "trace,%s,%c,%u,%.2f\n", STATUS[tr.status],
+                     tr.axis < 0 ? '-' : "xyz"[tr.axis], (unsigned)tr.n, (double)tr.scale_dps);
+    add_trace(line, n);
+    for (uint32_t i = 0; i < tr.n; i++) {
+        n = snprintf(line, sizeof(line), "%u,%.2f\n", (unsigned)tr.ago_ms[i], (double)tr.dps[i]);
+        add_trace(line, n);
+    }
+}
+
 /* phone.csv: events into the phone layer, as the phone delivered them.
    Returns the config's has, or -1 (including a failed `expect`). */
 static long replay_phone(FILE *in, const char *path)
@@ -416,6 +445,8 @@ static long replay_phone(FILE *in, const char *path)
             long long t = strtoll(f[1], NULL, 10);
             if (t / 1000000 > tick_max) { tick_max = t / 1000000; ticks++; }   /* not a repeat */
             rc_phone_tick(&p, t, (unsigned)strtoul(f[2], NULL, 10));
+        } else if (!strcmp(f[0], "trace") && n == 1) {
+            put_trace(&p);
         } else if (!strcmp(f[0], "finish") && n == 1) {
             rc_phone_finish(&p);
             g_finished = 1;
@@ -476,8 +507,8 @@ static int run(const char *dir, int write_mode)
         fprintf(stderr, "  %d lines out of replay order\n", o->order_errors);
         fails++;
     }
-    for (int s = 0; s < 4; s++) {
-        int expected = s != RC_MOTION_RAW || (has & RC_HAS_RAW_MOTION);
+    for (int s = 0; s < 5; s++) {
+        int expected = s == TRACE_OUT ? g_traced : s != RC_MOTION_RAW || (has & RC_HAS_RAW_MOTION);
         snprintf(path, sizeof(path), "%s/%s", dir, FILES[s]);
         if (write_mode) {
             if (!expected) { remove(path); continue; }
@@ -489,7 +520,7 @@ static int run(const char *dir, int write_mode)
         size_t wlen = 0;
         char *want = slurp(path, &wlen);
         if (!expected) {
-            if (want) { fprintf(stderr, "  %s: not expected without raw_motion\n", FILES[s]); fails++; }
+            if (want) { fprintf(stderr, "  %s: not expected (no raw_motion, or no trace call)\n", FILES[s]); fails++; }
             free(want);
             continue;
         }

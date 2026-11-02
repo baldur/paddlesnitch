@@ -121,6 +121,7 @@ typedef struct {
     int64_t           imu_last;                /* last accel passed on (-1)    */
     int               have_location;
     rc_phone_location location;
+    int64_t           first_tick_ms;           /* the recording's start (-1)   */
     int               tick_fix, tick_fixed;    /* the latest tick: rc_phone_live */
     int64_t           tick_ms, tick_fix_ms;    /* the latest tick's row ms, and
                                                   the latest with a fix         */
@@ -157,6 +158,13 @@ void rc_phone_finish(rc_phone *p);
 /* Live values (rc_live on the core). The GPS state (fix, since_fix_s) is
    the latest tick's, not the latest row written: rows wait for late samples. */
 void rc_phone_live(const rc_phone *p, rc_live_values *out);
+
+/*
+ * The live motion trace (recorder_core.h, LIVE MOTION TRACE), as of the
+ * latest tick: draw it, and show its status, after each tick. rc_trace is
+ * about 1 KB.
+ */
+void rc_phone_trace(const rc_phone *p, rc_trace *out);
 
 /*
  * Events dropped: arrived after their row was written ("late"), or an

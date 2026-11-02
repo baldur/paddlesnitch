@@ -113,6 +113,29 @@ describe('the sweep', () => {
     expect(counts.done).toBe(2)
     expect(made.calls).toEqual(['old', 'older-by-a-hair'])
   })
+
+  it("runs an account erasure's second pass alone: first in a sweep, and the sweep ends after it (#814)", async () => {
+    const tick = () => new Promise(r => setTimeout(r, 5))
+    await job('before')
+    await tick()
+    const erase = await enqueueJob('erase-account-again', { userId: 'live-account' })  // no marker: does nothing
+    await tick()
+    await job('after')
+    const later = Date.now() + 5 * MIN
+
+    let counts = await sweepJobs(later)
+    expect(made.calls).toEqual(['before'])                    // stops rather than start the erasure second
+    expect(counts.done).toBe(1)
+    expect(await getJson(erase)).not.toBeNull()
+
+    counts = await sweepJobs(later)
+    expect(counts.done).toBe(1)                               // the erasure, alone
+    expect(await getJson(erase)).toBeNull()
+    expect(made.calls).toEqual(['before'])
+
+    await sweepJobs(later)
+    expect(made.calls).toEqual(['before', 'after'])
+  })
 })
 
 describe('the endpoints the kicker calls', () => {

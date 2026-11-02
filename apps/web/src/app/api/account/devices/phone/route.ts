@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRequestUser } from '@/lib/auth'
+import { getRequestUserEvenIfErased } from '@/lib/auth'
 import { addPhone } from '@/lib/devices'
 import { erasedAnswer } from '@/lib/erased-answer'
 
@@ -9,7 +9,7 @@ import { erasedAnswer } from '@/lib/erased-answer'
 // tracker's (C3, mobile/contract/README.md § Phone recording). Asking again
 // with the same install ID returns the same phone.
 export async function POST(req: Request) {
-  const user = await getRequestUser(req)
+  const user = await getRequestUserEvenIfErased(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // An account being deleted, or deleted with its token still valid (C3).
   const erased = await erasedAnswer(user.id)

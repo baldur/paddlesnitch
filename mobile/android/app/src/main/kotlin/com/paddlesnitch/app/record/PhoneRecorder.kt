@@ -98,7 +98,8 @@ class PhoneRecorder(
         val c = core ?: return false
         c.tick(clock(), battMv)
         files?.sync()
-        _live.value = c.live()
+        // No motion sensors: no trace (the core would read the missing samples as a fault).
+        _live.value = c.live().let { if (motion) it.copy(trace = c.trace()) else it }
         logDrops(c, false)
         return true
     }

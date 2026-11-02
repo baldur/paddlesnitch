@@ -236,6 +236,26 @@ class PhoneRecorderTest {
         assertEquals(4f, recorder.live.value!!.sinceFixS)
     }
 
+    @Test fun withMotionEachTickCarriesTheCoresTrace() {
+        addSensors()
+        recorder.start()
+        hold(10, 13, Triple(0f, 0f, G), Triple(0f, 0f, 0f))
+        tickAt(11); tickAt(12)
+        val t = recorder.live.value!!.trace!!
+        assertEquals(RecorderCore.TraceStatus.STILL, t.status)   // a phone lying still
+        assertTrue("samples: ${t.n}", t.n > 10)
+        assertEquals(0, t.agoMs.last())                          // the newest sample
+        assertEquals(5f, t.scaleDps)                             // still: drawn on the core's 5 deg/s floor
+    }
+
+    // The contract: no motion sensors, no trace (the core would report it as a fault).
+    @Test fun withoutAGyroscopeThereIsNoTrace() {
+        addSensors(gyro = false)
+        recorder.start()
+        tickAt(10)
+        assertNull(recorder.live.value!!.trace)
+    }
+
     @Test fun theDropCountsAreLoggedBesideTheRecording() {
         addSensors()
         recorder.start()

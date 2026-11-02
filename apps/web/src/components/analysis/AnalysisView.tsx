@@ -316,7 +316,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             </div>
             {scale && (
               <div className="px-1" aria-label="Colour scale">
-                <div className="h-1.5 rounded-full" style={{ background: `linear-gradient(to right, ${[0, 0.4, 0.7, 1].map(ramp).join(',')})` }} />
+                <div className="h-1.5" style={{ background: `linear-gradient(to right, ${[0, 0.4, 0.7, 1].map(ramp).join(',')})` }} />
                 <div className="flex justify-between gap-3 text-xs text-muted tabular mt-1">
                   <span>{scaleLabel(scale.lo, 'lo')}</span><span>{scaleLabel(scale.hi, 'hi')}</span>
                 </div>

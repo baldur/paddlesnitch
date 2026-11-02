@@ -12,7 +12,7 @@ Shipped specs are kept in `docs/features/` as design records. **Each doc's own s
 | [`platform-monorepo.md`](platform-monorepo.md) | ✅ superseded | The original two-app split; replaced by `unified-app-and-api.md` |
 | [`unified-app-and-api.md`](unified-app-and-api.md) | ✅ 2026-09 | One Next app + the shared tRPC API |
 | [`paddle-analysis.md`](paddle-analysis.md) | ✅ 2026-08 | The analysis engine and its design decisions |
-| [`personable-insights.md`](personable-insights.md) | ✅ 2026-08 | History-aware summary: aggregates, athlete profile, retrieval. **The model switch to Haiku/Nova was NOT made; prod runs Mixtral** (`LLM_MODEL` in `infra/lib/att-stack.ts`) |
+| [`personable-insights.md`](personable-insights.md) | ✅ 2026-08 | History-aware summary: aggregates, athlete profile, retrieval. 2026-11-01: the paddlesnitch voice (voice.ts: voice card, examples, a check with one retry) on **Qwen3 Next 80B** (`LLM_MODEL` in `infra/lib/att-stack.ts`) |
 | [`similar-sections-compare.md`](similar-sections-compare.md) | ✅ 2026-08 | Compare a section across your paddles |
 | [`weather-and-river-conditions.md`](weather-and-river-conditions.md) | ✅ | Wind + river flow for a paddle |
 | [`single-app-shell.md`](single-app-shell.md) | ✅ 2026-08 | Shared header/shell, one dark theme |

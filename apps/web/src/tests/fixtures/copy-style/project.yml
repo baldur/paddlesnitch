@@ -1,0 +1,7 @@
+# copy-style.test.ts: line 6 is caught; the other keys are not shown to a
+# paddler, or say nothing retired. Not a real app file.
+info:
+  properties:
+    CFBundleDisplayName: paddlesnitch
+    NSLocationWhenInUseUsageDescription: "Unlock your paddling journey."
+    PaddlesnitchBaseURL: https://paddlesnitch.com/unlock

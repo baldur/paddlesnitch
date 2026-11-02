@@ -49,23 +49,12 @@ interface AccountApi {
     suspend fun deleteAccount()
     suspend fun exportAccount(into: java.io.File): String
     suspend fun signedInPage(next: String): String
-    /** Which sign-ins are switched on besides email (README § Signing in): Strava may be off. */
+    /** Which sign-ins are switched on besides email (README § Signing in). Its strava field is never used: Strava is gone. */
     suspend fun signInOptions(): SignInOptions
-    // Strava for a signed-in account (mobile/contract/README.md § Strava, signed in).
-    suspend fun stravaStatus(): StravaStatus
-    /** The Strava page to open; 403 reauth when the sign-in is too old, 503 when Strava isn't set up. */
-    suspend fun stravaConnect(challenge: String): WebPage
-    suspend fun stravaConnectFinish(code: String, verifier: String): StravaStatus
-    suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport
-    suspend fun stravaDisconnect(): Ok
     // Trackers (README § Account): each card is worked out by the server (summaries).
     suspend fun trackers(): TrackerList
     suspend fun recordings(): RecordingList
     suspend fun removeTracker(deviceId: String): Ok
-    // Older Strava paddles (README § Strava, signed in), one at a time from the open screen.
-    suspend fun stravaHistory(since: HistorySpan): StravaHistory
-    suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport
-    suspend fun stravaHistoryDone(): Ok
 }
 
 /** The session ended (the refresh token expired or was revoked): sign in again. */
@@ -82,9 +71,6 @@ class Api(
     private val appVersion: String,
     // Analysing an upload fetches the weather and river flow, so allow it a minute.
     private val http: OkHttpClient = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
-    // False in release until Strava comes back (PLAY-RELEASE.md): the app then reads Strava as
-    // off, as when the server switches it off, so sign-in, connect and import stay hidden.
-    private val stravaInApp: Boolean = BuildConfig.STRAVA_IN_APP,
 ) : AccountApi {
     private val base = baseUrl.trimEnd('/').toHttpUrl()
     private val refreshing = Mutex()
@@ -135,13 +121,6 @@ class Api(
     /** The kept account id, without asking the server (null: not known yet). */
     val keptAccountId: String? get() = tokens.userId
 
-    /** Where Strava sign-in starts, for the Custom Tab (auth/StravaSignIn.kt). */
-    fun stravaStartUrl(challenge: String): String =
-        base.newBuilder().encodedPath("/att/api/auth/strava/init").addQueryParameter("challenge", challenge).build().toString()
-
-    suspend fun stravaSignIn(code: String, verifier: String): SignIn =
-        signIn("/att/api/auth/strava/app-token", """{"code":${str(code)},"verifier":${str(verifier)}}""")
-
     /** Where Sign in with Google starts, for the Custom Tab (auth/GoogleSignIn.kt): a page with one button first. */
     fun googleStartUrl(challenge: String): String =
         base.newBuilder().encodedPath("/att/api/auth/google/init").addQueryParameter("challenge", challenge).build().toString()
@@ -151,7 +130,6 @@ class Api(
 
     override suspend fun signInOptions(): SignInOptions =
         read(call(Request.Builder().url(base.newBuilder().addPathSegments("att/api/auth/options").build()).get().build()), SignInOptions.serializer())
-            .let { if (stravaInApp) it else it.copy(strava = false) }
 
     suspend fun signOut() {
         motionSeen.clear()
@@ -207,15 +185,6 @@ class Api(
     override suspend fun setContact(email: String): Contact = account("POST", "api/account/contact", """{"email":${str(email)}}""", Contact.serializer())
     override suspend fun removeContact(): Ok = account("DELETE", "api/account/contact", null, Ok.serializer())
 
-    override suspend fun stravaStatus(): StravaStatus = account("GET", "att/api/strava/status", null, StravaStatus.serializer())
-    override suspend fun stravaConnect(challenge: String): WebPage =
-        account("POST", "att/api/strava/app-connect", """{"challenge":${str(challenge)}}""", WebPage.serializer())
-    override suspend fun stravaConnectFinish(code: String, verifier: String): StravaStatus =
-        account("POST", "att/api/strava/app-connect/finish", """{"code":${str(code)},"verifier":${str(verifier)}}""", StravaStatus.serializer())
-    override suspend fun setStravaAutoImport(enabled: Boolean): StravaAutoImport =
-        account("POST", "att/api/strava/auto-import", """{"enabled":$enabled}""", StravaAutoImport.serializer())
-    override suspend fun stravaDisconnect(): Ok = account("POST", "att/api/strava/disconnect", null, Ok.serializer())
-
     override suspend fun trackers(): TrackerList = account("GET", "api/account/devices", null, TrackerList.serializer())
     override suspend fun recordings(): RecordingList = account("GET", "api/account/devices/sessions", null, RecordingList.serializer())
     override suspend fun removeTracker(deviceId: String): Ok =
@@ -224,12 +193,6 @@ class Api(
     /** This install's phone on the account (C3): the same [installId] and account always get the same deviceId. */
     suspend fun addPhone(installId: String): Phone =
         account("POST", "api/account/devices/phone", """{"installId":${str(installId)},"model":"phone-android"}""", Phone.serializer())
-
-    override suspend fun stravaHistory(since: HistorySpan): StravaHistory =
-        query("sources.stravaHistory", StravaHistory.serializer(), """{"since":${str(since.wire)}}""")
-    override suspend fun importStravaPaddle(paddle: HistoryPaddle): StravaImport =
-        mutation("sources.importStravaPaddle", StravaImport.serializer(), """{"id":${paddle.id},"sport":${str(paddle.sport)},"startDate":${str(paddle.startDate)}}""")
-    override suspend fun stravaHistoryDone(): Ok = mutation("sources.stravaHistoryDone", Ok.serializer(), "{}")
 
     override suspend fun accountStatus(): AccountStatus = account("GET", "api/account", null, AccountStatus.serializer())
 

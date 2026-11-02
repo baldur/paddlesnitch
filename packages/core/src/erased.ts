@@ -16,6 +16,15 @@
 // rule (infra att-stack.ts, auth/erased/) removes it after 2 days, and a
 // marker older than that is ignored anyway. An upload already past the check
 // when the marker lands can still finish in the same moment (accepted).
+//
+// Every signed-in request checks it too (#795, `@paddlesnitch/core/auth`): a
+// 'done' account is signed out everywhere, so its old token writes nothing.
+// 'pending' signs nobody out (a delete that fails must never lock out a live
+// account). That check reads through a short per-process cache
+// (`erasedForSignIn`), so a server that read 'none' just before the delete
+// finished may still let the old token in for up to CACHE_MS. A marker read
+// that fails throws, so the request fails rather than letting a deleted
+// account in (fail closed, on purpose; the result isn't cached).
 import { createHash } from 'crypto'
 import { getJson, putJson } from './storage'
 
@@ -29,12 +38,14 @@ export type ErasureState = 'none' | 'pending' | 'done'
 
 /** Before erasure starts. */
 export async function markAccountErasing(userId: string): Promise<void> {
+  cache.delete(userId)
   await putJson(key(userId), { state: 'pending', at: new Date().toISOString() } satisfies Marker)
 }
 
 /** Once the account can't sign in again. */
 export async function markAccountErased(userId: string): Promise<void> {
   await putJson(key(userId), { state: 'done', at: new Date().toISOString() } satisfies Marker)
+  cache.set(userId, { done: true, until: Date.now() + CACHE_MS })
 }
 
 export async function erasureState(userId: string): Promise<ErasureState> {
@@ -48,4 +59,35 @@ export async function erasureState(userId: string): Promise<ErasureState> {
 /** True while a deleted account's tokens may still be valid. */
 export async function isAccountErased(userId: string): Promise<boolean> {
   return (await erasureState(userId)) === 'done'
+}
+
+// One storage read per signed-in account per server per minute at most.
+// Never cache longer than this: it is how long a deleted account's token can
+// still get in on a server that read the marker just before the delete ended.
+export const CACHE_MS = 60_000
+const CACHE_MAX = 10_000
+const cache = new Map<string, { done: boolean; until: number }>()
+
+/**
+ * Whether a sign-in for this account must be refused: true only once the
+ * delete has finished ('done'). Cached per process for CACHE_MS.
+ */
+export async function erasedForSignIn(userId: string): Promise<boolean> {
+  const now = Date.now()
+  const hit = cache.get(userId)
+  if (hit && hit.until > now) return hit.done
+  const state = await erasureState(userId)
+  const done = state === 'done'
+  // 'pending' is read again next time: it turns into 'done' or goes away soon.
+  if (state !== 'pending') {
+    cache.delete(userId)
+    if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string)
+    cache.set(userId, { done, until: now + CACHE_MS })
+  }
+  return done
+}
+
+/** Tests only: forget every cached answer. */
+export function clearErasedCache(): void {
+  cache.clear()
 }

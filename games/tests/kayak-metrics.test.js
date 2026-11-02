@@ -145,10 +145,11 @@ test('the sender also goes once a minute while something waits, and when the pag
   assert.equal(beacons.at(-1).body.events[0].props.mode, 'trial');
 });
 
-test("the walk's places as reported: the canoe club's by name, the rowing club's rooms as one, the erg room on its own", () => {
+test("the walk's places as reported: the canoe club's by name, the rowing club's rooms as one, the erg rooms on their own", () => {
   assert.equal(placeTag('boathouse'), 'boathouse');
   assert.equal(placeTag('rboathouse'), 'rowing');
   assert.equal(placeTag('erg'), 'erg');
+  assert.equal(placeTag('kerg'), 'erg', "the canoe club's erg room counts as an erg room");
   const s = createSession(0, 'walk');
   for (const p of ['rclub', 'rchanging', 'rboathouse', 'rclubhouse', 'rpontoon', 'erg']) s.places.add(p);
   assert.equal(sessionEvent(s, 10).props.places, 'rowing,erg');

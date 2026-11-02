@@ -8,8 +8,9 @@ import path from 'path'
 
 const repo = path.resolve(__dirname, '../../../..')
 const roots = ['apps/web/src', 'packages']
-// The AI prompt spells the month out in full; it's never shown as a date on a page.
-const allowed = new Set(['packages/analysis/src/llm.ts'])
+// Nothing is exempt: the AI prompt uses fmtDay too, because the model copies
+// the date format it is given onto the page (2026-11-01).
+const allowed = new Set<string>()
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap(n => {

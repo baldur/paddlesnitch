@@ -21,6 +21,10 @@ void rcs_sample(rc_stroke *s, const rc_config *cfg, uint32_t ms, float gx, float
 void rcs_row(rc_stroke *s, const rc_config *cfg, uint32_t ms, double speed_kmh);
 void rcs_finish(rc_stroke *s, const rc_config *cfg);
 
+/* The live trace (recorder_phone.h, rc_phone_trace) at now_ms, for a
+   recording that started at start_ms (both on the samples' clock). */
+void rcs_trace(const rc_stroke *s, uint32_t now_ms, uint32_t start_ms, rc_trace *out);
+
 /* The device's own track rows: where recorder_core.c writes ms and speed. */
 #define RCS_ROW_MS_COL    1
 #define RCS_ROW_SPEED_COL 8

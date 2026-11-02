@@ -183,6 +183,32 @@ static float autocorr(const rc_stroke *s, uint32_t k0, uint32_t n, int a, float 
     return denom > 0.0f ? sum / denom : 0.0f;
 }
 
+/* Orientation-agnostic: whichever gyroscope axis carries the stroke, the one
+   with the most variance over n samples from k0. Gives its mean and its sum
+   of squares about the mean. The stroke windows and the live trace both
+   pick their axis here, so the trace shows the signal the rate is counted
+   from. */
+static int pick_axis(const rc_stroke *s, uint32_t k0, uint32_t n, float *mean_out, float *ss_out)
+{
+    int best = -1;
+    float best_var = -1.0f, best_mean = 0.0f, denom = 0.0f;
+    for (int a = 0; a < 3; a++) {
+        float sum = 0.0f;
+        for (uint32_t i = 0; i < n; i++) sum += axis(held(s, k0 + i), a);
+        float mean = sum / (float)n;
+        float ss = 0.0f;                  /* sum of squares about the mean */
+        for (uint32_t i = 0; i < n; i++) {
+            float d = axis(held(s, k0 + i), a) - mean;
+            ss += d * d;
+        }
+        float var = ss / (float)n;
+        if (var > best_var) { best_var = var; best = a; best_mean = mean; denom = ss; }
+    }
+    *mean_out = best_mean;
+    *ss_out = denom;
+    return best;
+}
+
 /* Analyses [t, t + window): 1 and the result, or 0 for no clear stroke. */
 static int analyse(const rc_stroke *s, uint32_t t, uint32_t window_ms, rc_stroke_window *w)
 {
@@ -202,21 +228,9 @@ static int analyse(const rc_stroke *s, uint32_t t, uint32_t window_ms, rc_stroke
     float fs = 1000.0f * (float)(n - 1) / (float)span;
     if (fs < MIN_HZ) return 0;
 
-    /* Orientation-agnostic: whichever gyroscope axis carries the stroke. */
-    int best = -1;
-    float best_var = -1.0f, best_mean = 0.0f, denom = 0.0f;
-    for (int a = 0; a < 3; a++) {
-        float sum = 0.0f;
-        for (uint32_t i = 0; i < n; i++) sum += axis(held(s, k0 + i), a);
-        float mean = sum / (float)n;
-        float ss = 0.0f;                  /* sum of squares about the mean */
-        for (uint32_t i = 0; i < n; i++) {
-            float d = axis(held(s, k0 + i), a) - mean;
-            ss += d * d;
-        }
-        float var = ss / (float)n;
-        if (var > best_var) { best_var = var; best = a; best_mean = mean; denom = ss; }
-    }
+    float best_mean, denom;
+    int best = pick_axis(s, k0, n, &best_mean, &denom);
+    float best_var = denom / (float)n;
     if (best < 0 || best_var <= 0.0f || denom <= 0.0f) return 0;
 
     int lo = (int)floorf(fs / MAX_CYCLE_HZ);
@@ -556,4 +570,51 @@ void rcs_finish(rc_stroke *s, const rc_config *cfg)
                     series->alternating * 10 >= SERIES_ALT_SHARE10 * series->windows;
     say(cfg, "series,%d,%lu,%lu\n", series_ok, (unsigned long)series->windows,
         (unsigned long)series->alternating);
+}
+
+/* ---- the live trace (rc_phone_trace) ----------------------------------- */
+
+#define TRACE_MS        10000u  /* the span drawn, back from the newest sample  */
+#define NO_SAMPLES_MS   7000u   /* no sample this long: the sensors stopped.
+                                   Above a phone's batching (BATCHING in
+                                   recorder_phone.h: at most 5 s, plus the
+                                   wait for both sensors and the 1 s tick)  */
+#define STILL_DPS       1.0f    /* rms under this: the device is lying still
+                                   (13 Sep capture, 10 s blocks: parked
+                                   0.15-0.25 deg/s; moving >= 4 km/h, 10+)  */
+#define SCALE_FLOOR_DPS 5.0f    /* a still device draws nearly flat          */
+
+void rcs_trace(const rc_stroke *s, uint32_t now_ms, uint32_t start_ms, rc_trace *out)
+{
+    out->n = 0;
+    out->axis = -1;
+    out->scale_dps = SCALE_FLOOR_DPS;
+    /* The last sign of life: the newest sample; before any, the recording's
+       start (a sample before the first tick still counts from itself). */
+    uint32_t newest = s->ring_n ? held(s, s->ring_n - 1)->ms : start_ms;
+    if (after(now_ms, newest) && now_ms - newest >= NO_SAMPLES_MS) { out->status = RC_TRACE_NO_SAMPLES; return; }
+    if (!s->ring_n) { out->status = RC_TRACE_STARTING; return; }
+
+    /* The ring always holds the last 10 s: the series windows (15 s every
+       5 s) keep it back to at least 10 s before the newest sample. */
+    uint32_t k0 = 0;
+    while (k0 < s->ring_n && newest - held(s, k0)->ms >= TRACE_MS) k0++;
+    if (s->ring_n - k0 > RC_TRACE_MAX) k0 = s->ring_n - RC_TRACE_MAX;
+    uint32_t n = s->ring_n - k0;
+
+    float mean, ss;
+    int a = pick_axis(s, k0, n, &mean, &ss);
+    float peak = 0.0f;
+    for (uint32_t i = 0; i < n; i++) {
+        const rc_stroke_sample *e = held(s, k0 + i);
+        float v = axis(e, a) - mean;
+        out->ago_ms[i] = newest - e->ms;
+        out->dps[i] = v;
+        if (fabsf(v) > peak) peak = fabsf(v);
+    }
+    out->n = n;
+    out->axis = a;
+    if (peak > out->scale_dps) out->scale_dps = peak;
+    /* One sample has no spread: still, whatever the device is doing. */
+    out->status = sqrtf(ss / (float)n) < STILL_DPS ? RC_TRACE_STILL : RC_TRACE_MOTION;
 }

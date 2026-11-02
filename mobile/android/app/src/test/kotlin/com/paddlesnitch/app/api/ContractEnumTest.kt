@@ -10,5 +10,5 @@ class ContractEnumTest {
 
     @Test fun theContractsOwnUnknownIsAValue() = assertEquals(TrackerSummary.FirmwareState.Unknown, state("unknown"))
     @Test fun aValueFromANewerServerIsUnrecognised() = assertEquals(TrackerSummary.FirmwareState.Unrecognised, state("rolling_back"))
-    @Test fun otherEnumsKeepTheirUnknown() = assertEquals(StravaImport.Status.Unknown, ApiJson.decodeFromString(StravaImport.Status.serializer(), "\"queued\""))
+    @Test fun otherEnumsKeepTheirUnknown() = assertEquals(BoatClass.Unknown, ApiJson.decodeFromString(BoatClass.serializer(), "\"V12\""))
 }

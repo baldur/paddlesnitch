@@ -1,26 +1,26 @@
 import Foundation
 import PaddleAPI
 
-/// Google sign-in (mobile/contract/README.md, Signing in → "Google"): as
-/// Strava's, in the system's sign-in browser with a PKCE verifier. The page
+/// Google sign-in (mobile/contract/README.md, Signing in → "Google"): in the
+/// system's sign-in browser with a PKCE verifier. The page
 /// first asks for one tap on "Sign in with Google", so a link alone can't
 /// finish a sign-in for the app. It ends on
 /// com.paddlesnitch.app:/signin/google with a one-time code.
 public enum GoogleSignIn {
+    /// The app's own scheme, which the sign-in page ends on.
+    public static let callbackScheme = "com.paddlesnitch.app"
+
     public static func startURL(baseURL: URL, challenge: String) -> URL {
         baseURL.appending(path: "att/api/auth/google/init")
             .appending(queryItems: [URLQueryItem(name: "challenge", value: challenge)])
     }
 
     /// The code the sign-in came back with, or why there isn't one.
-    /// `stravaOn`: whether to mention Strava as another way in.
-    public static func code(from callback: URL, stravaOn: Bool) throws -> String {
+    public static func code(from callback: URL) throws -> String {
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        if let key = items.first(where: { $0.name == "error" })?.value {
-            throw GoogleSignInError(key: key, stravaOn: stravaOn)
-        }
+        if let key = items.first(where: { $0.name == "error" })?.value { throw GoogleSignInError(key: key) }
         guard let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
-            throw GoogleSignInError(key: "", stravaOn: stravaOn)
+            throw GoogleSignInError(key: "")
         }
         return code
     }
@@ -29,15 +29,11 @@ public enum GoogleSignIn {
 /// The sign-in came back with `?error=<key>`, or without a code.
 public struct GoogleSignInError: Error, Equatable {
     public let key: String
-    public let stravaOn: Bool
 
     /// The website's /signin words for the same keys.
     public var message: String {
         switch key {
-        case "google_account_exists":
-            stravaOn
-                ? "You already have an account with this email. Sign in with your email or Strava instead."
-                : "You already have an account with this email. Sign in with your email instead."
+        case "google_account_exists": "You already have an account with this email. Sign in with your email instead."
         case "google_no_email":
             "Couldn’t sign in with Google, because Google didn’t share a confirmed email address. "
                 + "Please sign up with your email instead."
@@ -48,38 +44,33 @@ public struct GoogleSignInError: Error, Equatable {
     }
 }
 
+/// `strava` is still decoded for older builds, but always ignored: Strava has
+/// gone from paddlesnitch, and the server always sends false.
 extension SignInOptions {
     public static let emailOnly = SignInOptions(google: false, strava: false)
-
-    /// The empty Paddles list: Strava is a way to add one only when it's on.
-    public var noPaddlesYet: String {
-        strava
-            ? "Add one from a GPS file, Strava or a time trial. A tracker adds its own."
-            : "Add one from a GPS file or a time trial. A tracker adds its own."
-    }
 }
 
-/// Help for someone who can't sign in (mobile/contract/README.md, "When
-/// `strava` is false"): an email, not a public issue report, as they'd put
-/// their name and email in it.
+/// Help for someone who made their account with Strava, which has gone: an
+/// email, not a public issue report, as they'd put their name and email in it.
 public enum SignInHelp {
+    /// Under the sign-in form, always.
+    public static let madeWithStrava = "Made your account with Strava? Email us and we’ll move it to your email."
     public static let emailUs =
-        URL(string: "mailto:privacy@paddlesnitch.com?subject=Signing%20in%20without%20Strava")
+        URL(string: "mailto:privacy@paddlesnitch.com?subject=Move%20my%20account%20to%20my%20email")
         ?? URL(filePath: "/")
 }
 
 extension AccountModel {
-    /// Asks which ways in the server offers. Every screen that shows Google
-    /// or Strava asks when it opens: sign in, Account, Add paddle.
+    /// Asks which ways in the server offers (Google). The sign-in screen
+    /// asks when it opens.
     public func loadOptions() async {
         // A failed ask keeps the last answer: only a first ask that fails
         // leaves email only, and says so.
         guard let answer = try? await anonymous.send(Endpoints.getAuthOptions, NoInput()) else {
-            optionsFailed = options == .emailOnly && !stravaSaidOff
+            optionsFailed = options == .emailOnly
             return
         }
         options = answer
-        stravaSaidOff = !answer.strava
         optionsFailed = false
     }
 
@@ -88,14 +79,14 @@ extension AccountModel {
     public func signInWithGoogle(browser: (URL) async throws -> URL) async throws {
         let verifier = Pkce.verifier()
         let start = GoogleSignIn.startURL(baseURL: anonymous.baseURL, challenge: Pkce.challenge(verifier))
-        let code = try GoogleSignIn.code(from: try await browser(start), stravaOn: options.strava)
+        let code = try GoogleSignIn.code(from: try await browser(start))
         try await accept(
             try await anonymous.send(Endpoints.authGoogleAppToken, GoogleAppToken(code: code, verifier: verifier)))
     }
 
     /// The website's issue form, signed in as this account through a
-    /// one-time web-code link, so the report is filed as it (for a Strava-made
-    /// account that can't sign in again to delete itself).
+    /// one-time web-code link, so the report is filed as it (a recording the
+    /// server won't take).
     public func reportPage() async throws -> URL {
         let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: "/account?report=1"))
         guard let url = Self.resolve(page.url, against: client.baseURL) else {

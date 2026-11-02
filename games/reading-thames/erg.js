@@ -125,7 +125,7 @@ export function ergPose(erg) {
 // and whether you beat the rower next to you.
 export function ergResult(done, best, otherMetres, piece = ERG.piece) {
   const record = !best || done < best;
-  const parts = [`500 m in ${clock(done)}${record && best ? ': a new best!' : '.'}`];
+  const parts = [`500 m in ${clock(done)}${record && best ? ', a new best!' : '.'}`];
   if (!record) parts.push(`Your best: ${clock(best)}.`);
   if (otherMetres < piece) parts.push('You beat the rower next to you.');
   return { text: parts.join(' '), record };

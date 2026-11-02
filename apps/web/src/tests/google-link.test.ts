@@ -8,7 +8,7 @@ import { NextRequest } from 'next/server'
 import { makeDataDir, cleanDataDir } from './helpers'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getAuthUser: vi.fn(), getRequestUser: vi.fn() }))
+vi.mock('@/lib/auth', async (orig) => ({ ...(await orig<typeof import('@/lib/auth')>()), getAuthUser: vi.fn(), getRequestUser: vi.fn(), getRequestUserEvenIfErased: vi.fn() }))
 vi.mock('@/lib/app-signin', async (orig) => ({ ...(await orig<typeof import('@/lib/app-signin')>()), hasRecentSignIn: vi.fn() }))
 vi.mock('@/lib/cognito', async (orig) => ({
   ...(await orig<typeof import('@/lib/cognito')>()),
@@ -18,7 +18,7 @@ vi.mock('@/lib/cognito', async (orig) => ({
 vi.mock('@/lib/tos', async (orig) => ({ ...(await orig<typeof import('@/lib/tos')>()), hasAcceptedCurrent: vi.fn(async () => false) }))
 
 import { cookies } from 'next/headers'
-import { getAuthUser, getRequestUser } from '@/lib/auth'
+import { getAuthUser, getRequestUser, getRequestUserEvenIfErased } from '@/lib/auth'
 import { hasRecentSignIn } from '@/lib/app-signin'
 import * as cognito from '@/lib/cognito'
 import { POST as link } from '@/app/att/api/auth/google/link/route'
@@ -347,7 +347,7 @@ describe('isNewGoogleAccount: the only accounts the callback may delete', () => 
 describe('deleting the account', () => {
   it('disconnects a connected Google login before the account goes, and removes a leftover note', async () => {
     const { DELETE } = await import('@/app/api/account/route')
-    vi.mocked(getRequestUser).mockResolvedValue(me)
+    vi.mocked(getRequestUserEvenIfErased).mockResolvedValue(me)
     vi.mocked(cognito.findUserBySub).mockResolvedValue({ sub: 'sub-me', email: 'me@example.com', displayName: 'Me', googleLinked: true, googleId: '1098' })
     vi.mocked(cookies).mockResolvedValue({ get: () => undefined, delete: vi.fn(), set: vi.fn() } as never)
     await leaveLinkNote('me@example.com', 'sub-me')

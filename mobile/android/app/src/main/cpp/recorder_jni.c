@@ -11,6 +11,7 @@
 
 typedef struct {
     rc_phone  phone;   /* ~100 KB: malloc'd, never on the stack */
+    rc_trace  trace;   /* ~1 KB, the same */
     JNIEnv   *env;
     jobject   self;
     jmethodID write;
@@ -80,6 +81,26 @@ JNIEXPORT void JNICALL FN(nativeLive)(JNIEnv *env, jobject self, jlong h, jfloat
     jfloat f[8] = { v.spm, v.roll_deg, v.pitch_deg, v.evenness_pct, v.speed_kmh, v.distance_m,
                     (jfloat)v.fix, v.since_fix_s };
     (*env)->SetFloatArrayRegion(env, out, 0, 8, f);
+}
+
+/* The live motion trace (rc_phone_trace): head gets status, axis and n; scale
+   the scale_dps; ago and dps (RC_TRACE_MAX each) the first n samples. */
+JNIEXPORT void JNICALL FN(nativeTrace)(JNIEnv *env, jobject self, jlong h, jintArray head, jfloatArray scale,
+                                       jintArray ago, jfloatArray dps)
+{
+    recorder *r = (recorder *)(intptr_t)h;
+    rc_trace *tr = &r->trace;
+    rc_phone_trace(&r->phone, tr);
+    uint32_t n = tr->n <= RC_TRACE_MAX ? tr->n : RC_TRACE_MAX;
+    jint hd[3] = { (jint)tr->status, (jint)tr->axis, (jint)n };
+    (*env)->SetIntArrayRegion(env, head, 0, 3, hd);
+    jfloat sc = tr->scale_dps;
+    (*env)->SetFloatArrayRegion(env, scale, 0, 1, &sc);
+    if (n) {
+        /* ago_ms is uint32_t, at most 10,000: the same bits as a jint */
+        (*env)->SetIntArrayRegion(env, ago, 0, (jsize)n, (const jint *)tr->ago_ms);
+        (*env)->SetFloatArrayRegion(env, dps, 0, (jsize)n, tr->dps);
+    }
 }
 
 JNIEXPORT jlong JNICALL FN(nativeDroppedLate)(JNIEnv *env, jobject self, jlong h)

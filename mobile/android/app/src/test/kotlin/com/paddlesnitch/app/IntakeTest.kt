@@ -72,26 +72,11 @@ class IntakeTest {
         assertEquals(Do.Browser("https://paddlesnitch.com/paddles/new"), Intake().arrived(Incoming.OpenOnWeb("https://paddlesnitch.com/paddles/new"), true).second)
     }
 
-    // Anyone can open this address. Without the guard, a crafted link opened sign-in with a
-    // Strava error, even in a release build that hides Strava.
-    @Test fun aStravaReturnCountsOnlyWhenThisAppStartedOneWhileSignedOut() {
-        val back = Incoming.StravaReturn("com.paddlesnitch.app:/signin/strava?code=1")
-        assertEquals(Do.StravaReturn(back.uri), Intake().arrived(back, signedIn = false, stravaPending = true).second)
-        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = false, stravaPending = false).second) // a link alone
-        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = true, stravaPending = true).second) // already signed in
-    }
-
     @Test fun aGoogleReturnCountsOnlyWhenThisAppStartedOneWhileSignedOut() {
         val back = Incoming.GoogleReturn("com.paddlesnitch.app:/signin/google?code=1")
         assertEquals(Do.GoogleReturn(back.uri), Intake().arrived(back, signedIn = false, googlePending = true).second)
         assertEquals(Do.Nothing, Intake().arrived(back, signedIn = false, googlePending = false).second) // a link alone
         assertEquals(Do.Nothing, Intake().arrived(back, signedIn = true, googlePending = true).second) // already signed in another way
-    }
-
-    @Test fun aStravaConnectReturnIsForTheSignedInAccountOnly() {
-        val back = Incoming.StravaConnectReturn("com.paddlesnitch.app:/account/strava?code=abc")
-        assertEquals(Do.StravaConnectReturn(back.uri), Intake().arrived(back, signedIn = true).second)
-        assertEquals(Do.Nothing, Intake().arrived(back, signedIn = false).second) // nobody started one: ignore it
     }
 
     @Test fun theBrowserNamedIsNeverThisAppOrTheChooser() {
