@@ -2,19 +2,12 @@ import Foundation
 import PaddleAPI
 
 /// Google sign-in and the sign-in options (mobile/contract/README.md,
-/// Signing in → "Google", "When strava is false"), played without Google.
+/// Signing in → "Google"), played without Google.
 extension SampleServer {
     /// What `GET /att/api/auth/options` answers; nil makes it fail.
     public var options: SignInOptions? {
         get { lock.withLock { _options } }
         set { lock.withLock { _options = newValue } }
-    }
-
-    /// What every ask after the first answers: options that change while
-    /// the app runs, to show each screen asks again.
-    public var optionsLater: SignInOptions? {
-        get { lock.withLock { _optionsLater } }
-        set { lock.withLock { _optionsLater = newValue } }
     }
 
     static let googleRoutes: Set<String> = [
@@ -25,11 +18,7 @@ extension SampleServer {
         if path == "/att/api/auth/web-code" { return try webCode(request) }
         let body = request.httpBody ?? Data()
         if path == "/att/api/auth/options" {
-            let options = lock.withLock {
-                let now = _options
-                if let later = _optionsLater { _options = later }
-                return now
-            }
+            let options = lock.withLock { _options }
             guard let options else { return (500, Data(#"{"error":"Something went wrong."}"#.utf8)) }
             return (200, try JSONEncoder.paddlesnitch.encode(options))
         }

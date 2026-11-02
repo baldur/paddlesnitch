@@ -18,9 +18,6 @@ struct PaddleListView: View {
     let openTerms: () -> Void
     /// Adding a paddle from a GPS file, and what came of it.
     let adding: AddPaddleModel
-    /// What the server offers (`options`): Strava is a way to add one only
-    /// when it's on.
-    let options: SignInOptions
     let openFile: (URL) -> Void
     /// Opens the record screen (RootView owns the recording).
     let openRecord: () -> Void
@@ -37,7 +34,7 @@ struct PaddleListView: View {
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
-        openTerms: @escaping () -> Void, adding: AddPaddleModel, options: SignInOptions,
+        openTerms: @escaping () -> Void, adding: AddPaddleModel,
         openFile: @escaping (URL) -> Void, openRecord: @escaping () -> Void, uploads: UploadQueue?,
         openReport: @escaping () async -> Bool
     ) {
@@ -48,7 +45,6 @@ struct PaddleListView: View {
         self.signIn = signIn
         self.openTerms = openTerms
         self.adding = adding
-        self.options = options
         self.openFile = openFile
         self.openRecord = openRecord
         self.uploads = uploads
@@ -131,7 +127,7 @@ struct PaddleListView: View {
         case .loaded(let rows) where rows.isEmpty && !hasPending:
             MessageView(
                 title: "No paddles yet",
-                message: options.noPaddlesYet)
+                message: "Add one from a GPS file or a time trial. A tracker adds its own.")
         case .loaded(let rows):
             list(rows)
         }

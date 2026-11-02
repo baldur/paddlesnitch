@@ -40,16 +40,16 @@ struct PaddlesnitchApp: App {
         let server = SampleServer(fixtures: fixtures, summariesPending: arguments.contains("-PendingSummaries"))
         // UI tests: an old sign-in, so deleting asks for a new one.
         if arguments.contains("-StaleSignIn") { server.signInIsRecent = false }
-        // UI tests: a session restored from a Strava sign-in.
-        if arguments.contains("-StravaAccount") { server.placeholderEmail = true }
-        // UI tests: Strava switched off on the server, as production now.
-        if arguments.contains("-StravaOff") { server.options = SignInOptions(google: true, strava: false) }
-        // UI tests: Strava goes off after the app's first ask.
-        if arguments.contains("-StravaOffLater") { server.optionsLater = SignInOptions(google: true, strava: false) }
+        // UI tests: an account made with Strava, whose sign-in email is a placeholder.
+        if arguments.contains("-PlaceholderEmail") { server.placeholderEmail = true }
+        // UI tests: asking whether the account was made with Strava fails.
+        if arguments.contains("-ContactFails") { server.failsContact = true }
+        // UI tests: the 10 minutes run out while DELETE is typed.
+        if arguments.contains("-SignInExpiresOnDelete") { server.signInExpiresOnDelete = true }
+        // UI tests: an older server that still says Strava is on, which the app ignores.
+        if arguments.contains("-OptionsSayStrava") { server.options = SignInOptions(google: true, strava: true) }
         // UI tests: asking which ways in are on fails.
         if arguments.contains("-OptionsFail") { server.options = nil }
-        // UI tests: Strava was connected before it was switched off.
-        if arguments.contains("-StravaConnected") { server.stravaConnected = true }
         // Phone recordings (C3): what the server does with an upload.
         let uploads: [String: PhoneUploads] = [
             "-UploadsDown": .down, "-UploadsRefused": .refused, "-UploadsNoFix": .noFix,

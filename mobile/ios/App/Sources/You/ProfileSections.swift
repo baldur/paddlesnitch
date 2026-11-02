@@ -29,8 +29,8 @@ struct ProfileSections: View {
         "Show your race results and personal bests on a public page. Private and group-only results stay hidden. "
         + "Off until you turn it on."
     static let contactHelp =
-        "You signed in with Strava, which doesn't share your email. Add one so we can tell you about your account, "
-        + "invitations and changes to our Terms. We never share it."
+        "We don’t have an email for this account. Add one so we can move your account to it "
+        + "and tell you about changes to our Terms."
 
     var body: some View {
         Section {
