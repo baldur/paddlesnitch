@@ -47,14 +47,20 @@ final class TrackersTests: AppTestCase {
         scrollToElement(app.buttons["Remove tracker"]).tap()
         XCTAssertTrue(text(containing: "Remove this tracker?").appears(timeout: 10), "asks first")
         // Tapped while the question is still sliding in, the tap missed and
-        // the question stayed (iOS 17 CI on #841): tap until it goes.
+        // the question stayed (iOS 17 CI on #841). Tap again only while it
+        // still says "Remove": once a tap lands it says "Removing…" or goes,
+        // and a second tap must never be sent (lead).
         let confirm = app.buttons["confirm-remove-tracker"]
         XCTAssertTrue(confirm.becomesHittable(timeout: 10))
         for _ in 0..<3 {
             confirm.tap()
-            if confirm.disappears(timeout: 3) { break }
+            let landed = poll(timeout: 3) {
+                let label = (try? confirm.snapshot())?.label  // nil: gone
+                return label == nil || label == "Removing…"
+            }
+            if landed { break }
         }
-        XCTAssertFalse(confirm.exists, "removed")
+        XCTAssertTrue(confirm.disappears(timeout: 10), "removed")
         XCTAssertTrue(app.buttons["Remove tracker"].disappears(timeout: 10))
         XCTAssertTrue(
             text(containing: "no longer on your account").appears(timeout: 10), "says what removed means")
