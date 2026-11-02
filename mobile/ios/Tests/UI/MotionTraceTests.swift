@@ -21,7 +21,7 @@ final class MotionTraceTests: AppTestCase {
             ("motion", "Motion sensor working"),
             ("no_samples", "Couldn’t read the motion sensor. Stroke rate pauses until it’s back."),
         ] {
-            let line = try showTrace(status)
+            let line = try showTrace(status, asked: gpsTops.isEmpty)
             XCTAssertEqual(line.label, words, status)
             XCTAssertFalse(element("record-no-motion").exists, "\(status): the phone has motion sensors")
             let drawn = traceBox()
@@ -46,7 +46,9 @@ final class MotionTraceTests: AppTestCase {
             gpsTops[status] = element("record-gps").frame.minY
             keep("Motion line, \(status)")
             try audit()
-            app.resetAuthorizationStatus(for: .location)  // ends the app, asks again
+            // Ends the app. Not a second permission reset: on CI's newest iOS
+            // the next launch read it as denied (#841).
+            app.terminate()
         }
         // The box keeps its space: the GPS line doesn't move between
         // statuses whose words fit on one line.
@@ -79,7 +81,7 @@ final class MotionTraceLargeTextTests: AppTestCase {
 
     func testTheMotionLineAtTheLargestTextSize() throws {
         for status in ["motion", "no_samples"] {
-            let line = try showTrace(status)
+            let line = try showTrace(status, asked: status == "motion")
             scrollAboveTheBar(line)
             // The frames only: the scroll can take part of the trace off the
             // top (MotionTraceTests checks the drawing).
@@ -90,7 +92,9 @@ final class MotionTraceLargeTextTests: AppTestCase {
                 isReadable(line) && line.frame.maxY <= barTop,
                 "\(status): the whole line on screen: \(line.frame) in \(readableArea), bar at \(barTop)")
             try audit(.textClipped)
-            app.resetAuthorizationStatus(for: .location)  // ends the app, asks again
+            // Ends the app. Not a second permission reset: on CI's newest iOS
+            // the next launch read it as denied (#841).
+            app.terminate()
         }
     }
 
@@ -129,13 +133,17 @@ extension AppTestCase {
 
     /// Signs in and starts a recording that shows the core fixture's first
     /// trace with this status (the last for `no_samples`), and returns its line.
-    func showTrace(_ status: String, file: StaticString = #filePath, line: UInt = #line) throws -> XCUIElement {
+    /// - Parameter asked: iOS asks for location (the first recording in a
+    ///   test, after setUp's reset); after that it's already allowed.
+    func showTrace(
+        _ status: String, asked: Bool = true, file: StaticString = #filePath, line: UInt = #line
+    ) throws -> XCUIElement {
         app.launchEnvironment["PADDLESNITCH_MOTION_TRACE"] = try Self.traceBlock(status)
         app.launch()
         signInAndWait()
         openRecord()
         app.buttons["record-start"].tap()
-        answerLocation("While Using")
+        if asked { answerLocation("While Using") }
         let motion = element("record-motion")
         XCTAssertTrue(motion.appears(timeout: 10), "the motion line", file: file, line: line)
         return motion
