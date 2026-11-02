@@ -468,8 +468,10 @@ out nothing.
 - Join the samples as they are: no smoothing and no animation between ticks, so
   Reduce Motion changes nothing. It moves on in steps as the phone's sensor
   batches arrive (0.5–2 s), and its height is rescaled to the last 10 s each
-  tick, so a gentle wobble and hard paddling look the same size. Both are on
-  purpose: the line says "the sensor sees movement", not how much.
+  tick, so a gentle wobble and hard paddling look the same size. The scale
+  never goes under ±5 deg/s (`scale_dps`), so a phone lying still draws almost
+  flat. Both are on purpose: the line says "the sensor sees movement", not how
+  much.
 - **The status line,** under the trace, in the same style and size as the GPS
   line (muted; wraps at large text), by `status`:
 

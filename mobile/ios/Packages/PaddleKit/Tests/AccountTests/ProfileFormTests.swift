@@ -7,21 +7,19 @@ import Testing
 
 /// Your details and public profile on the native Account screen, as the
 /// website's /account: public or private, the handle, and a contact email
-/// for a Strava account whose sign-in email is a placeholder.
+/// for an account made with Strava, whose sign-in email is a placeholder.
 @MainActor @Suite struct ProfileFormTests {
     let server = SampleServer(fixtures: fixtures)
 
-    func signedIn(strava: Bool = false) async throws -> AccountModel {
+    /// `placeholder`: an account made with Strava, signed in from before.
+    func signedIn(placeholder: Bool = false) async throws -> AccountModel {
         let suite = "profile-\(UUID().uuidString)"
         let account = AccountModel(
             baseURL: URL(string: "https://paddlesnitch.test") ?? URL(filePath: "/"), transport: server,
             app: "ios/1.0", tokens: MemoryTokenStore(),
             profile: ProfileStore(defaults: { UserDefaults(suiteName: suite) ?? .standard }))
-        if strava {
-            try await account.signInWithStrava(browser: SampleServer.stravaBrowser)
-        } else {
-            try await account.signIn(email: "pat@example.com", password: SampleServer.password)
-        }
+        try await account.signIn(email: "pat@example.com", password: SampleServer.password)
+        server.placeholderEmail = placeholder
         return account
     }
 
@@ -34,8 +32,8 @@ import Testing
         #expect(!form.needsContactEmail, "a real sign-in email needs no contact email")
     }
 
-    @Test func aStravaAccountIsAskedForAContactEmail() async throws {
-        let form = ProfileForm(account: try await signedIn(strava: true))
+    @Test func anAccountMadeWithStravaIsAskedForAContactEmail() async throws {
+        let form = ProfileForm(account: try await signedIn(placeholder: true))
         await form.load()
         #expect(form.needsContactEmail)
         #expect(form.contactSaved == nil)
@@ -93,7 +91,7 @@ import Testing
     }
 
     @Test func aContactEmailIsSavedThenRemoved() async throws {
-        let form = ProfileForm(account: try await signedIn(strava: true))
+        let form = ProfileForm(account: try await signedIn(placeholder: true))
         await form.load()
         #expect(form.contactButton == "Save")
         form.contactInput = " me@example.com "
@@ -107,7 +105,7 @@ import Testing
     }
 
     @Test func aBadContactEmailSaysWhy() async throws {
-        let form = ProfileForm(account: try await signedIn(strava: true))
+        let form = ProfileForm(account: try await signedIn(placeholder: true))
         await form.load()
         form.contactInput = "not-an-email"
         await form.saveContact()
