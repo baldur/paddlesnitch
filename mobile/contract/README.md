@@ -448,6 +448,57 @@ has a GPS fix", `since_fix_s` "0 while there's a fix, NAN before the first"):
 
 The line is not a live region.
 
+### Motion line (live trace)
+
+Under the stroke rate, above the GPS line: a small live trace of the motion the
+recorder is writing, so the paddler can see the sensors work (owner, 2026-11-01).
+From `rc_phone_trace` (recorder-core 0.6.0, `recorder_phone.h`), called after
+each tick. The core decides everything; the app draws what it returns and works
+out nothing.
+
+- **Order on both apps:** elapsed time, stroke rate, the trace, its status line,
+  then the GPS line. (Android today draws GPS above the stroke rate; it moves
+  under the trace, as iOS has it.)
+- **The trace:** full width, always 48 dp/pt tall, also at large text: the box
+  keeps its space in every status, empty when there's nothing to draw, so nothing
+  below it jumps when the sensor starts or drops out. One line, 2 dp/pt wide with
+  round joins, in primary text blue (`text-primary-text`); no axes, numbers, grid
+  or fill. x is `ago_ms`: newest at the right edge, 10 s across. y is
+  `dps / scale_dps` (−1 to 1, 0 in the middle).
+- Join the samples as they are: no smoothing and no animation between ticks, so
+  Reduce Motion changes nothing. It moves on in steps as the phone's sensor
+  batches arrive (0.5–2 s), and its height is rescaled to the last 10 s each
+  tick, so a gentle wobble and hard paddling look the same size. Both are on
+  purpose: the line says "the sensor sees movement", not how much.
+- **The status line,** under the trace, in the same style and size as the GPS
+  line (muted; wraps at large text), by `status`:
+
+| `status` | Trace | Shown |
+|---|---|---|
+| `RC_TRACE_STARTING` | none | Starting motion sensor |
+| `RC_TRACE_MOTION` | drawn | Motion sensor working |
+| `RC_TRACE_STILL` | drawn | Motion sensor working, phone still |
+| `RC_TRACE_NO_SAMPLES` | none | Couldn’t read the motion sensor. Stroke rate pauses until it’s back. (red) |
+
+- `STILL` can come back after `MOTION` (the phone put down during a rest), so
+  its words fit either way. `NO_SAMPLES` can clear too (Android may pause
+  sensor delivery and resume), and stroke rate carries on from the new samples.
+- **Accessibility:** the trace is hidden from screen readers. The status line is
+  read as it is. Like the GPS line, two changes are announced once each time they
+  happen: "Couldn’t read the motion sensor. Stroke rate pauses until it’s back."
+  on entering `NO_SAMPLES`, and "Motion sensor back" on leaving it. It isn't a live region otherwise.
+- **No motion sensors on the phone** (the app knows before Start and passes no
+  motion to the core): don't call `rc_phone_trace` and show no trace or motion
+  line; the existing "No motion sensors on this phone, so no stroke rate" stays.
+  (The core would report `STARTING`, then `NO_SAMPLES`, which would wrongly read
+  as a fault.)
+- **Tests:** the core's fixtures `trace_phone_flat` and `trace_phone_paddle` (golden
+  `trace.csv`, format in `recorder-core/fixtures/README.md`). Each app's fixture
+  runner takes the `trace_phone_` prefix, compares `trace.csv`, and fails if it
+  finds no `trace_phone_` case (a count of all cases would pass without them). Screenshot
+  tests draw each status from a fixture, plus one at the largest text size and one
+  on the smallest phone each app supports (iPhone SE; Android font scale 2.0).
+
 ### Altitude
 
 Height above sea level, as the tracker (`recorder_phone.h`, `alt_m`: "above
