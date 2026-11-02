@@ -213,17 +213,32 @@ isn't obvious from the code.
   XCTest fails the test ("No matches found … Keyboard", #833). AddPaddle's
   "Failed to terminate com.paddlesnitch.app" is the simulator: leave it
   unless it repeats.
-- A launch timeout on a shard's first test ("Failed to launch", "Failed
-  to get launch progress", "Timed out while acquiring background
+- A launch timeout on a shard's first test ("Timed out while launching
+  application", "… requesting launch progress", "… acquiring background
   assertion") came four times in two days, always on the first
   `app.launch()` in `AppTestCase.setUp()`, and the app started anyway.
-  Booting and erasing the simulator first (#845, a draft) cost up to
-  4 min a job and didn't stop it. So `setUp` launches once more after a
-  launch timeout, and only then (`launchRetryingOnce`, lead's choice).
-  Each retry prints "warning: Launch timed out in <test>; launching
-  again": grep the CI logs for it, leaving out LaunchingTests' own. A second timeout or any other failure still fails.
-  Read the xcresult's activities for which launch failed: the summary
-  names the test, not the step.
+  Booting and erasing the simulator first (#845) cost up to 4 min a job
+  and didn't stop it. So `setUp` launches once more after a launch
+  timeout, and only then (`launchRetryingOnce`, lead's choice). "Failed
+  to launch" alone isn't retried: a crash at launch says that too. Each
+  retry prints "warning: Launch timed out in <test>; launching again":
+  grep the CI logs for it, leaving out LaunchingTests' own. A second
+  timeout or any other failure still fails. Read the xcresult's
+  activities for which launch failed: the summary names the test, not
+  the step.
+- On the record screen at the largest text, the hold-to-stop bar covers the
+  foot of the screen. It keeps room for the hidden "Keep holding to stop.".
+  `scroll(by:)` starts its drag there, and a drag on the bar doesn't scroll
+  the page. `isHittable` doesn't count the bar either: it said yes to text
+  under it. MotionTraceLargeTextTests drags from just above the bar and
+  works out where the bar starts (`barTop`). Look at the iPhone SE
+  screenshots: the 6.1-inch phone hid this. CI runs only a standard
+  iPhone, so the SE run is by hand: before a PR that changes the record
+  screen, run MotionTraceTests on an iPhone SE (3rd generation) simulator.
+- The simulator has no motion sensors. With `-SampleServer`,
+  `PADDLESNITCH_MOTION_TRACE` (one block of a recorder-core `trace.csv`)
+  is the trace the record screen shows, so the UI tests draw each status
+  from the core's own fixtures. A missing status throws, never skips.
 - A CI log where every suite says "0 failures" and then `** TEST FAILED **`
   still had failures: a failed test restarts the test runner, and the
   per-suite counts after that cover only the restarted run. Read the

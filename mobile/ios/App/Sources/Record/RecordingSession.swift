@@ -21,14 +21,33 @@ final class RecordingSession {
         if !isRecording {
             guard let folder else { return }
             self.folder = folder
+            let trace = Self.traceForTests
             model = RecordModel(
                 announce: { AccessibilityNotification.Announcement($0).post() },
                 start: { onStatus in
-                    let recording = try PhoneRecording(directory: folder, onStatus: onStatus)
+                    let send: @MainActor @Sendable (RecordingStatus) -> Void =
+                        trace.map { trace in
+                            { @MainActor @Sendable status in
+                                var status = status
+                                status.trace = trace
+                                onStatus(status)
+                            }
+                        } ?? onStatus
+                    let recording = try PhoneRecording(directory: folder, onStatus: send)
                     return (recording, recording.files.track.lastPathComponent)
                 })
         }
         showing = true
+    }
+
+    /// UI tests only: the simulator has no motion sensors, so with the sample
+    /// server, `PADDLESNITCH_MOTION_TRACE` (one block of a recorder-core
+    /// fixture's trace.csv) is the trace the screen shows.
+    private static var traceForTests: MotionTrace? {
+        guard PaddlesnitchApp.usesSampleServer,
+            let csv = ProcessInfo.processInfo.environment["PADDLESNITCH_MOTION_TRACE"]
+        else { return nil }
+        return MotionTrace(csv: csv)
     }
 
     /// The signed-in account changed. A recording ends when its account was
