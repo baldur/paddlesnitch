@@ -134,8 +134,10 @@ struct PaddleDetailView: View {
             }
             if !paddle.efforts.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Rows with a rule above each, no box: data stays square, as
+                    // the website's table (#826).
                     ForEach(paddle.efforts, id: \.number) { effort in
-                        if effort.number > 1 { Divider().overlay(Palette.border) }
+                        Divider().overlay(Palette.border)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Effort \(effort.number) at \(effort.at)")
                                 .font(.plexSans(.subheadline)).foregroundStyle(Palette.muted)
@@ -145,14 +147,13 @@ struct PaddleDetailView: View {
                                 Text(trend).font(.plexSans(.subheadline)).foregroundStyle(Palette.split)
                             }
                         }
-                        .padding(12)
+                        .padding(.vertical, 12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .background(Palette.surface)
-                .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
-                .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("efforts")
             }
             if !paddle.rests.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
@@ -189,10 +190,7 @@ struct PaddleDetailView: View {
                         "\(row.km) kilometres at \(row.at), \(row.pace) per 500, \(row.spm) strokes a minute")
                 }
             }
-            .padding(.horizontal, 12)
-            .background(Palette.surface)
-            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+            // No box: data stays square, as the website's table (#826).
         }
         .accessibilityIdentifier("splits")
     }
@@ -229,8 +227,7 @@ struct SpeedLegend: View {
                 stops: [0, 0.4, 0.7, 1].map { .init(color: Color(ColourScale.ramp($0)), location: $0) },
                 startPoint: .leading, endPoint: .trailing
             )
-            .frame(height: 6)
-            .clipShape(Capsule())
+            .frame(height: 6)  // square: data has no rounded corners (design system)
             HStack {
                 Text(legend.slower)
                 Spacer()
@@ -244,6 +241,7 @@ struct SpeedLegend: View {
         .background(Palette.surface)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Speed colours: blue \(legend.slower), red \(legend.faster)")
+        .accessibilityIdentifier("speed-legend")
     }
 }
 

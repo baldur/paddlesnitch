@@ -26,6 +26,51 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(text(containing: "29 s at 1:23").exists)
     }
 
+    /// Data has no rounded corners (design system): the speed legend's bar is
+    /// square, as on Android. It finds the bar's left and top edges in the
+    /// pixels, then reads a third of a point in from that corner: the bar's
+    /// colour when square, the card behind it when the end is rounded.
+    func testTheSpeedLegendIsSquare() {
+        open("pdl-river")
+        let legend = element("speed-legend")
+        XCTAssertTrue(legend.appears(timeout: 10))
+        let shot = legend.screenshot().image
+        guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
+        let card = pixels.at(x: 2, y: 2)
+        let step = 1 / pixels.scale
+        // The bar is 6 pt tall near the top; scan its middle row for its left edge.
+        let rows = stride(from: 0, to: shot.size.height / 2, by: step)
+        guard
+            let middle = rows.first(where: { y in
+                !pixels.at(x: shot.size.width / 2, y: y).near(card)
+            }).map({ $0 + 3 }),
+            let left = stride(from: 0, to: shot.size.width / 2, by: step)
+                .first(where: { !pixels.at(x: $0, y: middle).near(card) }),
+            let top = rows.first(where: { !pixels.at(x: left + 1, y: $0).near(card) })
+        else { return XCTFail("no bar in the legend") }
+        let bar = pixels.at(x: left + 1, y: middle)
+        let corner = pixels.at(x: left + 0.34, y: top + 0.34)
+        XCTAssertTrue(corner.near(bar), "the corner is the bar's colour: \(corner) vs \(bar)")
+    }
+
+    /// #826: the efforts are rows with rules, no box, as the website's table.
+    /// Down the list's right edge the pixels are the page's background, bar
+    /// the 1 px rules; a box (the card colour, close to the page's, so the
+    /// check is tight) would fill that edge. The splits are drawn the same
+    /// way, but no sample paddle is long enough to show them.
+    func testEffortsHaveNoBox() {
+        open("pdl-river")
+        let list = scrollTo("efforts")
+        XCTAssertTrue(list.exists)
+        let shot = list.screenshot().image
+        guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
+        let page = Pixels.RGB(r: 0x0b, g: 0x12, b: 0x20)  // Palette.bg
+        let x = shot.size.width - 1
+        let column = stride(from: 1, to: shot.size.height - 1, by: 1).map { pixels.at(x: x, y: $0) }
+        let onPage = column.filter { $0.near(page, within: 8) }.count
+        XCTAssertGreaterThan(onPage * 10, column.count * 9, "\(onPage) of \(column.count) on the page")
+    }
+
     func testAPaddleWithoutGPSSaysWhyThereIsNoMap() {
         open("pdl-motion")
         XCTAssertTrue(text(containing: "The GPS lost the sky").appears(timeout: 10))
