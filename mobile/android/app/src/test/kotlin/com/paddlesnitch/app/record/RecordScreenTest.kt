@@ -31,6 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.junit.Test
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -274,6 +281,122 @@ class RecordScreenTest {
         assertEquals("—", liveStrokeRate(null))
         assertEquals("—", liveStrokeRate(notReady))
         assertEquals("58", liveStrokeRate(notReady.copy(spm = 57.6f)))
+    }
+
+    // ---- The motion line (mobile/contract/README.md, "Motion line"), drawn from the core's fixtures.
+    private val flat by lazy { fixtureTraces("trace_phone_flat") }
+    private val paddle by lazy { fixtureTraces("trace_phone_paddle") }
+    private val starting get() = flat.first { it.status == RecorderCore.TraceStatus.STARTING }
+    private val still get() = flat.last { it.status == RecorderCore.TraceStatus.STILL }
+    private val noSamples get() = flat.last { it.status == RecorderCore.TraceStatus.NO_SAMPLES }
+    private val moving get() = paddle.last { it.status == RecorderCore.TraceStatus.MOTION }
+    private fun traced(t: RecorderCore.Trace?) = notReady.copy(trace = t)
+    private fun recordingWith(t: RecorderCore.Trace) = RecordingService.State.Recording(files, MutableStateFlow(traced(t)), startedAt = 1_000L)
+    private fun traceNode() = compose.onNodeWithTag(MOTION_TRACE_TAG, useUnmergedTree = true)
+
+    @Test fun theFixturesHaveEveryStatus() {
+        assertEquals(0, starting.n); assertEquals(0, noSamples.n)
+        assertTrue(still.n > 1); assertTrue(moving.n > 1)
+    }
+
+    @Test fun theMotionLineIsTheCoresStatusInTheAgreedWords() {
+        assertEquals("Starting motion sensor" to false, motionLine(starting))
+        assertEquals("Motion sensor working" to false, motionLine(moving))
+        assertEquals("Motion sensor working, phone still" to false, motionLine(still))
+        assertEquals("Couldn’t read the motion sensor. Stroke rate pauses until it’s back." to true, motionLine(noSamples))
+    }
+
+    @Test fun onlyTheSensorStoppingAndComingBackAreAnnounced() {
+        assertEquals(null, motionAnnouncement(null, traced(starting)))
+        assertEquals(null, motionAnnouncement(traced(starting), traced(still)))
+        assertEquals(null, motionAnnouncement(traced(still), traced(moving)))
+        assertEquals(null, motionAnnouncement(traced(moving), traced(still)))   // put down for a rest
+        assertEquals(MOTION_NO_SAMPLES, motionAnnouncement(traced(still), traced(noSamples)))
+        assertEquals(MOTION_NO_SAMPLES, motionAnnouncement(traced(starting), traced(noSamples)))   // never started
+        assertEquals(null, motionAnnouncement(traced(noSamples), traced(noSamples)))
+        assertEquals(MOTION_BACK, motionAnnouncement(traced(noSamples), traced(moving)))
+        assertEquals(null, motionAnnouncement(traced(noSamples), null))            // stopped recording: nothing
+        assertEquals(null, motionAnnouncement(notReady, notReady))                 // no motion sensors: no trace
+    }
+
+    @Test fun gpsAndMotionChangingOnOneTickAreOneAnnouncement() {
+        assertEquals("GPS lost. $MOTION_NO_SAMPLES", announcement(fixed.copy(trace = still), lost(0.2f).copy(trace = noSamples)))
+        assertEquals("GPS back", announcement(lost(12f).copy(trace = still), fixed.copy(trace = still)))
+        assertEquals(MOTION_BACK, announcement(traced(noSamples), traced(moving)))
+        assertEquals(null, announcement(traced(still), traced(moving)))
+    }
+
+    // On the screen itself: the sensor stopping and coming back are each announced once, nothing else.
+    @Test fun theScreenAnnouncesTheSensorStoppingAndComingBack() {
+        val am = compose.activity.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+        org.robolectric.Shadows.shadowOf(am).setEnabled(true)
+        val live = MutableStateFlow(traced(still))
+        show(RecordingService.State.Recording(files, live, startedAt = 1_000L))
+        listOf(moving, noSamples, noSamples, moving, still).forEach { live.value = traced(it); compose.waitForIdle() }
+        val said = org.robolectric.Shadows.shadowOf(am).sentAccessibilityEvents
+            .filter { it.eventType == android.view.accessibility.AccessibilityEvent.TYPE_ANNOUNCEMENT }.map { it.text.joinToString("") }
+        assertEquals(listOf(MOTION_NO_SAMPLES, MOTION_BACK), said)
+    }
+
+    @Test fun eachSampleIsDrawnWhereTheCoreSaysNewestAtTheRight() {
+        val t = RecorderCore.Trace(RecorderCore.TraceStatus.MOTION, 1, 20f, intArrayOf(10_000, 5_000, 0), floatArrayOf(20f, 0f, -20f))
+        assertEquals(listOf(Offset(1f, 1f), Offset(500f, 24f), Offset(999f, 47f)), tracePoints(t, 1000f, 48f, 1f))
+        assertEquals(emptyList<Offset>(), tracePoints(noSamples, 1000f, 48f, 1f))
+    }
+
+    @Test fun motionStarting() { show(recordingWith(starting)); compose.onNodeWithText(MOTION_STARTING).assertExists(); golden("recording.motion-starting") }
+    @Test fun motionWorking() { show(recordingWith(moving)); compose.onNodeWithText(MOTION_WORKING).assertExists(); golden("recording.motion-working") }
+    @Test fun motionStill() { show(recordingWith(still)); compose.onNodeWithText(MOTION_STILL).assertExists(); golden("recording.motion-still") }
+    @Test fun motionNoSamples() { show(recordingWith(noSamples)); compose.onNodeWithText(MOTION_NO_SAMPLES).assertExists(); golden("recording.motion-no-samples") }
+    @Test fun motionAtLargeText() { show(recordingWith(moving), fontScale = 2f); golden("recording.motion.large-text") }
+    @Test @Config(qualifiers = "w320dp-h568dp") fun motionOnASmallPhoneAtLargeText() {
+        show(recordingWith(noSamples), fontScale = 2f)
+        // Below the fold here: the empty box keeps its place and the line wraps, nothing clips.
+        compose.onNodeWithText(MOTION_NO_SAMPLES).performScrollTo()
+        val box = traceNode().fetchSemanticsNode().boundsInRoot
+        assertTrue("the box is on screen: $box", box.top >= 0f)
+        golden("recording.motion.small-phone")
+    }
+
+    // The box keeps its space in every status, also at large text, so nothing under it jumps.
+    @Test fun theTraceIsAlways48dpTall() {
+        val live = MutableStateFlow(traced(starting))
+        show(RecordingService.State.Recording(files, live, startedAt = 1_000L), fontScale = 2f)
+        listOf(starting, still, moving, noSamples).forEach {
+            live.value = traced(it)
+            compose.waitForIdle()
+            val b = traceNode().fetchSemanticsNode().boundsInRoot
+            assertEquals("${it.status}", with(compose.density) { 48.dp.toPx() }, b.height, 0.5f)
+        }
+    }
+
+    @Test fun theOrderIsTimeStrokeRateTraceStatusThenGps() {
+        show(recordingWith(moving))
+        val tops = listOf(
+            compose.onNodeWithContentDescription("Elapsed", substring = true),
+            compose.onNodeWithContentDescription("Stroke rate", substring = true),
+            traceNode(),
+            compose.onNodeWithText(MOTION_WORKING),
+            compose.onNodeWithContentDescription("Waiting for GPS"),
+        ).map { it.fetchSemanticsNode().boundsInRoot.top }
+        assertEquals(tops.sorted(), tops)
+        assertEquals(tops.distinct(), tops)
+    }
+
+    @Test fun screenReadersGetTheStatusLineNotTheTrace() {
+        show(recordingWith(moving))
+        val trace = traceNode().fetchSemanticsNode().config
+        assertFalse(trace.contains(SemanticsProperties.ContentDescription))
+        assertFalse(trace.contains(SemanticsProperties.Text))
+        assertTrue(trace.isClearingSemantics)
+        val status = compose.onNodeWithText(MOTION_WORKING).fetchSemanticsNode().config
+        assertFalse(status.contains(SemanticsProperties.LiveRegion))   // not a live region: announced on change only
+    }
+
+    @Test fun withoutMotionSensorsThereIsNoTraceOrMotionLine() {
+        show(recording.copy(motion = false))
+        traceNode().assertDoesNotExist()
+        listOf(MOTION_STARTING, MOTION_NO_SAMPLES).forEach { compose.onNodeWithText(it).assertDoesNotExist() }
     }
 
     // A refused token refresh signs out by itself (#702), mid-paddle as easily as not.

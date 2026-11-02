@@ -29,6 +29,13 @@ class RecorderCore(has: Int, motion: Boolean, platform: Int = ANDROID, private v
     fun tick(tNs: Long, battMv: Int) = nativeTick(open(), tNs, battMv)
     fun finish() = nativeFinish(open())
     fun live(): Live = FloatArray(8).also { nativeLive(open(), it) }.let { Live(it[0], it[1], it[2], it[3], it[4], it[5], it[6] != 0f, it[7]) }
+    /** The live motion trace as of the latest tick (rc_phone_trace). Only for a recording with motion. */
+    fun trace(): Trace {
+        val head = IntArray(3); val scale = FloatArray(1); val ago = IntArray(TRACE_MAX); val dps = FloatArray(TRACE_MAX)
+        nativeTrace(open(), head, scale, ago, dps)
+        val n = head[2]
+        return Trace(TraceStatus.entries[head[0]], head[1], scale[0], ago.copyOf(n), dps.copyOf(n))
+    }
     val droppedLate: Long get() = nativeDroppedLate(open())
     val droppedUnpaired: Long get() = nativeDroppedUnpaired(open())
 
@@ -50,6 +57,7 @@ class RecorderCore(has: Int, motion: Boolean, platform: Int = ANDROID, private v
     private external fun nativeTick(h: Long, t: Long, battMv: Int)
     private external fun nativeFinish(h: Long)
     private external fun nativeLive(h: Long, out: FloatArray)
+    private external fun nativeTrace(h: Long, head: IntArray, scale: FloatArray, ago: IntArray, dps: FloatArray)
     private external fun nativeDroppedLate(h: Long): Long
     private external fun nativeDroppedUnpaired(h: Long): Long
     private external fun nativeFree(h: Long)
@@ -64,7 +72,21 @@ class RecorderCore(has: Int, motion: Boolean, platform: Int = ANDROID, private v
     data class Live(
         val spm: Float, val rollDeg: Float, val pitchDeg: Float, val evennessPct: Float, val speedKmh: Float, val distanceM: Float,
         val fix: Boolean = false, val sinceFixS: Float = Float.NaN,
+        /** The motion trace after the same tick; null for a recording without motion. */
+        val trace: Trace? = null,
     )
+
+    /** rc_trace_status, in the header's order (its values are 0 to 3). */
+    enum class TraceStatus { STARTING, NO_SAMPLES, STILL, MOTION }
+
+    /**
+     * The core's live motion trace (recorder_core.h, LIVE MOTION TRACE): [agoMs] before the newest
+     * sample (the last is 0) and [dps] about the mean, oldest first; draw dps in ±[scaleDps].
+     * [axis] is the gyroscope's x, y or z (0, 1, 2), -1 with no samples.
+     */
+    class Trace(val status: TraceStatus, val axis: Int, val scaleDps: Float, val agoMs: IntArray, val dps: FloatArray) {
+        val n get() = agoMs.size
+    }
 
     companion object {
         // recorder_phone.h: rc_platform, rc_stream and the RC_HAS_* bits.
@@ -74,6 +96,7 @@ class RecorderCore(has: Int, motion: Boolean, platform: Int = ANDROID, private v
         const val MOTION = 1
         const val HAS_SATS = 1 shl 0
         const val HAS_BATT_MV = 1 shl 2
+        const val TRACE_MAX = 128   // RC_TRACE_MAX
 
         @Volatile private var loaded = false
         private fun loadLibrary() {
