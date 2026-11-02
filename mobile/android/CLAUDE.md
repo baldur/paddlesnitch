@@ -134,6 +134,14 @@ time and isn't obvious from the code.
   (`SystemClock.uptimeMillis()`), or the core ignores every tick after the first as a repeat.
   Robolectric's `sendSensorEventToListeners` ignores the Handler, so tests send from the
   recorder thread themselves (`onThread`).
+- The live motion trace (recorder-core 0.6.0, contract "Motion line") is `RecorderCore.trace()`, taken
+  after each tick only when the recording has motion, and carried in `Live.trace`. The screen draws it as
+  it is (`tracePoints`: x from `ago_ms`, y from `dps / scale_dps`) and shows the status in the agreed
+  words. `RecorderFixturesTest` takes the `trace_phone_` cases and fails if it finds none. It writes
+  `trace.csv` as C's `%.2f`: the float's exact value, half to even, `-0.00` kept. `String.format`
+  rounds the shortest decimal half up, so it differs on ties. It also compares every case's
+  `stroke.csv`. The goldens draw traces replayed from the fixtures (`fixtureTraces`), never
+  made-up samples.
 - A recording's write errors never reach the core: `RecordingFiles.write` catches and counts
   them, and the JNI callback returns early while an exception is pending (CheckJNI aborts a
   debug build that makes JNI calls with one pending).
