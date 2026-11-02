@@ -255,4 +255,7 @@ isn't obvious from the code.
   element", no element; #846's run, EmailCodeStepTests). When an audit
   finds anything, `audit()` declines the sheet if it's up and looks
   again. The audit lives in `Auditing.swift`: `AppTestCase.swift` is at
-  SwiftLint's 400-line limit.
+  SwiftLint's 400-line limit. The same run had the sheet come just after
+  a 2 s look for it and cover the code field through a 5 s wait: wait
+  with `becomesClear` (decline, wait 3 s, three times), never one look
+  then one wait.

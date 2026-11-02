@@ -77,8 +77,7 @@ class AppTestCase: XCTestCase {
             // keyboard is still rising when the code is typed and it's lost.
             // "Save Password?" can come late, after the first look for it,
             // and cover the field: look again, then wait until a tap lands.
-            declineSavingPassword()
-            XCTAssertTrue(scrollToElement(field).becomesHittable(timeout: 5), "nothing over the field")
+            XCTAssertTrue(becomesClear(scrollToElement(field)), "nothing over the field")
             field.tap()
             XCTAssertTrue(field.waitForKeyboardFocus(timeout: 5), "the field has the keyboard")
         }
@@ -90,7 +89,7 @@ class AppTestCase: XCTestCase {
         guard typedText(in: field) != text else { return }
         declineSavingPassword()
         if !field.waitForKeyboardFocus(timeout: 2) {
-            XCTAssertTrue(field.becomesHittable(timeout: 5), "nothing over the field")
+            XCTAssertTrue(becomesClear(field), "nothing over the field")
             field.tap()
             XCTAssertTrue(field.waitForKeyboardFocus(timeout: 5), "the field has the keyboard")
         }
@@ -99,6 +98,17 @@ class AppTestCase: XCTestCase {
         if stray > 0 { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: stray)) }
         field.typeText(text)
         XCTAssertEqual(typedText(in: field), text, "typed", file: file, line: line)
+    }
+
+    /// Whether it becomes hittable, putting away a "Save Password?" that
+    /// comes late, even during the wait: on #846's run it came after a look
+    /// for it and covered the field for the rest of a single wait.
+    func becomesClear(_ element: XCUIElement) -> Bool {
+        for _ in 0..<3 {
+            declineSavingPassword()
+            if element.becomesHittable(timeout: 3) { return true }
+        }
+        return false
     }
 
     /// What's in a text field: an empty one reports its placeholder as its value.
