@@ -130,6 +130,9 @@ fun mirroredCounts(bins: List<RollHistogram.Bin>): List<Long> = bins.map { b ->
     bins.reduce { best, c -> if (abs(c.centreDeg + b.centreDeg) < abs(best.centreDeg + b.centreDeg)) c else best }.count
 }
 
+/** Label every nth tick so labels [lineHeight] tall, [gap] apart, keep a fifth of a line between them. */
+fun labelEvery(gap: Float, lineHeight: Float): Int = generateSequence(1) { it + 1 }.first { gap * it >= lineHeight * 1.2f }
+
 /** The histogram's x range, ±this: the widest bar's centre plus half a bin, at least 1°, so the edge bars sit inside. */
 fun histogramRange(h: RollHistogram) = max(h.bins.maxOf { abs(it.centreDeg) } + h.binWidthDeg / 2, 1.0)
 
@@ -153,9 +156,11 @@ fun BoatMotionScreen(
             // A 404 would fail every time: no Try again. Anything else can be tried again.
             if ((it as? ApiFailure)?.status == 404) notFound = true else failed = true
         }
-        // Try again failed too: its button went while loading, so focus comes back to the error (the website's ReadError).
-        if (failed && attempt > 0) runCatching { errorFocus.requestFocus() }
     }
+    // Try again failed too: its button went while loading, so focus comes back to the error (the website's ReadError).
+    // Only then is the error a focus stop; after the first failure Try again is the next stop, as on the website.
+    val retriedAndFailed = failed && attempt > 0
+    LaunchedEffect(retriedAndFailed, attempt) { if (retriedAndFailed) runCatching { errorFocus.requestFocus() } }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Eyebrow(fmtDayTime(paddle.paddledAt))
@@ -163,7 +168,7 @@ fun BoatMotionScreen(
         }
         // Always there, so TalkBack reads the failure when it arrives.
         Box(Modifier.fillMaxWidth().testTag("motion-error").semantics { liveRegion = LiveRegionMode.Polite }) {
-            if (failed) Column(Modifier.focusRequester(errorFocus).focusable(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (failed) Column(Modifier.focusRequester(errorFocus).then(if (retriedAndFailed) Modifier.focusable() else Modifier), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(MOTION_FAILED, color = PsColor.red, fontSize = 16.sp)
                 Button(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
             }
@@ -171,7 +176,8 @@ fun BoatMotionScreen(
         val m = motion
         when {
             failed -> {}
-            notFound -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // In the same card as "No boat motion", so the screen's empty states look alike.
+            notFound -> Column(Modifier.box().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(MOTION_NOT_FOUND, color = PsColor.fg, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.semantics { heading() })
                 OutlinedButton(onClick = onBack, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Back to the paddle") }
             }
@@ -294,11 +300,18 @@ private fun DrawScope.label(m: TextMeasurer, s: String, x: Float, y: Float, alig
     drawText(layout, topLeft = Offset(x - layout.size.width * align, y - layout.size.height / 2f))
 }
 
-/** Gridlines and degree labels at the ticks, and the zero line over them. */
+/**
+ * Gridlines and degree labels at the ticks, and the zero line over them. At large text the labels
+ * would touch, so only every [labelEvery]th one (counting from 0) is labelled; every gridline stays.
+ */
 private fun DrawScope.degreeAxis(m: TextMeasurer, f: Frame, bound: Double, y: (Double) -> Float) {
-    axisTicks(bound).forEach { v ->
+    val ticks = axisTicks(bound)
+    val gap = if (ticks.size > 1) abs(y(ticks[1].toDouble()) - y(ticks[0].toDouble())) else Float.MAX_VALUE
+    val every = labelEvery(gap, m.measure("0°", axisText).size.height.toFloat())
+    val step = if (ticks.size > 1) ticks[1] - ticks[0] else 1
+    ticks.forEach { v ->
         drawLine(PsColor.border, Offset(f.l, y(v.toDouble())), Offset(f.r, y(v.toDouble())), 1.dp.toPx())
-        label(m, "$v°", f.l - 6.dp.toPx(), y(v.toDouble()), align = 1f)
+        if ((v / step) % every == 0) label(m, "$v°", f.l - 6.dp.toPx(), y(v.toDouble()), align = 1f)
     }
     drawLine(PsColor.muted, Offset(f.l, y(0.0)), Offset(f.r, y(0.0)), 1.2.dp.toPx())
 }

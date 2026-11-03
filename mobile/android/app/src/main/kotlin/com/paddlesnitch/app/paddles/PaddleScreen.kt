@@ -46,6 +46,8 @@ import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.RecordingMotion
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.paddlesnitch.app.ui.PsColor
 import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.textColors
@@ -83,18 +85,22 @@ fun PaddlesHost(
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(openPaddle) { if (openPaddle != null) { open = openPaddle; onOpened() } }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val id = open
     if (id == null) {
         PaddlesScreen(list, sample, modifier, action, notice, listState, onOpen = { open = it })
     } else {
         BackHandler { open = null }
-        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion, offersMotion, onTrackers)
+        // Open phone: back to the list, at its top, where the phone's uploads are (under Record).
+        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion, offersMotion, onTrackers,
+            toUploads = { open = null; scope.launch { listState.scrollToItem(0) } })
     }
 }
 
 @Composable
 private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, writeSummary: (suspend (String) -> AnalysisSession)?, onBack: () -> Unit, modifier: Modifier, map: MapSlot,
-                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean, onTrackers: (() -> Unit)?) {
+                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean, onTrackers: (() -> Unit)?,
+                         toUploads: () -> Unit) {
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var session by remember(id) { mutableStateOf<AnalysisSession?>(null) }
     var motionOpen by rememberSaveable(id) { mutableStateOf(false) }
@@ -122,7 +128,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
         Column(modifier.fillMaxSize()) {
             TextButton(onClick = { motionOpen = false }, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddle", fontSize = 16.sp) }
             // Motion not arrived yet: a phone's uploads are under Record on the Paddles list, a tracker syncs from Trackers (lead, 2026-11-03).
-            val openDevice: (() -> Unit)? = if (s.source.phone == true) ({ motionOpen = false; onBack() }) else onTrackers
+            val openDevice: (() -> Unit)? = if (s.source.phone == true) ({ motionOpen = false; toUploads() }) else onTrackers
             BoatMotionScreen(s, load = { loadMotion(s) }, onBack = { motionOpen = false }, openDevice = openDevice)
         }
         return

@@ -36,6 +36,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isFocusable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.isFocused
@@ -162,6 +164,7 @@ class BoatMotionScreenTest {
         show { BoatMotionScreen(tracker, load = { calls++; throw ApiFailure("Couldn’t finish that. Please try again.", 503, generic = true) }) }
         compose.onNodeWithText(MOTION_FAILED).assertExists()
         compose.onNode(isFocused()).assertDoesNotExist()                     // the first failure leaves focus alone
+        compose.onNode(hasAnyDescendant(hasText(MOTION_FAILED)) and isFocusable()).assertDoesNotExist()   // and isn't a stop before Try again
         compose.onNodeWithText("Try again").performClick()
         compose.waitForIdle()
         assertEquals(2, calls)
@@ -211,6 +214,7 @@ class BoatMotionScreenTest {
             loadMotion = { motion("account.devices-session.no-motion.json") }, onTrackers = { error("not for a phone") }) }
         compose.onNodeWithText("Boat motion").performScrollTo().performClick()
         compose.onNodeWithText("Open phone").performClick()
+        compose.onNodeWithText("Paddles").assertIsDisplayed()                   // the list's top, where the uploads are
         compose.onNodeWithText("← Paddle").assertDoesNotExist()
         compose.onNodeWithText("← Paddles").assertDoesNotExist()                   // the list, with its upload lines
     }

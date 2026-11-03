@@ -54,6 +54,12 @@ class BoatMotionTest {
         assertEquals("A few moments went past ±5° and are clipped at the chart’s edge.", clippedNote(measured.copy(plotBoundDeg = 5.0)))
     }
 
+    @Test fun axisLabelsThinOutOnlyWhenTheyWouldTouch() {
+        assertEquals(1, labelEvery(gap = 40f, lineHeight = 20f))
+        assertEquals(2, labelEvery(gap = 20f, lineHeight = 20f))   // 1.2 lines needed: every other
+        assertEquals(3, labelEvery(gap = 9f, lineHeight = 20f))
+    }
+
     @Test fun aNarrowHistogramStillSpansADegree() {
         val one = com.paddlesnitch.app.api.RollHistogram(binWidthDeg = 0.2, bins = listOf(com.paddlesnitch.app.api.RollHistogram.Bin(0.1, 3)))
         assertEquals(1.0, histogramRange(one), 0.0)
