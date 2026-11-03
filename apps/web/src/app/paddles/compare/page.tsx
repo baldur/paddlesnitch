@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
 import { trpc } from '@/lib/trpc'
 import AppHeader from '@/components/AppHeader'
-import SameOuting from '@/components/analysis/SameOuting'
+import SameOuting, { compareLabels } from '@/components/analysis/SameOuting'
 import LineCompare from '@/components/analysis/LineCompare'
 import { fmtDay } from '@paddlesnitch/core/format'
 import { isMotionOnly } from '@paddlesnitch/core/paddles'
@@ -75,8 +75,9 @@ function CompareInner() {
   )
 
   const ra = A.result, rb = B.result
-  const labelA = bOwner ? `You · ${fmtDate(A.paddledAt)}` : fmtDate(A.paddledAt)
-  const labelB = bOwner ? `${buddyName ?? 'Buddy'} · ${fmtDate(B.paddledAt)}` : fmtDate(B.paddledAt)
+  const [ownA, ownB] = compareLabels(A, B, fmtDate)
+  const labelA = bOwner ? `You · ${fmtDate(A.paddledAt)}` : ownA
+  const labelB = bOwner ? `${buddyName ?? 'Buddy'} · ${fmtDate(B.paddledAt)}` : ownB
   const hrefB = bOwner ? `/buddies/${bOwner}/${B.id}` : `/paddles/${B.id}`
   const paceA = ra.cruiseSpeed, paceB = rb.cruiseSpeed // higher speed = faster = better
   const dPace = 500 / paceA - 500 / paceB // seconds/500 difference (A - B); negative = A faster

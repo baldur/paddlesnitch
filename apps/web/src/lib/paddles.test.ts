@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isPhonePaddle, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
+import { isPhonePaddle, alsoRecordedBy, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
 
 // A phone's paddle (C3) has the tracker's source shape; only the device ID differs (#789).
 describe('isPhonePaddle', () => {
@@ -22,6 +22,20 @@ describe('isPhonePaddle', () => {
 })
 
 // The logbook on /paddles.
+describe('alsoRecordedBy (one name per source, list and paddle page alike)', () => {
+  it('names each source as "Also recorded by …" says it', () => {
+    expect(alsoRecordedBy({ type: 'device' })).toBe('the tracker')
+    expect(alsoRecordedBy({ type: 'device', phone: true })).toBe('the phone')
+    expect(alsoRecordedBy({ type: 'device', deviceId: 'P0123456789ABCDEF' })).toBe('the phone')
+    expect(alsoRecordedBy({ type: 'strava' })).toBe('Strava')
+    expect(alsoRecordedBy({ type: 'trial' })).toBe('a time trial')
+    expect(alsoRecordedBy({ type: 'file' })).toBe('a file')
+  })
+  it('an unknown source reads as a file, never a raw type', () => {
+    expect(alsoRecordedBy({ type: 'watch-2030' })).toBe('a file')
+  })
+})
+
 describe('logbook', () => {
   const p = (at: string, km = 5, durationS = 3600, type = 'file') => ({ paddledAt: at, distanceKm: km, durationS, source: { type } })
   const NOW = new Date('2026-10-07T12:00:00Z')   // a Wednesday

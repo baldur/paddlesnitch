@@ -17,9 +17,8 @@ import { buttonClass } from '@paddlesnitch/ui/Button'
 import { Stat, badgeClass, cardClass, Chevron } from '@paddlesnitch/ui/Card'
 import { Field, inputClass, selectClass } from '@paddlesnitch/ui/Form'
 import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { isMotionOnly, isPhonePaddle } from '@paddlesnitch/core/paddles'
+import { isMotionOnly, isPhonePaddle, alsoRecordedBy } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
-import { sourceName } from './SameOuting'
 import PortageSuggestions from './PortageSuggestions'
 
 const compass = (d?: number) => (d == null ? '' : compassPoint(d))
@@ -576,7 +575,7 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             <div className="flex flex-col gap-1">
               {sameOuting.map(o => (
                 <Link key={o.id} href={`/paddles/compare?a=${sessionId}&b=${o.id}`} className="text-sm text-primary-text hover:underline min-h-11 inline-flex items-center">
-                  Also recorded by {o.phone ? 'the phone' : o.sourceType === 'device' ? 'the tracker' : sourceName(o.sourceType)} →
+                  Also recorded by {alsoRecordedBy({ type: o.sourceType, phone: o.phone })} →
                 </Link>
               ))}
             </div>

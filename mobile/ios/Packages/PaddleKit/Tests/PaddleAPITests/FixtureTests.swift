@@ -32,7 +32,19 @@ import Testing
             call.contains(" ")
             ? try Endpoints.decodeOutput(of: call, from: data, using: decoder)
             : try Procedures.decodeOutput(of: call, from: data, using: decoder)
-        #expect(String(describing: type(of: decoded)) == entry.schema, "\(name)")
+        #expect(String(describing: type(of: decoded)) == Self.swiftName(of: entry.schema), "\(name)")
+    }
+
+    /// A list schema (`{"type":"array","items":{"$ref":"X.schema.json"}}`)
+    /// is a typealias, which Swift names `Array<X>`.
+    static func swiftName(of schema: String) -> String {
+        let file = Contract.directory.appending(path: "api/\(schema).schema.json")
+        guard let data = try? Data(contentsOf: file),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            json["type"] as? String == "array",
+            let ref = (json["items"] as? [String: Any])?["$ref"] as? String
+        else { return schema }
+        return "Array<\(ref.replacingOccurrences(of: ".schema.json", with: ""))>"
     }
 
     @Test func aSignInCarriesTheTokensAndNeedsTermsDefaultsToNo() throws {

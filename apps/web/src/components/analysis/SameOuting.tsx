@@ -28,6 +28,21 @@ export function sourceName(type?: string, phone?: boolean): string {
   }
 }
 
+/**
+ * Column labels on Compare: the dates, but when both are from one day and
+ * different sources (one outing, a tracker and a phone), the sources, so the
+ * page doesn't read "13 Sep 2026 vs 13 Sep 2026".
+ */
+export function compareLabels(
+  a: { paddledAt: string; source: { type: string; deviceId?: string; phone?: boolean } },
+  b: { paddledAt: string; source: { type: string; deviceId?: string; phone?: boolean } },
+  fmtDate: (iso: string) => string,
+): [string, string] {
+  const da = fmtDate(a.paddledAt), db = fmtDate(b.paddledAt)
+  const sa = sourceName(a.source.type, isPhonePaddle(a.source)), sb = sourceName(b.source.type, isPhonePaddle(b.source))
+  return da === db && sa !== sb ? [sa, sb] : [da, db]
+}
+
 export default function SameOuting({ a, b }: {
   a: { id: string; source: { type: string; deviceId?: string; phone?: boolean }; result: { points: AnalysisPoint[] } }
   b: { id: string; source: { type: string; deviceId?: string; phone?: boolean }; result: { points: AnalysisPoint[] } }

@@ -36,6 +36,12 @@ export const isPhoneDeviceId = (deviceId: unknown): boolean => typeof deviceId =
 export const isPhonePaddle = (source: { type?: string; deviceId?: string; phone?: boolean } | undefined): boolean =>
   source?.phone === true || (source?.type === 'device' && isPhoneDeviceId(source.deviceId))
 
+const ALSO_RECORDED_BY: Record<string, string> = { device: 'the tracker', strava: 'Strava', trial: 'a time trial', file: 'a file' }
+
+/** Another recording of the same outing, as "Also recorded by …" names it (list and paddle page; mobile/contract/README.md quotes it). */
+export const alsoRecordedBy = (source: { type?: string; deviceId?: string; phone?: boolean }): string =>
+  isPhonePaddle(source) ? 'the phone' : ALSO_RECORDED_BY[source.type ?? ''] ?? 'a file'
+
 /** The paddle's source with `phone: true` added for a phone, so a reader
  *  without the device ID (a buddy, a share link, the apps) can say Phone. */
 export function markPhone<S extends { type?: string; deviceId?: string; phone?: true }>(source: S): S {

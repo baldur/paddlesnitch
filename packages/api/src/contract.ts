@@ -49,6 +49,14 @@ export const PaddleCard = named('PaddleCard', z.object({
   sameOuting: z.array(z.object({ id: z.string(), sourceType: z.string(), phone: z.literal(true).optional() })).optional(),
   phone: z.literal(true).optional(),
 }))
+/** paddles.sameOuting: the user's other recordings of this paddle's outing (none: an empty list). */
+export const SameOuting = named('SameOuting', z.object({
+  id: z.string(),
+  sourceType: z.string(),
+  paddledAt: timestamp(),
+  phone: z.literal(true).optional(),
+}))
+export const SameOutingList = named('SameOutingList', z.array(SameOuting))
 export const PaddleTotals = named('PaddleTotals', z.object({
   count: z.int(),
   totalKm: z.number(),
@@ -426,6 +434,8 @@ export const contractProcedures = {
   'paddles.get': { kind: 'query', auth: 'user', input: ById, output: AnalysisSession },
   // Writes the coach summary of a paddle that shows insightPending; the paddle page asks while it says "Writing your summary…".
   'paddles.writeSummary': { kind: 'mutation', auth: 'user', input: ById, output: AnalysisSession },
+  // "Also recorded by …" links on the paddle page (README § Same outing).
+  'paddles.sameOuting': { kind: 'query', auth: 'user', input: ById, output: SameOutingList },
 } satisfies Record<string, Procedure>
 
 // ---- Drift checks: a schema and its procedure must accept each other's types.
@@ -439,6 +449,8 @@ check<Same<z.infer<typeof AnalysisSession>, Out['paddles']['get']>>()
 check<Same<z.infer<typeof ById>, In['paddles']['get']>>()
 check<Same<z.infer<typeof AnalysisSession>, Out['paddles']['writeSummary']>>()
 check<Same<z.infer<typeof ById>, In['paddles']['writeSummary']>>()
+check<Same<z.infer<typeof SameOutingList>, Out['paddles']['sameOuting']>>()
+check<Same<z.infer<typeof ById>, In['paddles']['sameOuting']>>()
 // Boat motion is exactly what the timing package works out.
 check<Same<z.infer<typeof BoatMotion>, AttitudeReport>>()
 check<Same<z.infer<typeof MotionStrokeRate>, CadenceReport>>()

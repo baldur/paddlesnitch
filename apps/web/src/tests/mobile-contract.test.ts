@@ -11,9 +11,10 @@ import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
 import * as contract from '@paddlesnitch/api/contract'
-import { contractProcedures, restRoutes, AnalysisSession, Me, PaddleList } from '@paddlesnitch/api/contract'
+import { contractProcedures, restRoutes, AnalysisSession, Me, PaddleList, SameOutingList } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
+import { alsoRecordedBy } from '@paddlesnitch/core/paddles'
 import { mobileContractFiles, tokensFromCss } from '@/lib/mobile-contract'
 
 const ROOT = path.resolve(__dirname, '../../../..')
@@ -84,7 +85,7 @@ describe('real answers fit the schemas', () => {
   afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); delete process.env.DATA_DIR })
 
   // A real analysed paddle: 10 minutes at ~3 m/s with a stroke rate.
-  async function savePaddle(id: string) {
+  async function savePaddle(id: string, source: Record<string, unknown> = { type: 'file', filename: 'river.gpx' }) {
     const t0 = Date.parse('2026-09-01T10:00:00Z')
     const track = Array.from({ length: 600 }, (_, i) => ({
       lat: 51.5 + i * 0.000027, lng: -0.9, timestamp: new Date(t0 + i * 1000), strokeRate: 60 + (i % 5),
@@ -92,7 +93,7 @@ describe('real answers fit the schemas', () => {
     const result = analyseTrack(track)
     const session = {
       id, userId: USER.id, createdAt: '2026-09-01T11:00:00.000Z', paddledAt: '2026-09-01T10:00:00.000Z',
-      source: { type: 'file', filename: 'river.gpx' }, doubleStrokeRate: false, note: 'windy', insight: result.insight,
+      source, doubleStrokeRate: false, note: 'windy', insight: result.insight,
       result, boatClass: 'K1', seat: 1,
     }
     const p = path.join(dir, 'analysis', USER.id, id)
@@ -112,6 +113,14 @@ describe('real answers fit the schemas', () => {
     expect(list.error?.issues).toBeUndefined()
     const one = AnalysisSession.safeParse(await caller.paddles.get({ id: 'aaa' }))
     expect(one.error?.issues).toBeUndefined()
+  })
+
+  it('paddles.sameOuting, with a phone recording of the same outing', async () => {
+    await savePaddle('aaa')
+    await savePaddle('bbb', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's1' })
+    const same = SameOutingList.safeParse(await createCaller({ user: USER }).paddles.sameOuting({ id: 'aaa' }))
+    expect(same.error?.issues).toBeUndefined()
+    expect(same.data).toEqual([{ id: 'bbb', sourceType: 'device', paddledAt: '2026-09-01T10:00:00.000Z', phone: true }])
   })
 })
 
@@ -217,5 +226,17 @@ describe('schema rules the app generators rely on', () => {
     const get = (n: string) => JSON.parse(schemas.find(([f]) => f === `api/${n}.schema.json`)![1])
     expect(get('AnalysisSession').properties.paddledAt.format).toBe('date-time')
     expect(get('PaddleTotals').properties.count.type).toBe('integer')
+  })
+})
+
+// § Same outing quotes the website's words for who else recorded an outing.
+describe('README § Same outing', () => {
+  const readme = readFileSync(path.join(CONTRACT, 'README.md'), 'utf8')
+  const section = readme.slice(readme.indexOf('## Same outing'), readme.indexOf('## Adding a paddle from a file')).replace(/\s+/g, ' ')
+  it('quotes alsoRecordedBy for every source the website names', () => {
+    expect(section).toContain(`\`phone: true\` is "${alsoRecordedBy({ type: 'device', phone: true })}"`)
+    for (const type of ['device', 'strava', 'trial', 'file']) {
+      expect(section, type).toContain(`\`${type}\` ${type === 'file' ? 'or any other value ' : ''}"${alsoRecordedBy({ type })}"`)
+    }
   })
 })

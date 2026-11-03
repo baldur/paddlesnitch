@@ -225,6 +225,21 @@ import Testing
         }
     }
 
+    @Test func aTopLevelListOfANamedTypeIsATypealias() throws {
+        let swift = try #require(
+            try generate([
+                "Item.schema.json": #"{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}"#,
+                "ItemList.schema.json": #"{"type":"array","items":{"$ref":"Item.schema.json"}}"#,
+            ])["ItemList.swift"])
+        #expect(swift.contains("public typealias ItemList = [Item]\n"))
+    }
+
+    @Test func aTopLevelListOfAnInlineObjectIsRefused() {
+        #expect(throws: (any Error).self) {
+            try generate(["ItemList.schema.json": #"{"type":"array","items":{"type":"object","properties":{}}}"#])
+        }
+    }
+
     @Test func aUnionWithoutKindIsRefused() {
         #expect(throws: ModelsGenerator.Failure.self) {
             try generate(["Bad.schema.json": #"{"oneOf":[{"type":"object","properties":{"x":{"type":"string"}}}]}"#])

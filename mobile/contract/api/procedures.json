@@ -22,5 +22,11 @@
     "auth": "user",
     "input": "ById",
     "output": "AnalysisSession"
+  },
+  "paddles.sameOuting": {
+    "kind": "query",
+    "auth": "user",
+    "input": "ById",
+    "output": "SameOutingList"
   }
 }

@@ -12,6 +12,8 @@ public enum Procedures {
         path: "paddles.get", kind: .query, auth: .user)
     public static let paddlesList = Procedure<NoInput, PaddleList>(
         path: "paddles.list", kind: .query, auth: .user)
+    public static let paddlesSameOuting = Procedure<ById, SameOutingList>(
+        path: "paddles.sameOuting", kind: .query, auth: .user)
     public static let paddlesWriteSummary = Procedure<ById, AnalysisSession>(
         path: "paddles.writeSummary", kind: .mutation, auth: .user)
 
@@ -23,6 +25,7 @@ public enum Procedures {
         case "me": try decoder.decode(Me.self, from: data)
         case "paddles.get": try decoder.decode(AnalysisSession.self, from: data)
         case "paddles.list": try decoder.decode(PaddleList.self, from: data)
+        case "paddles.sameOuting": try decoder.decode(SameOutingList.self, from: data)
         case "paddles.writeSummary": try decoder.decode(AnalysisSession.self, from: data)
         default: throw ProcedureError.unknownPath(path)
         }
