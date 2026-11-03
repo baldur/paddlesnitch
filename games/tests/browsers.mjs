@@ -277,7 +277,15 @@ async function play(c, page, errors) {
       }
       const spot = label.startsWith('#') ? page.locator(label) : page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
-      await (c.touch ? spot.tap() : spot.click()).catch((e) => { throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]}`); });
+      await (c.touch ? spot.tap() : spot.click()).catch(async (e) => {
+        // Say why: where it was and what was on top of it (CI keeps no screenshots).
+        const why = await spot.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { box: [r.left, r.top, r.right, r.bottom].map(Math.round), hidden: el.hidden, onTop: top === el ? 'itself' : `${top?.id || top?.tagName} ${top?.textContent?.trim().slice(0, 30)}`, view: [innerWidth, innerHeight] };
+        }).catch(() => null);
+        throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]} ${JSON.stringify(why)}`);
+      });
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }

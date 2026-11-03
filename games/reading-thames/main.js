@@ -1274,7 +1274,8 @@ function placeDoors() {
   // mirror's in the middle. Upright, under the place's name: the top is too
   // narrow to share with the header, and Back and the note are at the bottom.)
   if (kergRun) {
-    const under = clubPlaceEl.getBoundingClientRect().bottom + 8;
+    // (Below Back too: mid-piece it sits under the place's name.)
+    const under = Math.max(clubPlaceEl.getBoundingClientRect().bottom, clubBack.hidden ? 0 : clubNavEl.getBoundingClientRect().bottom) + 8;
     ergMon.style.transform = h < 500 ? `translate(${w - 16 - ergMon.offsetWidth}px, ${h - 16 - ergMon.offsetHeight}px)`
       : w < 700 ? `translate(${w / 2}px, ${under}px) translate(-50%, 0)` : `translate(${w / 2}px, 12px) translate(-50%, 0)`;
   }
