@@ -177,3 +177,43 @@ test("a race's traffic is exactly as it was before outings could ask for a mix o
   const loop = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
   assert.equal(fp(createTraffic(loop, 3).boats), 'aecd4548d1bea4c9');
 });
+
+test("motorboats and cruisers on the river wander a little and drift: the bow swings past where they're going; a sculler keeps its line", () => {
+  const course = raceRiver();
+  const seen = Object.fromEntries(['motorboat', 'cruiser', 'sculler'].map((kind) => [kind, { swing: 0, bow: 0, drift: 0, n: 0 }]));
+  for (let seed = 0; seed < 60; seed++) {
+    const traffic = createTraffic(course, seed);
+    const last = new Map();
+    for (let t = 0; t < 600; t += 0.25) {
+      moveTraffic(traffic, t);
+      for (const b of traffic.boats) {
+        const k = seen[b.kind];
+        if (!k || !b.on) { last.delete(b); continue; }
+        const was = last.get(b);
+        last.set(b, { x: b.x, z: b.z, lat: b.lateral * b.dir });
+        if (!was) continue;
+        // Against the river's own line there, and against the way the boat actually moved.
+        const c = pointAt(traffic.river, b.s);
+        const along = Math.atan2(c.tx * b.dir, -c.tz * b.dir);
+        const track = Math.atan2(b.x - was.x, -(b.z - was.z));
+        const off = (a, h) => Math.atan2(Math.sin(h - a), Math.cos(h - a));
+        const bow = off(along, b.heading);
+        k.swing = Math.max(k.swing, Math.abs(b.lateral * b.dir - was.lat) / 0.25);
+        k.bow = Math.max(k.bow, Math.abs(bow));
+        // Drifting: the bow turned further than the track, the same way.
+        const tr = off(along, track);
+        if (Math.abs(tr) > 0.02) { k.drift += Math.sign(bow) === Math.sign(tr) && Math.abs(bow) > Math.abs(tr) ? 1 : 0; k.n++; }
+      }
+    }
+  }
+  const deg = (r) => (r * 180) / Math.PI;
+  for (const kind of ['motorboat', 'cruiser']) {
+    const m = seen[kind];
+    assert.ok(m.swing > 0.1, `a ${kind} moves across: ${m.swing} m/s`);
+    assert.ok(deg(m.bow) > 2 && deg(m.bow) < 10, `its bow off the river's line by up to ${deg(m.bow).toFixed(1)} degrees`);
+    assert.ok(m.n > 50 && m.drift / m.n > 0.8, `${kind}: the bow ahead of the track ${m.drift} of ${m.n}`);
+  }
+  // The big, slow cruiser drifts more gently than a motorboat.
+  assert.ok(seen.cruiser.bow < seen.motorboat.bow, `cruiser ${deg(seen.cruiser.bow).toFixed(1)}, motorboat ${deg(seen.motorboat.bow).toFixed(1)} degrees`);
+  assert.ok(deg(seen.sculler.bow) < 0.01, 'a sculler keeps its line');
+});

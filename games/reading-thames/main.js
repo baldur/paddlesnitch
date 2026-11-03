@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
+import { PLACES, START, DOOR_LABELS, backFrom, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from './kayak-erg.js';
@@ -276,6 +276,8 @@ function pause() {
   if (state !== 'racing' && state !== 'start') return;
   // A live race can't start again for one player alone.
   paused.querySelector('button[value="restart"]').hidden = !!liveRace;
+  // Ending says what ends (Back here read as Resume): it goes back to the walk.
+  paused.querySelector('button[value="menu"]').textContent = mode.outing ? 'End outing' : mode.drill ? 'End drill' : mode.row ? 'End row' : mode.solo ? 'End paddle' : 'End race';
   resumeTo = state;
   state = 'paused';
   openDialog(paused);
@@ -396,7 +398,9 @@ function toMenu() {
 // your paddler, boat and paddle first (Next, Next, Done); after that each is
 // one tap from home, and its button says Done.
 const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', paddle: 'stepPaddle', boards: 'stepBoards', practice: 'stepPractice' };
+let shownStep = 'home'; // the menu's page showing (a room's picker: see backFrom)
 function showStep(name) {
+  shownStep = name;
   // The menu's own home and its Leaderboards are the canoe club's.
   if (name === 'home') boardModes = null;
   if (name === 'boards') labelBoards();
@@ -410,6 +414,8 @@ function showStep(name) {
   menu.setAttribute('aria-label', document.getElementById(STEPS[name])?.querySelector('h3')?.textContent || 'Reading Thames');
   for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen || !!club;
   for (const b of menu.querySelectorAll('[data-skip]')) b.hidden = kitChosen || !!club;
+  // On the walk, Back is the one at the bottom left: a picker's pages have none of their own (the honours board keeps Done).
+  for (const b of menu.querySelectorAll('.step-buttons .back:not([data-skip])')) b.hidden = !!club && !(b.closest('#stepBoards') && boardModes);
   for (const b of menu.querySelectorAll('.step-buttons .next')) {
     b.innerHTML = kitChosen || club ? 'Done' : b.dataset.first;
   }
@@ -818,11 +824,16 @@ const clubNote = document.getElementById('clubNote');
 const clubFade = document.getElementById('clubFade');
 const clubBack = document.getElementById('clubBack');
 const clubStart = document.getElementById('clubStart');
-// Back goes up a level (a room or the pontoon to the club, the club to the
-// bridge); Start over goes straight back to the bridge. Esc and a gamepad's B go back too.
+const clubNavEl = document.getElementById('clubNav');
+// Back goes one step back the way you came (club.js backFrom); Start over goes
+// straight back to the bridge. Esc and a gamepad's B go back too.
 const back = () => {
-  if (club?.hiring) return unhire(); // choosing a boat at the pier: back to the bridge's cards
-  return club && PLACES[club.place].up && go(PLACES[club.place].up);
+  if (!club) return;
+  const to = backFrom(club.place, { hiring: club.hiring, sheet: menu.open ? { step: shownStep, base: shownStep, ...club.sheet } : null });
+  if (to?.unhire) unhire();
+  else if (to?.step) showStep(to.step);
+  else if (to?.close) closeSheet();
+  else if (to?.go) go(to.go);
 };
 clubBack.addEventListener('click', () => { fullScreen(); back(); });
 clubStart.addEventListener('click', () => { fullScreen(); go(START); });
@@ -849,6 +860,7 @@ function enterClub() {
   club = { shots, place, from: null, to: null, t: 1, length: 0, plan: null, spots: [] };
   try { club.plan = localStorage.getItem(LAST_KEY); } catch {}
   menu.classList.add('sheet');
+  document.body.classList.add('walking');
   clubEl.hidden = false;
   // Its labels and cards wait for the first frame of the scene behind them.
   if (!renderer) clubEl.classList.add('waiting');
@@ -859,6 +871,7 @@ function leaveClub() {
   club = null;
   clubEl.hidden = true;
   menu.classList.remove('sheet');
+  document.body.classList.remove('walking');
   if (menu.open) menu.close('');
 }
 
@@ -902,7 +915,7 @@ function arrive(place) {
   visit.places.add(place);
   clubDoors.replaceChildren();
   clubCards.replaceChildren();
-  clubBack.hidden = !PLACES[place].up;
+  clubBack.hidden = !PLACES[place].up && !(place === 'path' && club.hiring);
   clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
   document.getElementById('clubPlace').textContent = place === 'path' && club.hiring ? 'Hire a boat' : PLACES[place].label;
@@ -916,7 +929,6 @@ function arrive(place) {
   const spots = hiring
     ? [
       ...Object.entries(HIRE_BOATS).map(([id, b]) => ({ card: { picture: clubSvg(id === 'launch' ? 'hire' : id), name: b.label, line: b.line }, act: () => { hireBoat = id; club.hiring = false; choose('hire'); }, play: true })),
-      { card: { name: '\u2190 Back', line: 'To the clubs and outings' }, act: unhire },
     ]
     : place === 'path'
     ? [
@@ -1013,8 +1025,8 @@ function arrive(place) {
     return { ...spot, el: b };
   });
   menu.classList.toggle('rowing', place === 'rchanging');
-  if (place === 'changing' || place === 'rchanging') sheet('paddler');
-  if (place === 'clubhouse') sheet('home');
+  if (place === 'changing' || place === 'rchanging') sheet('paddler', true);
+  if (place === 'clubhouse') sheet('home', true);
   // A first visit: where to make your paddler, and where the races are.
   if (place === 'club' && !kitChosen) note('New here? Make your paddler in the changing room, then pick a race in the clubhouse');
   // Phones held upright: races are sideways.
@@ -1024,7 +1036,7 @@ function arrive(place) {
   if (!menu.open) (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
   club.backToHire = false;
   // On an upright phone the row sits above Back, not on it.
-  clubEl.classList.toggle('backable', !!PLACES[place].up);
+  clubEl.classList.toggle('backable', !clubBack.hidden);
   if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
   if (place === 'kerg') note(kergBest() ? `Your best 500 m: ${formatTime(kergBest())}` : 'Press left, then right, in turn, to start: arrows, thumbs or triggers');
   if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Press both arrows, thumbs or triggers together for each stroke');
@@ -1042,6 +1054,7 @@ function startErg() {
   ergRun = { erg: createErg({ pace: 128 }), play: beginPlay({ key: 'erg', solo: true }, { from: visit.from, now: clock() }) };
   visit.plays++;
   ergMon.hidden = false;
+  clubEl.classList.add('midpiece'); // Back up out of the thumbs' way, as on the kayak erg
   note('Row! Press both sides together for each stroke. Steady beats quick.');
 }
 function endErg(end = 'quit') {
@@ -1049,6 +1062,7 @@ function endErg(end = 'quit') {
   if (ergRun.play) track(playEvent(ergRun.play, { end, now: clock() }));
   ergRun = null;
   ergMon.hidden = true;
+  clubEl.classList.remove('midpiece');
 }
 function stepErgRun(dt) {
   const { erg } = ergRun;
@@ -1065,6 +1079,7 @@ function stepErgRun(dt) {
       track(playEvent(ergRun.play, { end: 'finished', now: clock() }));
       ergRun.play = null;
       ergRun.doneAt = clock();
+      clubEl.classList.remove('midpiece');
     }
   }
   const m = monitor(erg);
@@ -1091,7 +1106,7 @@ function startKerg(first = []) {
   ergMon.hidden = false;
   ergMon.classList.add('kayak');
   // While you paddle, the ways out are Esc and B: Back and Start over sit under the left thumb.
-  clubEl.classList.add('kerging', 'kerg');
+  clubEl.classList.add('midpiece', 'kerg');
   note('Paddle! Quicker than 90 a minute is a sprint: it pulls harder but empties the sprint bar.');
   stepKayakErg(kergRun.erg, 0, { strokes: first });
 }
@@ -1108,7 +1123,7 @@ function endKerg(end = 'quit') {
   kergRun = null;
   ergMon.hidden = true;
   ergMon.classList.remove('kayak');
-  clubEl.classList.remove('kerging', 'kerg');
+  clubEl.classList.remove('midpiece', 'kerg');
 }
 function stepKergRun(dt) {
   const { erg } = kergRun;
@@ -1130,7 +1145,7 @@ function stepKergRun(dt) {
       track(playEvent(kergRun.play, { end: 'finished', now: clock() }));
       kergRun.play = null;
       kergRun.doneAt = clock();
-      clubEl.classList.remove('kerging');
+      clubEl.classList.remove('midpiece');
     }
   }
   // Once you're going, the note makes way for the mirror.
@@ -1196,7 +1211,10 @@ function note(text) {
 }
 // A room's picker, beside the scene: not modal, so Back, Start over and the
 // room's own labels still work while it's open (a modal dialog blocks them).
-function sheet(step) {
+// `auto`: opened as you came in (Back leaves the room), not by a tap (Back puts it away).
+// Tapping Change with the changing room's picker already open leaves it as it was.
+function sheet(step, auto = false) {
+  if (!(menu.open && club.sheet?.base === step)) club.sheet = { base: step, auto };
   showStep(step);
   menu.returnValue = '';
   if (!menu.open) menu.show();
@@ -1247,13 +1265,23 @@ function placeDoors() {
       if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 4 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + 4) b.y = a.y + (a.h + b.h) / 2 + 4;
     }
   }
-  for (const p of placed) p.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+  // Never over Back and Start over (a boat's number sat on Back on a small phone): moved clear to their right.
+  const nav = !clubBack.hidden && clubNavEl.getBoundingClientRect();
+  if (nav) for (const p of placed) if (p.x - p.w / 2 < nav.right + 4 && p.y + p.h / 2 > nav.top - 4 && p.y - p.h / 2 < nav.bottom + 4) p.x = Math.max(p.x, nav.right + 4 + p.w / 2);
+  // Whole pixels, written only when they change: a label redrawn a hair off
+  // each frame never counts as still, and a tap waits for still (Playwright's
+  // WebKit, on CI's slow frames, waited 30 s on "Paint your boat").
+  for (const p of placed) {
+    const t = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -50%)`;
+    if (p.el.style.transform !== t) p.el.style.transform = t;
+  }
   // The kayak erg has no screen: its numbers at the top, in the middle.
   // (On a phone held sideways, bottom right: the top is the header's, and the
   // mirror's in the middle. Upright, under the place's name: the top is too
   // narrow to share with the header, and Back and the note are at the bottom.)
   if (kergRun) {
-    const under = clubPlaceEl.getBoundingClientRect().bottom + 8;
+    // (Below Back too: mid-piece it sits under the place's name.)
+    const under = Math.max(clubPlaceEl.getBoundingClientRect().bottom, clubBack.hidden ? 0 : clubNavEl.getBoundingClientRect().bottom) + 8;
     ergMon.style.transform = h < 500 ? `translate(${w - 16 - ergMon.offsetWidth}px, ${h - 16 - ergMon.offsetHeight}px)`
       : w < 700 ? `translate(${w / 2}px, ${under}px) translate(-50%, 0)` : `translate(${w / 2}px, 12px) translate(-50%, 0)`;
   }

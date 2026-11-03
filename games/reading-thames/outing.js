@@ -32,10 +32,15 @@ export const BUSY = { gap: 35, ambient: 5, hours: 2 };
 // (eye height, how far forward of the middle) and its size for knocks
 // (`shape`: metres to the bow and the stern, half its width).
 // knock: the speed (m/s) a sculler or kayaker rammed at least this hard goes in.
+// A boat on the water isn't on rails (owner, 2026-11-03: "a bit of a drift"):
+// `grip`, how quickly the water takes out a sideways slide (1/s: through a turn
+// the boat slides a few degrees outside where its bow points); `swing`, the
+// seconds the hull takes to start turning; it also carries on turning a moment
+// once the wheel is straight (longest in the 18 m narrowboat).
 export const HIRE_BOATS = {
-  speedboat: { label: 'Speedboat', line: 'Quick and nimble', top: 50 / 3.6, astern: 2, accel: 3, brake: 4, turn: 0.95, bump: 0.5, knock: 0.5, eye: 1.55, forward: -0.9, shape: { bow: 2.8, stern: 2.6, half: 1.05 } },
-  launch: { label: 'Electric launch', line: 'Steady, with cushions and a wheel', top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, bump: 0.3, knock: 0.5, eye: 1.35, forward: -1.4, shape: { bow: 3.25, stern: 3.1, half: 1.1 } },
-  narrowboat: { label: 'Narrowboat', line: 'Long and slow: steer from the back', top: 7 / 3.6, astern: 0.8, accel: 0.25, brake: 0.4, turn: 0.17, bump: 0.15, knock: 0.5, eye: 2.6, forward: -8.2, shape: { bow: 9, stern: 9, half: 1.05 } },
+  speedboat: { label: 'Speedboat', line: 'Quick and nimble', top: 50 / 3.6, astern: 2, accel: 3, brake: 4, turn: 0.95, grip: 4, swing: 0.25, bump: 0.5, knock: 0.5, eye: 1.55, forward: -0.9, shape: { bow: 2.8, stern: 2.6, half: 1.05 } },
+  launch: { label: 'Electric launch', line: 'Steady, with cushions and a wheel', top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, grip: 2.5, swing: 0.5, bump: 0.3, knock: 0.5, eye: 1.35, forward: -1.4, shape: { bow: 3.25, stern: 3.1, half: 1.1 } },
+  narrowboat: { label: 'Narrowboat', line: 'Long and slow: steer from the back', top: 7 / 3.6, astern: 0.8, accel: 0.25, brake: 0.4, turn: 0.17, grip: 1.2, swing: 1.2, bump: 0.15, knock: 0.5, eye: 2.6, forward: -8.2, shape: { bow: 9, stern: 9, half: 1.05 } },
 };
 export const HIRE = HIRE_BOATS.launch; // (what the tests and the HUD knew as the launch)
 // Ram a pack of kayakers or an eight and the boat sinks under you: SINK seconds, then back to the pier.
@@ -57,7 +62,7 @@ export function startOuting(race, kind, s, seed = 1, { boat = 'launch' } = {}) {
   const b = race.player.boat;
   const at = keepRight(river, s, race.course.shore);
   const ahead = keepRight(river, s + CRUISE.ahead, race.course.shore);
-  Object.assign(b, { x: at[0], z: at[1], heading: Math.atan2(ahead[0] - at[0], -(ahead[1] - at[1])), speed: kind === 'cruise' ? CRUISE.speed : 0, roll: 0, rollRate: 0, yawRate: 0, swim: 0 });
+  Object.assign(b, { x: at[0], z: at[1], heading: Math.atan2(ahead[0] - at[0], -(ahead[1] - at[1])), speed: kind === 'cruise' ? CRUISE.speed : 0, roll: 0, rollRate: 0, yawRate: 0, slip: 0, swim: 0 });
   if (kind === 'hire') b.shape = HIRE_BOATS[o.boat].shape;
   race.player.loc = locate(race.course, b.x, b.z);
   return o;
@@ -127,8 +132,8 @@ export function stepOuting(race, dt, input = {}) {
   } else if (o.sinking !== null) {
     // Going down: the boat slows to a stop as it settles; then it's gone.
     b.speed *= Math.exp(-2 * dt);
-    b.x += Math.sin(b.heading) * b.speed * k * dt;
-    b.z -= Math.cos(b.heading) * b.speed * k * dt;
+    b.slip *= Math.exp(-2 * dt);
+    drive(b, k, dt);
     if (!o.done && race.time - o.sinking >= SINK) {
       o.done = true;
       events.push('sunk');
@@ -140,10 +145,19 @@ export function stepOuting(race, dt, input = {}) {
     const want = throttle >= 0 ? throttle * H.top : throttle * H.astern;
     const rate = Math.sign(want - b.speed) !== Math.sign(b.speed) && b.speed ? H.brake : H.accel;
     b.speed += Math.max(-rate * dt, Math.min(rate * dt, want - b.speed));
-    b.heading += turn * H.turn * Math.min(1, Math.abs(b.speed) / 0.8) * Math.sign(b.speed || 1) * dt;
-    b.x += Math.sin(b.heading) * b.speed * k * dt;
-    b.z -= Math.cos(b.heading) * b.speed * k * dt;
-    if (race.course.shore && bounceOffShore(b, race.course.shore, dt)) events.push('bump');
+    // The wheel sets the rate the bow swings at, which the hull takes a moment to reach.
+    const yaw = turn * H.turn * Math.min(1, Math.abs(b.speed) / 0.8) * Math.sign(b.speed || 1);
+    b.yawRate += (yaw - b.yawRate) * Math.min(1, dt / H.swing);
+    // The boat keeps going the way it was: turned, some of its way is now sideways, and the water takes that out.
+    const d = b.yawRate * dt;
+    [b.speed, b.slip] = [b.speed * Math.cos(d) + b.slip * Math.sin(d), b.slip * Math.cos(d) - b.speed * Math.sin(d)];
+    b.heading += d;
+    b.slip *= Math.exp(-H.grip * dt);
+    drive(b, k, dt);
+    if (race.course.shore && bounceOffShore(b, race.course.shore, dt)) {
+      b.slip = 0;
+      events.push('bump');
+    }
     if (race.traffic) {
       for (const hit of trafficHits(race.traffic, [me])) {
         // A pack of kayakers or an eight: they hold, and your boat is holed and sinks.
@@ -157,6 +171,7 @@ export function stepOuting(race, dt, input = {}) {
         // A sculler or a kayaker on their own goes in; anything bigger, you bounce off.
         if (Math.abs(b.speed) > H.knock && knockIn(hit.boat, race.time)) events.push(`tipped-${hit.boat.kind}`);
         b.speed = -H.bump;
+        b.slip = 0;
         events.push('bump');
       }
       // Clear of a boat you bumped, it's solid again (a race's boats tip you in once only).
@@ -171,6 +186,12 @@ export function stepOuting(race, dt, input = {}) {
   b.swim = 0;
   me.loc = locate(race.course, b.x, b.z, me.loc?.i);
   return events;
+}
+
+// Moves a boat by its way through the water: ahead (`speed`, along its heading) and sideways (`slip`, to its right).
+function drive(b, k, dt) {
+  b.x += (Math.sin(b.heading) * b.speed + Math.cos(b.heading) * b.slip) * k * dt;
+  b.z += (-Math.cos(b.heading) * b.speed + Math.sin(b.heading) * b.slip) * k * dt;
 }
 
 // --- the boats ------------------------------------------------------------------

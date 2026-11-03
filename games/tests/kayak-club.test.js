@@ -7,7 +7,7 @@ import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
 import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
-import { WIDE, PLACES, START, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
+import { WIDE, PLACES, START, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -284,4 +284,20 @@ test("a glide blends a shot's wider view into the next, and adds none between tw
   assert.equal(glide(bridge, club, 0.5).wide, (100 + WIDE) / 2);
   assert.equal(glide(bridge, club, 1).wide, WIDE);
   assert.ok(!('wide' in glide(club, shots.places.pontoon, 0.5)));
+});
+
+test('Back is one step back the way you came, on every stage of the walk', () => {
+  // Choosing a boat at the pier: back to the bridge's cards.
+  assert.deepEqual(backFrom('path', { hiring: true }), { unhire: true });
+  // The bridge is the top: Back there is the header's link to the games.
+  assert.equal(backFrom('path'), null);
+  // Every other place goes up a level, and every place but the bridge has one.
+  for (const [place, p] of Object.entries(PLACES)) if (place !== START) assert.deepEqual(backFrom(place), { go: p.up }, place);
+  // A picker that opened as you came in goes with the room.
+  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'home', base: 'home', auto: true } }), { go: 'club' });
+  // One you opened with a tap: put away, still in the room.
+  assert.deepEqual(backFrom('boathouse', { sheet: { step: 'paddle', base: 'paddle', auto: false } }), { close: true });
+  // A page further into either: back to the page it opened on.
+  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'practice', base: 'home', auto: true } }), { step: 'home' });
+  assert.deepEqual(backFrom('boathouse', { sheet: { step: 'paddler', base: 'boat', auto: false } }), { step: 'boat' });
 });

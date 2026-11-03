@@ -201,8 +201,10 @@ async function play(c, page, errors) {
     // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
     const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
-      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
-      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null], ['@midpiece', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
+      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
+        ['Boathouse', 'boathouse'], ['@clear', null], ['Paint your boat', null], ['#clubBack', 'boathouse'], ['@closed', null], ['#clubBack', 'club'],
+        ['Clubhouse', 'clubhouse'], ['@practice', null], ['#clubBack', 'clubhouse'], ['@plan', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     // Try it now says what it is, in full, even on a phone.
     // (A first visit to the bridge always has it: wait for it, don't skip.)
     const tryLine = page.locator('#clubCards .card.go small');
@@ -226,7 +228,43 @@ async function play(c, page, errors) {
         if (!shown.note || shown.sheet) errors.push(`the honours board offline showed ${JSON.stringify(shown)}`);
         continue;
       }
+      // One Back on every stage, the same button at the bottom left.
+      if (label === '@practice') {
+        await page.locator('#stepHome button', { hasText: 'Practice' }).first().click();
+        const backs = await page.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.offsetParent && /^\W*Back$/.test(b.textContent.trim())).map((b) => b.id || b.className));
+        if (backs.join() !== 'clubBack') errors.push(`the plan's Practice page showed Back buttons ${JSON.stringify(backs)}, expected just the one at the bottom left`);
+        continue;
+      }
+      // Nothing in the scene over Back (a boat's number sat on it on a small phone).
+      if (label === '@clear') {
+        await page.waitForTimeout(500);
+        const over = await page.evaluate(() => {
+          const n = document.getElementById('clubNav').getBoundingClientRect();
+          return [...document.querySelectorAll('#clubDoors button')].filter((b) => !b.hidden).filter((b) => { const r = b.getBoundingClientRect(); return r.left < n.right && n.left < r.right && r.top < n.bottom && n.top < r.bottom; }).map((b) => b.textContent);
+        });
+        if (over.length) errors.push(`labels over Back and Start over: ${over.join(', ')}`);
+        continue;
+      }
+      // A picker opened with a tap: Back put it away and stayed in the room.
+      if (label === '@closed') {
+        if (await page.locator('#menu').evaluate((m) => m.open)) errors.push('Back from Paint your boat left its picker open');
+        continue;
+      }
+      // Rowing the erg, as paddling the kayak erg: Back up out of the thumbs' way.
+      if (label === '@midpiece') {
+        await page.waitForTimeout(500);
+        const box = await page.locator('#clubBack').boundingBox();
+        if (!box || box.y + box.height > page.viewportSize().height / 2 || await page.locator('#clubStart').isVisible()) errors.push(`rowing the erg, Back sits at ${JSON.stringify(box)}: expected it up out of the thumbs' way, and Start over gone`);
+        continue;
+      }
+      if (label === '@plan') {
+        const shown = await page.evaluate(() => ({ open: document.getElementById('menu').open, home: !document.getElementById('stepHome').hidden }));
+        if (!shown.open || !shown.home) errors.push(`Back from Practice showed ${JSON.stringify(shown)}, expected the plan`);
+        continue;
+      }
       if (label === '@unhire') {
+        const hiring = await page.evaluate(() => ({ back: !!document.getElementById('clubBack').offsetParent, card: [...document.querySelectorAll('#clubCards .card')].some((b) => /Back/.test(b.textContent)) }));
+        if (!hiring.back || hiring.card) errors.push(`the choice of boats showed ${JSON.stringify(hiring)}, expected Back at the bottom left and no Back card`);
         await page.keyboard.press('Escape');
         const back = await page.evaluate(() => ({ canoe: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Canoe Club')), speedboat: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Speedboat')) }));
         if (!back.canoe || back.speedboat) errors.push(`Back from the choice of boats showed ${JSON.stringify(back)}`);
@@ -239,7 +277,33 @@ async function play(c, page, errors) {
       }
       const spot = label.startsWith('#') ? page.locator(label) : page.locator('#club button', { hasText: label }).first();
       await spot.waitFor({ state: 'visible', timeout: 30_000 });
-      await (c.touch ? spot.tap() : spot.click()).catch((e) => { throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]}`); });
+      await (c.touch ? spot.tap() : spot.click()).catch(async (e) => {
+        // Say why: where it was and what was on top of it (CI keeps no screenshots).
+        const why = await spot.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          const boxes = [];
+          return new Promise((done) => {
+            const f = () => {
+              const b = el.getBoundingClientRect();
+              boxes.push(`${Math.round(performance.now())}ms ${[b.left, b.top, b.width, b.height].join(',')}`);
+              if (boxes.length < 6) requestAnimationFrame(f);
+              else done({ box: [r.left, r.top, r.right, r.bottom].map(Math.round), frames: boxes, hidden: el.hidden, disabled: el.disabled, onTop: top === el ? 'itself' : `${top?.id || top?.tagName} ${top?.textContent?.trim().slice(0, 30)}`, view: [innerWidth, innerHeight] });
+            };
+            requestAnimationFrame(f);
+          });
+        }).catch(() => null);
+        // Playwright's own reasons, the last few distinct lines of its call log.
+        const log = [...new Set(e.message.split('\n').map((l) => l.trim()).filter((l) => /^-/.test(l)))].slice(-6).join(' | ');
+        const said = `${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]} ${JSON.stringify(why)} ${log}`;
+        // Shown, enabled and on top, yet never "stable" to Playwright: CI's
+        // WebKit on software WebGL (about 100 ms frames) did this to "Paint
+        // your boat" though it held still to 0.1 px. A player could tap it, so
+        // tap it anyway and say so; anything covering it still fails.
+        if (!why || why.hidden || why.disabled || why.onTop !== 'itself') throw new Error(`couldn't ${said}`);
+        console.log(`  (forced the ${said})`);
+        await (c.touch ? spot.tap({ force: true }) : spot.click({ force: true }));
+      });
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
     }
@@ -282,7 +346,8 @@ async function play(c, page, errors) {
       const focused = await page.evaluate(() => document.activeElement?.textContent);
       if (!c.touch) await tap('left');
       await page.waitForTimeout(700);
-      const started = { ...(await look()), focused, focus: focused === 'Paddle a 500 m', nav: await page.locator('#clubBack').isVisible() };
+      const backBox = await page.locator('#clubBack').boundingBox();
+      const started = { ...(await look()), focused, focus: focused === 'Paddle a 500 m', back: backBox && backBox.y + backBox.height < height / 2, over: await page.locator('#clubStart').isVisible() };
       for (let i = 1; i < 12; i++) {
         await tap(i % 2 ? 'right' : 'left');
         await page.waitForTimeout(700);
@@ -290,7 +355,7 @@ async function play(c, page, errors) {
       const got = await look();
       if (!c.touch && !started.focus) errors.push(`arriving in the kayak erg room focused "${started.focused}", not Paddle a 500 m`);
       if (started.hit.length) errors.push(`just after the start, the kayak erg's numbers overlap ${started.hit.join(', ')}`);
-      if (started.nav) errors.push('Back and Start over stayed up under the left thumb while paddling');
+      if (!started.back || started.over) errors.push(`while paddling, Back should be up out of the thumbs' way and Start over gone: ${JSON.stringify(started)}`);
       const left = Number(/(\d+)m to go/.exec(got.text)?.[1]);
       if (got.hidden || !(left < 500)) errors.push(`the kayak erg's numbers say ${got.text}`);
       if (got.hit.length || got.off) errors.push(`the kayak erg's numbers overlap ${got.hit.join(', ') || 'the screen edge'}`);
@@ -597,7 +662,7 @@ async function play(c, page, errors) {
     });
     if (cut.length) errors.push(`the finish on a phone hides ${cut.join(', ')} below the fold`);
   }
-  // Out of full screen mid-race (the back gesture): it pauses; Quit to menu asks for full screen
+  // Out of full screen mid-race (the back gesture): it pauses; End race asks for full screen
   // again and goes back to the walk, which unlocks the screen; and having left full screen on
   // purpose on the walk, walking about doesn't ask again.
   if (c.club && c.touch && !c.strip && !c.outing && !c.row && !c.erg && !c.tryIt) {

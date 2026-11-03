@@ -30,6 +30,21 @@ export const PLACES = {
   rpontoon: { label: 'The landing stage', doors: ['rclub'], up: 'rclub', club: 'rowing' },
 };
 export const START = 'path';
+// Back (always the button at the bottom left), Esc, Backspace and a gamepad's B, on every
+// stage of the walk: one step back the way you came (owner, 2026-11-03: "an
+// obvious go back that is consistent"). Choosing a boat at the pier: back to
+// the bridge's cards. In a picker, a page past the one it opened on (Practice
+// from the plan, your paddler from the plan): back to that page. A picker you
+// opened with a tap (Paint your boat, Paddles): put away, still in the room.
+// Otherwise up a level, a room to its club and a club to the bridge, putting
+// away a picker that opened as you came in (the changing room's, the plan).
+// `sheet`: the open picker's { step, base (the page it opened on), auto (opened on arrival) }, or null.
+export function backFrom(place, { hiring = false, sheet = null } = {}) {
+  if (hiring) return { unhire: true };
+  if (sheet && sheet.step !== sheet.base) return { step: sheet.base };
+  if (sheet && !sheet.auto) return { close: true };
+  return PLACES[place]?.up ? { go: PLACES[place].up } : null;
+}
 export const DOOR_LABELS = {
   club: 'Reading Canoe Club', rowing: 'Reading Rowing Club', changing: 'Changing room', boathouse: 'Boathouse',
   clubhouse: 'Clubhouse', kerg: 'Erg room', pontoon: 'Go to the water', path: 'Back to the path',

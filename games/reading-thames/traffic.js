@@ -25,6 +25,13 @@ export const TRAFFIC = {
   cruiser: { length: 11, hull: 1.75, speed: 1.8, wash: 0.3, weight: 0.2 },
   motorboat: { length: 6, hull: 1.2, speed: 2.2, wash: 0.8, weight: 0.28 },
 };
+// A motorboat isn't on rails (owner, 2026-11-03: "make the river motorboats
+// drift a little too"): it wanders across its lane, its track swinging up to
+// `track` radians either way over `period` seconds, and its bow `crab` times as far,
+// as a boat sliding through a turn does. From the race's clock and the boat's
+// own phase only, so every copy of a live race sees the same.
+// (owner, 2026-11-03: "make the cruisers drift too": a big, slow boat, more gently and over longer.)
+export const DRIFT = { motorboat: { track: 0.04, period: 10, crab: 1.8 }, cruiser: { track: 0.03, period: 16, crab: 2 } };
 const BEHIND = 0.35; // of the eights, the share that come up from behind
 const MEAN_GAP = 120; // seconds of racing between boats, on average (gaps are random: some races are quiet; owner 2026-10-31: a little busier than the 150 it was)
 const PACE = 3.6; // m/s, a racing K1's, for when the pack will be where
@@ -164,10 +171,22 @@ export function moveTraffic(traffic, time) {
       if (!b.on) continue;
       b.lateral = b.dir * lane(river, b.s, b.dir, T);
     }
+    // Wandering, within its half of the open water; the bow ahead of the track (turning right is + heading).
+    const D = DRIFT[b.kind];
+    let yaw = 0;
+    if (D && !lead) {
+      const w = (2 * Math.PI) / D.period;
+      const a = w * time + b.phase;
+      const width = widthAt(river, b.s);
+      const room = (b.dir > 0 ? width.right : width.left) - Math.max(T.hull, T.oars?.[2] ?? 0);
+      const by = (Math.tan(D.track) * T.speed * k) / w; // metres either way (through the world, `k` times as fast)
+      b.lateral = b.dir * Math.max(0, Math.min(room, b.dir * b.lateral + by * Math.sin(a)));
+      yaw = D.crab * D.track * Math.cos(a);
+    }
     const c = pointAt(river, b.s);
     b.x = c.x - c.tz * b.lateral;
     b.z = c.z + c.tx * b.lateral;
-    b.heading = Math.atan2(c.tx * b.dir, -c.tz * b.dir);
+    b.heading = Math.atan2(c.tx * b.dir, -c.tz * b.dir) + yaw;
   }
 }
 
