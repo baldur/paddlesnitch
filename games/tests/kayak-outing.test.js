@@ -214,6 +214,7 @@ test('ram an eight or a pack of kayakers and the boat sinks under you, then it\'
   for (const kind of ['eight', 'pack']) {
     const { race, events } = await ram(kind, HIRE.top);
     assert.ok(events.includes(kind === 'pack' ? 'sinking-pack' : 'sinking-eight'), `${kind}: ${events}`);
+    race.player.boat.slip = 1; // holed mid-slide: the slide dies away as she settles
     assert.ok(!events.some((e) => e.startsWith('tipped')), 'they hold; you go down');
     // Sunk once, SINK seconds after it was holed (not before).
     let sunkAt = null;
@@ -224,6 +225,7 @@ test('ram an eight or a pack of kayakers and the boat sinks under you, then it\'
     assert.equal(count, 1, `${kind}: sunk once`);
     assert.ok(sunkAt >= SINK - 2 * DT && sunkAt <= SINK + DT, `${kind}: sunk at ${sunkAt}`);
     assert.ok(race.player.boat.speed < 0.5, 'and stopped');
+    assert.ok(race.player.boat.slip > 0 && race.player.boat.slip < 0.01, `${kind}: still sliding at ${race.player.boat.slip}`);
   }
 });
 
@@ -352,4 +354,18 @@ test('a hired boat swings on a moment after the wheel is let go, the narrowboat 
   };
   const [fast, steady, slow] = await Promise.all(['speedboat', 'launch', 'narrowboat'].map(swing));
   assert.ok(fast > 0.1 && fast < steady && steady < slow, `${fast}, ${steady}, ${slow}`);
+});
+
+test('a bump off the bank stops a hired boat\'s slide', async () => {
+  const { race } = await outing('hire', 'speedboat');
+  race.traffic = null;
+  const b = race.player.boat;
+  for (let t = 0; t < 4; t += DT) stepOuting(race, DT, { throttle: 1 });
+  // Hard right, towards the bank on the right, until it hits.
+  let bumped = false;
+  for (let t = 0; t < 20 && !bumped; t += DT) {
+    bumped = stepOuting(race, DT, { throttle: 1, turn: 1 }).includes('bump');
+    if (bumped) assert.equal(b.slip, 0);
+  }
+  assert.ok(bumped, 'it reached the bank');
 });
