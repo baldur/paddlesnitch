@@ -48,8 +48,21 @@ class BoatMotionTest {
         assertEquals(9.04 * 1.1, excerptBound(measured.excerpt), 1e-9)
         assertEquals("30 s at 10 Hz", excerptLabel(measured))
         assertEquals("30 s", excerptLabel(measured.copy(sampleRateHz = null)))
-        assertEquals("9", histogramEdge(measured.rollHistogram!!))
-        assertEquals("a few moments went past ±5° and are clipped here", clippedNote(measured.copy(plotBoundDeg = 5.0)))
+        // ±(widest centre 9.37 + half of the 0.47 bin): the edge bars sit inside the frame (#854).
+        assertEquals(9.605, histogramRange(measured.rollHistogram!!), 1e-9)
+        assertEquals("10", histogramEdge(measured.rollHistogram!!))
+        assertEquals("A few moments went past ±5° and are clipped at the chart’s edge.", clippedNote(measured.copy(plotBoundDeg = 5.0)))
+    }
+
+    @Test fun aNarrowHistogramStillSpansADegree() {
+        val one = com.paddlesnitch.app.api.RollHistogram(binWidthDeg = 0.2, bins = listOf(com.paddlesnitch.app.api.RollHistogram.Bin(0.1, 3)))
+        assertEquals(1.0, histogramRange(one), 0.0)
+    }
+
+    @Test fun onlyAMotionFileThatHasntArrivedGetsAWayToTheDevice() {
+        assertTrue(motionNotArrived(null))
+        assertTrue(motionNotArrived(measured.copy(available = false, reason = "")))
+        assertFalse(motionNotArrived(measured.copy(available = false, reason = "Motion file has too few samples to describe attitude.")))
     }
 
     @Test fun aSmallExcerptStillHasADegreeOfRoom() =

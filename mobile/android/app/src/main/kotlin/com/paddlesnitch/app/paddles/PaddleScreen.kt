@@ -77,6 +77,8 @@ fun PaddlesHost(
     loadMotion: (suspend (AnalysisSession) -> RecordingMotion)? = null,
     /** Which paddles offer it: any from a tracker, unless a caller narrows it (the samples have one motion answer). */
     offersMotion: (AnalysisSession) -> Boolean = ::hasBoatMotion,
+    /** The Trackers list, where a tracker syncs: Boat motion's way there when its motion hasn't arrived. Null: none. */
+    onTrackers: (() -> Unit)? = null,
 ) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(openPaddle) { if (openPaddle != null) { open = openPaddle; onOpened() } }
@@ -86,13 +88,13 @@ fun PaddlesHost(
         PaddlesScreen(list, sample, modifier, action, notice, listState, onOpen = { open = it })
     } else {
         BackHandler { open = null }
-        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion, offersMotion)
+        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion, offersMotion, onTrackers)
     }
 }
 
 @Composable
 private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, writeSummary: (suspend (String) -> AnalysisSession)?, onBack: () -> Unit, modifier: Modifier, map: MapSlot,
-                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean) {
+                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean, onTrackers: (() -> Unit)?) {
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var session by remember(id) { mutableStateOf<AnalysisSession?>(null) }
     var motionOpen by rememberSaveable(id) { mutableStateOf(false) }
@@ -119,7 +121,9 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
         BackHandler { motionOpen = false }
         Column(modifier.fillMaxSize()) {
             TextButton(onClick = { motionOpen = false }, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddle", fontSize = 16.sp) }
-            BoatMotionScreen(s, load = { loadMotion(s) })
+            // Motion not arrived yet: a phone's uploads are under Record on the Paddles list, a tracker syncs from Trackers (lead, 2026-11-03).
+            val openDevice: (() -> Unit)? = if (s.source.phone == true) ({ motionOpen = false; onBack() }) else onTrackers
+            BoatMotionScreen(s, load = { loadMotion(s) }, onBack = { motionOpen = false }, openDevice = openDevice)
         }
         return
     }

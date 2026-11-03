@@ -192,7 +192,7 @@ fun App(incoming: MutableStateFlow<Incoming?> = MutableStateFlow(null)) {
                     })
             }
             Screen.Paddles -> MyPaddles(api, intake.openPaddle, onOpened = { intake = intake.paddleOpened() }, added, addPaddle.pick,
-                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, modifier = m, recordEntry = recordEntry,
+                adding = intake.card is AddCard.Adding, onSignedOut = ::signedOut, onAccount = { inAccount = true }, onTrackers = { inTrackers = true }, modifier = m, recordEntry = recordEntry,
                 // Filed as this account, on the website: reports are public, so nothing personal goes in the link.
                 onReport = { scope.launch { runCatching { com.paddlesnitch.app.account.openTab(context, api.signedInPage("/account?report=1")) } } })
             Screen.Samples -> PaddlesHost(sample, sample = true, load = { id -> readSample(context, sampleFile(id)) }, modifier = m,
@@ -222,7 +222,7 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 @Composable
 private fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
-    onSignedOut: () -> Unit, onAccount: () -> Unit, modifier: Modifier,
+    onSignedOut: () -> Unit, onAccount: () -> Unit, onTrackers: () -> Unit, modifier: Modifier,
     /** The way to Record (WithRecording). */
     recordEntry: (@Composable () -> Unit)?,
     onReport: () -> Unit,
@@ -252,6 +252,7 @@ private fun MyPaddles(
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
             loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
+            onTrackers = onTrackers,
             notice = notice, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
