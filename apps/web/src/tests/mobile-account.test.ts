@@ -24,6 +24,7 @@ import { GET as exportFile, POST as exportLink } from '@/app/api/account/export/
 import { GET as accountStatus, DELETE as deleteAccount } from '@/app/api/account/route'
 import { markLinkSession, hasRecentSignIn } from '@/lib/app-signin'
 import { POST as mintWebCode, GET as redeemWebCode } from '@/app/att/api/auth/web-code/route'
+import { signedInResponse } from '@paddlesnitch/core/auth'
 import { NextRequest } from 'next/server'
 import { signInFromClaims, sessionOfFreshToken, idTokenSignIn } from '@paddlesnitch/core/cognito'
 import { setProfilePublic as storeProfilePublic, getProfileSettings } from '@/lib/profile'
@@ -236,10 +237,13 @@ describe('what the Account screens do', () => {
     const res = await redeemWebCode(new NextRequest(url))
     expect(res.headers.get('location')).toMatch(/\/paddles\/compare\?a=x&b=y$/)
     const lifetimes = Object.fromEntries(res.cookies.getAll().map(c => [c.name, c.maxAge]))
-    expect(lifetimes.tt_id).toBeLessThanOrEqual(60 * 60)
-    expect(lifetimes.tt_refresh).toBeLessThanOrEqual(60 * 60)
-    expect(lifetimes.tt_id).toBeGreaterThan(0)
-    expect(lifetimes.tt_from_link).toBeLessThanOrEqual(60 * 60)
+    expect(lifetimes).toEqual({ tt_id: 60 * 60, tt_refresh: 60 * 60, tt_from_link: 60 * 60 })
+  })
+
+  it('every other website sign-in still lasts 24 h and 30 days (the cap is only for web-code)', () => {
+    const res = signedInResponse(new Request('https://paddlesnitch.com/att/api/auth/login'), { ok: true }, pat.idToken, pat.refreshToken)
+    const lifetimes = Object.fromEntries(res.cookies.getAll().map(c => [c.name, c.maxAge]))
+    expect(lifetimes).toEqual({ tt_id: 24 * 60 * 60, tt_refresh: 30 * 24 * 60 * 60 })
   })
 
   it('a session a web-code link made never counts as a recent sign-in', async () => {
