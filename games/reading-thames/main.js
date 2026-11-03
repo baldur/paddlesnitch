@@ -1268,7 +1268,13 @@ function placeDoors() {
   // Never over Back and Start over (a boat's number sat on Back on a small phone): moved clear to their right.
   const nav = !clubBack.hidden && clubNavEl.getBoundingClientRect();
   if (nav) for (const p of placed) if (p.x - p.w / 2 < nav.right + 4 && p.y + p.h / 2 > nav.top - 4 && p.y - p.h / 2 < nav.bottom + 4) p.x = Math.max(p.x, nav.right + 4 + p.w / 2);
-  for (const p of placed) p.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+  // Whole pixels, written only when they change: a label redrawn a hair off
+  // each frame never counts as still, and a tap waits for still (Playwright's
+  // WebKit, on CI's slow frames, waited 30 s on "Paint your boat").
+  for (const p of placed) {
+    const t = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -50%)`;
+    if (p.el.style.transform !== t) p.el.style.transform = t;
+  }
   // The kayak erg has no screen: its numbers at the top, in the middle.
   // (On a phone held sideways, bottom right: the top is the header's, and the
   // mirror's in the middle. Upright, under the place's name: the top is too
