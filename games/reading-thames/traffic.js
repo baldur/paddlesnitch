@@ -30,7 +30,8 @@ export const TRAFFIC = {
 // `track` radians either way over `period` seconds, and its bow `crab` times as far,
 // as a boat sliding through a turn does. From the race's clock and the boat's
 // own phase only, so every copy of a live race sees the same.
-export const DRIFT = { motorboat: { track: 0.04, period: 10, crab: 1.8 } };
+// (owner, 2026-11-03: "make the cruisers drift too": a big, slow boat, more gently and over longer.)
+export const DRIFT = { motorboat: { track: 0.04, period: 10, crab: 1.8 }, cruiser: { track: 0.03, period: 16, crab: 2 } };
 const BEHIND = 0.35; // of the eights, the share that come up from behind
 const MEAN_GAP = 120; // seconds of racing between boats, on average (gaps are random: some races are quiet; owner 2026-10-31: a little busier than the 150 it was)
 const PACE = 3.6; // m/s, a racing K1's, for when the pack will be where
