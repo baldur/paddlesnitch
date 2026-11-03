@@ -67,7 +67,6 @@ import com.paddlesnitch.app.ui.PsColor
 import com.paddlesnitch.app.ui.PsRadius
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.roundToLong
 
 // A tracker paddle's boat motion, as the website's /paddles/[id]/motion
 // (mobile/contract/README.md § Boat motion). Every number comes from the
@@ -309,8 +308,9 @@ private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
     drawPath(band({ it.pitchMin }, { it.pitchMax }), PsColor.green, alpha = 0.28f)
     drawPath(band({ it.rollMin }, { it.rollMax }), PsColor.split, alpha = 0.5f)
     val bottom = f.under
-    label(m, "0 min", f.l, bottom)
-    label(m, "${((t1 - t0) / 60000).roundToLong()} min", f.r, bottom, align = 1f)
+    val (from, to) = envelopeXLabels(t1 - t0)
+    label(m, from, f.l, bottom)
+    label(m, to, f.r, bottom, align = 1f)
     var lx = f.r - legendWidth(m, "roll", "pitch")
     lx = swatch(m, PsColor.split, 0.5f, "roll", lx, f.legendMiddle)
     swatch(m, PsColor.green, 0.28f, "pitch", lx, f.legendMiddle)

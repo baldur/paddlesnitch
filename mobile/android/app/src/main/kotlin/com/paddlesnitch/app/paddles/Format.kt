@@ -136,6 +136,10 @@ fun noMotionCopy(attitude: com.paddlesnitch.app.api.BoatMotion?): String =
     if (!attitude?.reason.isNullOrEmpty()) "We couldn’t measure boat motion in this recording. The tracker or phone may not have been fixed firmly in the boat."
     else "Motion data uploads after the GPS track. If this recording is recent, it may still be uploading. Older recordings have no motion data."
 
+/** "Through the session"'s x labels for a recording [ms] long: seconds under two minutes, else minutes (the website's envelopeXLabels). */
+fun envelopeXLabels(ms: Double): Pair<String, String> =
+    if (ms < 120_000) "0 s" to "${Math.round(ms / 1000)} s" else "0 min" to "${Math.round(ms / 60_000)} min"
+
 /** A boat-motion chart's y-axis ticks: every multiple of the step within ±maxDeg (the website's axisTicks). */
 fun axisTicks(maxDeg: Double): List<Int> {
     val step = if (maxDeg > 12) 5 else if (maxDeg > 6) 3 else 2

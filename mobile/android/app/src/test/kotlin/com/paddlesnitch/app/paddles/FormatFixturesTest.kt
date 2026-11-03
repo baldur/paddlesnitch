@@ -51,6 +51,7 @@ class FormatFixturesTest {
         "noMotionCopy" to { i -> noMotionCopy(if (i is kotlinx.serialization.json.JsonNull) null else ApiJson.decodeFromJsonElement(com.paddlesnitch.app.api.BoatMotion.serializer(), motionOf(i.jsonObject))) },
         // The answer is a list: compared as JSON.
         "axisTicks" to { i -> kotlinx.serialization.json.JsonArray(axisTicks(i.jsonPrimitive.double).map { kotlinx.serialization.json.JsonPrimitive(it) }).toString() },
+        "envelopeXLabels" to { i -> envelopeXLabels(i.jsonPrimitive.double).toList().let { l -> kotlinx.serialization.json.JsonArray(l.map { kotlinx.serialization.json.JsonPrimitive(it) }).toString() } },
     )
 
     @Test

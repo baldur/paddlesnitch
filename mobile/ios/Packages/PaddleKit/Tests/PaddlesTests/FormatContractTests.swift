@@ -60,12 +60,15 @@ import Testing
         let out: String
 
         /// Most answers are text; `axisTicks` answers a list of numbers,
-        /// compared here as "-2,0,2".
+        /// compared here as "-2,0,2", and `envelopeXLabels` a pair of
+        /// strings, compared as "0 s,20 s".
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: RawKey.self)
             self.in = try container.decode(JSONValue.self, forKey: .in)
             if let numbers = try? container.decode([Double].self, forKey: .out) {
                 out = numbers.map(Self.number).joined(separator: ",")
+            } else if let strings = try? container.decode([String].self, forKey: .out) {
+                out = strings.joined(separator: ",")
             } else {
                 out = try container.decode(String.self, forKey: .out)
             }
@@ -106,13 +109,16 @@ import Testing
         }
     }
 
-    static let motionFunctions: Set = ["fmtEvenness", "axisTicks", "noMotionCopy"]
+    static let motionFunctions: Set = ["fmtEvenness", "axisTicks", "envelopeXLabels", "noMotionCopy"]
 
     /// Boat motion's words and axes.
     func motion(_ test: Case) throws -> String {
         switch (test.function, test.input) {
         case ("fmtEvenness", .number(let pct)): return Format.evenness(pct)
         case ("axisTicks", .number(let bound)): return Format.axisTicks(bound).map(Raw.number).joined(separator: ",")
+        case ("envelopeXLabels", .number(let ms)):
+            let (from, to) = Format.envelopeXLabels(ms)
+            return "\(from),\(to)"
         case ("noMotionCopy", .null): return Format.noMotionCopy(reason: nil)
         case ("noMotionCopy", .object(let data)):
             return Format.noMotionCopy(reason: try JSONDecoder().decode(NoMotionInput.self, from: data).reason)
