@@ -587,6 +587,7 @@ The script requires a `User-Agent` header; Overpass blocks the default Node.js U
   Covered by a regression test in `proxy.test.ts`.
 - **Never store `useSearchParams()` values in `useState`** — the state initialises before the effect that reads params, causing race conditions. Derive values directly: `const next = searchParams.get('next') ?? '/att'`.
 - **Route prefix `/att` is baked into the source** (`src/app/att/`) — no Next.js `basePath` config. All `href`, `fetch()`, and `router.push()` calls include `/att` explicitly.
+- **SVG charts: draw the viewBox at the chart's measured pixel width** (`useChartWidth` in `components/devices/BoatMotion.tsx`), so `fontSize={11}` is 11 px on every screen. A fixed 900-wide viewBox shrank the boat-motion charts' text to about 4 px on a phone (#736). Long notes go under the chart in HTML, not on its axis.
 - **Discovery (#513):** `/robots.txt`, `/sitemap.xml` (public pages + public trials/courses only) and `/llms.txt` come from `src/lib/discovery.ts`; public trial pages carry schema.org `SportsEvent` JSON-LD. Keep `LLMS_TXT` in step with the `/plan` link parameters on `/help`.
 
 ### Marketing campaign landings (`/?campaign=<id>`)

@@ -11,7 +11,8 @@ import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 import { fmtDayTime } from '@paddlesnitch/core/format'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
-import { Button, buttonClass } from '@paddlesnitch/ui/Button'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import ReadError from '@/components/devices/ReadError'
 import { EmptyState } from '@paddlesnitch/ui/Card'
 
 // A tracker paddle's BOAT MOTION (docs/features/one-paddle.md, phase 3): the
@@ -28,7 +29,8 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
   const q = trpc.paddles.get.useQuery({ id }, { retry: false })
   const src = q.data?.source
   const fromTracker = src?.type === 'device' && !!src.deviceId && !!src.deviceSessionId
-  const [rec, setRec] = useState<Recording | 'error' | null>(null)
+  // 'missing' (a 404) is no use retrying; 'error' (network, 5xx) may be.
+  const [rec, setRec] = useState<Recording | 'error' | 'missing' | null>(null)
   const [attempt, setAttempt] = useState(0)
   const retry = () => { setRec(null); setAttempt(a => a + 1) }
 
@@ -37,6 +39,7 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
     let cancelled = false
     fetch(`/api/account/devices/sessions/${src.deviceSessionId}?deviceId=${encodeURIComponent(src.deviceId!)}`)
       .then(async r => {
+        if (r.status === 404) { if (!cancelled) setRec('missing'); return }
         const d = await r.json()
         if (!cancelled) setRec(r.ok && d.report ? { report: d.report, cadence: d.cadence ?? null, attitude: d.attitude ?? null } : 'error')
       })
@@ -65,13 +68,12 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
                 </>} />
             )}
             {fromTracker && rec === null && <LoadingState label="Loading" />}
-            {fromTracker && rec === 'error' && (
-              <div className="flex flex-col items-start gap-3">
-                <p className="text-base text-red" role="alert">Couldn’t read this recording.</p>
-                <Button variant="secondary" onClick={retry}>Try again</Button>
-              </div>
+            {fromTracker && rec === 'error' && <ReadError onRetry={retry} retried={attempt > 0} />}
+            {fromTracker && rec === 'missing' && (
+              <EmptyState title="We can't find this recording"
+                action={<Link href={`/paddles/${id}`} className={buttonClass('secondary')}>Back to the paddle</Link>} />
             )}
-            {fromTracker && rec && rec !== 'error' && (
+            {fromTracker && rec && rec !== 'error' && rec !== 'missing' && (
               <>
                 <BoatMotion attitude={rec.attitude} strokeRate={q.data.result.avgSR} deviceId={src!.deviceId} />
                 <TechnicalDetails report={rec.report} cadence={rec.cadence} attitude={rec.attitude} />

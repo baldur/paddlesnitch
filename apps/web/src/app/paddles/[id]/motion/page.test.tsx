@@ -60,6 +60,30 @@ describe("a tracker paddle's BOAT MOTION page", () => {
     expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
+  it('shows the error again, with focus on it, when Try again fails too', async () => {
+    paddle.data = { id: 't-rec1', paddledAt: '2026-10-06T06:37:00Z', source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' }, result: { avgSR: 57.4 } }
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 500 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await mount()
+    const retry = [...container.querySelectorAll('button')].find(b => b.textContent === 'Try again')!
+    await act(async () => { retry.click() })
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const alert = container.querySelector('[role="alert"]')!
+    expect(alert.textContent).toBe('Couldn’t read this recording.')
+    expect(document.activeElement).toBe(alert.parentElement)
+  })
+
+  it("says a recording that's gone (404) can't be found, with a way back and no Try again", async () => {
+    paddle.data = { id: 't-rec1', paddledAt: '2026-10-06T06:37:00Z', source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' }, result: { avgSR: 57.4 } }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'not_found' }), { status: 404 })))
+    await mount()
+    expect(container.textContent).toContain("We can't find this recording")
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect([...container.querySelectorAll('button')].some(b => b.textContent === 'Try again')).toBe(false)
+    expect(container.querySelectorAll('a[href="/paddles/t-rec1"]').length).toBe(2)
+  })
+
   it("says there's no boat motion for a paddle that didn't come from a tracker", async () => {
     paddle.data = { id: 'p1', paddledAt: '2026-10-06T06:37:00Z', source: { type: 'strava' }, result: { avgSR: null } }
     const fetchMock = vi.fn()

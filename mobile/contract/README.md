@@ -216,8 +216,9 @@ they are the website's.
 | Paddle not from a tracker | Title "No boat motion for this paddle", body "This paddle didn't come from a paddlesnitch tracker. Boat motion needs one fixed in the boat.", buttons Back to the paddle and About the tracker (`/guide`, through web-code). Don't call the route |
 | `paddles.get` fails or finds nothing | Title "We can't find this paddle", button Back to Paddles |
 | Loading | "Loading" |
-| Call failed, or 404 | "Couldn’t read this recording." with a Try again button under it that calls the route again (as on the website; pull-to-refresh too if you like) |
-| `attitude` null, or `attitude.available` false | "No boat motion for this recording." (as the box's title) then `noMotionCopy` (format.json: no `attitude`, or an empty `reason` = the motion file hasn't arrived; a `reason` = it couldn't be measured). When the file hasn't arrived, add an "Open tracker" button to the tracker's screen (`deviceId`), where it can be synced; not when it couldn't be measured. Never show `reason` itself: it is the engine's English, for engineers |
+| Call failed (network, 5xx) | "Couldn’t read this recording." with a Try again button under it that calls the route again (as on the website; pull-to-refresh too if you like). If Try again fails too, move accessibility focus back to the error |
+| 404 | Title "We can't find this recording", button Back to the paddle. No Try again: it would fail every time |
+| `attitude` null, or `attitude.available` false | "No boat motion for this recording." (as the box's title) then `noMotionCopy` (format.json: no `attitude`, or an empty `reason` = the motion file hasn't arrived; a `reason` = it couldn't be measured). When the file hasn't arrived, add an "Open tracker" button ("Open phone" when `deviceId` is a phone's, `isPhoneDeviceId`) to that device's screen (`deviceId`), where it can be synced; not when it couldn't be measured. It is a way there, not a promise: an older recording never had motion. Never show `reason` itself: it is the engine's English, for engineers |
 | `attitude.available` | The tiles, the three charts and the two notes below, in that order |
 
 Page title "Boat motion", with the paddle's `paddledAt` as `fmtDayTime` above it.
@@ -243,6 +244,8 @@ website draws each chart as wide as the panel, 260 pt high (the histogram
 230), with chart text at 11 pt whatever the width: never scale the text down
 with the chart, or it can't be read on a phone. Legend swatches are drawn at
 0.8 opacity, not the opacity of what they stand for, so each stays visible.
+A chart with a legend ("Through the session" and the histogram) keeps it in
+a 34 pt band above the plot, so it never covers the tallest band or bar.
 Y-axis ticks are `axisTicks`
 (format.json) of the chart's bound, labelled with the plain number and "°"
 (a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
@@ -250,7 +253,7 @@ Y-axis ticks are `axisTicks`
   (roll at 0.5 opacity over pitch at 0.28), y from −`plotBoundDeg` to
   +`plotBoundDeg` (10 when null), values beyond clamped to the edge, and then
   a note under the chart (small, `muted`, outside the chart image) "A few
-  moments went past ±N° and are clipped at the chart's edge.". X labels from
+  moments went past ±N° and are clipped at the chart’s edge.". X labels from
   `envelopeXLabels` (format.json): "0 min" and the length in whole minutes,
   or seconds under two minutes. Legend "roll" and "pitch".
   Accessibility label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
@@ -264,7 +267,8 @@ Y-axis ticks are `axisTicks`
   (`split` at 0.45), plus a dashed `red` line of the same counts flipped
   about 0 (each bin takes the count of the bin nearest `-centreDeg`). The x
   range is ±N, N = the largest `|centreDeg|` plus half of `binWidthDeg`, at
-  least 1, so the edge bars sit inside the frame. Labels "level" at 0, "−N°"
+  least 1, so the edge bars sit inside the frame. Each bar is 0.86 of
+  `binWidthDeg` wide, in the chart's degrees. Labels "level" at 0, "−N°"
   (U+2212) at the left edge and "+N°" at the right (N rounded), legend
   "actual" and "mirrored".
   Accessibility label: "Distribution of boat lean, with the mirrored distribution overlaid to show evenness".

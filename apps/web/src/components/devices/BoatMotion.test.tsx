@@ -106,7 +106,7 @@ describe('boat motion charts', () => {
     await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
     const hist = svgs()[2]
     const W = viewBoxWidth(hist)
-    const bars = [...hist.querySelectorAll('rect')].filter(r => r.getAttribute('width') !== '10')
+    const bars = [...hist.querySelectorAll('rect:not([data-legend])')]
     expect(bars.length).toBe(fixture('').attitude.rollHistogram.bins.length)
     for (const b of bars) {
       const x = Number(b.getAttribute('x')), w = Number(b.getAttribute('width'))
@@ -115,10 +115,73 @@ describe('boat motion charts', () => {
     }
   })
 
+  it('keeps the edge bars inside the frame when the bins are not symmetric about 0', async () => {
+    const a = fixture('').attitude
+    const lopsided = { ...a, rollHistogram: { binWidthDeg: 5, bins: [-7.5, -2.5, 2.5].map(centreDeg => ({ centreDeg, count: 2 })) } }
+    await render(<BoatMotion attitude={lopsided} strokeRate={null} />)
+    const hist = svgs()[2]
+    for (const b of hist.querySelectorAll('rect:not([data-legend])')) {
+      expect(Number(b.getAttribute('x'))).toBeGreaterThanOrEqual(CHART_MARGIN.L)
+      expect(Number(b.getAttribute('x')) + Number(b.getAttribute('width'))).toBeLessThanOrEqual(viewBoxWidth(hist) - CHART_MARGIN.R)
+    }
+  })
+
   it('draws legend swatches at 0.8 opacity or more, so the pitch swatch shows', async () => {
     await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
-    const swatches = [...container.querySelectorAll('svg rect[width="10"]')]
+    const swatches = [...container.querySelectorAll('svg rect[data-legend]')]
     expect(swatches.length).toBe(3)
     for (const s of swatches) expect(Number(s.getAttribute('opacity') ?? 1)).toBeGreaterThanOrEqual(0.8)
+  })
+
+  it('keeps each legend in a band above the plot, clear of the tallest bars', async () => {
+    atWidth(PHONE_CHART_PX)
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    for (const s of container.querySelectorAll('svg rect[data-legend]')) {
+      expect(Number(s.getAttribute('y')) + Number(s.getAttribute('height'))).toBeLessThanOrEqual(CHART_MARGIN.TL)
+    }
+    for (const b of svgs()[2].querySelectorAll('rect:not([data-legend])')) {
+      expect(Number(b.getAttribute('y'))).toBeGreaterThanOrEqual(CHART_MARGIN.TL)
+    }
+  })
+
+  it('redraws at the new width when the chart is resized (a phone turned sideways)', async () => {
+    const observers: { cb: () => void; disconnect: ReturnType<typeof vi.fn> }[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      cb: () => void; disconnect = vi.fn()
+      constructor(cb: () => void) { this.cb = cb; observers.push(this) }
+      observe() {}
+    })
+    try {
+      atWidth(PHONE_CHART_PX)
+      await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+      expect(svgs().map(viewBoxWidth)).toEqual([300, 300, 300])
+      rect.mockReturnValue({ width: 640, height: 0 } as DOMRect)
+      await act(async () => { observers.forEach(o => o.cb()) })
+      expect(svgs().map(viewBoxWidth)).toEqual([640, 640, 640])
+      await act(async () => { root.unmount() })
+      expect(observers.length).toBe(3)
+      for (const o of observers) expect(o.disconnect).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('notes clipped moments under the chart, not on it, and only when there are some', async () => {
+    const a = fixture('').attitude
+    const wild = { ...a, envelope: a.envelope.map((b: { rollMax: number }, i: number) => (i === 5 ? { ...b, rollMax: a.plotBoundDeg + 4 } : b)) }
+    await render(<BoatMotion attitude={wild} strokeRate={null} />)
+    const note = [...container.querySelectorAll('p')].find(p => p.textContent!.startsWith('A few moments went past'))
+    expect(note?.textContent).toBe(`A few moments went past ±${a.plotBoundDeg.toFixed(0)}° and are clipped at the chart’s edge.`)
+    expect(note!.closest('svg')).toBeNull()
+    await act(async () => { root.unmount() }); container.remove()
+    const calm = { ...a, plotBoundDeg: 90 }
+    expect(await render(<BoatMotion attitude={calm} strokeRate={null} />)).not.toContain('A few moments went past')
+  })
+})
+
+describe('the way to the tracker', () => {
+  it('names a phone a phone', async () => {
+    await render(<BoatMotion attitude={fixture('.no-motion').attitude} strokeRate={null} deviceId="P0123456789ABCDEF" />)
+    expect(container.querySelector('a[href="/devices/P0123456789ABCDEF"]')?.textContent).toBe('Open phone')
   })
 })
