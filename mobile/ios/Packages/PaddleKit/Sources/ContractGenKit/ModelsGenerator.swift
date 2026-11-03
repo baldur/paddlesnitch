@@ -70,19 +70,6 @@ public enum ModelsGenerator {
 
     // MARK: Declarations
 
-    private static func declaration(name: String, schema: JSON, owner: String) throws -> String {
-        if let variants = schema["oneOf"]?.array {
-            return try union(name: name, variants: variants, owner: owner)
-        }
-        if let values = schema["enum"]?.array {
-            return try stringEnum(name: name, values: values.compactMap(\.string), owner: owner)
-        }
-        if schema["type"]?.string == "object" {
-            return try structure(name: name, schema: schema, owner: owner)
-        }
-        throw Failure.unsupported(type: owner, reason: "\(name) is neither an object, an enum nor a oneOf")
-    }
-
     private static func structure(name: String, schema: JSON, owner: String, skipping skipped: Set<String> = [])
         throws -> String
     {
@@ -291,5 +278,23 @@ public enum ModelsGenerator {
 
     static func literal(_ value: String) -> String {
         "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+}
+
+extension ModelsGenerator {
+    fileprivate static func declaration(name: String, schema: JSON, owner: String) throws -> String {
+        if let variants = schema["oneOf"]?.array {
+            return try union(name: name, variants: variants, owner: owner)
+        }
+        if let values = schema["enum"]?.array {
+            return try stringEnum(name: name, values: values.compactMap(\.string), owner: owner)
+        }
+        if schema["type"]?.string == "object" {
+            return try structure(name: name, schema: schema, owner: owner)
+        }
+        if schema["type"]?.string == "array" {
+            return try listAlias(name: name, schema: schema, owner: owner)
+        }
+        throw Failure.unsupported(type: owner, reason: "\(name) is neither an object, an array, an enum nor a oneOf")
     }
 }

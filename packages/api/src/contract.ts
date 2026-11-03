@@ -50,12 +50,13 @@ export const PaddleCard = named('PaddleCard', z.object({
   phone: z.literal(true).optional(),
 }))
 /** paddles.sameOuting: the user's other recordings of this paddle's outing (none: an empty list). */
-export const SameOutingList = named('SameOutingList', z.array(z.object({
+export const SameOuting = named('SameOuting', z.object({
   id: z.string(),
   sourceType: z.string(),
   paddledAt: timestamp(),
   phone: z.literal(true).optional(),
-})))
+}))
+export const SameOutingList = named('SameOutingList', z.array(SameOuting))
 export const PaddleTotals = named('PaddleTotals', z.object({
   count: z.int(),
   totalKm: z.number(),
