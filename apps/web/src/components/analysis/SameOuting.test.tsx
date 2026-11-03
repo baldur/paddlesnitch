@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 const cmp = vi.hoisted(() => ({ data: null as unknown }))
 vi.mock('@/lib/trpc', () => ({ trpc: { paddles: { compareOuting: { useQuery: () => ({ data: cmp.data }) } } } }))
 
-import SameOuting from './SameOuting'
+import SameOuting, { compareLabels } from './SameOuting'
 
 let container: HTMLDivElement
 let root: Root
@@ -48,5 +48,22 @@ describe('comparing the same outing from two sources', () => {
     cmp.data = { same: false }
     await mount()
     expect(container.textContent).toBe('')
+  })
+})
+
+describe('compareLabels', () => {
+  const day = (iso: string) => iso.slice(0, 10)
+  const at = (paddledAt: string, source: { type: string; deviceId?: string; phone?: boolean }) => ({ paddledAt, source })
+  it('one outing from a tracker and a phone: named by source, not the same date twice', () => {
+    expect(compareLabels(at('2026-09-13T07:00:00Z', { type: 'device', deviceId: 'ABC123' }), at('2026-09-13T07:00:30Z', { type: 'device', phone: true }), day))
+      .toEqual(['Tracker', 'Phone'])
+  })
+  it('different days: the dates', () => {
+    expect(compareLabels(at('2026-09-13T07:00:00Z', { type: 'device' }), at('2026-09-20T07:00:00Z', { type: 'device', phone: true }), day))
+      .toEqual(['2026-09-13', '2026-09-20'])
+  })
+  it('same day, same kind of source: the dates (two files would both say File)', () => {
+    expect(compareLabels(at('2026-09-13T07:00:00Z', { type: 'file' }), at('2026-09-13T17:00:00Z', { type: 'file' }), day))
+      .toEqual(['2026-09-13', '2026-09-13'])
   })
 })

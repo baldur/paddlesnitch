@@ -85,7 +85,7 @@ describe('real answers fit the schemas', () => {
   afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); delete process.env.DATA_DIR })
 
   // A real analysed paddle: 10 minutes at ~3 m/s with a stroke rate.
-  async function savePaddle(id: string) {
+  async function savePaddle(id: string, source: Record<string, unknown> = { type: 'file', filename: 'river.gpx' }) {
     const t0 = Date.parse('2026-09-01T10:00:00Z')
     const track = Array.from({ length: 600 }, (_, i) => ({
       lat: 51.5 + i * 0.000027, lng: -0.9, timestamp: new Date(t0 + i * 1000), strokeRate: 60 + (i % 5),
@@ -93,7 +93,7 @@ describe('real answers fit the schemas', () => {
     const result = analyseTrack(track)
     const session = {
       id, userId: USER.id, createdAt: '2026-09-01T11:00:00.000Z', paddledAt: '2026-09-01T10:00:00.000Z',
-      source: { type: 'file', filename: 'river.gpx' }, doubleStrokeRate: false, note: 'windy', insight: result.insight,
+      source, doubleStrokeRate: false, note: 'windy', insight: result.insight,
       result, boatClass: 'K1', seat: 1,
     }
     const p = path.join(dir, 'analysis', USER.id, id)
@@ -115,12 +115,12 @@ describe('real answers fit the schemas', () => {
     expect(one.error?.issues).toBeUndefined()
   })
 
-  it('paddles.sameOuting, with another recording of the same outing', async () => {
+  it('paddles.sameOuting, with a phone recording of the same outing', async () => {
     await savePaddle('aaa')
-    await savePaddle('bbb')
+    await savePaddle('bbb', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's1' })
     const same = SameOutingList.safeParse(await createCaller({ user: USER }).paddles.sameOuting({ id: 'aaa' }))
     expect(same.error?.issues).toBeUndefined()
-    expect(same.data?.map(o => o.id)).toEqual(['bbb'])
+    expect(same.data).toEqual([{ id: 'bbb', sourceType: 'device', paddledAt: '2026-09-01T10:00:00.000Z', phone: true }])
   })
 })
 

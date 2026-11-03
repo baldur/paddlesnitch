@@ -4,10 +4,5 @@
     "sourceType": "device",
     "paddledAt": "2026-10-24T07:00:30.000Z",
     "phone": true
-  },
-  {
-    "id": "pdl-tracker-file",
-    "sourceType": "file",
-    "paddledAt": "2026-10-24T06:59:10.000Z"
   }
 ]

@@ -61,25 +61,43 @@ A query with no input omits `?input=`.
 One outing recorded twice (a tracker and a phone, say) is one card, and each
 other recording links to the comparison, as on the website.
 
-- **Paddles list.** Under a card, one row per entry in its `sameOuting`:
-  "Also recorded by <who>" with "Compare →" at the end. The whole row is one
-  tap target, at least 44 pt (iOS) or 48 dp (Android) high. It opens Compare
-  with the card's paddle as `a` and the entry as `b`.
-- **Paddle page.** On your own paddle only (not a buddy's or a shared one),
-  call `paddles.sameOuting` with its id. Each entry is a link
-  "Also recorded by <who> →" under the summary, before Efforts and rests,
-  opening Compare with this paddle as `a`. An empty list shows nothing. So does
-  a failed call: the links are extra, never an error on the page.
+- **Paddles list.** Inside the card, under its own row, one row per entry in
+  `sameOuting`: a `border` divider above, "Also recorded by <who>" in `muted`
+  at the leading edge, "Compare →" in `primary-text` at the trailing edge. Each
+  row is a tap target of its own, separate from the card's tap that opens the
+  paddle, full width and at least 44 pt (iOS) or 48 dp (Android) high. It opens
+  Compare with the card's paddle as `a` and the entry as `b`.
+- **Paddle page.** On your own paddle (when buddies' and shared paddles come
+  to the apps, they get no links), call `paddles.sameOuting` with its id. Each
+  entry is a link "Also recorded by <who> →" in `primary-text`, body-small
+  size, full width and at least 44 pt or 48 dp high. They go after the summary
+  (after the note when there's no summary) and before Efforts and rests, and
+  open Compare with this paddle as `a`. An empty list shows nothing. So does a
+  failed call: the links are extra, never an error on the page.
 - **<who>** comes from the entry: `phone: true` is "the phone"; otherwise by
   `sourceType`, `device` "the tracker", `strava` "Strava", `trial`
   "a time trial", and `file` or any other value "a file" (rule 2). The website
   uses the same words (`alsoRecordedBy` in `packages/core/src/paddles.ts`).
-- **Compare** isn't native yet (both apps' phase P4). Until then, open the
-  website's `/paddles/compare?a=<a>&b=<b>` signed in, through web-code (§ Signing in,
-  "Website pages, signed in"), in the in-app browser.
+- **Screen readers.** Each row or link is one element, a button, read as
+  "Compare with the recording from <who>". The arrow is not read.
+- **Compare** isn't native yet (both apps' phase P4). Until then, ask web-code
+  for `/paddles/compare?a=<a>&b=<b>` (§ Signing in, "Website pages, signed
+  in") and open the `url` it answers in the in-app browser: a Custom Tab on
+  Android, `SFSafariViewController` on iOS. While web-code is asked, the tapped
+  row or link shows a small spinner and takes no more taps (each code works
+  once). If it fails, show "Couldn't open Compare. Please try again." as a
+  snackbar (Android) or a short alert (iOS), and leave the page as it was. The
+  website's own header and tab bar show inside the browser; Done or the close
+  button brings the person back.
 
-Fixtures: `paddles.sameOuting` (a phone and a file), `paddles.sameOuting.none`
-(`[]`), and the cards' `sameOuting` in `paddles.list.with-phone`.
+Tests each app adds: a card with two rows (`paddles.list.with-phone`) where a
+row tap asks for Compare and doesn't open the paddle; the paddle page with
+`paddles.sameOuting` and with `paddles.sameOuting.none`; and a failed web-code
+showing the message. Snapshots at the largest text size.
+
+Fixtures: `paddles.sameOuting` (the answer for `pdl-tracker`: its phone
+recording, as on its card in `paddles.list.with-phone`) and
+`paddles.sameOuting.none` (`[]`).
 
 ## Adding a paddle from a file
 
