@@ -103,9 +103,8 @@ export default function PrivacyPolicy() {
         <Section title="Cookies and browser storage">
           <p>We set these cookies, all needed for the site to work:</p>
           <ul className="list-disc pl-5 mt-2 space-y-2">
-            <li><code>tt_id</code>: your sign-in token. Lasts 24 hours.</li>
-            <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days.</li>
-            <li>When the paddlesnitch app opens the website signed in, <code>tt_id</code> and <code>tt_refresh</code> last an hour instead.</li>
+            <li><code>tt_id</code>: your sign-in token. Lasts 24 hours, or an hour when the paddlesnitch app opened the website.</li>
+            <li><code>tt_refresh</code>: keeps you signed in between visits. Lasts 30 days, or an hour when the paddlesnitch app opened the website.</li>
             <li><code>tt_from_link</code>: only when the paddlesnitch app opens the website signed in. It records which account the app signed in, so this browser can’t connect a Google login to that account. Lasts 24 hours, or until you sign out.</li>
             <li><code>google_signin_state</code>, <code>google_signin_verifier</code>, <code>google_signin_next</code>, <code>google_signin_app</code> and <code>google_signin_link</code>: only while you sign in with Google or connect it on your account page. They check the reply really came from Google, and bring you back to the right page, or to the paddlesnitch app if you started there. They last 10 minutes.</li>
           </ul>
