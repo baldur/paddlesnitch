@@ -36,6 +36,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isFocusable
 import androidx.compose.ui.unit.dp
@@ -161,13 +162,14 @@ class BoatMotionScreenTest {
     // The website's ReadError: Try again's button goes while loading, so a second failure puts focus on the error.
     @Test fun aTryAgainThatFailsAgainPutsFocusOnTheError() {
         var calls = 0
-        show { BoatMotionScreen(tracker, load = { calls++; throw ApiFailure("Couldn’t finish that. Please try again.", 503, generic = true) }) }
-        compose.onNodeWithText(MOTION_FAILED).assertExists()
+        // A real load suspends, so the error leaves the screen while Try again loads: the focus must wait for it to come back.
+        show { BoatMotionScreen(tracker, load = { calls++; kotlinx.coroutines.delay(50); throw ApiFailure("Couldn’t finish that. Please try again.", 503, generic = true) }) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(MOTION_FAILED).fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(isFocused()).assertDoesNotExist()                     // the first failure leaves focus alone
         compose.onNode(hasAnyDescendant(hasText(MOTION_FAILED)) and isFocusable()).assertDoesNotExist()   // and isn't a stop before Try again
         compose.onNodeWithText("Try again").performClick()
+        compose.waitUntil(5_000) { calls == 2 && compose.onAllNodesWithText(MOTION_FAILED).fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
-        assertEquals(2, calls)
         compose.onNode(isFocused() and hasAnyDescendant(hasText(MOTION_FAILED))).assertExists()
     }
 

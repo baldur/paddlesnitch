@@ -60,6 +60,14 @@ class BoatMotionTest {
         assertEquals(3, labelEvery(gap = 9f, lineHeight = 20f))
     }
 
+    // Lead, 2026-11-03: the server's source.phone decides, never the id's shape.
+    @Test fun openPhoneOrTrackerIsTheServersPhoneFlag() {
+        val phone = paddle("paddles.get.with-phone.json")
+        assertEquals("Open phone", deviceButton(phone))
+        assertEquals("Open phone", deviceButton(phone.copy(source = phone.source.copy(deviceId = "TRACKER01"))))
+        assertEquals("Open tracker", deviceButton(phone.copy(source = phone.source.copy(phone = null))))
+    }
+
     @Test fun aNarrowHistogramStillSpansADegree() {
         val one = com.paddlesnitch.app.api.RollHistogram(binWidthDeg = 0.2, bins = listOf(com.paddlesnitch.app.api.RollHistogram.Bin(0.1, 3)))
         assertEquals(1.0, histogramRange(one), 0.0)
