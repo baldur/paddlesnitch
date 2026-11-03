@@ -82,8 +82,11 @@ other recording links to the comparison, as on the website.
   "Compare with the recording from <who>". The arrow is not read.
 - **Compare** isn't native yet (both apps' phase P4). Until then, ask web-code
   for `/paddles/compare?a=<a>&b=<b>` (§ Signing in, "Website pages, signed
-  in") and open the `url` it answers in the in-app browser: a Custom Tab on
-  Android, `SFSafariViewController` on iOS. While web-code is asked, the tapped
+  in") and open the `url` it answers in the in-app browser: on Android a Custom
+  Tab with ephemeral browsing where the browser supports it
+  (`CustomTabsClient.isEphemeralBrowsingSupported`), opened through the helper
+  that names the browser, so the redirect to `/paddles/…` doesn't come back
+  into the app; on iOS `SFSafariViewController`. Never prefetch the `url`. While web-code is asked, the tapped
   row or link shows a small spinner and takes no more taps (each code works
   once). If it fails, show "Couldn't open Compare. Please try again." as a
   snackbar (Android) or a short alert (iOS), and leave the page as it was. The
