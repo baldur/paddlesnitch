@@ -286,16 +286,23 @@ async function play(c, page, errors) {
           return new Promise((done) => {
             const f = () => {
               const b = el.getBoundingClientRect();
-              boxes.push([b.left, b.top].map((v) => Math.round(v * 10) / 10).join(','));
+              boxes.push(`${Math.round(performance.now())}ms ${[b.left, b.top, b.width, b.height].join(',')}`);
               if (boxes.length < 6) requestAnimationFrame(f);
-              else done({ box: [r.left, r.top, r.right, r.bottom].map(Math.round), frames: boxes, hidden: el.hidden, onTop: top === el ? 'itself' : `${top?.id || top?.tagName} ${top?.textContent?.trim().slice(0, 30)}`, view: [innerWidth, innerHeight] });
+              else done({ box: [r.left, r.top, r.right, r.bottom].map(Math.round), frames: boxes, hidden: el.hidden, disabled: el.disabled, onTop: top === el ? 'itself' : `${top?.id || top?.tagName} ${top?.textContent?.trim().slice(0, 30)}`, view: [innerWidth, innerHeight] });
             };
             requestAnimationFrame(f);
           });
         }).catch(() => null);
         // Playwright's own reasons, the last few distinct lines of its call log.
         const log = [...new Set(e.message.split('\n').map((l) => l.trim()).filter((l) => /^-/.test(l)))].slice(-6).join(' | ');
-        throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]} ${JSON.stringify(why)} ${log}`);
+        const said = `${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]} ${JSON.stringify(why)} ${log}`;
+        // Shown, enabled and on top, yet never "stable" to Playwright: CI's
+        // WebKit on software WebGL (about 100 ms frames) did this to "Paint
+        // your boat" though it held still to 0.1 px. A player could tap it, so
+        // tap it anyway and say so; anything covering it still fails.
+        if (!why || why.hidden || why.disabled || why.onTop !== 'itself') throw new Error(`couldn't ${said}`);
+        console.log(`  (forced the ${said})`);
+        await (c.touch ? spot.tap({ force: true }) : spot.click({ force: true }));
       });
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
