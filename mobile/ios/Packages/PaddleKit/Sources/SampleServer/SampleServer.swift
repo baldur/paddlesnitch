@@ -39,6 +39,8 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _contact: String?
     var _placeholderEmail = false
     var _failsContact = false
+    var _failsWebCode = false
+    var _failsSameOuting = false
     var _signInExpiresOnDelete = false
     /// The recent sign-in runs out between the check and the delete: the
     /// check says recent, the delete answers 403.
@@ -187,6 +189,9 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
             let id = try input(ById.self, from: request).id
             let pending = summariesPending && lock.withLock { !written.contains(id) }
             return try paddle(id: id, pending: pending)
+        case "/api/trpc/paddles.sameOuting":
+            guard signedIn else { return Self.unauthorized }
+            return try sameOuting(id: try input(ById.self, from: request).id)
         case "/api/trpc/paddles.writeSummary":
             guard signedIn else { return Self.unauthorized }
             let id = try JSONDecoder().decode(ById.self, from: request.httpBody ?? Data()).id
@@ -197,6 +202,26 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         default:
             return (404, Data(#"{"error":{"message":"Not found","data":{"code":"NOT_FOUND","httpStatus":404}}}"#.utf8))
         }
+    }
+
+    /// Make `paddles.sameOuting` fail, as when the server is down.
+    public var failsSameOuting: Bool {
+        get { lock.withLock { _failsSameOuting } }
+        set { lock.withLock { _failsSameOuting = newValue } }
+    }
+
+    /// The other recordings on this paddle's card in the list, so the page
+    /// and the card agree; `paddles.sameOuting.none` for any other paddle.
+    private func sameOuting(id: String) throws -> (Int, Data) {
+        if failsSameOuting { return (500, Data(#"{"error":{"message":"Something went wrong."}}"#.utf8)) }
+        let list = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: try paddlesList())
+        guard let card = list.cards.first(where: { $0.id == id }), let items = card.sameOuting, !items.isEmpty else {
+            return (200, trpc(try fixture("paddles.sameOuting.none")))
+        }
+        let entries = items.map {
+            SameOuting(id: $0.id, paddledAt: card.paddledAt, phone: $0.phone, sourceType: $0.sourceType)
+        }
+        return (200, trpc(try JSONEncoder.paddlesnitch.encode(entries)))
     }
 
     /// The first `paddles.get*.json` with this id, `paddles.get.json` first.

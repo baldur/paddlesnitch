@@ -9,10 +9,13 @@ import SwiftUI
 /// then the Android app's 500 m splits.
 struct PaddleDetailView: View {
     @State private var model: PaddleDetailModel
+    /// Compare on the website with another recording of this outing.
+    let openCompare: (_ a: String, _ b: String) async -> Bool
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(id: String, source: any PaddlesSource) {
+    init(id: String, source: any PaddlesSource, openCompare: @escaping (_ a: String, _ b: String) async -> Bool) {
         _model = State(initialValue: PaddleDetailModel(id: id, source: source))
+        self.openCompare = openCompare
     }
 
     var body: some View {
@@ -55,6 +58,15 @@ struct PaddleDetailView: View {
                                 .accessibilityLabel("Your note: \(note)")
                         }
                         summary(paddle)
+                        // After the summary (or the note), before Efforts and rests.
+                        if !model.sameOuting.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(model.sameOuting, id: \.id) { link in
+                                    SameOutingButton(link: link, style: .link) { await openCompare(model.id, link.id) }
+                                        .accessibilityIdentifier("same-outing-\(link.id)")
+                                }
+                            }
+                        }
                         if !paddle.efforts.isEmpty || !paddle.rests.isEmpty || !paddle.repeats.isEmpty {
                             efforts(paddle)
                         }

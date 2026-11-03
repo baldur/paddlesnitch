@@ -26,6 +26,9 @@ struct PaddleListView: View {
     /// The website's issue form, for a recording the server won't take:
     /// false if it couldn't open.
     let openReport: () async -> Bool
+    /// Compare on the website for this paddle (`a`) and another recording
+    /// of the outing (`b`): false if it couldn't open.
+    let openCompare: (_ a: String, _ b: String) async -> Bool
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var loadedID: String?
@@ -36,7 +39,7 @@ struct PaddleListView: View {
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
         openTerms: @escaping () -> Void, adding: AddPaddleModel,
         openFile: @escaping (URL) -> Void, openRecord: @escaping () -> Void, uploads: UploadQueue?,
-        openReport: @escaping () async -> Bool
+        openReport: @escaping () async -> Bool, openCompare: @escaping (_ a: String, _ b: String) async -> Bool
     ) {
         self.source = source
         self.sourceID = sourceID
@@ -49,6 +52,7 @@ struct PaddleListView: View {
         self.openRecord = openRecord
         self.uploads = uploads
         self.openReport = openReport
+        self.openCompare = openCompare
         _model = State(initialValue: PaddleListModel(source: source))
     }
 
@@ -64,10 +68,10 @@ struct PaddleListView: View {
                 .navigationTitle("Paddles")
                 .toolbarBackground(Palette.bg, for: .navigationBar)
                 .navigationDestination(for: PaddleRow.self) { row in
-                    PaddleDetailView(id: row.id, source: source)
+                    PaddleDetailView(id: row.id, source: source, openCompare: openCompare)
                 }
                 .navigationDestination(item: $openedID) { id in
-                    PaddleDetailView(id: id, source: source)
+                    PaddleDetailView(id: id, source: source, openCompare: openCompare)
                 }
                 .toolbar {
                     if !isSample {
@@ -163,14 +167,7 @@ struct PaddleListView: View {
                     .accessibilityAddTraits(.isLink)
                     .listRowBackground(Palette.surface)
                     .accessibilityIdentifier("paddle-\(row.id)")
-                    // Compare arrives with P4; until then the row says the
-                    // outing has another recording.
-                    ForEach(row.alsoRecordedBy, id: \.self) { line in
-                        Text(line)
-                            .font(.plexSans(.subheadline))
-                            .foregroundStyle(Palette.muted)
-                            .listRowBackground(Palette.surface)
-                    }
+                    sameOutingRows(row)
                 }
             } header: {
                 // Not over no rows (a first recording still uploading).
@@ -250,6 +247,24 @@ extension PaddleListView {
     }
 
     /// Every card but "Adding…" can be closed, which forgets the file.
+    /// Inside the card, each its own tap target apart from the card's:
+    /// Compare on the website. The samples have no account to compare in.
+    private func sameOutingRows(_ row: PaddleRow) -> some View {
+        ForEach(row.sameOuting, id: \.id) { link in
+            Group {
+                if isSample {
+                    Text(link.text)
+                        .font(.plexSans(.subheadline))
+                        .foregroundStyle(Palette.muted)
+                } else {
+                    SameOutingButton(link: link, style: .row) { await openCompare(row.id, link.id) }
+                }
+            }
+            .listRowBackground(Palette.surface)
+            .accessibilityIdentifier("same-outing-\(row.id)-\(link.id)")
+        }
+    }
+
     fileprivate func addCard(
         _ text: String, failed: Bool = false, busy: Bool = false, action: String? = nil, run: @escaping () -> Void = {}
     ) -> some View {

@@ -17,7 +17,7 @@ struct RootView: View {
     /// The signed-in account's recordings from this phone, uploading.
     @State private var uploads: UploadQueue?
     @State private var network = NetworkWatch()
-    @State private var reportPage: URL?
+    @State private var websitePage: URL?
     @State private var recording = RecordingSession()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -46,7 +46,7 @@ struct RootView: View {
                     openFile: { url in Task { await open(url) } },
                     openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
                     uploads: uploads,
-                    openReport: openReport
+                    openReport: openReport, openCompare: openCompare
                 )
                 .tabItem { Label("Paddles", systemImage: "water.waves") }
                 .tag("paddles")
@@ -79,7 +79,7 @@ struct RootView: View {
             default: break
             }
         }
-        .sheet(item: $reportPage) { url in
+        .sheet(item: $websitePage) { url in
             SafariView(url: url).ignoresSafeArea()
         }
         .task { await openLaunchFile() }
@@ -135,10 +135,21 @@ struct RootView: View {
     /// open, the screen says so rather than doing nothing.
     private func openReport() async -> Bool {
         do {
-            reportPage = try await account.reportPage()
+            websitePage = try await account.reportPage()
             return true
         } catch {
             AccessibilityNotification.Announcement("Couldn’t open the issue form. Please try again.").post()
+            return false
+        }
+    }
+
+    /// Compare on the website, signed in as this account. The button that
+    /// asked says if it couldn't open.
+    private func openCompare(_ a: String, _ b: String) async -> Bool {
+        do {
+            websitePage = try await account.websitePage(SameOutingLink.comparePath(a: a, b: b))
+            return true
+        } catch {
             return false
         }
     }

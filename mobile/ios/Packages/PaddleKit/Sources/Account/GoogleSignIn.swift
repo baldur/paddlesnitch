@@ -88,7 +88,14 @@ extension AccountModel {
     /// one-time web-code link, so the report is filed as it (a recording the
     /// server won't take).
     public func reportPage() async throws -> URL {
-        let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: "/account?report=1"))
+        try await websitePage("/account?report=1")
+    }
+
+    /// A website page signed in as this account, through a one-time
+    /// web-code link (mobile/contract/README.md, "Website pages, signed
+    /// in"). Open it at once, and never fetch it first: that spends it.
+    public func websitePage(_ next: String) async throws -> URL {
+        let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: next))
         guard let url = Self.resolve(page.url, against: client.baseURL) else {
             throw PaddleAPIError.undecodable("web-code link")
         }
