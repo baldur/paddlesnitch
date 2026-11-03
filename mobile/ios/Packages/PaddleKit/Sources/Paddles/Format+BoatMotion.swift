@@ -2,7 +2,7 @@ import Foundation
 import PaddleAPI
 
 /// Boat motion's words and axes, as the website's (format.json:
-/// `fmtEvenness`, `axisTicks`, `noMotionCopy`).
+/// `fmtEvenness`, `axisTicks`, `envelopeXLabels`, `noMotionCopy`).
 extension Format {
     /// "6%": how uneven the roll is, by JavaScript's toFixed (0.5 rounds up).
     public static func evenness(_ imbalancePct: Double) -> String {
@@ -15,6 +15,14 @@ extension Format {
         let step: Double = maxDeg > 12 ? 5 : maxDeg > 6 ? 3 : 2
         let top = (maxDeg / step).rounded(.down) * step
         return stride(from: -top, through: top, by: step).map { $0 == 0 ? 0 : $0 }
+    }
+
+    /// "Through the session"'s x labels for a recording `ms` long: seconds
+    /// under two minutes (a 20 s recording read "0 min … 0 min"), else minutes.
+    public static func envelopeXLabels(_ ms: Double) -> (String, String) {
+        ms < 120_000
+            ? ("0 s", "\(Int((ms / 1000).rounded())) s")
+            : ("0 min", "\(Int((ms / 60_000).rounded())) min")
     }
 
     /// Why there are no charts. A `reason` means motion data arrived but

@@ -8,6 +8,7 @@ import TechnicalDetails from '@/components/devices/TechnicalDetails'
 import LoadingState from '@/components/LoadingState'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
+import ReadError from '@/components/devices/ReadError'
 import { EmptyState } from '@paddlesnitch/ui/Card'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
@@ -28,6 +29,8 @@ export default function RecordingMotion() {
   const [noPaddle, setNoPaddle] = useState<string | null>(null)
   const [fromMotion, setFromMotion] = useState<string | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+  const retry = () => { setState('loading'); setAttempt(a => a + 1) }
 
   useEffect(() => {
     let cancelled = false
@@ -36,13 +39,17 @@ export default function RecordingMotion() {
         // The session list is already owner-filtered, and it is where the
         // deviceId comes from — so the URL can carry just the session id.
         const listRes = await fetch('/api/account/devices/sessions')
-        const list: { sessions?: DeviceSessionMeta[] } = listRes.ok ? await listRes.json() : {}
+        // A list that failed to load is worth retrying; a recording not on it isn't.
+        if (!listRes.ok) throw new Error('session list')
+        const list: { sessions?: DeviceSessionMeta[] } = await listRes.json()
         const found = (list.sessions ?? []).find(s => s.sessionId === sessionId)
         if (cancelled) return
         if (!found) { setMeta('missing'); setState('ready'); return }
         setMeta(found)
 
         const res = await fetch(`/api/account/devices/sessions/${sessionId}?deviceId=${encodeURIComponent(found.deviceId)}`)
+        if (cancelled) return
+        if (res.status === 404) { setMeta('missing'); setState('ready'); return }
         const d = await res.json()
         if (cancelled) return
         // A failed read is an error, not "no motion yet".
@@ -58,7 +65,7 @@ export default function RecordingMotion() {
       }
     })()
     return () => { cancelled = true }
-  }, [sessionId])
+  }, [sessionId, attempt])
 
   return (
     <main className="flex-1 flex flex-col">
@@ -67,7 +74,7 @@ export default function RecordingMotion() {
       } />
       <Page width="wide">
         {state === 'loading' && <LoadingState label="Loading" />}
-        {state === 'error' && <p className="text-base text-red" role="alert">Couldn’t read this recording. Please try again.</p>}
+        {state === 'error' && <ReadError onRetry={retry} retried={attempt > 0} />}
 
         {state === 'ready' && meta === 'missing' && (
           <EmptyState
@@ -84,7 +91,7 @@ export default function RecordingMotion() {
             />
             {noPaddle && <p className="text-base text-fg border-l-2 border-primary pl-3 -mt-4">{noPaddle}{fromMotion ? ` ${fromMotion}` : ''}</p>}
 
-            <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} />
+            <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} deviceId={meta.deviceId} />
             {report && <TechnicalDetails report={report} cadence={cadence} attitude={attitude} />}
           </>
         )}

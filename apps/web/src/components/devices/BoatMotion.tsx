@@ -1,6 +1,11 @@
+'use client'
+import Link from 'next/link'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { noMotionCopy, fmtEvenness } from '@/lib/tracker-copy'
 import { eyebrowClass } from '@paddlesnitch/ui/Layout'
-import { axisTicks } from '@/lib/boat-motion-chart'
+import { buttonClass } from '@paddlesnitch/ui/Button'
+import { isPhoneDeviceId } from '@paddlesnitch/core/paddles'
+import { axisTicks, envelopeXLabels, histogramHalfRangeDeg } from '@/lib/boat-motion-chart'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 
 // Boat motion from a tracker's motion data: roll, pitch, evenness, stroke rate,
@@ -19,13 +24,21 @@ const C = {
   warn: 'var(--color-red, #f87171)',
 }
 
-export default function BoatMotion({ attitude, strokeRate }: { attitude: AttitudeReport | null; strokeRate: number | null }) {
+// `deviceId`, when the page knows the tracker (or phone): a motion file that
+// hasn't arrived gets a way to it, where the paddler can sync. A way there,
+// not a promise: an older recording never had motion.
+export default function BoatMotion({ attitude, strokeRate, deviceId }: { attitude: AttitudeReport | null; strokeRate: number | null; deviceId?: string }) {
   return (
     <>
       {!attitude?.available ? (
         <div className="rounded-control border border-border bg-surface p-4 text-base text-muted flex flex-col gap-2">
           <p className="text-fg font-medium">No boat motion for this recording.</p>
           <p>{noMotionCopy(attitude)}</p>
+          {!attitude?.reason && deviceId && (
+            <Link href={`/devices/${deviceId}`} className={buttonClass('secondary', 'md', 'self-start mt-1')}>
+              {isPhoneDeviceId(deviceId) ? 'Open phone' : 'Open tracker'}
+            </Link>
+          )}
         </div>
       ) : (
         <>
@@ -105,11 +118,39 @@ function Panel({ title, caption, children }: { title: string; caption: string; c
 
 /* ---------------------------------------------------------------- charts --- */
 
-const W = 900, H = 260, L = 44, R = 14, T = 14, B = 26
+const H = 260, L = 44, R = 14, T = 14, B = 26
+// A chart with a legend keeps it in a band above the plot (legend text on
+// y 4–14), so the legend never covers the tallest bars or bands, which it did
+// once the viewBox matched a phone's width.
+const TL = 34
+export const CHART_MARGIN = { L, R, T, B, TL }
 
 const axes = axisTicks
 
+// The charts draw in a viewBox as wide as they are on screen, so one unit is
+// one pixel and 11 px text stays 11 px on a phone (a fixed 900-wide viewBox
+// shrank it to about 4 px). 900 until measured.
+function useChartWidth() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(900)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => {
+      const px = Math.round(el.getBoundingClientRect().width)
+      if (px > 0) setWidth(px)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, width] as const
+}
+
 function EnvelopeChart({ report }: { report: AttitudeReport }) {
+  const [ref, W] = useChartWidth()
   const env = report.envelope
   if (env.length < 2) return null
   const t0 = env[0].t, t1 = env[env.length - 1].t
@@ -122,13 +163,14 @@ function EnvelopeChart({ report }: { report: AttitudeReport }) {
     Math.abs(b.pitchMin) > maxDeg || Math.abs(b.pitchMax) > maxDeg)
   const x = (t: number) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R)
   const cl = (d: number) => Math.max(-maxDeg, Math.min(maxDeg, d))
-  const y = (d: number) => T + ((maxDeg - cl(d)) / (2 * maxDeg)) * (H - T - B)
+  const y = (d: number) => TL + ((maxDeg - cl(d)) / (2 * maxDeg)) * (H - TL - B)
 
   const band = (lo: (b: typeof env[0]) => number, hi: (b: typeof env[0]) => number) =>
     `M ${env.map(b => `${x(b.t).toFixed(1)} ${y(hi(b)).toFixed(1)}`).join(' L ')} L ${[...env].reverse().map(b => `${x(b.t).toFixed(1)} ${y(lo(b)).toFixed(1)}`).join(' L ')} Z`
 
-  const mins = Math.round((t1 - t0) / 60000)
+  const [startLabel, endLabel] = envelopeXLabels(t1 - t0)
   return (
+    <div ref={ref}>
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
       aria-label={`Roll and pitch through the session, reaching about ${maxDeg.toFixed(0)} degrees`}>
       {axes(maxDeg).map(v => (
@@ -140,24 +182,29 @@ function EnvelopeChart({ report }: { report: AttitudeReport }) {
       <line x1={L} y1={y(0)} x2={W - R} y2={y(0)} stroke={C.muted} strokeWidth={1.2} />
       <path d={band(b => b.pitchMin, b => b.pitchMax)} fill={C.pitch} opacity={0.28} />
       <path d={band(b => b.rollMin, b => b.rollMax)} fill={C.roll} opacity={0.5} />
-      <text x={L} y={H - 8} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">0 min</text>
-      {clamped && (
-        <text x={(L + W - R) / 2} y={H - 8} fill={C.muted} fontSize={11} textAnchor="middle" fontFamily="var(--font-mono, monospace)">
-          a few moments went past ±{maxDeg.toFixed(0)}° and are clipped here
-        </text>
-      )}
-      <text x={W - R} y={H - 8} fill={C.muted} fontSize={11} textAnchor="end" fontFamily="var(--font-mono, monospace)">{mins} min</text>
+      <text x={L} y={H - 8} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">{startLabel}</text>
+      <text x={W - R} y={H - 8} fill={C.muted} fontSize={11} textAnchor="end" fontFamily="var(--font-mono, monospace)">{endLabel}</text>
+      {/* Legend swatches at 0.8, not the bands' own opacity: pitch at 0.28 was
+          close to invisible on the surface. */}
       <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
-        <rect x={W - R - 108} y={T + 2} width={10} height={10} fill={C.roll} opacity={0.5} />
-        <text x={W - R - 94} y={T + 11} fill={C.muted}>roll</text>
-        <rect x={W - R - 58} y={T + 2} width={10} height={10} fill={C.pitch} opacity={0.28} />
-        <text x={W - R - 44} y={T + 11} fill={C.muted}>pitch</text>
+        <rect data-legend x={W - R - 108} y={4} width={10} height={10} fill={C.roll} opacity={0.8} />
+        <text x={W - R - 94} y={13} fill={C.muted}>roll</text>
+        <rect data-legend x={W - R - 58} y={4} width={10} height={10} fill={C.pitch} opacity={0.8} />
+        <text x={W - R - 44} y={13} fill={C.muted}>pitch</text>
       </g>
     </svg>
+    {/* Under the chart, not on its axis: it doesn't fit there on a phone. */}
+    {clamped && (
+      <p className="text-sm text-muted px-2 pt-1">
+        A few moments went past ±{maxDeg.toFixed(0)}° and are clipped at the chart’s edge.
+      </p>
+    )}
+    </div>
   )
 }
 
 function ExcerptChart({ report }: { report: AttitudeReport }) {
+  const [ref, W] = useChartWidth()
   const ex = report.excerpt
   if (ex.length < 2) return null
   const t0 = ex[0].t, t1 = ex[ex.length - 1].t
@@ -168,6 +215,7 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
     ex.map((s, i) => `${i ? 'L' : 'M'} ${x(s.t).toFixed(1)} ${y(pick(s)).toFixed(1)}`).join(' ')
 
   return (
+    <div ref={ref}>
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
       aria-label="Thirty seconds of roll and pitch at full sample rate">
       {axes(maxDeg).map(v => (
@@ -183,18 +231,21 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
         {Math.round((t1 - t0) / 1000)} s at {report.sampleRateHz} Hz
       </text>
     </svg>
+    </div>
   )
 }
 
 function HistogramChart({ report }: { report: AttitudeReport }) {
+  const [ref, W] = useChartWidth()
   const h = report.rollHistogram
   if (!h || h.bins.length === 0) return null
   const maxCount = Math.max(...h.bins.map(b => b.count), 1)
-  const maxDeg = Math.max(...h.bins.map(b => Math.abs(b.centreDeg)), 1)
+  const maxDeg = histogramHalfRangeDeg(h)
   const HH = 230, BB = 30
   const x = (d: number) => L + ((d + maxDeg) / (2 * maxDeg)) * (W - L - R)
-  const y = (c: number) => T + (1 - c / maxCount) * (HH - T - BB)
-  const bw = ((W - L - R) / h.bins.length) * 0.86
+  const y = (c: number) => TL + (1 - c / maxCount) * (HH - TL - BB)
+  // One bin wide in degrees, less a gap, so a bar never reaches past its slot.
+  const bw = (h.binWidthDeg / (2 * maxDeg)) * (W - L - R) * 0.86
 
   // The mirrored outline: the same distribution flipped about zero. Where it
   // parts company with the bars, that side of the stroke went further.
@@ -206,6 +257,7 @@ function HistogramChart({ report }: { report: AttitudeReport }) {
   const outline = mirrored.map((b, i) => `${i ? 'L' : 'M'} ${x(b.centreDeg).toFixed(1)} ${y(b.count).toFixed(1)}`).join(' ')
 
   return (
+    <div ref={ref}>
     <svg viewBox={`0 0 ${W} ${HH}`} className="w-full h-auto" role="img"
       aria-label="Distribution of boat lean, with the mirrored distribution overlaid to show evenness">
       {h.bins.map(b => (
@@ -213,16 +265,17 @@ function HistogramChart({ report }: { report: AttitudeReport }) {
           width={bw} height={Math.max(0, HH - BB - y(b.count))} fill={C.roll} opacity={0.45} />
       ))}
       <path d={outline} fill="none" stroke={C.warn} strokeWidth={1.6} strokeDasharray="4 3" />
-      <line x1={x(0)} y1={T} x2={x(0)} y2={HH - BB} stroke={C.muted} strokeWidth={1.2} />
+      <line x1={x(0)} y1={TL} x2={x(0)} y2={HH - BB} stroke={C.muted} strokeWidth={1.2} />
       <text x={x(0)} y={HH - 14} fill={C.muted} fontSize={11} textAnchor="middle" fontFamily="var(--font-mono, monospace)">level</text>
       <text x={L} y={HH - 14} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">−{maxDeg.toFixed(0)}°</text>
       <text x={W - R} y={HH - 14} fill={C.muted} fontSize={11} textAnchor="end" fontFamily="var(--font-mono, monospace)">+{maxDeg.toFixed(0)}°</text>
       <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
-        <rect x={L + 6} y={T} width={10} height={10} fill={C.roll} opacity={0.45} />
-        <text x={L + 20} y={T + 9} fill={C.muted}>actual</text>
-        <line x1={L + 70} y1={T + 5} x2={L + 88} y2={T + 5} stroke={C.warn} strokeWidth={1.6} strokeDasharray="4 3" />
-        <text x={L + 94} y={T + 9} fill={C.muted}>mirrored</text>
+        <rect data-legend x={L + 6} y={4} width={10} height={10} fill={C.roll} opacity={0.8} />
+        <text x={L + 20} y={13} fill={C.muted}>actual</text>
+        <line x1={L + 70} y1={9} x2={L + 88} y2={9} stroke={C.warn} strokeWidth={1.6} strokeDasharray="4 3" />
+        <text x={L + 94} y={13} fill={C.muted}>mirrored</text>
       </g>
     </svg>
+    </div>
   )
 }

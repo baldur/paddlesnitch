@@ -13,6 +13,7 @@ const section = readme.slice(readme.indexOf('### Boat motion'), readme.indexOf('
 const site = [
   'apps/web/src/components/devices/BoatMotion.tsx',
   'apps/web/src/app/paddles/[id]/motion/page.tsx',
+  'apps/web/src/components/devices/ReadError.tsx',
   'apps/web/src/lib/tracker-copy.ts',
 ].map(read).join('\n').replace(/<\/?span[^>]*>/g, '').replace(/&apos;/g, "'").replace(/\{' '\}/g, ' ').replace(/\s+/g, ' ')
 
