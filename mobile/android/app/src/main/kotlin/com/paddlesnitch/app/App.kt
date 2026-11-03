@@ -227,6 +227,7 @@ private fun MyPaddles(
     recordEntry: (@Composable () -> Unit)?,
     onReport: () -> Unit,
 ) {
+    val context = LocalContext.current
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -252,6 +253,9 @@ private fun MyPaddles(
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
             loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
+            sameOuting = { api.sameOuting(it) },
+            // Compare isn't native yet: the website's, signed in through web-code (README § Same outing).
+            openCompare = { a, b -> check(openInBrowser(context, api.signedInPage(compareNext(a, b)), ephemeral = true)) { "no browser" } },
             notice = notice, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
@@ -294,17 +298,25 @@ private suspend fun readMotionSample(context: android.content.Context): Recordin
     context.assets.open("api/account.devices-session.json").bufferedReader().use { ApiJson.decodeFromString(RecordingMotion.serializer(), it.readText()) }
 }
 
+/** Compare for two paddles, as the path web-code is asked for. */
+internal fun compareNext(a: String, b: String) = "/paddles/compare?a=${Uri.encode(a)}&b=${Uri.encode(b)}"
+
 /**
  * A paddlesnitch.com page the app has no screen for. The browser is named, since
  * an unnamed link to paddlesnitch.com/paddles/… would come straight back here.
+ * [ephemeral]: a private tab where the browser offers one (a signed-in page from web-code).
+ * Never prefetched or warmed up: a web-code link works once (NoPrefetchTest). False if nothing opened.
  */
-private fun openInBrowser(context: Context, url: String) {
+internal fun openInBrowser(context: Context, url: String, ephemeral: Boolean = false): Boolean {
     val browser = chooseBrowser(
         customTabs = CustomTabsClient.getPackageName(context, null),
         default = context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)?.activityInfo?.packageName,
         self = context.packageName,
-    ) ?: return
-    runCatching { CustomTabsIntent.Builder().build().apply { intent.setPackage(browser) }.launchUrl(context, Uri.parse(url)) }
+    ) ?: return false
+    val private = ephemeral && runCatching { CustomTabsClient.isEphemeralBrowsingSupported(context, browser) }.getOrDefault(false)
+    return runCatching {
+        CustomTabsIntent.Builder().setEphemeralBrowsingEnabled(private).build().apply { intent.setPackage(browser) }.launchUrl(context, Uri.parse(url))
+    }.isSuccess
 }
 
 /** The browser to name: one with Custom Tabs, else the default; never this app or the system chooser ("android"). */

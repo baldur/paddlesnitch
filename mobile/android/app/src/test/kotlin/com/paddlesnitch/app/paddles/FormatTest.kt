@@ -66,5 +66,9 @@ class FormatTest {
         assertEquals("Also recorded by the phone", alsoRecordedBy("device", true))
         assertEquals("Also recorded by the tracker", alsoRecordedBy("device", false))
         assertEquals("Also recorded by Strava", alsoRecordedBy("strava"))
+        assertEquals("Also recorded by a time trial", alsoRecordedBy("trial"))
+        assertEquals("Also recorded by a file", alsoRecordedBy("file"))
+        assertEquals("Also recorded by a file", alsoRecordedBy("something-new"))   // rule 2: any other value
+        assertEquals("Compare with the recording from the phone", compareLabel("device", true))
     }
 }

@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -60,6 +58,8 @@ fun PaddlesScreen(
     notice: (@Composable () -> Unit)? = null,
     state: LazyListState = rememberLazyListState(),
     onOpen: (id: String) -> Unit = {},
+    /** Opens Compare from a card's same-outing rows; null (the samples) shows the rows without it. */
+    compare: Compare? = null,
 ) {
     LazyColumn(
         modifier.fillMaxWidth(),
@@ -87,7 +87,7 @@ fun PaddlesScreen(
         } else {
             item { Logbook(list) }
             item { Eyebrow("All paddles") }
-            items(list.cards, key = { it.id }) { PaddleRow(it, onOpen) }
+            items(list.cards, key = { it.id }) { PaddleRow(it, onOpen, compare) }
         }
     }
 }
@@ -153,10 +153,11 @@ internal fun WeeksChart(weeks: List<Double>) {
 }
 
 @Composable
-private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit) {
+private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit, compare: Compare?) {
     val noGps = p.noGps == true
-    Column(Modifier.card().clip(cardShape).clickable(onClickLabel = "Open this paddle") { onOpen(p.id) }) {
-        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    // The card's own row opens the paddle; each same-outing row under it is a tap target of its own.
+    Column(Modifier.card().clip(cardShape)) {
+        Row(Modifier.fillMaxWidth().clickable(onClickLabel = "Open this paddle") { onOpen(p.id) }.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (noGps) NoGpsTag() else RouteThumb(p.route)
             Column(Modifier.weight(1f)) {
                 Text(
@@ -176,13 +177,7 @@ private fun PaddleRow(p: PaddleCard, onOpen: (String) -> Unit) {
                 p.note?.let { Text(it, color = PsColor.split, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
-        // The same outing from another source, shown once under it.
-        p.sameOuting.orEmpty().forEach { o ->
-            HorizontalDivider(color = PsColor.border)
-            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(alsoRecordedBy(o.sourceType, o.phone), color = PsColor.muted, fontSize = 14.sp)
-                Spacer(Modifier.weight(1f))
-            }
-        }
+        // The same outing from another source, shown once under it, each opening Compare.
+        p.sameOuting.orEmpty().forEach { o -> SameOutingRow(p.id, o.id, o.sourceType, o.phone, compare) }
     }
 }

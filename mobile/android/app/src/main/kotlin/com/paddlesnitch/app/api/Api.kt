@@ -153,6 +153,9 @@ class Api(
     override suspend fun me(): Me = query("me", Me.serializer())
     suspend fun paddles(): PaddleList = query("paddles.list", PaddleList.serializer())
     suspend fun paddle(id: String): AnalysisSession = query("paddles.get", AnalysisSession.serializer(), """{"id":${str(id)}}""")
+    /** The other recordings of the same outing as one of your paddles (README § Same outing). */
+    suspend fun sameOuting(id: String): SameOutingList =
+        query("paddles.sameOuting", kotlinx.serialization.builtins.ListSerializer(SameOuting.serializer()), """{"id":${str(id)}}""")
     /** Writes a paddle's pending coach summary (can take a few seconds); the paddle as it is when already written. */
     suspend fun writeSummary(id: String): AnalysisSession = mutation("paddles.writeSummary", AnalysisSession.serializer(), """{"id":${str(id)}}""")
 

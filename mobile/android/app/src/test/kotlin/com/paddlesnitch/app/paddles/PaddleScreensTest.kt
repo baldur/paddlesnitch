@@ -30,6 +30,19 @@ import com.paddlesnitch.app.ui.PaddlesnitchTheme
 import com.paddlesnitch.app.ui.PsColor
 import java.io.File
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.unit.dp
+import com.paddlesnitch.app.api.SameOuting
+import com.paddlesnitch.app.api.SameOutingList
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.serialization.builtins.ListSerializer
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -140,6 +153,124 @@ class PaddleScreensTest {
         compose.onNodeWithText("Also recorded by the phone").assertExists()
         compose.onNodeWithText("Also recorded by the tracker").assertDoesNotExist()
     }
+
+    // ---- Same outing (mobile/contract/README.md § Same outing, #805).
+    private val withPhone by lazy { ApiJson.decodeFromString(PaddleList.serializer(), fixtures.resolve("api/paddles.list.with-phone.json").readText()) }
+    private fun sameOuting(name: String) =
+        ApiJson.decodeFromString(ListSerializer(SameOuting.serializer()), fixtures.resolve("api/$name.json").readText())
+    private val asked = mutableListOf<Pair<String, String>>()
+    private val record: suspend (String, String) -> Unit = { a, b -> asked += a to b }
+    private fun row(who: String) = compose.onNodeWithContentDescription("Compare with the recording from $who")
+    /** The list is lazy: a row below the fold isn't composed until the list scrolls to it. */
+    private fun rowInList(who: String) = row(who).also {
+        compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription("Compare with the recording from $who"))
+    }
+
+    @Test
+    fun aSameOutingRowAsksForCompareAndDoesntOpenThePaddle() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        rowInList("the phone").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("pdl-tracker" to "pdl-phone2"), asked)
+        compose.onNodeWithText("← Paddles").assertDoesNotExist()                      // the card's tap didn't fire
+        rowInList("Strava").performClick()
+        compose.waitForIdle()
+        assertEquals("pdl-phone" to "pdl-strava", asked.last())
+        compose.onAllNodesWithText("Compare →").assertCountEquals(2)
+    }
+
+    @Test
+    fun eachRowIsOneButtonReadAsCompareWithoutTheArrow() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        val node = row("the phone").fetchSemanticsNode()
+        assertEquals(Role.Button, node.config[SemanticsProperties.Role])
+        assertTrue(node.config.contains(SemanticsActions.OnClick))
+        assertEquals(listOf("Compare with the recording from the phone"), node.config[SemanticsProperties.ContentDescription])
+        assertTrue("at least 48 dp: ${node.boundsInRoot}", node.boundsInRoot.height >= with(compose.density) { 48.dp.toPx() } - 0.5f)
+    }
+
+    @Test
+    fun whileCompareIsAskedTheRowSpinsAndTakesNoMoreTaps() {
+        val answer = CompletableDeferred<Unit>()
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = { a, b -> asked += a to b; answer.await() }) }
+        rowInList("the phone").performClick()
+        row("the phone").performClick()
+        rowInList("Strava").performClick()                                  // each code works once: one at a time
+        compose.waitForIdle()
+        assertEquals(listOf("pdl-tracker" to "pdl-phone2"), asked)
+        compose.onAllNodesWithText("Compare →").assertCountEquals(1)                   // the tapped row shows a spinner instead
+        answer.complete(Unit)
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Compare →").assertCountEquals(2)
+    }
+
+    @Test
+    fun aFailedWebCodeSaysSoAndLeavesThePageAsItWas() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap,
+            openCompare = { _, _ -> throw ApiFailure("Couldn’t finish that. Please try again.", 500, generic = true) }) }
+        rowInList("the phone").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(COMPARE_FAILED).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("← Paddles").assertDoesNotExist()                      // still the list, nothing opened
+        compose.onNode(hasContentDescription("Compare with the recording from the phone") and hasText("Compare →")).assertExists()   // no spinner left
+    }
+
+    @Test
+    fun theSamplesShowWhoElseRecordedItButDontLink() {
+        show { PaddlesHost(withPhone, sample = true, load = { paddle(it) }, map = fakeMap, sameOuting = { sameOuting("paddles.sameOuting") }) }
+        compose.onNodeWithText("Also recorded by the phone").assertExists()
+        compose.onAllNodesWithText("Compare →").assertCountEquals(0)
+        row("the phone").assertDoesNotExist()
+    }
+
+    private fun showPage(links: suspend (String) -> SameOutingList, fontScale: Float = 1f) = show(fontScale) {
+        PaddlesHost(list, sample = false, load = { paddle("pdl-river") }, map = fakeMap, openPaddle = "pdl-tracker", sameOuting = links, openCompare = record)
+    }
+
+    @Test
+    fun thePaddlePageLinksAfterTheSummaryAndBeforeEfforts() {
+        showPage({ sameOuting("paddles.sameOuting") })
+        val link = compose.onNodeWithText("Also recorded by the phone →").performScrollTo()
+        // positionInRoot, not boundsInRoot: bounds are clipped to the screen, so anything below it reads 0.
+        val top = { n: androidx.compose.ui.test.SemanticsNodeInteraction -> n.fetchSemanticsNode().positionInRoot.y }
+        val summary = top(compose.onNodeWithText("A 3-min paddle", substring = true))
+        val efforts = top(compose.onNodeWithText("Efforts and rests"))
+        assertTrue("summary $summary, link ${top(link)}, efforts $efforts", summary < top(link) && top(link) < efforts)
+        row("the phone").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("pdl-tracker" to "pdl-phone2"), asked)                    // this paddle is a
+    }
+
+    @Test
+    fun thePaddlePageWithNoOtherRecordingShowsNothing() {
+        showPage({ sameOuting("paddles.sameOuting.none") })
+        compose.onNodeWithText("Efforts and rests").assertExists()
+        compose.onNodeWithText("Also recorded by", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun aFailedSameOutingCallShowsNothingNotAnError() {
+        showPage({ throw ApiFailure("Couldn’t finish that. Please try again.", 500, generic = true) })
+        compose.onNodeWithText("Efforts and rests").assertExists()
+        compose.onNodeWithText("Also recorded by", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Couldn’t", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun sameOutingRowsAtLargeText() {
+        show(fontScale = 2f) { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        rowInList("the phone")
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.paddles.PaddleScreensTest.sameOutingRows.large-text.png")
+    }
+
+    @Test
+    fun sameOutingLinkAtLargeText() {
+        showPage({ sameOuting("paddles.sameOuting") }, fontScale = 2f)
+        compose.onNodeWithText("Also recorded by the phone →").performScrollTo()
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.paddles.PaddleScreensTest.sameOutingLink.large-text.png")
+    }
+
+    @Test
+    fun compareIsAskedForWithBothIds() = assertEquals("/paddles/compare?a=pdl-tracker&b=pdl-phone2", com.paddlesnitch.app.compareNext("pdl-tracker", "pdl-phone2"))
 
     @Test
     fun paddlesList() {
