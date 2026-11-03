@@ -11,9 +11,10 @@ import { readFileSync, readdirSync, existsSync } from 'fs'
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter, createCaller } from '@paddlesnitch/api'
 import * as contract from '@paddlesnitch/api/contract'
-import { contractProcedures, restRoutes, AnalysisSession, Me, PaddleList } from '@paddlesnitch/api/contract'
+import { contractProcedures, restRoutes, AnalysisSession, Me, PaddleList, SameOutingList } from '@paddlesnitch/api/contract'
 import type { z } from 'zod'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
+import { alsoRecordedBy } from '@paddlesnitch/core/paddles'
 import { mobileContractFiles, tokensFromCss } from '@/lib/mobile-contract'
 
 const ROOT = path.resolve(__dirname, '../../../..')
@@ -112,6 +113,14 @@ describe('real answers fit the schemas', () => {
     expect(list.error?.issues).toBeUndefined()
     const one = AnalysisSession.safeParse(await caller.paddles.get({ id: 'aaa' }))
     expect(one.error?.issues).toBeUndefined()
+  })
+
+  it('paddles.sameOuting, with another recording of the same outing', async () => {
+    await savePaddle('aaa')
+    await savePaddle('bbb')
+    const same = SameOutingList.safeParse(await createCaller({ user: USER }).paddles.sameOuting({ id: 'aaa' }))
+    expect(same.error?.issues).toBeUndefined()
+    expect(same.data?.map(o => o.id)).toEqual(['bbb'])
   })
 })
 
@@ -217,5 +226,17 @@ describe('schema rules the app generators rely on', () => {
     const get = (n: string) => JSON.parse(schemas.find(([f]) => f === `api/${n}.schema.json`)![1])
     expect(get('AnalysisSession').properties.paddledAt.format).toBe('date-time')
     expect(get('PaddleTotals').properties.count.type).toBe('integer')
+  })
+})
+
+// § Same outing quotes the website's words for who else recorded an outing.
+describe('README § Same outing', () => {
+  const readme = readFileSync(path.join(CONTRACT, 'README.md'), 'utf8')
+  const section = readme.slice(readme.indexOf('## Same outing'), readme.indexOf('## Adding a paddle from a file')).replace(/\s+/g, ' ')
+  it('quotes alsoRecordedBy for every source the website names', () => {
+    expect(section).toContain(`\`phone: true\` is "${alsoRecordedBy({ type: 'device', phone: true })}"`)
+    for (const type of ['device', 'strava', 'trial', 'file']) {
+      expect(section, type).toContain(`\`${type}\` ${type === 'file' ? 'or any other value ' : ''}"${alsoRecordedBy({ type })}"`)
+    }
   })
 })

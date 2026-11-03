@@ -204,6 +204,14 @@
     "call": "paddles.list",
     "schema": "PaddleList"
   },
+  "paddles.sameOuting.json": {
+    "call": "paddles.sameOuting",
+    "schema": "SameOutingList"
+  },
+  "paddles.sameOuting.none.json": {
+    "call": "paddles.sameOuting",
+    "schema": "SameOutingList"
+  },
   "paddles.writeSummary.json": {
     "call": "paddles.writeSummary",
     "schema": "AnalysisSession"

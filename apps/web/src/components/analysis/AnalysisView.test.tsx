@@ -154,6 +154,14 @@ describe('AnalysisView ALSO RECORDED BY', () => {
     expect(link?.textContent).toBe('Also recorded by the phone →')
   })
 
+  it('names a file as the Paddles list does ("a file", not "File")', async () => {
+    await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" />, qc =>
+      qc.setQueryData(getQueryKey(trpc.paddles.sameOuting, { id: 't-rec1' }, 'query'),
+        [{ id: 'f1', sourceType: 'file', paddledAt: '2026-10-06T09:01:00Z' }]))
+    const link = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('Also recorded by'))
+    expect(link?.textContent).toBe('Also recorded by a file →')
+  })
+
   it('labels Phone from the mark a buddy or a share link gets (no device ID) (#789)', async () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device', phone: true } }} readOnly />)
     expect(container.textContent).toContain('Phone')
