@@ -35,8 +35,8 @@ export const BUSY = { gap: 35, ambient: 5, hours: 2 };
 // A boat on the water isn't on rails (owner, 2026-11-03: "a bit of a drift"):
 // `grip`, how quickly the water takes out a sideways slide (1/s: through a turn
 // the boat slides a few degrees outside where its bow points); `swing`, the
-// seconds the hull takes to start turning, and carries on turning once the
-// wheel is straight (the narrowboat's 18 m longest).
+// seconds the hull takes to start turning; it also carries on turning a moment
+// once the wheel is straight (longest in the 18 m narrowboat).
 export const HIRE_BOATS = {
   speedboat: { label: 'Speedboat', line: 'Quick and nimble', top: 50 / 3.6, astern: 2, accel: 3, brake: 4, turn: 0.95, grip: 4, swing: 0.25, bump: 0.5, knock: 0.5, eye: 1.55, forward: -0.9, shape: { bow: 2.8, stern: 2.6, half: 1.05 } },
   launch: { label: 'Electric launch', line: 'Steady, with cushions and a wheel', top: 20 / 3.6, astern: 1.2, accel: 0.8, brake: 1.2, turn: 0.42, grip: 2.5, swing: 0.5, bump: 0.3, knock: 0.5, eye: 1.35, forward: -1.4, shape: { bow: 3.25, stern: 3.1, half: 1.1 } },

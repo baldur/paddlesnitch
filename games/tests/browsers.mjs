@@ -613,7 +613,7 @@ async function play(c, page, errors) {
     });
     if (cut.length) errors.push(`the finish on a phone hides ${cut.join(', ')} below the fold`);
   }
-  // Out of full screen mid-race (the back gesture): it pauses; Quit to menu asks for full screen
+  // Out of full screen mid-race (the back gesture): it pauses; End race asks for full screen
   // again and goes back to the walk, which unlocks the screen; and having left full screen on
   // purpose on the walk, walking about doesn't ask again.
   if (c.club && c.touch && !c.strip && !c.outing && !c.row && !c.erg && !c.tryIt) {

@@ -30,7 +30,7 @@ export const PLACES = {
   rpontoon: { label: 'The landing stage', doors: ['rclub'], up: 'rclub', club: 'rowing' },
 };
 export const START = 'path';
-// Back (always the button at the bottom left), Esc and a gamepad's B, on every
+// Back (always the button at the bottom left), Esc, Backspace and a gamepad's B, on every
 // stage of the walk: one step back the way you came (owner, 2026-11-03: "an
 // obvious go back that is consistent"). Choosing a boat at the pier: back to
 // the bridge's cards. In a picker, a page past the one it opened on (Practice

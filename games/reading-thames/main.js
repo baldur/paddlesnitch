@@ -276,6 +276,8 @@ function pause() {
   if (state !== 'racing' && state !== 'start') return;
   // A live race can't start again for one player alone.
   paused.querySelector('button[value="restart"]').hidden = !!liveRace;
+  // Ending says what ends (Back here read as Resume): it goes back to the walk.
+  paused.querySelector('button[value="menu"]').textContent = mode.outing ? 'End outing' : mode.drill ? 'End drill' : mode.row ? 'End row' : mode.solo ? 'End paddle' : 'End race';
   resumeTo = state;
   state = 'paused';
   openDialog(paused);
