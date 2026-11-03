@@ -109,7 +109,7 @@ details, delete account…), `POST /att/api/auth/web-code {next: "/account#delet
 with the Bearer token answers `{url}`; open it in the in-app browser within a
 minute. It works once and signs the website in as the app's user. That
 sign-in lasts an hour: on Android the browser keeps its cookies after the app
-signs out. Never prefetch the `url` (no
+signs out, and the app's sign-out doesn't end it. Never prefetch the `url` (no
 `mayLaunchUrl`): fetching it spends the code. `next` must be a page: a server route (`/api/…`, `/att/api/…`) opens the home page instead.
 
 **Google.** Show it only when `options` says `google: true`. Make a PKCE

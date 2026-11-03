@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ url: url.toString() })
 }
 
-/** How long a browser stays signed in from a web-code link. */
+/**
+ * How long a browser stays signed in from a web-code link. Both cookies end
+ * together, so the website's silent refresh (which needs tt_refresh) can't
+ * stretch it.
+ */
 const LINK_SIGNIN_MAX_AGE_S = 60 * 60
 
 /** The in-app browser swaps it for the website's cookies and goes on to `next`. */
@@ -60,7 +64,7 @@ export async function GET(req: NextRequest) {
   // Marks this browser as signed in by a link: whoever opened it may not be the
   // account's owner, so connecting Google refuses here.
   res.cookies.set(FROM_LINK_COOKIE, account.userId, {
-    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 24 * 60 * 60, secure: process.env.NODE_ENV === 'production',
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: LINK_SIGNIN_MAX_AGE_S, secure: process.env.NODE_ENV === 'production',
   })
   return res
 }

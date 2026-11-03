@@ -239,6 +239,7 @@ describe('what the Account screens do', () => {
     expect(lifetimes.tt_id).toBeLessThanOrEqual(60 * 60)
     expect(lifetimes.tt_refresh).toBeLessThanOrEqual(60 * 60)
     expect(lifetimes.tt_id).toBeGreaterThan(0)
+    expect(lifetimes.tt_from_link).toBeLessThanOrEqual(60 * 60)
   })
 
   it('a session a web-code link made never counts as a recent sign-in', async () => {
