@@ -540,6 +540,10 @@ summary { cursor: pointer; }
 /* In the club the editors and the plan are a sheet at the side, the room still in view. */
 /* Opened with show(), not showModal(), so the scene's buttons work beside it: placed by hand, over the walk's overlay. */
 #menu.sheet { position: fixed; inset: calc(max(16px, env(safe-area-inset-top)) + 48px) max(16px, env(safe-area-inset-right)) auto auto; margin: 0; z-index: 6; width: min(26rem, calc(100vw - 32px)); max-height: calc(100dvh - 48px - 32px); overflow: auto; }
+/* A picker on the walk: the header has ← Games, and in the picker it looked like Back (which is at the bottom left). */
+#menu.sheet .dialog-links { display: none; }
+/* Nothing to pause on the walk: Pause shows only racing or out on the water. */
+body.walking #pause { display: none; }
 /* Below the header's Pause and Sound; on a phone held upright, a bottom sheet above Back and Start over, the scene above it. */
 @media (orientation: portrait) and (max-width: 600px) {
   #menu.sheet { inset: auto 16px calc(max(16px, env(safe-area-inset-bottom)) + 64px) 16px; width: auto; max-height: 52dvh; }
@@ -600,13 +604,14 @@ summary { cursor: pointer; }
 #ergMon .other { grid-column: 1 / -1; font-size: 0.75rem; }
 #coach[hidden], #ergMon[hidden] { display: none; }
 /* The kayak erg has no screen: its numbers in the game's own dark panel, not
-   a monitor's. While you paddle, Back moves up under the room's name (at the
-   bottom it sat under the left thumb), and Start over and the door make way.
+   a monitor's. While you paddle (or row, on the rowing club's erg), Back moves
+   up under the room's name (at the bottom it sat under the left thumb), and
+   Start over and the door make way.
    On a short screen the note keeps left of the numbers, bottom right. */
 #ergMon.kayak { background: rgba(10, 18, 18, 0.8); color: #fff; box-shadow: none; border-radius: 10px; font-family: system-ui, sans-serif; }
-#club.kerging #clubStart { display: none; }
-#club.kerging #clubDoors .door { visibility: hidden; }
-#club.kerging #clubNav { bottom: auto; top: calc(max(14px, env(safe-area-inset-top)) + 3.6rem + clamp(1.3rem, 4vw, 2.2rem) * 1.25); }
+#club.midpiece #clubStart { display: none; }
+#club.midpiece #clubDoors .door { visibility: hidden; }
+#club.midpiece #clubNav { bottom: auto; top: calc(max(14px, env(safe-area-inset-top)) + 3.6rem + clamp(1.3rem, 4vw, 2.2rem) * 1.25); }
 @media (max-height: 500px) {
   #club.kerg #clubNote { left: max(16px, env(safe-area-inset-left)); transform: none; max-width: calc(100vw - 290px); }
 }

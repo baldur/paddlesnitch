@@ -201,8 +201,9 @@ async function play(c, page, errors) {
     // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
     const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
-      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
+      : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null], ['@midpiece', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
+        ['Boathouse', 'boathouse'], ['@clear', null], ['Paint your boat', null], ['#clubBack', 'boathouse'], ['@closed', null], ['#clubBack', 'club'],
         ['Clubhouse', 'clubhouse'], ['@practice', null], ['#clubBack', 'clubhouse'], ['@plan', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     // Try it now says what it is, in full, even on a phone.
     // (A first visit to the bridge always has it: wait for it, don't skip.)
@@ -232,6 +233,28 @@ async function play(c, page, errors) {
         await page.locator('#stepHome button', { hasText: 'Practice' }).first().click();
         const backs = await page.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.offsetParent && /^\W*Back$/.test(b.textContent.trim())).map((b) => b.id || b.className));
         if (backs.join() !== 'clubBack') errors.push(`the plan's Practice page showed Back buttons ${JSON.stringify(backs)}, expected just the one at the bottom left`);
+        continue;
+      }
+      // Nothing in the scene over Back (a boat's number sat on it on a small phone).
+      if (label === '@clear') {
+        await page.waitForTimeout(500);
+        const over = await page.evaluate(() => {
+          const n = document.getElementById('clubNav').getBoundingClientRect();
+          return [...document.querySelectorAll('#clubDoors button')].filter((b) => !b.hidden).filter((b) => { const r = b.getBoundingClientRect(); return r.left < n.right && n.left < r.right && r.top < n.bottom && n.top < r.bottom; }).map((b) => b.textContent);
+        });
+        if (over.length) errors.push(`labels over Back and Start over: ${over.join(', ')}`);
+        continue;
+      }
+      // A picker opened with a tap: Back put it away and stayed in the room.
+      if (label === '@closed') {
+        if (await page.locator('#menu').evaluate((m) => m.open)) errors.push('Back from Paint your boat left its picker open');
+        continue;
+      }
+      // Rowing the erg, as paddling the kayak erg: Back up out of the thumbs' way.
+      if (label === '@midpiece') {
+        await page.waitForTimeout(500);
+        const box = await page.locator('#clubBack').boundingBox();
+        if (!box || box.y + box.height > page.viewportSize().height / 2 || await page.locator('#clubStart').isVisible()) errors.push(`rowing the erg, Back sits at ${JSON.stringify(box)}: expected it up out of the thumbs' way, and Start over gone`);
         continue;
       }
       if (label === '@plan') {

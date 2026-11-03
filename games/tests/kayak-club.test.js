@@ -293,10 +293,11 @@ test('Back is one step back the way you came, on every stage of the walk', () =>
   assert.equal(backFrom('path'), null);
   // Every other place goes up a level, and every place but the bridge has one.
   for (const [place, p] of Object.entries(PLACES)) if (place !== START) assert.deepEqual(backFrom(place), { go: p.up }, place);
-  // With a picker open on the page it opened on, the room's Back still leaves (Done puts it away).
-  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'home', base: 'home' } }), { go: 'club' });
-  assert.deepEqual(backFrom('boathouse', { sheet: { step: 'paddle', base: 'paddle' } }), { go: 'club' });
-  // A page further into it: back to the page it opened on.
-  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'practice', base: 'home' } }), { step: 'home' });
-  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'paddler', base: 'home' } }), { step: 'home' });
+  // A picker that opened as you came in goes with the room.
+  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'home', base: 'home', auto: true } }), { go: 'club' });
+  // One you opened with a tap: put away, still in the room.
+  assert.deepEqual(backFrom('boathouse', { sheet: { step: 'paddle', base: 'paddle', auto: false } }), { close: true });
+  // A page further into either: back to the page it opened on.
+  assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'practice', base: 'home', auto: true } }), { step: 'home' });
+  assert.deepEqual(backFrom('boathouse', { sheet: { step: 'paddler', base: 'boat', auto: false } }), { step: 'boat' });
 });
