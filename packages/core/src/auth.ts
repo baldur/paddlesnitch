@@ -28,11 +28,13 @@ type CookieJar = {
   delete: (name: string) => void
 }
 
-export function setAuthCookies(jar: CookieJar, idToken: string, refreshToken?: string) {
+/** `maxAgeS` shortens both cookies (a sign-in an app handed to a browser: web-code). */
+export function setAuthCookies(jar: CookieJar, idToken: string, refreshToken?: string, maxAgeS?: number) {
   const base = { httpOnly: true, sameSite: 'lax' as const, path: '/', secure: process.env.NODE_ENV === 'production' }
-  jar.set(ID_COOKIE, idToken, { ...base, maxAge: ID_MAX_AGE })
+  const life = (s: number) => Math.min(s, maxAgeS ?? s)
+  jar.set(ID_COOKIE, idToken, { ...base, maxAge: life(ID_MAX_AGE) })
   if (refreshToken !== undefined) {
-    jar.set(REFRESH_COOKIE, refreshToken, { ...base, maxAge: REFRESH_MAX_AGE })
+    jar.set(REFRESH_COOKIE, refreshToken, { ...base, maxAge: life(REFRESH_MAX_AGE) })
   }
 }
 
