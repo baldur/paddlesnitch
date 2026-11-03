@@ -525,6 +525,8 @@ summary { cursor: pointer; }
   #club.backable #clubCards { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
   #club.backable #clubNote { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 116px); } /* and the note above the cards */
 }
+/* Choosing a boat at the pier, the three cards are a wide row: above Back, never over it. */
+#club.backable #clubCards.choice { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
 @media (max-width: 860px) { #clubCards .friend small { display: none; } }
 .pin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .pin.canoe { background: #f2c230; }
@@ -598,11 +600,13 @@ summary { cursor: pointer; }
 #ergMon .other { grid-column: 1 / -1; font-size: 0.75rem; }
 #coach[hidden], #ergMon[hidden] { display: none; }
 /* The kayak erg has no screen: its numbers in the game's own dark panel, not
-   a monitor's. While you paddle, Back, Start over and the door make way (Esc
-   and B still leave): they sat under the left thumb. On a short screen the
-   note keeps left of the numbers, bottom right. */
+   a monitor's. While you paddle, Back moves up under the room's name (at the
+   bottom it sat under the left thumb), and Start over and the door make way.
+   On a short screen the note keeps left of the numbers, bottom right. */
 #ergMon.kayak { background: rgba(10, 18, 18, 0.8); color: #fff; box-shadow: none; border-radius: 10px; font-family: system-ui, sans-serif; }
-#club.kerging #clubNav, #club.kerging #clubDoors .door { visibility: hidden; }
+#club.kerging #clubStart { display: none; }
+#club.kerging #clubDoors .door { visibility: hidden; }
+#club.kerging #clubNav { bottom: auto; top: calc(max(14px, env(safe-area-inset-top)) + 3.6rem + clamp(1.3rem, 4vw, 2.2rem) * 1.25); }
 @media (max-height: 500px) {
   #club.kerg #clubNote { left: max(16px, env(safe-area-inset-left)); transform: none; max-width: calc(100vw - 290px); }
 }

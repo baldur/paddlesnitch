@@ -312,3 +312,44 @@ test("a narrowboat's stern, 8 m behind you, hits a sculler there; a kayak's woul
   sculler.hit = [];
   assert.equal(trafficHits(traffic, [me(null)]).length, 0, 'a kayak');
 });
+
+test('a hired boat drifts through a turn: its track lags its bow by a few degrees, and the slide dies away once straight', async () => {
+  for (const boat of Object.keys(HIRE_BOATS)) {
+    const { race } = await outing('hire', boat);
+    race.course.shore = null;
+    race.traffic = null;
+    const b = race.player.boat;
+    for (let t = 0; t < 30; t += DT) stepOuting(race, DT, { throttle: 1 });
+    // Hard over for a while: which way is it actually going, against where it points?
+    let slide = 0;
+    for (let t = 0; t < 3; t += DT) {
+      const [x, z] = [b.x, b.z];
+      stepOuting(race, DT, { throttle: 1, turn: 1 });
+      const track = Math.atan2(b.x - x, -(b.z - z));
+      slide = Math.atan2(Math.sin(b.heading - track), Math.cos(b.heading - track));
+    }
+    // The bow points inside the turn (to the right) of where the boat is going.
+    const deg = (slide * 180) / Math.PI;
+    assert.ok(deg > 3 && deg < 15, `${boat}: ${deg.toFixed(1)} degrees of drift`);
+    // Wheel straight: the slide goes in a few seconds.
+    for (let t = 0; t < 6; t += DT) stepOuting(race, DT, { throttle: 1 });
+    assert.ok(Math.abs(b.slip) < 0.05, `${boat}: still sliding at ${b.slip} m/s`);
+  }
+});
+
+test('a hired boat swings on a moment after the wheel is let go, the narrowboat longest', async () => {
+  const swing = async (boat) => {
+    const { race } = await outing('hire', boat);
+    race.course.shore = null;
+    race.traffic = null;
+    const b = race.player.boat;
+    for (let t = 0; t < 30; t += DT) stepOuting(race, DT, { throttle: 1 });
+    for (let t = 0; t < 4; t += DT) stepOuting(race, DT, { throttle: 1, turn: 1 });
+    const h = b.heading;
+    const rate = b.yawRate;
+    for (let t = 0; t < 3; t += DT) stepOuting(race, DT, { throttle: 1 });
+    return (b.heading - h) / rate; // seconds' worth of the turn it carried on for
+  };
+  const [fast, steady, slow] = await Promise.all(['speedboat', 'launch', 'narrowboat'].map(swing));
+  assert.ok(fast > 0.1 && fast < steady && steady < slow, `${fast}, ${steady}, ${slow}`);
+});

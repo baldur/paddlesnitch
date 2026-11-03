@@ -202,7 +202,8 @@ async function play(c, page, errors) {
     const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
-      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
+      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
+        ['Clubhouse', 'clubhouse'], ['@practice', null], ['#clubBack', 'clubhouse'], ['@plan', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     // Try it now says what it is, in full, even on a phone.
     // (A first visit to the bridge always has it: wait for it, don't skip.)
     const tryLine = page.locator('#clubCards .card.go small');
@@ -226,7 +227,21 @@ async function play(c, page, errors) {
         if (!shown.note || shown.sheet) errors.push(`the honours board offline showed ${JSON.stringify(shown)}`);
         continue;
       }
+      // One Back on every stage, the same button at the bottom left.
+      if (label === '@practice') {
+        await page.locator('#stepHome button', { hasText: 'Practice' }).first().click();
+        const backs = await page.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.offsetParent && /^\W*Back$/.test(b.textContent.trim())).map((b) => b.id || b.className));
+        if (backs.join() !== 'clubBack') errors.push(`the plan's Practice page showed Back buttons ${JSON.stringify(backs)}, expected just the one at the bottom left`);
+        continue;
+      }
+      if (label === '@plan') {
+        const shown = await page.evaluate(() => ({ open: document.getElementById('menu').open, home: !document.getElementById('stepHome').hidden }));
+        if (!shown.open || !shown.home) errors.push(`Back from Practice showed ${JSON.stringify(shown)}, expected the plan`);
+        continue;
+      }
       if (label === '@unhire') {
+        const hiring = await page.evaluate(() => ({ back: !!document.getElementById('clubBack').offsetParent, card: [...document.querySelectorAll('#clubCards .card')].some((b) => /Back/.test(b.textContent)) }));
+        if (!hiring.back || hiring.card) errors.push(`the choice of boats showed ${JSON.stringify(hiring)}, expected Back at the bottom left and no Back card`);
         await page.keyboard.press('Escape');
         const back = await page.evaluate(() => ({ canoe: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Canoe Club')), speedboat: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Speedboat')) }));
         if (!back.canoe || back.speedboat) errors.push(`Back from the choice of boats showed ${JSON.stringify(back)}`);
@@ -282,7 +297,8 @@ async function play(c, page, errors) {
       const focused = await page.evaluate(() => document.activeElement?.textContent);
       if (!c.touch) await tap('left');
       await page.waitForTimeout(700);
-      const started = { ...(await look()), focused, focus: focused === 'Paddle a 500 m', nav: await page.locator('#clubBack').isVisible() };
+      const backBox = await page.locator('#clubBack').boundingBox();
+      const started = { ...(await look()), focused, focus: focused === 'Paddle a 500 m', back: backBox && backBox.y + backBox.height < height / 2, over: await page.locator('#clubStart').isVisible() };
       for (let i = 1; i < 12; i++) {
         await tap(i % 2 ? 'right' : 'left');
         await page.waitForTimeout(700);
@@ -290,7 +306,7 @@ async function play(c, page, errors) {
       const got = await look();
       if (!c.touch && !started.focus) errors.push(`arriving in the kayak erg room focused "${started.focused}", not Paddle a 500 m`);
       if (started.hit.length) errors.push(`just after the start, the kayak erg's numbers overlap ${started.hit.join(', ')}`);
-      if (started.nav) errors.push('Back and Start over stayed up under the left thumb while paddling');
+      if (!started.back || started.over) errors.push(`while paddling, Back should be up out of the thumbs' way and Start over gone: ${JSON.stringify(started)}`);
       const left = Number(/(\d+)m to go/.exec(got.text)?.[1]);
       if (got.hidden || !(left < 500)) errors.push(`the kayak erg's numbers say ${got.text}`);
       if (got.hit.length || got.off) errors.push(`the kayak erg's numbers overlap ${got.hit.join(', ') || 'the screen edge'}`);

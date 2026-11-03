@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
+import { PLACES, START, DOOR_LABELS, backFrom, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from './kayak-erg.js';
@@ -396,7 +396,9 @@ function toMenu() {
 // your paddler, boat and paddle first (Next, Next, Done); after that each is
 // one tap from home, and its button says Done.
 const STEPS = { home: 'stepHome', paddler: 'stepPaddler', boat: 'stepBoat', paddle: 'stepPaddle', boards: 'stepBoards', practice: 'stepPractice' };
+let shownStep = 'home'; // the menu's page showing (a room's picker: see backFrom)
 function showStep(name) {
+  shownStep = name;
   // The menu's own home and its Leaderboards are the canoe club's.
   if (name === 'home') boardModes = null;
   if (name === 'boards') labelBoards();
@@ -410,6 +412,8 @@ function showStep(name) {
   menu.setAttribute('aria-label', document.getElementById(STEPS[name])?.querySelector('h3')?.textContent || 'Reading Thames');
   for (const p of menu.querySelectorAll('.progress')) p.hidden = kitChosen || !!club;
   for (const b of menu.querySelectorAll('[data-skip]')) b.hidden = kitChosen || !!club;
+  // On the walk, Back is the one at the bottom left: a picker's pages have none of their own (the honours board keeps Done).
+  for (const b of menu.querySelectorAll('.step-buttons .back:not([data-skip])')) b.hidden = !!club && !(b.closest('#stepBoards') && boardModes);
   for (const b of menu.querySelectorAll('.step-buttons .next')) {
     b.innerHTML = kitChosen || club ? 'Done' : b.dataset.first;
   }
@@ -818,11 +822,14 @@ const clubNote = document.getElementById('clubNote');
 const clubFade = document.getElementById('clubFade');
 const clubBack = document.getElementById('clubBack');
 const clubStart = document.getElementById('clubStart');
-// Back goes up a level (a room or the pontoon to the club, the club to the
-// bridge); Start over goes straight back to the bridge. Esc and a gamepad's B go back too.
+// Back goes one step back the way you came (club.js backFrom); Start over goes
+// straight back to the bridge. Esc and a gamepad's B go back too.
 const back = () => {
-  if (club?.hiring) return unhire(); // choosing a boat at the pier: back to the bridge's cards
-  return club && PLACES[club.place].up && go(PLACES[club.place].up);
+  if (!club) return;
+  const to = backFrom(club.place, { hiring: club.hiring, sheet: menu.open ? { step: shownStep, base: club.sheet ?? shownStep } : null });
+  if (to?.unhire) unhire();
+  else if (to?.step) showStep(to.step);
+  else if (to?.go) go(to.go);
 };
 clubBack.addEventListener('click', () => { fullScreen(); back(); });
 clubStart.addEventListener('click', () => { fullScreen(); go(START); });
@@ -902,7 +909,7 @@ function arrive(place) {
   visit.places.add(place);
   clubDoors.replaceChildren();
   clubCards.replaceChildren();
-  clubBack.hidden = !PLACES[place].up;
+  clubBack.hidden = !PLACES[place].up && !(place === 'path' && club.hiring);
   clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
   document.getElementById('clubPlace').textContent = place === 'path' && club.hiring ? 'Hire a boat' : PLACES[place].label;
@@ -916,7 +923,6 @@ function arrive(place) {
   const spots = hiring
     ? [
       ...Object.entries(HIRE_BOATS).map(([id, b]) => ({ card: { picture: clubSvg(id === 'launch' ? 'hire' : id), name: b.label, line: b.line }, act: () => { hireBoat = id; club.hiring = false; choose('hire'); }, play: true })),
-      { card: { name: '\u2190 Back', line: 'To the clubs and outings' }, act: unhire },
     ]
     : place === 'path'
     ? [
@@ -1024,7 +1030,7 @@ function arrive(place) {
   if (!menu.open) (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
   club.backToHire = false;
   // On an upright phone the row sits above Back, not on it.
-  clubEl.classList.toggle('backable', !!PLACES[place].up);
+  clubEl.classList.toggle('backable', !clubBack.hidden);
   if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
   if (place === 'kerg') note(kergBest() ? `Your best 500 m: ${formatTime(kergBest())}` : 'Press left, then right, in turn, to start: arrows, thumbs or triggers');
   if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Press both arrows, thumbs or triggers together for each stroke');
@@ -1197,6 +1203,7 @@ function note(text) {
 // A room's picker, beside the scene: not modal, so Back, Start over and the
 // room's own labels still work while it's open (a modal dialog blocks them).
 function sheet(step) {
+  club.sheet = step; // the page it opened on (Back from a page past it comes back here)
   showStep(step);
   menu.returnValue = '';
   if (!menu.open) menu.show();
