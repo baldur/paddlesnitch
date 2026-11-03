@@ -4,7 +4,6 @@
 // no cookie. Each must let that person in, answer what mobile/contract says,
 // and refuse a caller with no sign-in.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { NextRequest } from 'next/server'
 import type { z } from 'zod'
 import { makeDataDir, cleanDataDir, makeUser, type TestUser } from './helpers'
 
@@ -13,17 +12,19 @@ vi.mock('next/headers', () => ({ cookies: vi.fn() }))
 // already stops a refresh in cognito-local, so that can't show it).
 vi.mock('@/lib/cognito', async importOriginal => {
   const real = await importOriginal<typeof import('@/lib/cognito')>()
-  return { ...real, revoke: vi.fn(real.revoke) }
+  // cognito-local has no CUSTOM_AUTH, so a web-code redeem is given its sign-in.
+  return { ...real, revoke: vi.fn(real.revoke), customAuthSignIn: vi.fn(real.customAuthSignIn) }
 })
 
 import { cookies } from 'next/headers'
 import { CURRENT_TOS_VERSION } from '@/lib/types'
-import { revoke } from '@/lib/cognito'
+import { revoke, customAuthSignIn } from '@/lib/cognito'
 import { GET as tosStatus, POST as acceptTos } from '@/app/api/account/tos/route'
 import { GET as exportFile, POST as exportLink } from '@/app/api/account/export/route'
 import { GET as accountStatus, DELETE as deleteAccount } from '@/app/api/account/route'
 import { markLinkSession, hasRecentSignIn } from '@/lib/app-signin'
-import { POST as mintWebCode } from '@/app/att/api/auth/web-code/route'
+import { POST as mintWebCode, GET as redeemWebCode } from '@/app/att/api/auth/web-code/route'
+import { NextRequest } from 'next/server'
 import { signInFromClaims, sessionOfFreshToken, idTokenSignIn } from '@paddlesnitch/core/cognito'
 import { setProfilePublic as storeProfilePublic, getProfileSettings } from '@/lib/profile'
 import { GET as getProfile, PATCH as setProfile } from '@/app/api/account/profile/route'
@@ -226,6 +227,18 @@ describe('what the Account screens do', () => {
     jar({})
     const ok = await mintWebCode(req('POST', '/att/api/auth/web-code', pat.idToken, { next: '/account' }))
     expect(ok.status).toBe(200)
+  })
+
+  it('a web-code sign-in lasts an hour in the browser, not 30 days (the phone\'s browser outlives the app\'s sign-out)', async () => {
+    const minted = await mintWebCode(req('POST', '/att/api/auth/web-code', pat.idToken, { next: '/paddles/compare?a=x&b=y' }))
+    const { url } = await minted.json()
+    vi.mocked(customAuthSignIn).mockResolvedValueOnce({ idToken: pat.idToken, refreshToken: pat.refreshToken })
+    const res = await redeemWebCode(new NextRequest(url))
+    expect(res.headers.get('location')).toMatch(/\/paddles\/compare\?a=x&b=y$/)
+    const lifetimes = Object.fromEntries(res.cookies.getAll().map(c => [c.name, c.maxAge]))
+    expect(lifetimes.tt_id).toBeLessThanOrEqual(60 * 60)
+    expect(lifetimes.tt_refresh).toBeLessThanOrEqual(60 * 60)
+    expect(lifetimes.tt_id).toBeGreaterThan(0)
   })
 
   it('a session a web-code link made never counts as a recent sign-in', async () => {

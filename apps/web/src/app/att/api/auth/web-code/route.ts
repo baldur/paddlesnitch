@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ url: url.toString() })
 }
 
+/** How long a browser stays signed in from a web-code link. */
+const LINK_SIGNIN_MAX_AGE_S = 60 * 60
+
 /** The in-app browser swaps it for the website's cookies and goes on to `next`. */
 export async function GET(req: NextRequest) {
   const base = canonicalBaseUrl(req)
@@ -51,7 +54,9 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.redirect(new URL(`/signin?error=app_link_expired&next=${encodeURIComponent(next)}`, base))
   await markLinkSession(account.userId, session)
   const res = NextResponse.redirect(new URL(next, base))
-  setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken)
+  // An hour, not 30 days: on Android the browser is the phone's own Chrome,
+  // which keeps the cookies after the app signs out (security review, #805).
+  setAuthCookies(res.cookies, tokens.idToken, tokens.refreshToken, LINK_SIGNIN_MAX_AGE_S)
   // Marks this browser as signed in by a link: whoever opened it may not be the
   // account's owner, so connecting Google refuses here.
   res.cookies.set(FROM_LINK_COOKIE, account.userId, {
