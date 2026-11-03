@@ -102,21 +102,22 @@ final class MotionTraceLargeTextTests: AppTestCase {
     /// an SE at this size, 208 of the screen's 667 pt. Now it's the button
     /// and its padding (94 pt) until a tap shows the hint, and the hint
     /// grows the bar upward: the button doesn't move under the thumb.
+    /// Measured from the bar's top: its frame also takes in the strip
+    /// behind the home indicator, which an SE doesn't have.
     func testTheStopBarMakesRoomForTheHintOnlyWhileItShows() throws {
         _ = try showTrace("motion", asked: true)
-        let bar = element("record-stop-bar"), stop = element("record-stop")
+        let stop = element("record-stop")
         let hint = text(containing: "Keep holding to stop.")
-        XCTAssertEqual(bar.frame.height, stop.frame.height + 32, accuracy: 1, "the button and its padding only")
+        XCTAssertEqual(stop.frame.minY - barTop, 16, accuracy: 1, "only the padding over the button")
         XCTAssertFalse(hint.exists, "no hint before a tap")
+        XCTAssertLessThanOrEqual(
+            element("record-stroke-rate").frame.maxY, barTop, "the numbers clear of the bar without a scroll")
         keep("Stop bar at the largest text")
         let button = stop.frame
         stop.tap()
         XCTAssertTrue(hint.appears(timeout: 5), "a tap shows the hint")
         XCTAssertEqual(stop.frame.minY, button.minY, accuracy: 1, "the button doesn't move")
-        XCTAssertGreaterThanOrEqual(hint.frame.minY, bar.frame.minY, "the hint is in the bar")
-        XCTAssertEqual(
-            bar.frame.height, stop.frame.height + 8 + hint.frame.height + 32, accuracy: 1,
-            "the bar grows by the hint")
+        XCTAssertEqual(stop.frame.minY - barTop, 16 + hint.frame.height + 8, accuracy: 1, "the bar grows by the hint")
         keep("Stop bar at the largest text, with the hint")
     }
 
