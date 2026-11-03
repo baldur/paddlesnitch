@@ -7,7 +7,7 @@ import BoatMotion from '@/components/devices/BoatMotion'
 import TechnicalDetails from '@/components/devices/TechnicalDetails'
 import LoadingState from '@/components/LoadingState'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
-import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
 import { EmptyState } from '@paddlesnitch/ui/Card'
 import type { DeviceSessionMeta } from '@/lib/devices'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
@@ -28,6 +28,8 @@ export default function RecordingMotion() {
   const [noPaddle, setNoPaddle] = useState<string | null>(null)
   const [fromMotion, setFromMotion] = useState<string | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+  const retry = () => { setState('loading'); setAttempt(a => a + 1) }
 
   useEffect(() => {
     let cancelled = false
@@ -58,7 +60,7 @@ export default function RecordingMotion() {
       }
     })()
     return () => { cancelled = true }
-  }, [sessionId])
+  }, [sessionId, attempt])
 
   return (
     <main className="flex-1 flex flex-col">
@@ -67,7 +69,12 @@ export default function RecordingMotion() {
       } />
       <Page width="wide">
         {state === 'loading' && <LoadingState label="Loading" />}
-        {state === 'error' && <p className="text-base text-red" role="alert">Couldn’t read this recording. Please try again.</p>}
+        {state === 'error' && (
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-base text-red" role="alert">Couldn’t read this recording.</p>
+            <Button variant="secondary" onClick={retry}>Try again</Button>
+          </div>
+        )}
 
         {state === 'ready' && meta === 'missing' && (
           <EmptyState
@@ -84,7 +91,7 @@ export default function RecordingMotion() {
             />
             {noPaddle && <p className="text-base text-fg border-l-2 border-primary pl-3 -mt-4">{noPaddle}{fromMotion ? ` ${fromMotion}` : ''}</p>}
 
-            <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} />
+            <BoatMotion attitude={attitude} strokeRate={cadence?.available ? cadence.medianStrokesPerMin : null} deviceId={meta.deviceId} />
             {report && <TechnicalDetails report={report} cadence={cadence} attitude={attitude} />}
           </>
         )}

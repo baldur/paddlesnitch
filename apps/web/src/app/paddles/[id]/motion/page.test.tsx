@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 vi.mock('@/components/AppHeader', () => ({ default: ({ breadcrumb }: { breadcrumb: React.ReactNode }) => <header>{breadcrumb}</header> }))
-vi.mock('@/components/devices/BoatMotion', () => ({ default: ({ strokeRate }: { strokeRate: number | null }) => <div>MOTION CHARTS sr={String(strokeRate)}</div> }))
+vi.mock('@/components/devices/BoatMotion', () => ({ default: ({ strokeRate, deviceId }: { strokeRate: number | null; deviceId?: string }) => <div>MOTION CHARTS sr={String(strokeRate)} device={String(deviceId)}</div> }))
 vi.mock('@/components/devices/TechnicalDetails', () => ({ default: () => <div>TECHNICAL DETAILS</div> }))
 const paddle = vi.hoisted(() => ({ data: null as unknown }))
 vi.mock('@/lib/trpc', () => ({
@@ -34,6 +34,30 @@ describe("a tracker paddle's BOAT MOTION page", () => {
     expect(container.textContent).toContain('MOTION CHARTS sr=57.4')
     expect(container.textContent).toContain('TECHNICAL DETAILS')
     expect(container.querySelector('a[href="/paddles/t-rec1"]')?.textContent).toBe('← Paddle')
+  })
+
+  it('passes the tracker to the boat motion, so a missing motion file can link to it', async () => {
+    paddle.data = { id: 't-rec1', paddledAt: '2026-10-06T06:37:00Z', source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' }, result: { avgSR: null } }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ report: { rows: 1 }, cadence: null, attitude: null }))))
+    await mount()
+    expect(container.textContent).toContain('device=435AC17C')
+  })
+
+  it('offers Try again when the recording read fails, and reads it again', async () => {
+    paddle.data = { id: 't-rec1', paddledAt: '2026-10-06T06:37:00Z', source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' }, result: { avgSR: 57.4 } }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'not_found' }), { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ report: { rows: 1 }, cadence: null, attitude: { available: true } })))
+    vi.stubGlobal('fetch', fetchMock)
+    await mount()
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Couldn’t read this recording.')
+    const retry = [...container.querySelectorAll('button')].find(b => b.textContent === 'Try again')!
+    expect(retry).toBeDefined()
+    await act(async () => { retry.click() })
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('MOTION CHARTS')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
   it("says there's no boat motion for a paddle that didn't come from a tracker", async () => {

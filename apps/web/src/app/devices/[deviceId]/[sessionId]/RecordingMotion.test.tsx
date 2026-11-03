@@ -41,7 +41,25 @@ describe("a tracker recording's boat motion", () => {
 
   it("shows a failed read as an error, not as motion that hasn't arrived", async () => {
     const text = await mount(new Response(JSON.stringify({ error: 'not_found' }), { status: 404 }))
-    expect(text).toContain('Couldn’t read this recording. Please try again.')
+    expect(text).toContain('Couldn’t read this recording.')
     expect(text).not.toContain('it may still be uploading')
+  })
+
+  it('offers Try again after a failed read, and reads it again', async () => {
+    await mount(new Response(JSON.stringify({ error: 'oops' }), { status: 500 }))
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Couldn’t read this recording.')
+    const retry = [...container.querySelectorAll('button')].find(b => b.textContent === 'Try again')!
+    expect(retry).toBeDefined()
+    const fetchMock = vi.fn(async (url: string) => url === '/api/account/devices/sessions'
+      ? new Response(JSON.stringify({ sessions: [{ sessionId: 'rec1', deviceId: 'C0FFEE01', filename: 'track_1.csv', uploadedAt: '2026-10-25T08:00:00Z' }] }))
+      : new Response(JSON.stringify({ report: describeDeviceData(trackCsv(600, 9)), cadence: null, attitude: null })))
+    vi.stubGlobal('fetch', fetchMock)
+    await act(async () => { retry.click() })
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(fetchMock).toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    // The motion file hasn't arrived: the box links to the tracker.
+    expect(container.textContent).toContain('it may still be uploading')
+    expect(container.querySelector('a[href="/devices/C0FFEE01"]')?.textContent).toBe('Open tracker')
   })
 })

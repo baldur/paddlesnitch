@@ -11,7 +11,7 @@ import type { CadenceReport } from '@paddlesnitch/timing/cadence'
 import type { AttitudeReport } from '@paddlesnitch/timing/attitude'
 import { fmtDayTime } from '@paddlesnitch/core/format'
 import { Page, PageHeader } from '@paddlesnitch/ui/Layout'
-import { buttonClass } from '@paddlesnitch/ui/Button'
+import { Button, buttonClass } from '@paddlesnitch/ui/Button'
 import { EmptyState } from '@paddlesnitch/ui/Card'
 
 // A tracker paddle's BOAT MOTION (docs/features/one-paddle.md, phase 3): the
@@ -29,6 +29,8 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
   const src = q.data?.source
   const fromTracker = src?.type === 'device' && !!src.deviceId && !!src.deviceSessionId
   const [rec, setRec] = useState<Recording | 'error' | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const retry = () => { setRec(null); setAttempt(a => a + 1) }
 
   useEffect(() => {
     if (!fromTracker || !src) return
@@ -40,7 +42,7 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
       })
       .catch(() => { if (!cancelled) setRec('error') })
     return () => { cancelled = true }
-  }, [fromTracker, src])
+  }, [fromTracker, src, attempt])
 
   return (
     <main className="flex-1 flex flex-col">
@@ -63,10 +65,15 @@ export default function PaddleMotionPage({ params }: { params: Promise<{ id: str
                 </>} />
             )}
             {fromTracker && rec === null && <LoadingState label="Loading" />}
-            {fromTracker && rec === 'error' && <p className="text-base text-red" role="alert">Couldn’t read this recording. Please try again.</p>}
+            {fromTracker && rec === 'error' && (
+              <div className="flex flex-col items-start gap-3">
+                <p className="text-base text-red" role="alert">Couldn’t read this recording.</p>
+                <Button variant="secondary" onClick={retry}>Try again</Button>
+              </div>
+            )}
             {fromTracker && rec && rec !== 'error' && (
               <>
-                <BoatMotion attitude={rec.attitude} strokeRate={q.data.result.avgSR} />
+                <BoatMotion attitude={rec.attitude} strokeRate={q.data.result.avgSR} deviceId={src!.deviceId} />
                 <TechnicalDetails report={rec.report} cadence={rec.cadence} attitude={rec.attitude} />
               </>
             )}
