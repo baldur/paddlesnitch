@@ -98,14 +98,32 @@ final class MotionTraceLargeTextTests: AppTestCase {
         }
     }
 
-    /// Where the hold-to-stop bar starts: 16 pt over the hidden "Keep
-    /// holding to stop." (8 pt over the button), which is in the same font
-    /// as "Recording carries on." and as long. The bar draws over the page,
-    /// but `isHittable` doesn't count it, and the hidden text has no element.
-    private var barTop: CGFloat {
-        let hint = text(containing: "Recording carries on.").frame.height
-        return element("record-stop").frame.minY - 8 - hint - 16
+    /// #842: the bar kept room for the hidden "Keep holding to stop.": on
+    /// an SE at this size, 208 of the screen's 667 pt. Now it's the button
+    /// and its padding (94 pt) until a tap shows the hint, and the hint
+    /// grows the bar upward: the button doesn't move under the thumb.
+    /// Measured from the bar's top: its frame also takes in the strip
+    /// behind the home indicator, which an SE doesn't have.
+    func testTheStopBarMakesRoomForTheHintOnlyWhileItShows() throws {
+        _ = try showTrace("motion", asked: true)
+        let stop = element("record-stop")
+        let hint = text(containing: "Keep holding to stop.")
+        XCTAssertEqual(stop.frame.minY - barTop, 16, accuracy: 1, "only the padding over the button")
+        XCTAssertFalse(hint.exists, "no hint before a tap")
+        XCTAssertLessThanOrEqual(
+            element("record-stroke-rate").frame.maxY, barTop, "the numbers clear of the bar without a scroll")
+        keep("Stop bar at the largest text")
+        let button = stop.frame
+        stop.tap()
+        XCTAssertTrue(hint.appears(timeout: 5), "a tap shows the hint")
+        XCTAssertEqual(stop.frame.minY, button.minY, accuracy: 1, "the button doesn't move")
+        XCTAssertEqual(stop.frame.minY - barTop, 16 + hint.frame.height + 8, accuracy: 1, "the bar grows by the hint")
+        keep("Stop bar at the largest text, with the hint")
     }
+
+    /// Where the hold-to-stop bar starts. It draws over the page, but
+    /// `isHittable` doesn't count it.
+    private var barTop: CGFloat { element("record-stop-bar").frame.minY }
 
     /// At this size the hold-to-stop bar covers the foot of the screen, and
     /// a drag that starts on it doesn't scroll the page (`scroll(by:)` starts

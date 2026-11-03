@@ -29,6 +29,8 @@ struct RecordView: View {
                     HoldToStopButton { model.stop() }
                         .padding(16)
                         .background(Palette.bg)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("record-stop-bar")
                 }
             }
             .background(Palette.bg)
@@ -313,12 +315,15 @@ private struct HoldToStopButton: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // Above the button and always there, so a tap never moves it.
-            Text("Keep holding to stop.")
-                .font(.plexSans(.subheadline))
-                .foregroundStyle(Palette.muted)
-                .opacity(hint ? 1 : 0)
-                .accessibilityHidden(!hint)
+            // Takes room only while it shows (#842): kept for it, at the
+            // largest text it made the bar a third of an SE's screen. The
+            // bar is pinned to the foot of the screen, so it grows upward
+            // and the button never moves.
+            if hint {
+                Text("Keep holding to stop.")
+                    .font(.plexSans(.subheadline))
+                    .foregroundStyle(Palette.muted)
+            }
             Text("Hold to stop")
                 .font(.plexSans(.title3, weight: .semibold))
                 .foregroundStyle(Palette.bg)
