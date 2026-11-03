@@ -282,9 +282,20 @@ async function play(c, page, errors) {
         const why = await spot.evaluate((el) => {
           const r = el.getBoundingClientRect();
           const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-          return { box: [r.left, r.top, r.right, r.bottom].map(Math.round), hidden: el.hidden, onTop: top === el ? 'itself' : `${top?.id || top?.tagName} ${top?.textContent?.trim().slice(0, 30)}`, view: [innerWidth, innerHeight] };
+          const boxes = [];
+          return new Promise((done) => {
+            const f = () => {
+              const b = el.getBoundingClientRect();
+              boxes.push([b.left, b.top].map((v) => Math.round(v * 10) / 10).join(','));
+              if (boxes.length < 6) requestAnimationFrame(f);
+              else done({ box: [r.left, r.top, r.right, r.bottom].map(Math.round), frames: boxes, hidden: el.hidden, onTop: top === el ? 'itself' : `${top?.id || top?.tagName} ${top?.textContent?.trim().slice(0, 30)}`, view: [innerWidth, innerHeight] });
+            };
+            requestAnimationFrame(f);
+          });
         }).catch(() => null);
-        throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]} ${JSON.stringify(why)}`);
+        // Playwright's own reasons, the last few distinct lines of its call log.
+        const log = [...new Set(e.message.split('\n').map((l) => l.trim()).filter((l) => /^-/.test(l)))].slice(-6).join(' | ');
+        throw new Error(`couldn't ${c.touch ? 'tap' : 'click'} ${label}: ${e.message.split('\n')[0]} ${JSON.stringify(why)} ${log}`);
       });
       if (place) await page.waitForFunction((p) => window.kayak.club?.place === p && !window.kayak.club.to, place, { timeout: 60_000 });
       if (label === 'Change' && !(await page.locator('#menu').evaluate((m) => m.open))) errors.push("Change didn't open the paddler picker");
