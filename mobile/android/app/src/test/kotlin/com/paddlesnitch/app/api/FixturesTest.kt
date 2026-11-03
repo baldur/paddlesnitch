@@ -2,6 +2,7 @@ package com.paddlesnitch.app.api
 
 import java.io.File
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
@@ -23,10 +24,18 @@ class FixturesTest {
         assertEquals("every fixture is in index.json and every entry has a file", names.toSet(), index.keys)
         for ((name, entry) in index) {
             val schema = entry.jsonObject.getValue("schema").jsonPrimitive.content
-            val model = runCatching { serializer(Class.forName("com.paddlesnitch.app.api.$schema")) }
+            val model = runCatching { modelFor(schema) }
                 .getOrElse { throw AssertionError("$name: no generated model $schema", it) }
             runCatching { read(name, model) }.getOrElse { throw AssertionError("$name doesn't decode as $schema", it) }
         }
+    }
+
+    // A list schema (paddles.sameOuting) is a typealias, which has no class: read it as a List of its named item.
+    private fun modelFor(schema: String): KSerializer<*> {
+        val file = ApiJson.parseToJsonElement(File("../../contract/api/$schema.schema.json").readText()).jsonObject
+        val item = file["items"]?.jsonObject?.get("\$ref")?.jsonPrimitive?.content?.removeSuffix(".schema.json")
+        return if (item != null) ListSerializer(serializer(Class.forName("com.paddlesnitch.app.api.$item")))
+        else serializer(Class.forName("com.paddlesnitch.app.api.$schema"))
     }
 
     @Test
