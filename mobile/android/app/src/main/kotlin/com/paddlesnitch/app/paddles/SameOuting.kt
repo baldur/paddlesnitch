@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,22 +68,37 @@ class Compare(
     }
 }
 
+// Tags for tests: what a row shows is hidden from screen readers (each row is one button, read by its label).
+const val COMPARE_ARROW_TAG = "compareArrow"
+const val COMPARE_SPINNER_TAG = "compareSpinner"
+const val COMPARE_WHO_TAG = "compareWho"
+
+/** Shown, but not read: the button's label says it all, without the arrow or "in progress". */
+private fun Modifier.notRead(tag: String) = testTag(tag).clearAndSetSemantics { }
+
+/** One button, read "Compare with the recording from <who>". */
+private fun Modifier.compareButton(compare: Compare, a: String, b: String, sourceType: String, phone: Boolean?) =
+    clickable(role = Role.Button) { compare.tap(a, b) }.semantics { contentDescription = compareLabel(sourceType, phone) }
+
 /** A row inside a Paddles card, under its own: who else recorded it, and Compare → when [compare] is given. */
 @Composable
 internal fun SameOutingRow(a: String, b: String, sourceType: String, phone: Boolean?, compare: Compare?) {
     HorizontalDivider(color = PsColor.border)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .then(if (compare == null) Modifier else Modifier
-                .clickable(role = Role.Button) { compare.tap(a, b) }
-                .semantics { contentDescription = compareLabel(sourceType, phone) })
+            .then(if (compare == null) Modifier else Modifier.compareButton(compare, a, b, sourceType, phone))
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(alsoRecordedBy(sourceType, phone), color = PsColor.muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        // The samples (no compare) keep the words readable: there's nothing to tap.
+        Text(alsoRecordedBy(sourceType, phone), color = PsColor.muted, fontSize = 14.sp,
+            modifier = Modifier.weight(1f).then(if (compare == null) Modifier else Modifier.notRead(COMPARE_WHO_TAG)))
         if (compare != null) {
             Spacer(Modifier.size(8.dp))
-            if (compare.busy == (a to b)) Spinner() else Text("Compare →", color = PsColor.primaryText, fontSize = 14.sp)
+            if (compare.busy == (a to b)) Spinner()
+            // While another row opens, this one takes no taps: muted says so.
+            else Text("Compare →", color = if (compare.busy == null) PsColor.primaryText else PsColor.muted, fontSize = 14.sp,
+                modifier = Modifier.notRead(COMPARE_ARROW_TAG))
         }
     }
 }
@@ -90,16 +107,16 @@ internal fun SameOutingRow(a: String, b: String, sourceType: String, phone: Bool
 @Composable
 internal fun SameOutingLink(a: String, b: String, sourceType: String, phone: Boolean?, compare: Compare) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .clickable(role = Role.Button) { compare.tap(a, b) }
-            .semantics { contentDescription = compareLabel(sourceType, phone) },
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).compareButton(compare, a, b, sourceType, phone),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("${alsoRecordedBy(sourceType, phone)} →", color = PsColor.primaryText, fontSize = 14.sp)
+        // Not filling: the text wraps at large text and the spinner keeps its room after it.
+        Text("${alsoRecordedBy(sourceType, phone)} →", color = if (compare.busy == null || compare.busy == (a to b)) PsColor.primaryText else PsColor.muted,
+            fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false).notRead(COMPARE_WHO_TAG))
         if (compare.busy == (a to b)) Spinner()
     }
 }
 
 @Composable
-private fun Spinner() = CircularProgressIndicator(Modifier.size(16.dp), color = PsColor.primaryText, strokeWidth = 2.dp)
+private fun Spinner() = CircularProgressIndicator(Modifier.size(16.dp).notRead(COMPARE_SPINNER_TAG), color = PsColor.primaryText, strokeWidth = 2.dp)

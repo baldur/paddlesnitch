@@ -42,6 +42,7 @@ import com.paddlesnitch.app.api.RecordingMotion
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
+import com.paddlesnitch.app.api.SameOutingList
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
@@ -228,6 +229,7 @@ private fun MyPaddles(
     onReport: () -> Unit,
 ) {
     val context = LocalContext.current
+    val sameOuting = remember(api) { sameOutingCalls(api) { url, private -> openInBrowser(context, url, private) } }
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -253,9 +255,7 @@ private fun MyPaddles(
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
             loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
-            sameOuting = { api.sameOuting(it) },
-            // Compare isn't native yet: the website's, signed in through web-code (README § Same outing).
-            openCompare = { a, b -> check(openInBrowser(context, api.signedInPage(compareNext(a, b)), ephemeral = true)) { "no browser" } },
+            sameOuting = sameOuting.sameOuting, openCompare = sameOuting.openCompare,
             notice = notice, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
@@ -301,6 +301,23 @@ private suspend fun readMotionSample(context: android.content.Context): Recordin
 /** Compare for two paddles, as the path web-code is asked for. */
 internal fun compareNext(a: String, b: String) = "/paddles/compare?a=${Uri.encode(a)}&b=${Uri.encode(b)}"
 
+/** What a signed-in Paddles gets for the same outing (README § Same outing). */
+internal class SameOutingCalls(val sameOuting: suspend (String) -> SameOutingList, val openCompare: suspend (String, String) -> Unit)
+
+/**
+ * The real calls: paddles.sameOuting, and Compare (not native yet) as the website's page signed in
+ * through web-code, opened by [open] (url, private tab?) in a private tab. A failure throws, so the
+ * screen says so.
+ */
+internal fun sameOutingCalls(api: Api, open: (url: String, private: Boolean) -> Boolean) = SameOutingCalls(
+    sameOuting = { api.sameOuting(it) },
+    openCompare = { a, b -> check(open(api.signedInPage(compareNext(a, b)), true)) { "no browser" } },
+)
+
+/** A Custom Tab in [browser], private when [ephemeral] (only where the browser supports it). */
+internal fun customTab(browser: String, ephemeral: Boolean): CustomTabsIntent =
+    CustomTabsIntent.Builder().setEphemeralBrowsingEnabled(ephemeral).build().apply { intent.setPackage(browser) }
+
 /**
  * A paddlesnitch.com page the app has no screen for. The browser is named, since
  * an unnamed link to paddlesnitch.com/paddles/… would come straight back here.
@@ -315,7 +332,7 @@ internal fun openInBrowser(context: Context, url: String, ephemeral: Boolean = f
     ) ?: return false
     val private = ephemeral && runCatching { CustomTabsClient.isEphemeralBrowsingSupported(context, browser) }.getOrDefault(false)
     return runCatching {
-        CustomTabsIntent.Builder().setEphemeralBrowsingEnabled(private).build().apply { intent.setPackage(browser) }.launchUrl(context, Uri.parse(url))
+        customTab(browser, private).launchUrl(context, Uri.parse(url))
     }.isSuccess
 }
 
