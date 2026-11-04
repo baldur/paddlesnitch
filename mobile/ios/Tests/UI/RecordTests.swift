@@ -72,6 +72,23 @@ final class RecordTests: AppTestCase {
         XCTAssertTrue(line.disappears(timeout: 10))
     }
 
+    /// Let go before 1.5 s and it keeps recording: only a full hold stops
+    /// (a bump in a drybag mustn't end a paddle). 0.5 s and 1.2 s, short
+    /// and nearly there; each wait outlasts the 1.5 s so a late stop shows.
+    func testLettingGoEarlyKeepsRecording() throws {
+        try startRecording(allow: true)
+        let stop = element("record-stop")
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        for seconds in [0.5, 1.2] {
+            stop.press(forDuration: seconds)
+            XCTAssertFalse(element("record-recording").disappears(timeout: 2), "still recording after \(seconds) s")
+        }
+        // The same button stops on a full hold, so the short presses reached
+        // it (a press shows nothing else: it isn't a tap, so no hint).
+        stop.press(forDuration: 2)
+        XCTAssertTrue(element("record-recording").disappears(timeout: 10), "a full hold stops it")
+    }
+
     func testWhileTheServerIsDownTheRecordingWaits() throws {
         try record(with: "-UploadsDown")
         let line = element("upload-line")
@@ -133,10 +150,17 @@ final class RecordTests: AppTestCase {
         app.launch()
         signIn()
         XCTAssertTrue(element("sample-notice").appears(timeout: 15), "signed out")
-        app.buttons["sample-notice-action"].tap()
-        XCTAssertTrue(
-            element("sign-in-account-deleted").appears(timeout: 10)
-                && text(containing: "This account was deleted").exists)
+        // The sign-in sheet can still be closing over it: 0.7 s after Sign
+        // in, the tap found it covered (#873's CI, newest iOS). And a sheet
+        // asked to open while another closes is dropped without a word: wait
+        // for it to go, then tap until the new one is up.
+        XCTAssertTrue(app.buttons["sign-in-submit"].disappears(timeout: 10), "the sign-in sheet closed")
+        let deleted = element("sign-in-account-deleted")
+        for _ in 0..<3 {
+            tapWhenClear(app.buttons["sample-notice-action"])
+            if deleted.appears(timeout: 5) { break }
+        }
+        XCTAssertTrue(deleted.exists && text(containing: "This account was deleted").exists)
     }
 
     /// The app signs out on its own when the server refuses a refresh (a
