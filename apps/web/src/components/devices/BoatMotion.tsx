@@ -96,12 +96,18 @@ export default function BoatMotion({ attitude, strokeRate, deviceId }: { attitud
   )
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+// One boat-motion number, also used by the summary on the paddle page
+// (BoatMotionSummary). A screen reader reads it as one thing, with the units
+// spoken (mobile/contract README, Boat motion: Tiles).
+export function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+  const spoken = value.replace(/°$/, ' degrees')
+  const unit = note === 'spm' ? 'strokes per minute' : note
   return (
-    <div className="rounded-control border border-border bg-surface px-3 py-2 min-w-0">
-      <div className={eyebrowClass}>{label}</div>
-      <div className="text-fg tabular text-xl mt-0.5">{value}</div>
-      {note && <div className="text-sm text-muted">{note}</div>}
+    <div role="group" aria-label={[label, spoken, unit].filter(Boolean).join(', ')}
+      className="rounded-control border border-border bg-surface px-3 py-2 min-w-0">
+      <div aria-hidden className={eyebrowClass}>{label}</div>
+      <div aria-hidden className="text-fg tabular text-xl mt-0.5">{value}</div>
+      {note && <div aria-hidden className="text-sm text-muted">{note}</div>}
     </div>
   )
 }

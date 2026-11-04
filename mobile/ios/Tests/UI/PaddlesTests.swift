@@ -25,10 +25,9 @@ final class PaddlesTests: AppTestCase {
         let row = scrollTo("paddle-pdl-river")
         XCTAssertTrue(row.exists)
         // 56 pt in from the row's edge. A tap within about 17 pt of anything
-        // drawn counts as on it; without the fix, a sweep of this row (iPhone
-        // 17, 402 pt, iOS 26.5)
-        // missed from x 300 to 340 and opened from 345 (the chevron, 362
-        // to 370). The words end near 293. Keep the sample's words short
+        // drawn counts as on it. Without the fix, a sweep of this row
+        // (iPhone 17, 402 pt, iOS 26.5) missed from x 300 to 340 and opened
+        // from 345 (the chevron, 362 to 370). The words end near 293. Keep the sample's words short
         // of here, or this stops proving anything.
         let window = app.windows.firstMatch
         window.coordinate(withNormalizedOffset: .zero)

@@ -229,3 +229,11 @@ time and isn't obvious from the code.
   the Scaffold's `topBar`, so every screen shows it and its insets are right. It sits outside the
   Scaffold for that; the recording screen has its own Scaffold.
 - Never rebase a pushed branch: a force-push is refused here. Merge the base in instead.
+- Boat motion on the paddle (#866, README § Boat motion, On the paddle): `BoatMotionSummary` shows the
+  screen's own Evenness and Side-to-side roll tiles (`balanceTiles`) with "All charts →", only on a paddle
+  that offers Boat motion and only when `attitude.available`. Loading, no motion, a 404 or a failure show
+  nothing. `PaddleLoader` asks once per paddle; the screen asks again, and `Api.recordingMotion`'s ETag
+  makes that a 304. Tests find the Boat motion button with `hasText("Boat motion") and hasClickAction()`:
+  the summary's heading has the same words.
+- To undo a mutation, revert only the mutated lines, or commit your work first. `git checkout -- <file>`
+  on a file with uncommitted work throws the work away with the mutation (it happened, 2026-11-04).
