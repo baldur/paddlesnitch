@@ -303,7 +303,8 @@ private struct BigButton: View {
 }
 
 /// Stops only when held for 1.5 s, so a bump in a drybag doesn't end a
-/// paddle. A fill sweeps across while it's held; a tap says to keep holding;
+/// paddle. A fill sweeps across while it's held; a tap, or letting go before
+/// it fills, says to keep holding;
 /// VoiceOver hears "Hold to stop" and has a "Stop recording" action that
 /// stops at once (the contract's words). The one filled danger control: the web's
 /// are outlined, but this one has to be found by feel.
@@ -344,9 +345,10 @@ private struct HoldToStopButton: View {
                     finish()
                 } onPressingChanged: { down in
                     pressing = down
-                    if down { hint = false }
+                    // Let go before it fills: say what to do, as a tap does
+                    // (#880). A held press isn't a tap, so it said nothing.
+                    hint = !down && !stopped
                 }
-                .sensoryFeedback(.success, trigger: stopped)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Hold to stop")
                 .accessibilityAddTraits(.isButton)
@@ -360,8 +362,15 @@ private struct HoldToStopButton: View {
         }
     }
 
+    /// The haptic plays here, not from `.sensoryFeedback` on this view: the
+    /// stop removes the view in the same update, so a trigger on it most
+    /// likely never fired (design-usability, #880; check on a phone, #879).
+    /// The hint is cleared here too, whatever order SwiftUI reports the
+    /// press ending in.
     private func finish() {
         stopped = true
+        hint = false
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         stop()
     }
 }

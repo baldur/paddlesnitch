@@ -79,14 +79,33 @@ final class RecordTests: AppTestCase {
         try startRecording(allow: true)
         let stop = element("record-stop")
         XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        let hint = text(containing: "Keep holding to stop.")
         for seconds in [0.5, 1.2] {
             stop.press(forDuration: seconds)
+            // Letting go before it fills says what to do, as a tap does (#880).
+            XCTAssertTrue(hint.appears(timeout: 2), "the hint after letting go at \(seconds) s")
             XCTAssertFalse(element("record-recording").disappears(timeout: 2), "still recording after \(seconds) s")
         }
-        // The same button stops on a full hold, so the short presses reached
-        // it (a press shows nothing else: it isn't a tap, so no hint).
         stop.press(forDuration: 2)
         XCTAssertTrue(element("record-recording").disappears(timeout: 10), "a full hold stops it")
+    }
+
+    /// It stops the moment the fill completes, with the finger still down,
+    /// not at the lift (contract #881). A press can't be watched mid-hold,
+    /// so: hold past 1.5 s, then drag well off the button before letting go.
+    /// A stop at the lift would be cancelled by the drag and keep recording.
+    /// After it, the record screen and its button are gone, so nothing can
+    /// stop it twice (the model ignores a second stop too).
+    func testItStopsWhenTheFillCompletesWithTheFingerDown() throws {
+        try startRecording(allow: true)
+        let stop = element("record-stop")
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        let start = stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(
+            forDuration: 1.8, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -300)), withVelocity: .fast,
+            thenHoldForDuration: 1)
+        XCTAssertTrue(element("record-recording").disappears(timeout: 5), "stopped before the finger moved off")
+        XCTAssertFalse(stop.exists, "no Hold to stop left to press again")
     }
 
     func testWhileTheServerIsDownTheRecordingWaits() throws {
