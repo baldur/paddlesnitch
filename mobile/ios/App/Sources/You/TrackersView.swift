@@ -39,7 +39,8 @@ struct TrackersView: View {
                 switch route {
                 case .tracker(let id): TrackerDetailView(account: account, model: model, deviceId: id)
                 case .paddle(let id):
-                    PaddleDetailView(id: id, source: ServerPaddles(client: account.client), openPage: openPage)
+                    PaddleDetailView(
+                        id: id, source: ServerPaddles(client: account.client), account: account, openPage: openPage)
                 }
             }
             .sheet(isPresented: $guide) {

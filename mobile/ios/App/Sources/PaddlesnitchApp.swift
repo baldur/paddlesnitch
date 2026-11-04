@@ -58,6 +58,12 @@ struct PaddlesnitchApp: App {
             "-SameOutingFails": { $0.failsSameOuting = true },
         ]
         for (argument, apply) in switches where arguments.contains(argument) { apply(server) }
+        // Boat motion: how the recording's motion answers.
+        let motion: [String: SampleServer.MotionAnswer] = [
+            "-MotionUnusable": .unusable, "-MotionNotFound": .notFound, "-MotionFails": .fails,
+            "-MotionFailsOnce": .failsOnce,
+        ]
+        if let answer = motion.first(where: { arguments.contains($0.key) })?.value { server.motionAnswer = answer }
         // Phone recordings (C3): what the server does with an upload.
         let uploads: [String: PhoneUploads] = [
             "-UploadsDown": .down, "-UploadsRefused": .refused, "-UploadsNoFix": .noFix,

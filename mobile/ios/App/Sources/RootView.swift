@@ -12,7 +12,7 @@ struct RootView: View {
     let samples: SamplePaddles
     @State private var signingIn = false
     @State private var termsOpen = false
-    @State private var selectedTab = "paddles"
+    @State private var navigator = AppNavigator()
     @State private var adding: AddPaddleModel
     /// The signed-in account's recordings from this phone, uploading.
     @State private var uploads: UploadQueue?
@@ -35,12 +35,13 @@ struct RootView: View {
         // "Recording · h:mm:ss" above every screen, nav bars included.
         VStack(spacing: 0) {
             RecordingBar(session: recording)
-            TabView(selection: $selectedTab) {
+            TabView(selection: Bindable(navigator).tab) {
                 // The same list view throughout; it reloads when `sourceID` changes
                 // (samples, or this person's). Rebuilding its navigation stack
                 // under the closing sign-in sheet crashed UIKit on iOS 17.
                 PaddleListView(
                     source: source, sourceID: account.user?.id ?? "samples", isSample: account.user == nil,
+                    account: account.user == nil ? nil : account,
                     needsTerms: account.user?.needsTerms == true, signIn: { signingIn = true },
                     openTerms: { termsOpen = true }, adding: adding,
                     openFile: { url in Task { await open(url) } },
@@ -56,6 +57,7 @@ struct RootView: View {
             }
         }
         .background(Palette.bg)
+        .environment(navigator)
         // A GPS file opened in the app from Files, Mail or a share sheet.
         .onOpenURL { url in Task { await open(url) } }
         .onChange(of: account.user?.id) { _, id in
@@ -191,7 +193,7 @@ struct RootView: View {
 
     /// Adds the paddle in a GPS file, or keeps it until sign-in.
     private func open(_ url: URL) async {
-        selectedTab = "paddles"
+        navigator.tab = "paddles"
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else {

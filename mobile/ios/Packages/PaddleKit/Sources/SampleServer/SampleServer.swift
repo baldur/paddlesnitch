@@ -39,6 +39,7 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _contact: String?
     var _placeholderEmail = false
     var _failsContact = false
+    var _motionAnswer: MotionAnswer = .fixtures
     var _failsWebCode = false
     var _failsSameOuting = false
     var _signInExpiresOnDelete = false
@@ -108,11 +109,14 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
 
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         lock.withLock { _requests.append(request) }
-        let (status, body) = try answer(request)
+        var (status, body) = try answer(request)
+        var headers = ["Content-Type": "application/json"]
+        if Self.isMotion(request.url?.path ?? "") {
+            headers.merge(Self.conditional(request, status: &status, body: &body)) { $1 }
+        }
         guard let url = request.url,
             let response = HTTPURLResponse(
-                url: url, statusCode: status, httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/json"])
+                url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)
         else { throw URLError(.badURL) }
         return (body, response)
     }

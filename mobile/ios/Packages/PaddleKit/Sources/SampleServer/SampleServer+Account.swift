@@ -15,6 +15,9 @@ extension SampleServer {
         {
             return try phone(path: path, request: request)
         }
+        if Self.isMotion(path) {
+            return try motion(path: path, request: request)
+        }
         if path.hasPrefix("/api/account/devices") {
             return try trackers(path: path, request: request)
         }

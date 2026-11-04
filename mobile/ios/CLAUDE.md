@@ -296,3 +296,21 @@ isn't obvious from the code.
   and check `elementType == .button` in the UI test. State a List row
   must keep through a scroll (a spinner, a failure alert) lives in the
   screen (`CompareOpener`), not in the row.
+- Boat motion (`BoatMotionView`, model in `Paddles/BoatMotion.swift`):
+  the model works out every chart bound, clamp and mirror from the
+  server's answer, so the tests are pure; the view only maps them to
+  points (Canvas, chart text at a fixed 11 pt). The sample server
+  answers `GET /api/account/devices/sessions/<id>` with an ETag (304 on
+  `If-None-Match`): S0012 measured, others no motion;
+  `-MotionUnusable`, `-MotionNotFound`, `-MotionFails`,
+  `-MotionFailsOnce`. On the screen's large-text check the page jumps
+  back up after each audit, as a List does: `checkScreen(at:)` the parts.
+- Going to another tab's screen (Open tracker → You → Trackers):
+  `AppNavigator` in the environment holds the request until that tab's
+  view takes it (`onChange(…, initial: true)`): a tab never shown yet
+  has no view to see a change. Keep the system back button (the
+  README's "← Paddle" is the website's link): hiding it to draw "Paddle"
+  turns off the edge swipe back. Test the back button, not a swipe: a
+  synthesized drag from the screen edge didn't trigger iOS 17's back
+  gesture on CI (it did on 26.5). The button's label is the screen
+  below's title, or "Back".

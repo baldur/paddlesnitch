@@ -35,6 +35,7 @@ struct YouView: View {
     /// Type-erased, so Devices can push its own routes (a tracker, a
     /// paddle) with destinations it declares.
     @State private var path = NavigationPath()
+    @Environment(AppNavigator.self) private var navigator
 
     enum Route: Hashable {
         case account, trackers
@@ -122,6 +123,12 @@ struct YouView: View {
                 case .account: AccountView(account: account, signIn: signIn)
                 case .trackers: TrackersView(account: account)
                 }
+            }
+            // Boat motion's Open tracker: straight to Trackers.
+            .onChange(of: navigator.trackersWanted, initial: true) { _, wanted in
+                guard wanted else { return }
+                path = NavigationPath([Route.trackers])
+                navigator.trackersWanted = false
             }
             .onChange(of: account.user?.id) { _, id in
                 // Signed in again to delete: straight back

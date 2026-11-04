@@ -85,6 +85,8 @@ public struct PaddleSummary: Hashable, Sendable {
     public let efforts: [Effort]
     public let rests: [String]
     public let splits: [Split]
+    /// Its Boat motion screen, for a paddle from a tracker or phone.
+    public let motion: MotionRecording?
 
     public init(_ paddle: AnalysisSession, summaryFailed: Bool = false) {
         let result = paddle.result
@@ -105,6 +107,7 @@ public struct PaddleSummary: Hashable, Sendable {
         efforts = Self.efforts(result.surges)
         rests = Self.rests(result.stops)
         splits = result.noGps == nil ? Self.splits(result.points) : []
+        motion = MotionRecording(paddle)
     }
 
     static func gpsStats(_ result: AnalysisResult) -> [Stat] {

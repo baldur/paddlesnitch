@@ -36,6 +36,21 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(text(containing: "29 s at 1:23").exists, "and the rests, at the end")
     }
 
+    /// Boat motion: the tile labels wrap, never truncate; the charts keep
+    /// their 11 pt text.
+    func testBoatMotionAtTheLargestTextSize() throws {
+        signInAndWait()
+        open("pdl-river")
+        let button = element("open-motion")
+        XCTAssertTrue(button.appears(timeout: 10))
+        button.tap()
+        XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+        keep("Boat motion at the largest text")
+        // Each check jumps the page back up: go to each part in turn.
+        // The tiles, a caption and the notes: chart text doesn't grow.
+        try checkScreen(at: [element("motion-envelope"), text(containing: "What this can't tell you.")])
+    }
+
     /// The same-outing row in the card and the link on the paddle page
     /// (Compare), signed in: the samples have no account to compare in.
     func testSameOutingAtTheLargestTextSize() throws {
