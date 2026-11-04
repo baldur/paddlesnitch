@@ -30,8 +30,26 @@ import com.paddlesnitch.app.ui.PaddlesnitchTheme
 import com.paddlesnitch.app.ui.PsColor
 import java.io.File
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.unit.dp
+import com.paddlesnitch.app.api.SameOuting
+import com.paddlesnitch.app.api.SameOutingList
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.serialization.builtins.ListSerializer
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.assertFalse
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -139,6 +157,180 @@ class PaddleScreensTest {
         compose.onNodeWithText("Also recorded by Strava").assertExists()
         compose.onNodeWithText("Also recorded by the phone").assertExists()
         compose.onNodeWithText("Also recorded by the tracker").assertDoesNotExist()
+    }
+
+    // ---- Same outing (mobile/contract/README.md § Same outing, #805).
+    private val withPhone by lazy { ApiJson.decodeFromString(PaddleList.serializer(), fixtures.resolve("api/paddles.list.with-phone.json").readText()) }
+    private fun sameOuting(name: String) =
+        ApiJson.decodeFromString(ListSerializer(SameOuting.serializer()), fixtures.resolve("api/$name.json").readText())
+    private val asked = mutableListOf<Pair<String, String>>()
+    private val record: suspend (String, String) -> Unit = { a, b -> asked += a to b }
+    private fun row(who: String) = compose.onNodeWithContentDescription("Compare with the recording from $who")
+    /** "Compare →" as drawn (hidden from screen readers, so found by its tag in the unmerged tree). */
+    private fun arrows() = compose.onAllNodesWithTag(COMPARE_ARROW_TAG, useUnmergedTree = true)
+    private fun spinners() = compose.onAllNodesWithTag(COMPARE_SPINNER_TAG, useUnmergedTree = true)
+    /** The list is lazy: a row below the fold isn't composed until the list scrolls to it. */
+    private fun rowInList(who: String) = row(who).also {
+        compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription("Compare with the recording from $who"))
+    }
+
+    @Test
+    fun aSameOutingRowAsksForCompareAndDoesntOpenThePaddle() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        rowInList("the phone").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("pdl-tracker" to "pdl-phone2"), asked)
+        compose.onNodeWithText("← Paddles").assertDoesNotExist()                      // the card's tap didn't fire
+        rowInList("Strava").performClick()
+        compose.waitForIdle()
+        assertEquals("pdl-phone" to "pdl-strava", asked.last())
+        arrows().assertCountEquals(2)
+    }
+
+    @Test
+    fun eachRowIsOneButtonReadAsCompareWithoutTheArrow() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        val node = row("the phone").fetchSemanticsNode()
+        assertEquals(Role.Button, node.config[SemanticsProperties.Role])
+        assertTrue(node.config.contains(SemanticsActions.OnClick))
+        assertEquals(listOf("Compare with the recording from the phone"), node.config[SemanticsProperties.ContentDescription])
+        assertFalse("nothing else read, no arrow", node.config.contains(SemanticsProperties.Text))
+        assertTrue("at least 48 dp: ${node.boundsInRoot}", node.boundsInRoot.height >= with(compose.density) { 48.dp.toPx() } - 0.5f)
+    }
+
+    @Test
+    fun whileCompareIsAskedTheRowSpinsAndTakesNoMoreTaps() {
+        val answer = CompletableDeferred<Unit>()
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = { a, b -> asked += a to b; answer.await() }) }
+        rowInList("the phone").performClick()
+        row("the phone").performClick()
+        rowInList("Strava").performClick()                                  // each code works once: one at a time
+        compose.waitForIdle()
+        assertEquals(listOf("pdl-tracker" to "pdl-phone2"), asked)
+        arrows().assertCountEquals(1)                   // the tapped row shows a spinner instead
+        answer.complete(Unit)
+        compose.waitForIdle()
+        arrows().assertCountEquals(2)
+    }
+
+    @Test
+    fun aFailedWebCodeSaysSoAndLeavesThePageAsItWas() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap,
+            openCompare = { _, _ -> throw ApiFailure("Couldn’t finish that. Please try again.", 500, generic = true) }) }
+        rowInList("the phone").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(COMPARE_FAILED).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("← Paddles").assertDoesNotExist()                      // still the list, nothing opened
+        compose.onNode(hasTestTag(COMPARE_ARROW_TAG) and hasAnyAncestor(hasContentDescription("Compare with the recording from the phone")), useUnmergedTree = true)
+            .assertExists()                                                           // no spinner left
+    }
+
+    @Test
+    fun theSamplesShowWhoElseRecordedItButDontLink() {
+        show { PaddlesHost(withPhone, sample = true, load = { paddle(it) }, map = fakeMap, sameOuting = { sameOuting("paddles.sameOuting") }) }
+        compose.onNodeWithText("Also recorded by the phone").assertExists()
+        arrows().assertCountEquals(0)
+        row("the phone").assertDoesNotExist()
+    }
+
+    private fun showPage(links: suspend (String) -> SameOutingList, fontScale: Float = 1f) = show(fontScale) {
+        PaddlesHost(list, sample = false, load = { paddle("pdl-river") }, map = fakeMap, openPaddle = "pdl-tracker", sameOuting = links, openCompare = record)
+    }
+
+    @Test
+    fun thePaddlePageLinksAfterTheSummaryAndBeforeEfforts() {
+        showPage({ sameOuting("paddles.sameOuting") })
+        val link = row("the phone").performScrollTo()
+        // positionInRoot, not boundsInRoot: bounds are clipped to the screen, so anything below it reads 0.
+        val top = { n: androidx.compose.ui.test.SemanticsNodeInteraction -> n.fetchSemanticsNode().positionInRoot.y }
+        val summary = top(compose.onNodeWithText("A 3-min paddle", substring = true))
+        val efforts = top(compose.onNodeWithText("Efforts and rests"))
+        assertTrue("summary $summary, link ${top(link)}, efforts $efforts", summary < top(link) && top(link) < efforts)
+        row("the phone").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("pdl-tracker" to "pdl-phone2"), asked)                    // this paddle is a
+    }
+
+    @Test
+    fun thePaddlePageWithNoOtherRecordingShowsNothing() {
+        showPage({ sameOuting("paddles.sameOuting.none") })
+        compose.onNodeWithText("Efforts and rests").assertExists()
+        compose.onNodeWithContentDescription("Compare with", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun aFailedSameOutingCallShowsNothingNotAnError() {
+        showPage({ throw ApiFailure("Couldn’t finish that. Please try again.", 500, generic = true) })
+        compose.onNodeWithText("Efforts and rests").assertExists()
+        compose.onNodeWithContentDescription("Compare with", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Couldn’t", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun thePageLinkIsOneButton48dpHigh() {
+        showPage({ sameOuting("paddles.sameOuting") })
+        val node = row("the phone").performScrollTo().fetchSemanticsNode()
+        assertEquals(Role.Button, node.config[SemanticsProperties.Role])
+        assertFalse(node.config.contains(SemanticsProperties.Text))
+        assertTrue("at least 48 dp: ${node.size}", node.size.height >= with(compose.density) { 48.dp.roundToPx() })
+    }
+
+    @Test
+    fun whileCompareIsAskedThePageLinkSpinsAndTakesNoMoreTaps() {
+        val answer = CompletableDeferred<Unit>()
+        show { PaddlesHost(list, sample = false, load = { paddle("pdl-river") }, map = fakeMap, openPaddle = "pdl-tracker",
+            sameOuting = { sameOuting("paddles.sameOuting") }, openCompare = { a, b -> asked += a to b; answer.await() }) }
+        row("the phone").performScrollTo().performClick()
+        row("the phone").performClick()
+        compose.waitForIdle()
+        assertEquals(1, asked.size)
+        spinners().assertCountEquals(1)
+        answer.complete(Unit)
+        compose.waitForIdle()
+        spinners().assertCountEquals(0)
+    }
+
+    @Test
+    fun aFailedWebCodeOnThePageSaysSoAndKeepsThePage() {
+        show { PaddlesHost(list, sample = false, load = { paddle("pdl-river") }, map = fakeMap, openPaddle = "pdl-tracker",
+            sameOuting = { sameOuting("paddles.sameOuting") }, openCompare = { _, _ -> throw ApiFailure("x", 500, generic = true) }) }
+        row("the phone").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(COMPARE_FAILED).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("← Paddles").assertExists()
+        compose.onNodeWithText("Efforts and rests").assertExists()
+    }
+
+    // A long name wraps at large text; the spinner keeps its room after it.
+    @Test
+    fun aBusyLinkAtLargeTextStillShowsItsSpinner() {
+        val trial = listOf(SameOuting("pdl-trial", "trial", "2026-10-24T07:00:30.000Z"))
+        show(fontScale = 2f) { PaddlesHost(list, sample = false, load = { paddle("pdl-river") }, map = fakeMap, openPaddle = "pdl-tracker",
+            sameOuting = { trial }, openCompare = { _, _ -> CompletableDeferred<Unit>().await() }) }
+        row("a time trial").performScrollTo().performClick()
+        compose.waitForIdle()
+        val spinner = compose.onNodeWithTag(COMPARE_SPINNER_TAG, useUnmergedTree = true).fetchSemanticsNode()
+        assertTrue("spinner has room: ${spinner.size}", spinner.size.width >= with(compose.density) { 16.dp.roundToPx() })
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.paddles.PaddleScreensTest.sameOutingLink.busy.large-text.png")
+    }
+
+    @Test
+    fun sameOutingRows() {
+        show { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        rowInList("the phone")
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.paddles.PaddleScreensTest.sameOutingRows.png")
+    }
+
+    @Test
+    fun sameOutingRowsAtLargeText() {
+        show(fontScale = 2f) { PaddlesHost(withPhone, sample = false, load = { paddle(it) }, map = fakeMap, openCompare = record) }
+        rowInList("the phone")
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.paddles.PaddleScreensTest.sameOutingRows.large-text.png")
+    }
+
+    @Test
+    fun sameOutingLinkAtLargeText() {
+        showPage({ sameOuting("paddles.sameOuting") }, fontScale = 2f)
+        row("the phone").performScrollTo()
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.paddles.PaddleScreensTest.sameOutingLink.large-text.png")
     }
 
     @Test

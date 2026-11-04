@@ -81,6 +81,17 @@ class ApiTest {
         assertEquals("""{"id":"pdl-river"}""", server.takeRequest().url.queryParameter("input"))
     }
 
+    @Test fun theSameOutingIsAskedByIdAndReadAsAList() = runTest {
+        tokens.save("id-1", "r-1")
+        trpc(File("../../contract/fixtures/api/paddles.sameOuting.json").readText())
+        assertEquals(listOf(SameOuting("pdl-phone2", "device", "2026-10-24T07:00:30.000Z", phone = true)), api.sameOuting("pdl-tracker"))
+        val req = server.takeRequest()
+        assertEquals("/api/trpc/paddles.sameOuting", req.url.encodedPath)
+        assertEquals("""{"id":"pdl-tracker"}""", req.url.queryParameter("input"))
+        trpc(File("../../contract/fixtures/api/paddles.sameOuting.none.json").readText())
+        assertEquals(emptyList<SameOuting>(), api.sameOuting("pdl-river"))
+    }
+
     // tRPC's NOT_FOUND body isn't the contract's ApiError: the status comes through so the paddle page can say it's not there.
     @Test fun aPaddleThatIsntThereKeepsItsStatus() = runTest {
         tokens.save("id-1", "r-1")
