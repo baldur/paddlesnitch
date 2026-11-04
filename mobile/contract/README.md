@@ -289,7 +289,8 @@ route; on the website it asks with `&motion=1` for the same slim answer the
 apps get with their header. Only when `attitude.available`: a heading "Boat
 motion" with a link "All charts →" (a 44 pt tap target) to the Boat motion
 screen, then two tiles in one row, exactly as on that screen: Evenness first,
-then Side-to-side roll. In every other state (loading, no motion, 404,
+then Side-to-side roll. At accessibility text sizes the two tiles stack, one
+per row, so a label never squeezes into half the width. In every other state (loading, no motion, 404,
 failure) show nothing: the paddle's Boat motion button still leads to the
 screen, which explains. Not on a buddy's paddle.
 
