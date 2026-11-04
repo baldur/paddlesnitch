@@ -24,6 +24,26 @@ final class AccountTests: AppTestCase {
         XCTAssertTrue(element("terms-notice").disappears(timeout: 10), "the notice goes")
     }
 
+    /// Account's Terms rows open their pages from the screen, not from the
+    /// List row: a sheet put on a row was dropped as soon as it opened, and
+    /// the page went by itself (#878). It stays until Done, and Done leaves
+    /// Account up.
+    func testATermsPageFromAccountStaysOpenUntilDone() {
+        signInAndWait(email: "sam@example.com")
+        openAccount()
+        let read = scrollToElement(app.buttons["Read the Privacy Policy"])
+        XCTAssertTrue(read.exists)
+        read.tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.appears(timeout: 10), "the page opened")
+        XCTAssertFalse(web.disappears(timeout: 3), "and stayed open")
+        let done = safariCloseWhenStill()
+        XCTAssertNotNil(done, "Safari's close, on top and still")
+        done?.tap()
+        XCTAssertTrue(web.disappears(timeout: 10), "Done closed it")
+        XCTAssertTrue(app.navigationBars["Account"].exists, "on Account still")
+    }
+
     func testDownloadingYourDataOffersTheFile() {
         signInAndWait()
         openAccount()

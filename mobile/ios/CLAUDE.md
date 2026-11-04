@@ -344,6 +344,16 @@ isn't obvious from the code.
   sheet itself, through each caller's `close`, but only when nothing is
   already closing it: on newer iOS the sheet is being dismissed when Done
   reports, and a second close (SwiftUI's `dismiss` or clearing the state)
-  closed the Create account sheet under it too. So a test of a sheet that
+  closed the Create account sheet under it too. If that way out ends with
+  Safari still on screen, it closes it then. So a test of a sheet that
   closes checks that the screen under it stays. Xcode here can't
   download iOS 17.5; CI's iOS 17 job is the only check.
+- Never put a `.sheet` on a view inside a List row: it was dropped as
+  soon as it opened (TermsView's Read the Terms showed the page for half a
+  second, in the changed-Terms sheet and on Account, #878). Hand the
+  request up (`read`) and present from the screen around the List.
+- Tap Safari's close with `safariCloseWhenStill()`: one query, ours left
+  out by id (`terms-close`, `keyboard-done`), tapped once its frame stands
+  still. Elements by index (`allElementsBoundByIndex`) failed the test
+  ("No matches found for Element at index 1") as Safari's views changed
+  while the page loaded.

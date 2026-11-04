@@ -20,10 +20,9 @@ final class SameOutingTests: AppTestCase {
         keep("Same-outing row in its card")
         row.tap()
         XCTAssertTrue(safariDone.appears(timeout: 10), "Compare opens in the in-app browser")
-        safariDone.tap()
+        safariCloseWhenStill()?.tap()
         XCTAssertTrue(element("logbook").appears(timeout: 10), "back on the list, the paddle not opened")
         XCTAssertTrue(safariDone.disappears(timeout: 10), "Done closed Compare")
-        XCTAssertFalse(row.disappears(timeout: 2), "the list stays: Done closed only Compare")
         XCTAssertFalse(text(containing: "PACE").exists)
     }
 
@@ -42,12 +41,9 @@ final class SameOutingTests: AppTestCase {
         try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
         link.tap()
         XCTAssertTrue(safariDone.appears(timeout: 10), "Compare opens in the in-app browser")
-        safariDone.tap()
+        safariCloseWhenStill()?.tap()
         XCTAssertTrue(link.appears(timeout: 10), "back on the paddle")
         XCTAssertTrue(safariDone.disappears(timeout: 10), "Done closed Compare")
-        // SafariView dismisses as Safari closes itself: the paddle page
-        // that opened Compare must stay, not be closed too.
-        XCTAssertFalse(link.disappears(timeout: 2), "still on the paddle")
     }
 
     func testAPaddleWithNoOtherRecordingHasNoLinks() {

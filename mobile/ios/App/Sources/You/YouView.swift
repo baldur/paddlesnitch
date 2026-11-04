@@ -218,9 +218,10 @@ struct YouView: View {
 /// Done calls `close`, which clears the state that shows the sheet. Safari
 /// closes itself, but on iOS 17 not when the sheet sits on another sheet
 /// (the Terms from Create account stayed open through every tap on Done,
-/// #878's CI). So only then: on newer iOS the sheet is already closing
-/// when Done reports, and closing it again (by `dismiss` or the state)
-/// closed the Create account sheet under it as well.
+/// #878's CI). So only then, or if Safari's own way out ends with it still
+/// on screen: on newer iOS the sheet is already closing when Done reports,
+/// and closing it again (by `dismiss` or the state) closed the Create
+/// account sheet under it as well.
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
     let close: () -> Void
@@ -245,14 +246,17 @@ struct SafariView: UIViewControllerRepresentable {
         init(close: @escaping () -> Void) { self.close = close }
 
         func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+            var leaving: UIViewController? = controller
+            while let view = leaving, !view.isBeingDismissed { leaving = view.parent }
+            // Nothing closing it (iOS 17, a sheet on a sheet): close it.
+            guard let leaving else { return close() }
             // Newer iOS: Safari's sheet is already on its way out, and
-            // closing it again closes the sheet under it too.
-            var shown: UIViewController? = controller
-            while let view = shown {
-                if view.isBeingDismissed { return }
-                shown = view.parent
+            // closing it again closes the sheet under it too. Only if that
+            // way out ends with Safari still on screen, close it then.
+            guard let transition = leaving.transitionCoordinator else { return }
+            transition.animate(alongsideTransition: nil) { [weak self, weak controller] _ in
+                if controller?.view.window != nil { self?.close() }
             }
-            close()
         }
     }
 }

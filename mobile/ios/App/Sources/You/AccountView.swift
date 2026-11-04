@@ -118,7 +118,7 @@ struct AccountView: View {
 
     private var termsSection: some View {
         Section {
-            TermsView(account: account, onStatus: { termsChanged = !$0.accepted })
+            TermsView(account: account, read: { webPage = $0 }, onStatus: { termsChanged = !$0.accepted })
         } header: {
             header("Terms of Service")
         }
@@ -175,16 +175,18 @@ struct AccountView: View {
 /// Whether this account has accepted the current Terms, and accepting them
 /// as the website does: read them, tick that you agree to the Terms and the
 /// Privacy Policy, accept. On the Account screen, and in a sheet from the
-/// Paddles notice.
+/// Paddles notice. The screen around it opens the pages (`read`): a sheet
+/// put on a List row was dropped as soon as it opened, so Read the Terms
+/// showed the page for half a second (#878).
 struct TermsView: View {
     let account: AccountModel
+    let read: (YouView.WebPage) -> Void
     var onStatus: (TosStatus) -> Void = { _ in }
     var accepted: () -> Void = {}
     @State private var status: TosStatus?
     @State private var failure: String?
     @State private var agreed = false
     @State private var accepting = false
-    @State private var reading: YouView.WebPage?
 
     /// Said on the Paddles notice too.
     static let changed = "The Terms of Service have changed. Please read and accept them."
@@ -237,14 +239,11 @@ struct TermsView: View {
         .font(.plexSans(.body))
         .listRowBackground(Palette.surface)
         .task { await load() }
-        .sheet(item: $reading) { page in
-            SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { reading = nil }.ignoresSafeArea()
-        }
     }
 
     private func readButton(_ title: String, path: String) -> some View {
         Button {
-            reading = YouView.WebPage(title: title, path: path)
+            read(YouView.WebPage(title: title, path: path))
         } label: {
             Text(title).frame(minHeight: 44)
         }

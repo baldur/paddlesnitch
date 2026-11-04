@@ -12,6 +12,9 @@ struct RootView: View {
     let samples: SamplePaddles
     @State private var signingIn = false
     @State private var termsOpen = false
+    /// A page opened from the Terms sheet: presented from the sheet's
+    /// NavigationStack, not its List row (TermsView).
+    @State private var termsPage: YouView.WebPage?
     @State private var navigator = AppNavigator()
     @State private var adding: AddPaddleModel
     /// The signed-in account's recordings from this phone, uploading.
@@ -116,7 +119,7 @@ struct RootView: View {
             NavigationStack {
                 List {
                     Section {
-                        TermsView(account: account, accepted: { termsOpen = false })
+                        TermsView(account: account, read: { termsPage = $0 }, accepted: { termsOpen = false })
                     } header: {
                         Text("Terms of Service").font(.plexSans(.subheadline, weight: .medium))
                             .foregroundStyle(Palette.muted).textCase(nil)
@@ -126,7 +129,15 @@ struct RootView: View {
                 .background(Palette.bg)
                 .navigationTitle("Terms of Service")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { termsOpen = false } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { termsOpen = false }.accessibilityIdentifier("terms-close")
+                    }
+                }
+            }
+            .sheet(item: $termsPage) { page in
+                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { termsPage = nil }
+                    .ignoresSafeArea()
             }
             .preferredColorScheme(.dark)
             .buttonBorderShape(.control)

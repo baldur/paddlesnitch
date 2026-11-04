@@ -55,6 +55,27 @@ extension XCUIElement {
 }
 
 extension AppTestCase {
+    /// Safari's own close button ("Done" up to iOS 26, "Close" on 27), once
+    /// it's hittable and has stopped moving; nil if it never does. Not ours:
+    /// the changed-Terms sheet under Safari has a "Close" too
+    /// (`terms-close`), and the keyboard a "Done". Still: a tap while Safari
+    /// slides up is dropped, which looks just like Done closing nothing on
+    /// iOS 17 (#878). Tap it once. One query, not elements by index: those
+    /// fail the test when Safari's views change as the page loads.
+    func safariCloseWhenStill(timeout: TimeInterval = 10) -> XCUIElement? {
+        let button = app.buttons.matching(
+            NSPredicate(
+                format: "label IN {'Done', 'Close'} AND NOT (identifier IN {'terms-close', 'keyboard-done'})")
+        ).firstMatch
+        var last = CGRect.null
+        let still = poll(timeout: timeout) {
+            let frame = button.frameIfThere ?? .null
+            defer { last = frame }
+            return !frame.isNull && frame == last && button.isHittable
+        }
+        return still ? button : nil
+    }
+
     func dismissKeyboard() {
         let keyboard = app.keyboards.firstMatch
         guard keyboard.exists else { return }

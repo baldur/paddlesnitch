@@ -95,6 +95,38 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(text(containing: "The Terms of Service have changed").exists)
     }
 
+    /// The changed-Terms sheet is a sheet too, so Read the Terms opens Safari
+    /// on a sheet, as Create account's did. One tap on Done closes Safari and
+    /// only Safari: on iOS 17 it closed nothing there (#878), and a second
+    /// close on newer iOS took the sheet under it too.
+    func testDoneClosesTheTermsPageAndKeepsTheChangedTermsSheet() {
+        signInAndWait(email: "sam@example.com")
+        let notice = element("terms-notice")
+        XCTAssertTrue(notice.appears(timeout: 10))
+        app.buttons["terms-notice-action"].tap()
+        let sheet = element("account-terms")
+        XCTAssertTrue(sheet.appears(timeout: 10), "the changed-Terms sheet")
+        let agree = app.switches["terms-agree"]
+        XCTAssertTrue(agree.appears(timeout: 10))
+        // The sheet's own "Read the Terms", below its words: the notice's is
+        // under the sheet.
+        let read = app.buttons.matching(identifier: "Read the Terms").allElementsBoundByIndex
+            .first { $0.isHittable && $0.frame.minY > sheet.frame.minY }
+        XCTAssertNotNil(read)
+        read?.tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.appears(timeout: 10), "the Terms page opened")
+        // On main it closed by itself half a second later: the sheet was on
+        // TermsView's List row.
+        XCTAssertFalse(web.disappears(timeout: 3), "and stayed open")
+        let done = safariCloseWhenStill()
+        XCTAssertNotNil(done, "Safari's close, on top and still")
+        done?.tap()
+        XCTAssertTrue(web.disappears(timeout: 10), "Done closed the Terms page")
+        XCTAssertFalse(sheet.disappears(timeout: 2), "the changed-Terms sheet stays")
+        XCTAssertTrue(agree.exists)
+    }
+
     /// The Terms tick and "Read them" take taps 22 pt above and below the
     /// middle of their words, 44 pt in all, and in the gap between the box
     /// and its words (#872). XCUITest calls each 21 pt tall, but iOS takes a
@@ -102,6 +134,20 @@ final class SignInTests: AppTestCase {
     func testTheTermsTickAndReadThemTakeTapsAroundTheirWords() {
         app.buttons["sample-notice-action"].tap()
         showCreateAccount()
+        // What's typed must survive the Terms page opening and closing.
+        let email = app.textFields["Email"]
+        let name = app.textFields["Display name"]
+        XCTAssertTrue(email.appears(timeout: 10))
+        type("new@example.com", into: email)
+        type("New", into: name)
+        // The form puts the keyboard away on a drag through it (interactive),
+        // which `dismissKeyboard`'s margin swipe doesn't reach.
+        let keyboard = app.keyboards.firstMatch
+        if let top = keyboard.frameIfThere?.minY {
+            let from = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 30, dy: top - 60))
+            from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: 0, dy: app.frame.maxY - top + 40)))
+        }
+        XCTAssertTrue(keyboard.disappears(timeout: 5), "the keyboard put away")
         let tick = scrollToElement(element("terms-checkbox"))
         let window = app.windows.firstMatch
         func tap(_ x: CGFloat, _ y: CGFloat) {
@@ -117,17 +163,20 @@ final class SignInTests: AppTestCase {
         let read = app.buttons["Read them"]
         for dy: CGFloat in [-22, 22] {
             tap(read.frame.midX, read.frame.midY + dy)
-            let close = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
-            XCTAssertTrue(close.appears(timeout: 10), "Terms opened at \(dy) pt")
+            let web = app.webViews.firstMatch
+            XCTAssertTrue(web.appears(timeout: 10), "Terms opened at \(dy) pt")
             // One tap on Done: on iOS 17 it closed nothing here, a sheet on
             // a sheet, until SafariView closed its own sheet (#878's CI).
-            XCTAssertTrue(close.becomesHittable(timeout: 5))
-            close.tap()
-            XCTAssertTrue(close.disappears(timeout: 10), "Done closed the Terms opened at \(dy) pt")
-            // Only the Terms: Safari closes itself on newer iOS and SafariView
-            // dismisses too, so check the form under it stays, and stays.
-            XCTAssertFalse(app.textFields["Display name"].disappears(timeout: 2), "Create account still up")
+            let done = safariCloseWhenStill()
+            XCTAssertNotNil(done, "Safari's close, on top and still")
+            done?.tap()
+            XCTAssertTrue(web.disappears(timeout: 10), "Done closed the Terms opened at \(dy) pt")
+            // Only the Terms: a second close on newer iOS took the form under
+            // it too, so check the form stays, with what was typed.
+            XCTAssertFalse(name.disappears(timeout: 2), "Create account still up")
             XCTAssertTrue(tick.exists)
+            XCTAssertEqual(typedText(in: email), "new@example.com", "the email kept")
+            XCTAssertEqual(typedText(in: name), "New", "the name kept")
         }
     }
 
