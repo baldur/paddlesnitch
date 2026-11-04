@@ -47,6 +47,18 @@ struct RecordModelTests {
         #expect(model.phase == .ready)
     }
 
+    /// A second hold, or the accessibility action, after a stop stops
+    /// nothing: the recording is closed once (Android #882 found a window).
+    @Test func aSecondStopDoesNothing() {
+        let starter = Starter()
+        let model = RecordModel(now: { Date(timeIntervalSince1970: 1_789_712_662) }, start: starter.start)
+        model.record()
+        model.stop()
+        model.stop()
+        #expect(starter.recording.stopped == 1)
+        #expect(model.phase == .saved("track_20260918_062422.csv"))
+    }
+
     @Test func doneDoesNothingWhileRecording() {
         let starter = Starter()
         let model = RecordModel(start: starter.start)

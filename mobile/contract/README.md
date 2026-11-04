@@ -289,7 +289,8 @@ route; on the website it asks with `&motion=1` for the same slim answer the
 apps get with their header. Only when `attitude.available`: a heading "Boat
 motion" with a link "All charts →" (a 44 pt tap target) to the Boat motion
 screen, then two tiles in one row, exactly as on that screen: Evenness first,
-then Side-to-side roll. In every other state (loading, no motion, 404,
+then Side-to-side roll. At accessibility text sizes the two tiles stack, one
+per row, so a label never squeezes into half the width. In every other state (loading, no motion, 404,
 failure) show nothing: the paddle's Boat motion button still leads to the
 screen, which explains. Not on a buddy's paddle.
 
@@ -465,8 +466,9 @@ Both apps, laid out the same (design-usability, #767):
   number the app works out itself), then the GPS line below. A problem (a failed
   write) shows in place of the "Recording" heading.
 - Stop: a filled red button; hold for 1.5 s, a lighter fill sweeping across it as
-  you hold, with a haptic; a tap says
-  "Keep holding to stop." Stop in the Android notification needs an unlock
+  you hold. It stops, with a haptic, the moment the fill completes, with the
+  finger still down: never wait for the lift. A tap, or letting go before it
+  fills, says "Keep holding to stop." (#880) Stop in the Android notification needs an unlock
   (`setAuthenticationRequired`). Hold to stop is pinned to the bottom.
 - Hold to stop has a named accessibility action, "Stop recording" (VoiceOver
   custom action; Android `customActions`), which stops at once. Its label is

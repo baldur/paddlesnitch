@@ -72,6 +72,42 @@ final class RecordTests: AppTestCase {
         XCTAssertTrue(line.disappears(timeout: 10))
     }
 
+    /// Let go before 1.5 s and it keeps recording: only a full hold stops
+    /// (a bump in a drybag mustn't end a paddle). 0.5 s and 1.2 s, short
+    /// and nearly there; each wait outlasts the 1.5 s so a late stop shows.
+    func testLettingGoEarlyKeepsRecording() throws {
+        try startRecording(allow: true)
+        let stop = element("record-stop")
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        let hint = text(containing: "Keep holding to stop.")
+        for seconds in [0.5, 1.2] {
+            stop.press(forDuration: seconds)
+            // Letting go before it fills says what to do, as a tap does (#880).
+            XCTAssertTrue(hint.appears(timeout: 2), "the hint after letting go at \(seconds) s")
+            XCTAssertFalse(element("record-recording").disappears(timeout: 2), "still recording after \(seconds) s")
+        }
+        stop.press(forDuration: 2)
+        XCTAssertTrue(element("record-recording").disappears(timeout: 10), "a full hold stops it")
+    }
+
+    /// It stops the moment the fill completes, with the finger still down,
+    /// not at the lift (contract #881). A press can't be watched mid-hold,
+    /// so: hold past 1.5 s, then drag well off the button before letting go.
+    /// A stop at the lift would be cancelled by the drag and keep recording.
+    /// After it, the record screen and its button are gone, so nothing can
+    /// stop it twice (the model ignores a second stop too).
+    func testItStopsWhenTheFillCompletesWithTheFingerDown() throws {
+        try startRecording(allow: true)
+        let stop = element("record-stop")
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        let start = stop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(
+            forDuration: 1.8, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -300)), withVelocity: .fast,
+            thenHoldForDuration: 1)
+        XCTAssertTrue(element("record-recording").disappears(timeout: 5), "stopped before the finger moved off")
+        XCTAssertFalse(stop.exists, "no Hold to stop left to press again")
+    }
+
     func testWhileTheServerIsDownTheRecordingWaits() throws {
         try record(with: "-UploadsDown")
         let line = element("upload-line")
@@ -133,10 +169,17 @@ final class RecordTests: AppTestCase {
         app.launch()
         signIn()
         XCTAssertTrue(element("sample-notice").appears(timeout: 15), "signed out")
-        app.buttons["sample-notice-action"].tap()
-        XCTAssertTrue(
-            element("sign-in-account-deleted").appears(timeout: 10)
-                && text(containing: "This account was deleted").exists)
+        // The sign-in sheet can still be closing over it: 0.7 s after Sign
+        // in, the tap found it covered (#873's CI, newest iOS). And a sheet
+        // asked to open while another closes is dropped without a word: wait
+        // for it to go, then tap until the new one is up.
+        XCTAssertTrue(app.buttons["sign-in-submit"].disappears(timeout: 10), "the sign-in sheet closed")
+        let deleted = element("sign-in-account-deleted")
+        for _ in 0..<3 {
+            tapWhenClear(app.buttons["sample-notice-action"])
+            if deleted.appears(timeout: 5) { break }
+        }
+        XCTAssertTrue(deleted.exists && text(containing: "This account was deleted").exists)
     }
 
     /// The app signs out on its own when the server refuses a refresh (a

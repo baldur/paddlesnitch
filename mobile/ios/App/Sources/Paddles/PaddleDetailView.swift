@@ -14,6 +14,9 @@ struct PaddleDetailView: View {
     /// samples have none.
     let account: AccountModel?
     @State private var motionOpen = false
+    /// The paddle's own motion, for its two tiles (README "On the paddle")
+    /// and its Boat motion screen.
+    @State private var motion: BoatMotionModel?
     @State private var compare: CompareOpener
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -79,6 +82,11 @@ struct PaddleDetailView: View {
                                 .accessibilityLabel("Your note: \(note)")
                         }
                         summary(paddle)
+                        // Only once it's in and readable: in every other
+                        // state the Boat motion button above explains.
+                        if case .loaded(let summary)? = motion?.state {
+                            BoatMotionOnPaddle(summary: summary) { motionOpen = true }
+                        }
                         // After the summary (or the note), before Efforts and rests.
                         if !model.sameOuting.isEmpty {
                             VStack(alignment: .leading, spacing: 0) {
@@ -100,8 +108,16 @@ struct PaddleDetailView: View {
                 .padding(.bottom, 24)
             }
             .navigationTitle(paddle.title)
+            .task(id: paddle.motion) {
+                // Once per recording: this runs again on coming back from
+                // the screen, and a new model would blank the tiles.
+                guard let recording = paddle.motion, let account, motion?.recording != recording else { return }
+                let model = BoatMotionView.model(recording, account: account)
+                motion = model
+                await model.load()
+            }
             .navigationDestination(isPresented: $motionOpen) {
-                if let motion = paddle.motion, let account { BoatMotionView(recording: motion, account: account) }
+                if let motion { BoatMotionView(model: motion) }
             }
         }
     }
