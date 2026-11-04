@@ -42,6 +42,8 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
     var _motionAnswer: MotionAnswer = .fixtures
     var _failsWebCode = false
     var _failsSameOuting = false
+    var _sameOutingOnTrackerPaddle = false
+    var _noTrackers = false
     var _signInExpiresOnDelete = false
     /// The recent sign-in runs out between the check and the delete: the
     /// check says recent, the delete answers 403.
@@ -214,11 +216,19 @@ public final class SampleServer: HTTPTransport, @unchecked Sendable {
         set { lock.withLock { _failsSameOuting = newValue } }
     }
 
+    /// The tracker's paddle (`pdl_8Kq2Zr`, opened from Devices) has pdl-river's
+    /// other recordings, so Compare opens two screens above Devices (#878).
+    public var sameOutingOnTrackerPaddle: Bool {
+        get { lock.withLock { _sameOutingOnTrackerPaddle } }
+        set { lock.withLock { _sameOutingOnTrackerPaddle = newValue } }
+    }
+
     /// The other recordings on this paddle's card in the list, so the page
     /// and the card agree; `paddles.sameOuting.none` for any other paddle.
     private func sameOuting(id: String) throws -> (Int, Data) {
         if failsSameOuting { return (500, Data(#"{"error":{"message":"Something went wrong."}}"#.utf8)) }
         let list = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: try paddlesList())
+        let id = sameOutingOnTrackerPaddle && id == "pdl_8Kq2Zr" ? "pdl-river" : id
         guard let card = list.cards.first(where: { $0.id == id }), let items = card.sameOuting, !items.isEmpty else {
             return (200, trpc(try fixture("paddles.sameOuting.none")))
         }

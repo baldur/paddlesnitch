@@ -20,9 +20,10 @@ final class SameOutingTests: AppTestCase {
         keep("Same-outing row in its card")
         row.tap()
         XCTAssertTrue(safariDone.appears(timeout: 10), "Compare opens in the in-app browser")
-        safariDone.tap()
-        XCTAssertTrue(element("logbook").appears(timeout: 10), "back on the list, the paddle not opened")
-        XCTAssertFalse(text(containing: "PACE").exists)
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
+        XCTAssertTrue(app.webViews.firstMatch.disappears(timeout: 10), "Done closed Compare")
+        XCTAssertFalse(element("logbook").disappears(timeout: 2), "back on the list, and it stays")
+        XCTAssertFalse(text(containing: "PACE").exists, "the paddle not opened")
     }
 
     func testThePaddlePageLinksTheOtherRecordingAfterTheSummary() throws {
@@ -40,8 +41,33 @@ final class SameOutingTests: AppTestCase {
         try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
         link.tap()
         XCTAssertTrue(safariDone.appears(timeout: 10), "Compare opens in the in-app browser")
-        safariDone.tap()
-        XCTAssertTrue(link.appears(timeout: 10), "back on the paddle")
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
+        XCTAssertTrue(app.webViews.firstMatch.disappears(timeout: 10), "Done closed Compare")
+        XCTAssertFalse(link.disappears(timeout: 2), "back on the paddle, and it stays")
+    }
+
+    /// Compare is full screen (Safari's own look): a swipe in from the left
+    /// edge closes it too, and the same link then opens it again. Safari
+    /// gone without Done must still free the link, or every web link on the
+    /// screen went dead (#878).
+    func testAnEdgeSwipeClosesCompareAndTheLinkOpensItAgain() {
+        signInAndWait()
+        open("pdl-river")
+        let link = scrollTo("same-outing-pdl-river-watch")
+        let web = app.webViews.firstMatch
+        link.tap()
+        XCTAssertTrue(web.appears(timeout: 10), "Compare opened")
+        XCTAssertTrue(web.standsStill(timeout: 10), "Safari up")
+        let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0))
+        edge.press(
+            forDuration: 0.1, thenDragTo: edge.withOffset(CGVector(dx: app.frame.width * 0.8, dy: 0)),
+            withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(web.disappears(timeout: 10), "an edge swipe closed it")
+        XCTAssertFalse(link.disappears(timeout: 2), "on the paddle")
+        link.tap()
+        XCTAssertTrue(web.appears(timeout: 10), "the same link opens it again")
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
+        XCTAssertTrue(web.disappears(timeout: 10))
     }
 
     func testAPaddleWithNoOtherRecordingHasNoLinks() {

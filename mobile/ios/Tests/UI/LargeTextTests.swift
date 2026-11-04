@@ -124,8 +124,14 @@ final class LargeTextTests: AppTestCase {
             // some of the way.
             // A check's jump can leave the row above or below, and a row not
             // on screen doesn't exist yet: look downwards, then upwards.
-            for _ in 0..<2 where !(element.exists && isReadable(element)) { scrollToElement(element) }
-            for _ in 0..<12 where !element.exists { app.swipeDown() }
+            for _ in 0..<2 {
+                guard !(element.exists && isReadable(element)) else { break }
+                scrollToElement(element)
+            }
+            for _ in 0..<12 {
+                guard !element.exists else { break }
+                app.swipeDown()
+            }
             if element.exists && !isReadable(element) { scrollToElement(element) }
             XCTAssertTrue(element.exists, "reached \(element)")
             try audit(.textClipped, unpinnedFails: false)
@@ -223,5 +229,28 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(app.textFields["Email"].appears(timeout: 10))
         try checkWholeScreen()
         XCTAssertTrue(app.buttons["sign-in-submit"].exists)
+    }
+}
+
+/// The smallest accessibility text size, where the row is stacked but its
+/// lines don't fill it.
+final class AccessibilityTextTests: AppTestCase {
+    override var launchArguments: [String] {
+        ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
+    }
+
+    /// pdl-motion's lines ("— · 0:19") stop well short of the row's right
+    /// edge, and a stacked row was only as wide as its longest line: a tap
+    /// out to the right did nothing (measured on iPhone 17, iOS 26.5). Keep
+    /// pdl-motion's words in the contract fixtures short of the right edge,
+    /// or this stops proving anything.
+    func testATapRightOfShortLinesOpensThePaddle() {
+        let row = scrollTo("paddle-pdl-motion")
+        XCTAssertTrue(row.exists)
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: row.frame.maxX - 28 - window.frame.minX, dy: row.frame.midY - window.frame.minY))
+            .tap()
+        XCTAssertTrue(text(containing: "STROKE RATE").appears(timeout: 10), "the paddle's page opened")
     }
 }

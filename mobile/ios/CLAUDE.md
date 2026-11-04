@@ -334,3 +334,52 @@ isn't obvious from the code.
   is only as wide as its longest line). `testATapOnARowsEmptySpaceOpensThePaddle`
   and `LargeTextTests.testATapBesideTheThumbnailOpensThePaddle` tap a
   row's empty part; the second failed exactly as CI did without it.
+  `AccessibilityTextTests` (the smallest accessibility size, short
+  lines) proves the full width.
+- iOS takes a tap that lands near a control: within about 17 pt of
+  anything drawn (a paddle row's chevron caught taps from 17 pt left of
+  it), and 22 pt above and below the middle of the Terms tick and "Read
+  them" (44 pt in all), which XCUITest calls 21 pt tall. Measured on
+  iPhone 17, iOS 26.5; CI's iOS 17 job runs the same tests. So a small
+  frame isn't a small target, and a dead spot is only real if it's
+  further than that from everything drawn. Measure with a sweep of taps
+  before calling a target too small (#872). To test a dead spot, tap
+  well clear of every drawn thing, check it fails without the fix, and
+  say in the test which sample words it depends on.
+- `for _ in 0..<n where cond` skips rounds but never ends the loop: every
+  test helper that used it kept looking after it was done. Use
+  `guard cond else { break }`.
+- Open the website with `.safari(url:closed:)` (Safari.swift), never
+  SFSafariViewController inside a SwiftUI `.sheet`. In a sheet, Safari's
+  Done misbehaved on every iOS we have: on iOS 17 it closed nothing (from
+  Account, and from a sheet on a sheet, #878's CI); on newer iOS the sheet
+  was already closing when Done reported, and any second close (SwiftUI's
+  `dismiss`, or clearing the state) took the screen under it too. Two
+  guards on that path each failed on CI. `.safari` presents it with
+  UIKit's `present()`, the way Safari's view is made to be shown, so Done
+  takes down exactly Safari. It's full screen, Safari's own look
+  (it ignores `.pageSheet`), so it closes with Done or a swipe in from
+  the left edge, not a swipe down. It's presented from the top of the window, not
+  from the screen that asked: a paddle pushed above Devices left Devices'
+  screen out of the window, and its present went nowhere. Done, an edge
+  swipe, a refused present or Safari taken down with what it sat on all
+  clear the state; otherwise the same link sets the same value, SwiftUI
+  sees no change, and every web link on that screen goes dead. A SwiftUI
+  sheet asked for on that screen while Safari is up (sign-in after the
+  session ends) is refused by UIKit (not tried by hand yet). Tests of a page that
+  closes check the screen under it stays for 2 s, with what was typed.
+  Xcode here can't download iOS 17.5; CI's iOS 17 job is the only check.
+- Never put a `.sheet` on a view inside a List row: it was dropped as
+  soon as it opened (TermsView's Read the Terms showed the page for half a
+  second, in the changed-Terms sheet and on Account, #878). Hand the
+  request up (`read`) and present from the screen around the List.
+- Close Safari in a test with `tapSafariCloseWhenStill()`: one query,
+  ours left out by id (`terms-close`, `keyboard-done`), then one tap at
+  the button's middle once its frame stands still. XCUITest's tap on the
+  element did nothing, on 26.5 (UIKit-presented Safari, twice 3 s apart)
+  and on CI's iOS 17 (Compare, which had passed with a plain tap), while
+  a tap at its middle closed it: a "Done does nothing" failure can be the
+  test's tap, so check Safari's `safariViewControllerDidFinish` fired.
+  Elements by index (`allElementsBoundByIndex`) failed the test ("No
+  matches found for Element at index 1") as Safari's views changed while
+  the page loaded.

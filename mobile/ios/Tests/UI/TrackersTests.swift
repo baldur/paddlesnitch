@@ -13,6 +13,49 @@ final class TrackersTests: AppTestCase {
         XCTAssertTrue(app.navigationBars["Devices"].appears(timeout: 10))
     }
 
+    private func relaunch(with argument: String) {
+        app.terminate()
+        app.launchArguments += [argument]
+        app.launch()
+    }
+
+    /// The website opens over Devices, a pushed screen (the shape that
+    /// failed on iOS 17, #878), and Done leaves Devices up.
+    func testTheGuideOpensAndDoneLeavesDevices() {
+        relaunch(with: "-NoTrackers")
+        openTrackers()
+        let guide = app.buttons["Open the guide"]
+        XCTAssertTrue(guide.appears(timeout: 10), "no trackers: the guide")
+        guide.tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.appears(timeout: 10), "the guide opened")
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
+        XCTAssertTrue(web.disappears(timeout: 10), "Done closed it")
+        XCTAssertFalse(app.navigationBars["Devices"].disappears(timeout: 2), "on Devices, and it stays")
+    }
+
+    /// Compare from a paddle two screens above Devices: Devices, whose
+    /// screen opens the page, is out of the window then, so Safari comes
+    /// from the top of the window (#878).
+    func testCompareFromATrackersPaddleOpensAndDoneLeavesThePaddle() {
+        relaunch(with: "-SameOutingOnTrackerPaddle")
+        openTrackers()
+        let card = element("tracker-C0FFEE01")
+        XCTAssertTrue(card.appears(timeout: 10))
+        card.tap()
+        let river = element("recording-rec-river")
+        XCTAssertTrue(river.appears(timeout: 10))
+        river.tap()
+        XCTAssertTrue(text(containing: "PACE").appears(timeout: 10), "the paddle opens")
+        let link = scrollTo("same-outing-pdl-river-watch")
+        link.tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.appears(timeout: 10), "Compare opened")
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
+        XCTAssertTrue(web.disappears(timeout: 10), "Done closed it")
+        XCTAssertFalse(link.disappears(timeout: 2), "on the paddle, and it stays")
+    }
+
     func testTheCardsSayWhatTheServerSays() {
         openTrackers()
         XCTAssertTrue(text(containing: "Tracker C0FFEE01").appears(timeout: 10))

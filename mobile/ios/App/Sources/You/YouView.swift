@@ -1,6 +1,5 @@
 import Account
 import DesignSystem
-import SafariServices
 import SwiftUI
 
 /// The account tab. The account itself is native (AccountView); the public
@@ -136,10 +135,7 @@ struct YouView: View {
                 if id != nil && account.afterSignIn != nil { path = NavigationPath([Route.account]) }
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
-            .sheet(item: $open) { page in
-                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path))
-                    .ignoresSafeArea()
-            }
+            .safari(url: open.map { PaddlesnitchApp.baseURL.appending(path: $0.path) }) { open = nil }
             .confirmationDialog("Sign out of paddlesnitch?", isPresented: $confirmingSignOut, titleVisibility: .visible)
             {
                 Button("Sign out", role: .destructive) { Task { await account.signOut() } }
@@ -212,18 +208,4 @@ struct YouView: View {
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "\(short) (\(build))"
     }
-}
-
-/// The website inside the app, in Safari's own view.
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let controller = SFSafariViewController(url: url)
-        controller.preferredBarTintColor = UIColor(Palette.bg)
-        controller.preferredControlTintColor = UIColor(Palette.primaryText)
-        return controller
-    }
-
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }

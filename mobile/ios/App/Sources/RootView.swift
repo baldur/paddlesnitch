@@ -12,6 +12,9 @@ struct RootView: View {
     let samples: SamplePaddles
     @State private var signingIn = false
     @State private var termsOpen = false
+    /// A page opened from the Terms sheet: opened from the sheet's
+    /// NavigationStack, not its List row (TermsView).
+    @State private var termsPage: YouView.WebPage?
     @State private var navigator = AppNavigator()
     @State private var adding: AddPaddleModel
     /// The signed-in account's recordings from this phone, uploading.
@@ -81,9 +84,7 @@ struct RootView: View {
             default: break
             }
         }
-        .sheet(item: $websitePage) { url in
-            SafariView(url: url).ignoresSafeArea()
-        }
+        .safari(url: websitePage) { websitePage = nil }
         .task { await openLaunchFile() }
         .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in
             if PaddlesnitchApp.usesSampleServer { Task { await account.signOut() } }
@@ -116,7 +117,7 @@ struct RootView: View {
             NavigationStack {
                 List {
                     Section {
-                        TermsView(account: account, accepted: { termsOpen = false })
+                        TermsView(account: account, read: { termsPage = $0 }, accepted: { termsOpen = false })
                     } header: {
                         Text("Terms of Service").font(.plexSans(.subheadline, weight: .medium))
                             .foregroundStyle(Palette.muted).textCase(nil)
@@ -126,8 +127,13 @@ struct RootView: View {
                 .background(Palette.bg)
                 .navigationTitle("Terms of Service")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { termsOpen = false } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { termsOpen = false }.accessibilityIdentifier("terms-close")
+                    }
+                }
             }
+            .safari(url: termsPage.map { PaddlesnitchApp.baseURL.appending(path: $0.path) }) { termsPage = nil }
             .preferredColorScheme(.dark)
             .buttonBorderShape(.control)
         }

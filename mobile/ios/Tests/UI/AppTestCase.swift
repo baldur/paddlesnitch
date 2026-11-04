@@ -304,8 +304,11 @@ class AppTestCase: XCTestCase {
         let below = !loaded.appears(timeout: 3)
         if below { scrollToElement(loaded) }
         XCTAssertTrue(loaded.appears(timeout: 10), "the profile loaded")
+        // `break`, not `for … where`: a `where` skips a round but never ends
+        // the loop, so it kept looking after the row stood still.
         var last = CGRect.null
-        for _ in 0..<20 where loaded.frame != last {
+        for _ in 0..<20 {
+            guard loaded.frame != last else { break }
             last = loaded.frame
             usleep(150_000)
         }
@@ -313,7 +316,10 @@ class AppTestCase: XCTestCase {
             // `exists` first: `isHittable` on a row not made yet spends ~2 s
             // looking for it.
             let top = app.staticTexts["Your details"].firstMatch
-            for _ in 0..<8 where !(top.exists && top.isHittable) { app.swipeDown() }
+            for _ in 0..<8 {
+                guard !(top.exists && top.isHittable) else { break }
+                app.swipeDown()
+            }
         }
     }
 
