@@ -58,6 +58,19 @@ describe('the boat-motion fixtures are what the route answers an app', () => {
   })
 })
 
+describe("the paddle page's summary gets the slim answer too (#866)", () => {
+  it('?motion=1 answers only the boat motion, without the app header', async () => {
+    const id = await recording('track_20261025_0702.csv', boatSidecar(S, 10, 400_000))
+    const res = await GET(new Request(`http://x/api/account/devices/sessions/${id}?deviceId=${D}&motion=1`), { params: Promise.resolve({ sessionId: id }) })
+    expect(await res.json()).toEqual(fixture(''))
+  })
+  it('without it the website still gets the whole report', async () => {
+    const id = await recording('track_20261025_0702.csv', boatSidecar(S, 10, 400_000))
+    const body = await (await get(id, {})).json()
+    expect(Object.keys(body).length).toBeGreaterThan(2)
+  })
+})
+
 describe("the app's answer and the website's share an ETag, kept apart by Vary", () => {
   it('says it varies by the app header, and answers an app 304 for what it has', async () => {
     const id = await recording('track_20261025_0702.csv', boatSidecar(60, 10, 400_000))
