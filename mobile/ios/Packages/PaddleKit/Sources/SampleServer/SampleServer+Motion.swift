@@ -14,9 +14,10 @@ extension SampleServer {
         case notFound
         /// Fails every time, as when the server is down.
         case fails
-        /// Fails this many times, then answers from the fixtures. Two: the
-        /// paddle page's call, then the screen's first.
-        case failsFirst(Int)
+        /// Answers from the fixtures on this call only (counting from 1) and
+        /// fails every other. Three: the paddle page's call and the screen's
+        /// first fail, Try again works, and any call after that fails.
+        case answersOnly(call: Int)
     }
 
     public var motionAnswer: MotionAnswer {
@@ -34,11 +35,15 @@ extension SampleServer {
         }
         let answer = lock.withLock {
             let answer = _motionAnswer
-            if case .failsFirst(let times) = answer { _motionAnswer = times > 1 ? .failsFirst(times - 1) : .fixtures }
+            guard case .answersOnly(let call) = answer else { return answer }
+            _motionAnswer = .answersOnly(call: call - 1)
             return answer
         }
         switch answer {
-        case .fails, .failsFirst: return (502, Data("<html>Bad gateway</html>".utf8))
+        case .answersOnly(let call) where call == 1:
+            let measured = path.hasSuffix("/S0012")
+            return (200, try fixture(measured ? "account.devices-session" : "account.devices-session.no-motion"))
+        case .fails, .answersOnly: return (502, Data("<html>Bad gateway</html>".utf8))
         case .notFound: return (404, try fixture("account.devices-session.not-found"))
         case .unusable: return (200, try fixture("account.devices-session.motion-unusable"))
         case .fixtures:

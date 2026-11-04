@@ -89,6 +89,9 @@ public final class BoatMotionModel {
             failures = 0
             state = .notFound
         } catch {
+            // Cancelled (the screen opened, or the page went away): not a
+            // failure, and what's on screen stays.
+            if Task.isCancelled { return }
             failures += 1
             state = .failed
         }

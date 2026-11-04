@@ -64,15 +64,17 @@ final class BoatMotionTests: AppTestCase {
     }
 
     /// The paddle page's call fails, then the screen's first: Try again
-    /// on the screen fills the page's tiles too (one model).
+    /// on the screen fills the page's tiles too (one model). Every later
+    /// call fails, so a reload on coming back would hide them.
     func testAFailedCallCanBeTriedAgain() {
-        relaunch(with: "-MotionFailsTwice")
+        relaunch(with: "-MotionAnswersThirdOnly")
         openMotion("pdl-river")
         XCTAssertTrue(text(containing: "Couldn’t read this recording.").appears(timeout: 10))
         app.buttons["motion-try-again"].tap()
         XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(element("motion-on-paddle").appears(timeout: 10))
+        XCTAssertFalse(element("motion-on-paddle").disappears(timeout: 3), "no reload on coming back")
     }
 
     func testARecordingThatIsGoneSaysSoWithoutTryAgain() {
@@ -96,6 +98,11 @@ final class BoatMotionTests: AppTestCase {
         XCTAssertTrue(evenness.exists && roll.exists, "the screen's two tiles, read in words")
         XCTAssertLessThan(evenness.frame.maxX, roll.frame.minX, "Evenness first, in one row")
         XCTAssertEqual(evenness.frame.minY, roll.frame.minY, accuracy: 1)
+        let summary = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Summary:'"))
+            .firstMatch
+        let sameOuting = element("same-outing-pdl-river-watch")
+        XCTAssertLessThan(summary.frame.maxY, section.frame.minY, "after the summary")
+        XCTAssertLessThan(section.frame.maxY, sameOuting.frame.minY, "before the same-outing link")
         XCTAssertFalse(section.descendants(matching: .any)["Stroke rate, 64, strokes per minute"].exists)
         let link = section.buttons["motion-all-charts"]
         XCTAssertEqual(link.label, "All charts")
@@ -103,12 +110,31 @@ final class BoatMotionTests: AppTestCase {
         keep("Boat motion on the paddle")
         link.tap()
         XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(element("open-motion").appears(timeout: 10))
+        XCTAssertTrue(element("motion-on-paddle").exists, "still there on coming back, not loading again")
     }
 
     /// No motion file yet: nothing on the paddle; its button explains.
     func testNoMotionShowsNothingOnThePaddle() {
         signInAndWait()
         open("pdl-motion")
+        XCTAssertTrue(element("open-motion").appears(timeout: 10))
+        XCTAssertFalse(element("motion-on-paddle").appears(timeout: 3))
+    }
+
+    func testUnmeasurableMotionShowsNothingOnThePaddle() {
+        relaunch(with: "-MotionUnusable")
+        signInAndWait()
+        open("pdl-river")
+        XCTAssertTrue(element("open-motion").appears(timeout: 10))
+        XCTAssertFalse(element("motion-on-paddle").appears(timeout: 3))
+    }
+
+    func testAGoneRecordingShowsNothingOnThePaddle() {
+        relaunch(with: "-MotionNotFound")
+        signInAndWait()
+        open("pdl-river")
         XCTAssertTrue(element("open-motion").appears(timeout: 10))
         XCTAssertFalse(element("motion-on-paddle").appears(timeout: 3))
     }
@@ -126,7 +152,7 @@ final class BoatMotionTests: AppTestCase {
         open("pdl-river")
         XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
         XCTAssertFalse(element("open-motion").exists)
-        XCTAssertFalse(element("motion-on-paddle").exists)
+        XCTAssertFalse(element("motion-on-paddle").appears(timeout: 3))
         app.terminate()
         app.launch()
         signInAndWait()

@@ -8,7 +8,7 @@ import SwiftUI
 /// (mobile/contract/README.md, "Boat motion"). Every number comes from the
 /// server; this draws.
 struct BoatMotionView: View {
-    /// The paddle page's: what this screen loads also fills its tiles.
+    /// The paddle page's model: what this screen loads also fills the page's tiles.
     let model: BoatMotionModel
     @Environment(AppNavigator.self) private var navigator
     @Environment(\.dismiss) private var dismiss

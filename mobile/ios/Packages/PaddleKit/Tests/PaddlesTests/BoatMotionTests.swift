@@ -62,6 +62,18 @@ import Testing
         #expect(summary.tiles.count == 4)
     }
 
+    /// A load cancelled on its way (the page opened the screen first)
+    /// isn't a failure: no error, no focus move.
+    @Test func aCancelledLoadIsNotAFailure() async throws {
+        let model = try await model(Script([.failure(CancellationError())]))
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await model.load()
+        }
+        await task.value
+        #expect(model.state == .loading && model.failures == 0)
+    }
+
     @Test func noMotionFileYetOffersTheTracker() async throws {
         let model = try await model(
             Script([.success(.changed(try motion("account.devices-session.no-motion"), etag: nil))]))

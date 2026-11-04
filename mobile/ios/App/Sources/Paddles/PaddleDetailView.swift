@@ -109,7 +109,9 @@ struct PaddleDetailView: View {
             }
             .navigationTitle(paddle.title)
             .task(id: paddle.motion) {
-                guard let recording = paddle.motion, let account else { return }
+                // Once per recording: this runs again on coming back from
+                // the screen, and a new model would blank the tiles.
+                guard let recording = paddle.motion, let account, motion?.recording != recording else { return }
                 let model = BoatMotionView.model(recording, account: account)
                 motion = model
                 await model.load()
