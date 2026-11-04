@@ -56,6 +56,10 @@ struct PaddlesnitchApp: App {
             "-WebCodeFails": { $0.failsWebCode = true },
             // Asking for a paddle's same-outing recordings fails.
             "-SameOutingFails": { $0.failsSameOuting = true },
+            // The tracker's paddle has other recordings (Compare from Devices).
+            "-SameOutingOnTrackerPaddle": { $0.sameOutingOnTrackerPaddle = true },
+            // An account with no trackers: Devices offers the guide.
+            "-NoTrackers": { $0.noTrackers = true },
         ]
         for (argument, apply) in switches where arguments.contains(argument) { apply(server) }
         // Boat motion: how the recording's motion answers.

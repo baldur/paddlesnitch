@@ -39,7 +39,7 @@ final class AccountTests: AppTestCase {
         XCTAssertFalse(web.disappears(timeout: 3), "and stayed open")
         XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
         XCTAssertTrue(web.disappears(timeout: 10), "Done closed it")
-        XCTAssertTrue(app.navigationBars["Account"].exists, "on Account still")
+        XCTAssertFalse(app.navigationBars["Account"].disappears(timeout: 2), "on Account, and it stays")
     }
 
     func testDownloadingYourDataOffersTheFile() {

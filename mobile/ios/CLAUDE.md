@@ -357,9 +357,18 @@ isn't obvious from the code.
   `dismiss`, or clearing the state) took the screen under it too. Two
   guards on that path each failed on CI. `.safari` presents it with
   UIKit's `present()`, the way Safari's view is made to be shown, so Done
-  takes down exactly Safari. Tests of a page that closes check the screen
-  under it stays, with what was typed. Xcode here can't download iOS
-  17.5; CI's iOS 17 job is the only check.
+  takes down exactly Safari. It's full screen, Safari's own look
+  (it ignores `.pageSheet`), so it closes with Done or a swipe in from
+  the left edge, not a swipe down. It's presented from the top of the window, not
+  from the screen that asked: a paddle pushed above Devices left Devices'
+  screen out of the window, and its present went nowhere. Done, an edge
+  swipe, a refused present or Safari taken down with what it sat on all
+  clear the state; otherwise the same link sets the same value, SwiftUI
+  sees no change, and every web link on that screen goes dead. A SwiftUI
+  sheet asked for on that screen while Safari is up (sign-in after the
+  session ends) is refused by UIKit (not tried by hand yet). Tests of a page that
+  closes check the screen under it stays for 2 s, with what was typed.
+  Xcode here can't download iOS 17.5; CI's iOS 17 job is the only check.
 - Never put a `.sheet` on a view inside a List row: it was dropped as
   soon as it opened (TermsView's Read the Terms showed the page for half a
   second, in the changed-Terms sheet and on Account, #878). Hand the

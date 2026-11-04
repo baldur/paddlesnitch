@@ -13,6 +13,13 @@ extension SampleServer {
 
     /// Make the trackers' list or their recordings fail, as when the server
     /// is down.
+    /// An account with no trackers (`account.devices.none`): Devices offers
+    /// the guide.
+    public var noTrackers: Bool {
+        get { lock.withLock { _noTrackers } }
+        set { lock.withLock { _noTrackers = newValue } }
+    }
+
     public var failsTrackerList: Bool {
         get { lock.withLock { _failsTrackerList } }
         set { lock.withLock { _failsTrackerList = newValue } }
@@ -31,6 +38,8 @@ extension SampleServer {
         case ("GET", "/api/account/devices") where failsTrackerList,
             ("GET", "/api/account/devices/sessions") where failsTrackerRecordings:
             return (502, Data("<html>Bad gateway</html>".utf8))
+        case ("GET", "/api/account/devices") where noTrackers:
+            return (200, try fixture("account.devices.none"))
         case ("GET", "/api/account/devices"):
             // The server lists this phone too since C3; the app leaves it out.
             var list = try JSONDecoder.paddlesnitch.decode(
