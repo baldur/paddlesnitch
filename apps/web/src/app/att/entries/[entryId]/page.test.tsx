@@ -5,8 +5,11 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
-const push = vi.fn()
+const order: string[] = []
+const push = vi.fn(() => { order.push('push') })
+const invalidate = vi.fn(() => { order.push('invalidate'); return Promise.resolve() })
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
+vi.mock('@/lib/trpc', () => ({ trpc: { useUtils: () => ({ paddles: { sessions: { invalidate } } }) } }))
 vi.mock('@/components/AppHeader', () => ({ default: () => <header>HEADER</header> }))
 vi.mock('@/components/map/CourseMapClient', () => ({ default: () => null }))
 
@@ -41,6 +44,14 @@ describe('a trial result opens as a paddle', () => {
     expect(body.get('trialEntryId')).toBe('e1')
     expect(body.get('trialId')).toBe('t1')
     expect(push).toHaveBeenCalledWith('/paddles/p9')
+  })
+
+  // #865: the new paddle must be in the Paddles list when the reader goes back to it.
+  it('marks the Paddles list stale before opening the new paddle', async () => {
+    order.length = 0
+    await mount(true)
+    await act(async () => { button()!.click() })
+    expect(order).toEqual(['invalidate', 'push'])
   })
 
   it("isn't offered on someone else's result", async () => {

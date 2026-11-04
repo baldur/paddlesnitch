@@ -12,6 +12,7 @@ import { paceFor500m } from '@/lib/format'
 import CourseMapClient from '@/components/map/CourseMapClient'
 import LoadingState from '@/components/LoadingState'
 import { formatTime } from '@/lib/geo'
+import { trpc } from '@/lib/trpc'
 import type { CourseMetadata, CrewMember, Split, EntryConditions, LatLng } from '@/lib/types'
 
 type EntryDetail = {
@@ -43,6 +44,7 @@ function compass(deg: number): string {
 export default function EntryDetailPage({ params }: { params: Promise<{ entryId: string }> }) {
   const { entryId } = use(params)
   const router = useRouter()
+  const utils = trpc.useUtils()
   const [data, setData] = useState<EntryDetail | null | undefined>(undefined)
   const [note, setNote] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
@@ -70,6 +72,9 @@ export default function EntryDetailPage({ params }: { params: Promise<{ entryId:
       const res = await fetch('/paddles/api/analyse', { method: 'POST', body: fd })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.id) throw new Error()
+      // A new paddle: mark the Paddles list stale, or it misses it for up to
+      // 30 s (#865, same as Add paddle).
+      await utils.paddles.sessions.invalidate()
       router.push(`/paddles/${d.id}`)
     } catch {
       setOpenErr('Couldn’t open it as a paddle. Please try again.')

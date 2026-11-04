@@ -71,7 +71,10 @@ export default function AddPaddlePage() {
       if (data.duplicate) setDupId(data.id as string)
       // Go to the paddle's own page: rendering it here at /paddles/new meant
       // a refresh lost it and the URL couldn't be shared or bookmarked.
-      else if (data.id) router.replace(`/paddles/${data.id}`)
+      // Invalidate the Paddles list first (as the delete path does) so the new
+      // paddle shows when you go back to the feed — the list is cached fresh for
+      // PREFILLED_FRESH_MS, so without this it stays stale for up to 30 s (#865).
+      else if (data.id) { await utils.paddles.sessions.invalidate(); router.replace(`/paddles/${data.id}`) }
       else setRes(data)
     } catch (err) { setError(err instanceof Error ? err.message : 'Couldn’t analyse that paddle. Please try again.') }
     finally { setStatus('idle') }
