@@ -6,18 +6,18 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
-const state = vi.hoisted(() => ({ invalidated: 0, replaced: [] as string[] }))
+const state = vi.hoisted(() => ({ invalidated: 0, replaced: [] as string[], order: [] as string[] }))
 
 vi.mock('@/lib/trpc', () => ({
   trpc: {
     useUtils: () => ({
-      paddles: { sessions: { invalidate: () => { state.invalidated++; return Promise.resolve() } } },
+      paddles: { sessions: { invalidate: () => { state.invalidated++; state.order.push('invalidate'); return Promise.resolve() } } },
       sources: { trials: { fetch: () => Promise.resolve([]) } },
     }),
     me: { useQuery: () => ({ isPending: false, data: { user: { id: 'u1' } } }) },
   },
 }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: (p: string) => { state.replaced.push(p) } }) }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: (p: string) => { state.replaced.push(p); state.order.push('replace') } }) }))
 vi.mock('@/lib/trace-upload', () => ({
   prepareTraceUpload: (f: File) => Promise.resolve(f),
   uploadErrorMessage: () => 'Couldn’t analyse that paddle.',
@@ -33,7 +33,7 @@ let root: Root
 let fetchResult: unknown
 
 beforeEach(() => {
-  state.invalidated = 0; state.replaced = []
+  state.invalidated = 0; state.replaced = []; state.order = []
   vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, json: () => Promise.resolve(fetchResult) }))
 })
 afterEach(async () => {
@@ -62,6 +62,7 @@ describe('add a paddle refreshes the feed', () => {
     await mountAndUpload()
     expect(state.invalidated).toBe(1)
     expect(state.replaced).toEqual(['/paddles/new1'])
+    expect(state.order).toEqual(['invalidate', 'replace'])
   })
 
   it('does not invalidate the list for a duplicate (nothing new was added)', async () => {
