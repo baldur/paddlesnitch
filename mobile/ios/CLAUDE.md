@@ -322,3 +322,15 @@ isn't obvious from the code.
   is only as wide as its longest line). `testATapOnARowsEmptySpaceOpensThePaddle`
   and `LargeTextTests.testATapBesideTheThumbnailOpensThePaddle` tap a
   row's empty part; the second failed exactly as CI did without it.
+  `AccessibilityTextTests` (the smallest accessibility size, short
+  lines) proves the full width.
+- iOS takes a tap that lands near a control: within about 17 pt of
+  anything drawn (a paddle row's chevron caught taps from 17 pt left of
+  it), and 20 pt above and below the Terms tick and "Read them", which
+  XCUITest calls 21 pt tall. So a small frame isn't a small target, and
+  a dead spot is only real if it's further than that from everything
+  drawn. Measure with a sweep of taps before calling a target too small
+  (#872 was closed that way). To test a dead spot, tap well clear of
+  every drawn thing and check it fails without the fix.
+- `for _ in 0..<n where cond` skips rounds but never ends the loop: use
+  `guard cond else { break }`.

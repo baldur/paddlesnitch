@@ -24,7 +24,15 @@ final class PaddlesTests: AppTestCase {
     func testATapOnARowsEmptySpaceOpensThePaddle() {
         let row = scrollTo("paddle-pdl-river")
         XCTAssertTrue(row.exists)
-        row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        // 56 pt in from the row's edge. A tap within about 17 pt of anything
+        // drawn counts as on it; without the fix, a sweep of this row
+        // missed from x 300 to 340 and opened from 345 (the chevron, 362
+        // to 370). The words end near 293. Keep the sample's words short
+        // of here, or this stops proving anything.
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: row.frame.maxX - 56 - window.frame.minX, dy: row.frame.midY - window.frame.minY))
+            .tap()
         XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
     }
 

@@ -95,6 +95,33 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(text(containing: "The Terms of Service have changed").exists)
     }
 
+    /// The Terms tick and "Read them" take taps 20 pt above and below
+    /// their words, which is 41 pt or more in all (#872). XCUITest calls
+    /// each 21 pt tall, but iOS takes a tap that lands near a control.
+    func testTheTermsTickAndReadThemTakeTapsAroundTheirWords() {
+        app.buttons["sample-notice-action"].tap()
+        showCreateAccount()
+        let tick = scrollToElement(element("terms-checkbox"))
+        let window = app.windows.firstMatch
+        func tap(_ x: CGFloat, _ y: CGFloat) {
+            window.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: x - window.frame.minX, dy: y - window.frame.minY)).tap()
+        }
+        for dy: CGFloat in [-20, 20] {
+            let before = tick.value as? String
+            tap(tick.frame.minX + 60, tick.frame.midY + dy)
+            XCTAssertTrue(poll(timeout: 2) { tick.value as? String != before }, "ticked or not at \(dy) pt")
+        }
+        let read = app.buttons["Read them"]
+        for dy: CGFloat in [-20, 20] {
+            tap(read.frame.midX, read.frame.midY + dy)
+            let close = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
+            XCTAssertTrue(close.appears(timeout: 10), "Terms opened at \(dy) pt")
+            close.tap()
+            XCTAssertTrue(close.disappears(timeout: 10))
+        }
+    }
+
     func testCreatingAnAccountNeedsTheTermsTicked() {
         app.buttons["sample-notice-action"].tap()
         showCreateAccount()

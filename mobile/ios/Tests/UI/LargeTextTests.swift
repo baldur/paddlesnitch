@@ -210,3 +210,24 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(app.buttons["sign-in-submit"].exists)
     }
 }
+
+/// The smallest accessibility text size, where the row is stacked but its
+/// lines don't fill it.
+final class AccessibilityTextTests: AppTestCase {
+    override var launchArguments: [String] {
+        ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
+    }
+
+    /// pdl-motion's lines ("— · 0:19") stop well short of the row's right
+    /// edge, and a stacked row was only as wide as its longest line: a tap
+    /// out to the right did nothing.
+    func testATapRightOfShortLinesOpensThePaddle() {
+        let row = scrollTo("paddle-pdl-motion")
+        XCTAssertTrue(row.exists)
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: row.frame.maxX - 28 - window.frame.minX, dy: row.frame.midY - window.frame.minY))
+            .tap()
+        XCTAssertTrue(row.disappears(timeout: 10), "the paddle opened over the list")
+    }
+}
