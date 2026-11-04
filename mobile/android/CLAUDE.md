@@ -115,6 +115,12 @@ time and isn't obvious from the code.
   `fontScale`, never in fixed dp: fixed margins overlapped at large text. Tile labels are
   long mono words, so tiles go one per row at large text, or they break mid-word.
   `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
+  Since #854, charts are the website's fixed heights (260 dp, the histogram 230), with 11 sp text and a
+  34 dp legend band. A 404 is "We can't find this recording" with Back to the paddle and no Try again.
+  A Try again that fails again moves focus to the error. When the motion file hasn't arrived, Open
+  tracker goes to Trackers and Open phone back to Paddles, where its uploads are (lead's option (a),
+  2026-11-03). The app has no screen for one device. A phone is the paddle's `source.phone`, never the
+  id's shape.
 - A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
   that starts below the fold, or the second golden repeats the first.
 - Recording on the phone (`record/`): `PhoneRecorder` hands SensorEvent and Location values to
@@ -184,6 +190,16 @@ time and isn't obvious from the code.
   own load (a failure never hides Account), asked again by Delete and Sign out if unknown, never
   guessed: it gives a contact email field, a question before Sign out (`SIGN_OUT_STRAVA`), and
   Email us with the Support ID (`deleteMailto`) instead of signing in again to delete.
+- Same outing (#805, README § Same outing): a card's own row opens the paddle; each "Also recorded by"
+  row under it is a tap target of its own (`SameOutingRow`), never inside the card's `clickable`.
+  The paddle page asks `paddles.sameOuting` and shows nothing on failure. Compare opens through
+  web-code in a named Custom Tab, ephemeral where the browser supports it (`openInBrowser`), one at
+  a time (`Compare.busy`). Never prefetch or warm up a web-code link (`NoPrefetchTest`): it works once.
+- `SnackbarHostState.showSnackbar` suspends until the snackbar goes. Free any busy state before
+  calling it, or the UI stays locked for the snackbar's 4 s (a test caught exactly that).
+- In tests, `boundsInRoot` is clipped to the screen, so a node below it reads `top = 0`. Compare
+  positions with `positionInRoot`. In a `LazyColumn`, a row below the fold isn't composed:
+  `performScrollToNode` on the list first, since `performScrollTo` on the row finds nothing.
 - Every sign-in return address can be opened by any app or link. `Intake.arrived` passes a
   Google return on only while this app's verifier for it is waiting
   (`PrefsGoogleVerifierStore.pending`) and nobody is signed in.

@@ -14,11 +14,17 @@ struct PaddleDetailView: View {
     /// samples have none.
     let account: AccountModel?
     @State private var motionOpen = false
+    @State private var compare: CompareOpener
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(id: String, source: any PaddlesSource, account: AccountModel?) {
+    /// `openPage` opens a website page signed in (Compare).
+    init(
+        id: String, source: any PaddlesSource, account: AccountModel?,
+        openPage: @escaping (String) async -> Bool
+    ) {
         _model = State(initialValue: PaddleDetailModel(id: id, source: source))
         self.account = account
+        _compare = State(initialValue: CompareOpener(openPage: openPage))
     }
 
     var body: some View {
@@ -27,6 +33,7 @@ struct PaddleDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .task { await model.load() }
+            .compareFailedAlert(compare)
     }
 
     @ViewBuilder private var content: some View {
@@ -72,6 +79,17 @@ struct PaddleDetailView: View {
                                 .accessibilityLabel("Your note: \(note)")
                         }
                         summary(paddle)
+                        // After the summary (or the note), before Efforts and rests.
+                        if !model.sameOuting.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(model.sameOuting, id: \.id) { link in
+                                    SameOutingButton(link: link, style: .link, opening: compare.opening == link) {
+                                        Task { await compare.open(paddle: model.id, link: link) }
+                                    }
+                                    .accessibilityIdentifier("same-outing-\(link.id)")
+                                }
+                            }
+                        }
                         if !paddle.efforts.isEmpty || !paddle.rests.isEmpty || !paddle.repeats.isEmpty {
                             efforts(paddle)
                         }

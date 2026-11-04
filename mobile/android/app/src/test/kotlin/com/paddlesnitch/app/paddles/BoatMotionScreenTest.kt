@@ -36,6 +36,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isFocusable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.isFocused
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -103,27 +109,78 @@ class BoatMotionScreenTest {
     }
 
     @Test fun theMotionFileHasntArrived() {
-        show { BoatMotionScreen(tracker, load = { motion("account.devices-session.no-motion.json") }) }
+        var opened = 0
+        show { BoatMotionScreen(tracker, load = { motion("account.devices-session.no-motion.json") }, openDevice = { opened++ }) }
         compose.onNodeWithText("No boat motion for this recording.").assertExists()
         compose.onNodeWithText(noMotionCopy(null)).assertExists()
         golden("no-motion")
+        compose.onNodeWithText("Open tracker").performClick()
+        assertEquals(1, opened)
+    }
+
+    // The paddle's own source.phone (the server's), not the id's shape (lead, 2026-11-03).
+    @Test fun aPhonesRecordingSaysOpenPhone() {
+        show { BoatMotionScreen(paddle("paddles.get.with-phone.json"), load = { motion("account.devices-session.no-motion.json") }, openDevice = {}) }
+        compose.onNodeWithText("Open phone").assertExists()
+        compose.onNodeWithText("Open tracker").assertDoesNotExist()
+    }
+
+    @Test fun withNowhereToGoThereIsNoButton() {
+        show { BoatMotionScreen(tracker, load = { motion("account.devices-session.no-motion.json") }) }
+        compose.onNodeWithText("Open tracker").assertDoesNotExist()
     }
 
     @Test fun motionThatCouldntBeMeasuredNeverShowsTheEnginesReason() {
-        show { BoatMotionScreen(tracker, load = { motion("account.devices-session.motion-unusable.json") }) }
+        show { BoatMotionScreen(tracker, load = { motion("account.devices-session.motion-unusable.json") }, openDevice = {}) }
         compose.onNodeWithText("We couldn’t measure boat motion", substring = true).assertExists()
         compose.onNodeWithText("too few samples", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Open tracker").assertDoesNotExist()   // it came and couldn't be measured: syncing won't help
     }
 
     @Test fun aFailureCanBeTriedAgain() {
         var calls = 0
-        show { BoatMotionScreen(tracker, load = { if (calls++ == 0) throw ApiFailure("Not found", 404) else motion("account.devices-session.json") }) }
+        show { BoatMotionScreen(tracker, load = { if (calls++ == 0) throw ApiFailure("Couldn’t finish that. Please try again.", 503, generic = true) else motion("account.devices-session.json") }) }
         compose.onNodeWithText(MOTION_FAILED).assertExists()
         golden("failed")
         compose.onNodeWithText("Try again").performClick()
         compose.onNodeWithText(MOTION_FAILED).assertDoesNotExist()
         compose.onNodeWithText("Through the session").assertExists()
         assertEquals(2, calls)
+    }
+
+    @Test fun aRecordingThatIsntThereSaysSoWithNoTryAgain() {
+        var back = 0
+        show { BoatMotionScreen(tracker, load = { throw ApiFailure("Not found", 404) }, onBack = { back++ }) }
+        compose.onNodeWithText(MOTION_NOT_FOUND).assertExists()
+        compose.onNodeWithText("Try again").assertDoesNotExist()
+        compose.onNodeWithText(MOTION_FAILED).assertDoesNotExist()
+        golden("not-found")
+        compose.onNodeWithText("Back to the paddle").performClick()
+        assertEquals(1, back)
+    }
+
+    // The website's ReadError: Try again's button goes while loading, so a second failure puts focus on the error.
+    @Test fun aTryAgainThatFailsAgainPutsFocusOnTheError() {
+        var calls = 0
+        // A real load suspends, so the error leaves the screen while Try again loads: the focus must wait for it to come back.
+        show { BoatMotionScreen(tracker, load = { calls++; kotlinx.coroutines.delay(50); throw ApiFailure("Couldn’t finish that. Please try again.", 503, generic = true) }) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText(MOTION_FAILED).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(isFocused()).assertDoesNotExist()                     // the first failure leaves focus alone
+        compose.onNode(hasAnyDescendant(hasText(MOTION_FAILED)) and isFocusable()).assertDoesNotExist()   // and isn't a stop before Try again
+        compose.onNodeWithText("Try again").performClick()
+        compose.waitUntil(5_000) { calls == 2 && compose.onAllNodesWithText(MOTION_FAILED).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        compose.onNode(isFocused() and hasAnyDescendant(hasText(MOTION_FAILED))).assertExists()
+    }
+
+    // The website's heights whatever the width, and at large text (the text grows, the charts don't shrink it).
+    @Test fun theChartsAreTheWebsitesHeight() {
+        show(fontScale = 2f) { BoatMotionScreen(tracker, load = { motion("account.devices-session.json") }) }
+        fun height(label: String) = compose.onNodeWithContentDescription(label, substring = true).fetchSemanticsNode().size.height
+        val dp = { v: Int -> with(compose.density) { v.dp.roundToPx() } }
+        assertEquals(dp(260), height("Roll and pitch through the session"))
+        assertEquals(dp(260), height("Thirty seconds of roll and pitch"))
+        assertEquals(dp(230), height("Distribution of boat lean"))
     }
 
     private val fakeMap: MapSlot = { _, m -> Box(m.background(PsColor.surface2), contentAlignment = Alignment.Center) { Text("map", color = PsColor.muted) } }
@@ -141,6 +198,27 @@ class BoatMotionScreenTest {
         compose.onNodeWithText("Boat motion").performScrollTo().performClick()
         compose.onNodeWithText("← Paddle").performClick()
         compose.onNodeWithText("← Paddles").assertExists()
+    }
+
+    // Lead, 2026-11-03: a tracker syncs from the Trackers list; a phone's uploads are under Record on Paddles.
+    @Test fun openTrackerGoesToTheTrackersList() {
+        var trackers = 0
+        show { PaddlesHost(list, sample = false, load = { tracker }, map = fakeMap, openPaddle = "pdl-river",
+            loadMotion = { motion("account.devices-session.no-motion.json") }, onTrackers = { trackers++ }) }
+        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        compose.onNodeWithText("Open tracker").performClick()
+        assertEquals(1, trackers)
+    }
+
+    @Test fun openPhoneGoesBackToThePaddlesList() {
+        val phone = paddle("paddles.get.with-phone.json")
+        show { PaddlesHost(list, sample = false, load = { phone }, map = fakeMap, openPaddle = "pdl-phone",
+            loadMotion = { motion("account.devices-session.no-motion.json") }, onTrackers = { error("not for a phone") }) }
+        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        compose.onNodeWithText("Open phone").performClick()
+        compose.onNodeWithText("Paddles").assertIsDisplayed()                   // the list's top, where the uploads are
+        compose.onNodeWithText("← Paddle").assertDoesNotExist()
+        compose.onNodeWithText("← Paddles").assertDoesNotExist()                   // the list, with its upload lines
     }
 
     @Test fun aPaddleNotFromATrackerHasNoBoatMotion() {
@@ -175,7 +253,7 @@ class BoatMotionScreenTest {
     @Test fun aClippedSessionSaysSoUnderTheChart() {
         val m = motion("account.devices-session.json")
         show { BoatMotionScreen(tracker, load = { m.copy(attitude = m.attitude!!.copy(plotBoundDeg = 5.0)) }) }
-        compose.onNodeWithText("a few moments went past ±5° and are clipped here").performScrollTo()
+        compose.onNodeWithText("A few moments went past ±5° and are clipped at the chart’s edge.").performScrollTo()
         golden("clipped")
     }
 

@@ -12,6 +12,8 @@ struct TrackersView: View {
     let account: AccountModel
     @State private var model: TrackersModel
     @State private var guide = false
+    /// Compare, from a paddle opened here.
+    @State private var compare: URL?
 
     /// Pushed by value, with the destinations declared here: on iOS 17 a
     /// link that builds its destination inline hung opening a paddle two
@@ -37,12 +39,23 @@ struct TrackersView: View {
                 switch route {
                 case .tracker(let id): TrackerDetailView(account: account, model: model, deviceId: id)
                 case .paddle(let id):
-                    PaddleDetailView(id: id, source: ServerPaddles(client: account.client), account: account)
+                    PaddleDetailView(
+                        id: id, source: ServerPaddles(client: account.client), account: account, openPage: openPage)
                 }
             }
             .sheet(isPresented: $guide) {
                 SafariView(url: PaddlesnitchApp.baseURL.appending(path: "guide")).ignoresSafeArea()
             }
+            .sheet(item: $compare) { url in SafariView(url: url).ignoresSafeArea() }
+    }
+
+    private func openPage(_ path: String) async -> Bool {
+        do {
+            compare = try await account.websitePage(path)
+            return true
+        } catch {
+            return false
+        }
     }
 
     @ViewBuilder private var content: some View {

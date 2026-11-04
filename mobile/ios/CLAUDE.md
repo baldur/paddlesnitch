@@ -279,6 +279,23 @@ isn't obvious from the code.
   a 2 s look for it and cover the code field through a 5 s wait: wait
   with `becomesClear` (decline, wait 3 s, three times), never one look
   then one wait.
+- Website pages signed in (Compare, the issue form) go through
+  `AccountModel.websitePage(next)` and open in `SafariView`. Never fetch
+  the url first: that spends the one-time code. A UI test knows Safari is
+  up by its close button: "Done" up to iOS 26, an X labelled "Close" on
+  27 (`SameOutingTests.safariDone`). `-WebCodeFails` and
+  `-SameOutingFails` make the sample server fail those calls; the
+  sample server's launch switches are a table in `PaddlesnitchApp`
+  (SwiftLint's complexity limit).
+- After `checkScreen` in LargeTextTests the List has jumped back to the
+  top, so an element it checked is off screen and has no frame:
+  `scrollToElement` again before measuring it.
+- `.accessibilityElement(children: .ignore)` on a `Button` makes a new
+  element that is not a button (XCUITest reads `.other`; VoiceOver
+  doesn't say "button"): add `.accessibilityAddTraits(.isButton)` back,
+  and check `elementType == .button` in the UI test. State a List row
+  must keep through a scroll (a spinner, a failure alert) lives in the
+  screen (`CompareOpener`), not in the row.
 - Boat motion (`BoatMotionView`, model in `Paddles/BoatMotion.swift`):
   the model works out every chart bound, clamp and mirror from the
   server's answer, so the tests are pure; the view only maps them to

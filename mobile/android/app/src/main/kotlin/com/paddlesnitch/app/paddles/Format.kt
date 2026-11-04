@@ -117,9 +117,13 @@ fun km1(km: Double): String = if (km % 1.0 == 0.0) km.toLong().toString() else t
 fun sourceLabel(type: String, phone: Boolean? = null): String? =
     if (phone == true) "Phone" else mapOf("strava" to "Strava", "trial" to "Time trial", "device" to "Tracker")[type]
 
+/** Who else recorded an outing: the website's alsoRecordedBy words (packages/core/src/paddles.ts). */
+fun recordedBy(sourceType: String, phone: Boolean?): String =
+    if (phone == true) "the phone" else mapOf("strava" to "Strava", "trial" to "a time trial", "device" to "the tracker")[sourceType] ?: "a file"
+
 /** "Also recorded by …" for the same outing from another source. */
 fun alsoRecordedBy(type: String, phone: Boolean? = null): String =
-    "Also recorded by " + (if (phone == true) "the phone" else mapOf("strava" to "Strava", "trial" to "a time trial", "device" to "the tracker")[type] ?: "a file")
+    "Also recorded by " + recordedBy(type, phone)
 
 /** About how many strokes: to the hundred from 1,000, with commas ("12,300"). */
 fun roundStrokes(n: Double): String =

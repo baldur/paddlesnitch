@@ -38,18 +38,26 @@ struct PaddlesnitchApp: App {
             UserDefaults.standard.removeObject(forKey: profile.key)
         }
         let server = SampleServer(fixtures: fixtures, summariesPending: arguments.contains("-PendingSummaries"))
-        // UI tests: an old sign-in, so deleting asks for a new one.
-        if arguments.contains("-StaleSignIn") { server.signInIsRecent = false }
-        // UI tests: an account made with Strava, whose sign-in email is a placeholder.
-        if arguments.contains("-PlaceholderEmail") { server.placeholderEmail = true }
-        // UI tests: asking whether the account was made with Strava fails.
-        if arguments.contains("-ContactFails") { server.failsContact = true }
-        // UI tests: the 10 minutes run out while DELETE is typed.
-        if arguments.contains("-SignInExpiresOnDelete") { server.signInExpiresOnDelete = true }
-        // UI tests: an older server that still says Strava is on, which the app ignores.
-        if arguments.contains("-OptionsSayStrava") { server.options = SignInOptions(google: true, strava: true) }
-        // UI tests: asking which ways in are on fails.
-        if arguments.contains("-OptionsFail") { server.options = nil }
+        // UI tests: how the sample server answers, one launch argument each.
+        let switches: [String: (SampleServer) -> Void] = [
+            // An old sign-in, so deleting asks for a new one.
+            "-StaleSignIn": { $0.signInIsRecent = false },
+            // An account made with Strava, whose sign-in email is a placeholder.
+            "-PlaceholderEmail": { $0.placeholderEmail = true },
+            // Asking whether the account was made with Strava fails.
+            "-ContactFails": { $0.failsContact = true },
+            // The 10 minutes run out while DELETE is typed.
+            "-SignInExpiresOnDelete": { $0.signInExpiresOnDelete = true },
+            // An older server that still says Strava is on, which the app ignores.
+            "-OptionsSayStrava": { $0.options = SignInOptions(google: true, strava: true) },
+            // Asking which ways in are on fails.
+            "-OptionsFail": { $0.options = nil },
+            // Web-code fails (Compare, the issue form).
+            "-WebCodeFails": { $0.failsWebCode = true },
+            // Asking for a paddle's same-outing recordings fails.
+            "-SameOutingFails": { $0.failsSameOuting = true },
+        ]
+        for (argument, apply) in switches where arguments.contains(argument) { apply(server) }
         // Boat motion: how the recording's motion answers.
         let motion: [String: SampleServer.MotionAnswer] = [
             "-MotionUnusable": .unusable, "-MotionNotFound": .notFound, "-MotionFails": .fails,
