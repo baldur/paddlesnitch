@@ -237,3 +237,7 @@ time and isn't obvious from the code.
   the summary's heading has the same words.
 - To undo a mutation, revert only the mutated lines, or commit your work first. `git checkout -- <file>`
   on a file with uncommitted work throws the work away with the mutation (it happened, 2026-11-04).
+- Hold to stop (#880, #881) stops, with the haptic, the moment the fill completes, with the finger still
+  down. The stop runs at the end of the fill's own coroutine, never after `tryAwaitRelease`. Any early end,
+  a release or a finger slid off (a cancelled press, where `tryAwaitRelease` returns false), says "Keep
+  holding to stop.". Tests pass a fake `LocalHapticFeedback` and step `mainClock` with the finger down.

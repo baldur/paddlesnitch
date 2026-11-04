@@ -31,6 +31,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.junit.Test
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.geometry.Offset
@@ -54,12 +57,15 @@ class RecordScreenTest {
     // 1 h 5 min 3 s in.
     private val recording = RecordingService.State.Recording(files, MutableStateFlow(notReady), startedAt = 1_000L)
     private val now = { 1_000L + 3_903_000L }
+    /** Every haptic the screen asks for. */
+    private val felt = mutableListOf<HapticFeedbackType>()
+    private val haptics = object : HapticFeedback { override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) { felt += hapticFeedbackType } }
 
     private fun show(state: RecordingService.State, fontScale: Float = 1f, onStart: () -> Unit = {}, onStop: () -> Unit = {},
                      onSettings: () -> Unit = {}, notificationsOn: Boolean = true, location: LocationReady = LocationReady.Ready,
                      onLocationSettings: () -> Unit = {}) = compose.setContent {
         val d = LocalDensity.current
-        CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
+        CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale), LocalHapticFeedback provides haptics) {
             PaddlesnitchTheme { Surface(color = PsColor.bg) {
                 RecordScreen(state, onStart, onStop, location = location, onSettings = onSettings, onLocationSettings = onLocationSettings,
                     notificationsOn = notificationsOn, now = now)
@@ -131,7 +137,6 @@ class RecordScreenTest {
         compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
     }
 
-
     @Test fun slidingOffTheButtonPartWayThroughSaysToKeepHolding() {
         var stops = 0
         show(recording, onStop = { stops++ })
@@ -144,15 +149,23 @@ class RecordScreenTest {
         compose.onNodeWithText(KEEP_HOLDING).assertExists()
     }
 
-    @Test fun holdingForOneAndAHalfSecondsStopsIt() {
+    // Lead, 2026-11-04 (#881): it stops, with the haptic, the moment the fill completes, finger still down.
+    @Test fun holdingStopsAtOneAndAHalfSecondsWithTheFingerStillDown() {
         var stops = 0
         show(recording, onStop = { stops++ })
         compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
-        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS + 100L)
-        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
-        compose.mainClock.advanceTimeBy(100)
+        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS - 100L)
+        assertEquals("not yet", 0, stops)
+        assertEquals(emptyList<HapticFeedbackType>(), felt)
+        compose.mainClock.advanceTimeBy(1_800L - (HOLD_TO_STOP_MS - 100L))   // 1.8 s in, never lifted
         assertEquals(1, stops)
+        assertEquals(listOf(HapticFeedbackType.LongPress), felt)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("the lift adds nothing", 1, stops)
+        assertEquals(1, felt.size)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
     }
 
     @Test fun talkBackStopsItWithANamedStopRecordingAction() {
