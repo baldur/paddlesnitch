@@ -51,6 +51,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.launch
 import com.paddlesnitch.app.ui.PsColor
 import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.textColors
@@ -82,6 +83,8 @@ fun PaddlesHost(
     loadMotion: (suspend (AnalysisSession) -> RecordingMotion)? = null,
     /** Which paddles offer it: any from a tracker, unless a caller narrows it (the samples have one motion answer). */
     offersMotion: (AnalysisSession) -> Boolean = ::hasBoatMotion,
+    /** The Trackers list, where a tracker syncs: Boat motion's way there when its motion hasn't arrived. Null: none. */
+    onTrackers: (() -> Unit)? = null,
     /** The other recordings of a paddle's outing (paddles.sameOuting); null shows no links on the page. */
     sameOuting: (suspend (id: String) -> SameOutingList)? = null,
     /** Opens Compare for two paddles (web-code, then the browser); null: same-outing rows don't link. */
@@ -101,8 +104,10 @@ fun PaddlesHost(
             PaddlesScreen(list, sample, Modifier, action, notice, listState, onOpen = { open = it }, compare = compare)
         } else {
             BackHandler { open = null }
+            // Open phone: back to the list, at its top, where the phone's uploads are (under Record).
             PaddleLoader(id, load, writeSummary, onBack = { open = null }, Modifier, map, loadMotion, offersMotion,
-                sameOuting.takeIf { compare != null }, compare)
+                sameOuting.takeIf { compare != null }, compare, onTrackers,
+                toUploads = { open = null; scope.launch { listState.scrollToItem(0) } })
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
@@ -111,7 +116,8 @@ fun PaddlesHost(
 @Composable
 private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, writeSummary: (suspend (String) -> AnalysisSession)?, onBack: () -> Unit, modifier: Modifier, map: MapSlot,
                          loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean,
-                         sameOuting: (suspend (String) -> SameOutingList)?, compare: Compare?) {
+                         sameOuting: (suspend (String) -> SameOutingList)?, compare: Compare?, onTrackers: (() -> Unit)?,
+                         toUploads: () -> Unit) {
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var session by remember(id) { mutableStateOf<AnalysisSession?>(null) }
     var motionOpen by rememberSaveable(id) { mutableStateOf(false) }
@@ -141,7 +147,9 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
         BackHandler { motionOpen = false }
         Column(modifier.fillMaxSize()) {
             TextButton(onClick = { motionOpen = false }, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddle", fontSize = 16.sp) }
-            BoatMotionScreen(s, load = { loadMotion(s) })
+            // Motion not arrived yet: a phone's uploads are under Record on the Paddles list, a tracker syncs from Trackers (lead, 2026-11-03).
+            val openDevice: (() -> Unit)? = if (s.source.phone == true) ({ motionOpen = false; toUploads() }) else onTrackers
+            BoatMotionScreen(s, load = { loadMotion(s) }, onBack = { motionOpen = false }, openDevice = openDevice)
         }
         return
     }

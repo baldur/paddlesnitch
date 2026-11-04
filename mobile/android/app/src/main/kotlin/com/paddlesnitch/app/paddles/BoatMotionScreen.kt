@@ -18,6 +18,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.paddlesnitch.app.ui.Button
+import com.paddlesnitch.app.ui.OutlinedButton
+import com.paddlesnitch.app.ui.outlinedColors
+import com.paddlesnitch.app.api.ApiFailure
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,7 +78,9 @@ import kotlin.math.max
 // (mobile/contract/README.md § Boat motion). Every number comes from the
 // server; this file only lays them out and draws them.
 
-const val MOTION_FAILED = "Couldn’t read this recording. Please try again."
+const val MOTION_FAILED = "Couldn’t read this recording."
+/** A 404: the README's words as they are (a straight apostrophe, as the website's title). */
+const val MOTION_NOT_FOUND = "We can't find this recording"
 
 /** Whether a paddle can show boat motion: it came from one of your trackers. */
 fun hasBoatMotion(s: AnalysisSession) =
@@ -105,8 +113,8 @@ fun envelopeClipped(a: BoatMotion): Boolean {
     return a.envelope.any { abs(it.rollMin) > m || abs(it.rollMax) > m || abs(it.pitchMin) > m || abs(it.pitchMax) > m }
 }
 
-/** The axis note when the envelope went past its bound. */
-fun clippedNote(a: BoatMotion) = "a few moments went past ±${toFixed(envelopeBound(a), 0)}° and are clipped here"
+/** The note under the chart when the envelope went past its bound. */
+fun clippedNote(a: BoatMotion) = "A few moments went past ±${toFixed(envelopeBound(a), 0)}° and are clipped at the chart’s edge."
 
 /** The excerpt chart's bound: the largest value (at least 1°), with a tenth to spare. */
 fun excerptBound(ex: List<AttitudeSample>) = max(ex.maxOfOrNull { max(abs(it.roll), abs(it.pitch)) } ?: 0.0, 1.0) * 1.1
@@ -122,18 +130,37 @@ fun mirroredCounts(bins: List<RollHistogram.Bin>): List<Long> = bins.map { b ->
     bins.reduce { best, c -> if (abs(c.centreDeg + b.centreDeg) < abs(best.centreDeg + b.centreDeg)) c else best }.count
 }
 
-/** The histogram's widest lean, at least 1°, rounded as the label shows it. */
-fun histogramEdge(h: RollHistogram) = toFixed(max(h.bins.maxOf { abs(it.centreDeg) }, 1.0), 0)
+/** Label every nth tick so labels [lineHeight] tall, [gap] apart, keep a fifth of a line between them. */
+fun labelEvery(gap: Float, lineHeight: Float): Int = generateSequence(1) { it + 1 }.first { gap * it >= lineHeight * 1.2f }
+
+/** The histogram's x range, ±this: the widest bar's centre plus half a bin, at least 1°, so the edge bars sit inside. */
+fun histogramRange(h: RollHistogram) = max(h.bins.maxOf { abs(it.centreDeg) } + h.binWidthDeg / 2, 1.0)
+
+/** The histogram's edge labels' N, rounded. */
+fun histogramEdge(h: RollHistogram) = toFixed(histogramRange(h), 0)
 
 @Composable
-fun BoatMotionScreen(paddle: AnalysisSession, load: suspend () -> RecordingMotion, modifier: Modifier = Modifier) {
+fun BoatMotionScreen(
+    paddle: AnalysisSession, load: suspend () -> RecordingMotion, modifier: Modifier = Modifier, onBack: () -> Unit = {},
+    /** Where the recording's device can sync (Open tracker / Open phone) when its motion hasn't arrived; null: no button. */
+    openDevice: (() -> Unit)? = null,
+) {
     var motion by remember(paddle.id) { mutableStateOf<RecordingMotion?>(null) }
     var failed by remember(paddle.id) { mutableStateOf(false) }
+    var notFound by remember(paddle.id) { mutableStateOf(false) }
     var attempt by remember(paddle.id) { mutableIntStateOf(0) }
+    val errorFocus = remember { FocusRequester() }
     LaunchedEffect(paddle.id, attempt) {
         failed = false
-        runCatching { load() }.onSuccess { motion = it }.onFailure { failed = true }
+        runCatching { load() }.onSuccess { motion = it }.onFailure {
+            // A 404 would fail every time: no Try again. Anything else can be tried again.
+            if ((it as? ApiFailure)?.status == 404) notFound = true else failed = true
+        }
     }
+    // Try again failed too: its button went while loading, so focus comes back to the error (the website's ReadError).
+    // Only then is the error a focus stop; after the first failure Try again is the next stop, as on the website.
+    val retriedAndFailed = failed && attempt > 0
+    LaunchedEffect(retriedAndFailed, attempt) { if (retriedAndFailed) runCatching { errorFocus.requestFocus() } }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Eyebrow(fmtDayTime(paddle.paddledAt))
@@ -141,7 +168,7 @@ fun BoatMotionScreen(paddle: AnalysisSession, load: suspend () -> RecordingMotio
         }
         // Always there, so TalkBack reads the failure when it arrives.
         Box(Modifier.fillMaxWidth().testTag("motion-error").semantics { liveRegion = LiveRegionMode.Polite }) {
-            if (failed) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (failed) Column(Modifier.focusRequester(errorFocus).then(if (retriedAndFailed) Modifier.focusable() else Modifier), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(MOTION_FAILED, color = PsColor.red, fontSize = 16.sp)
                 Button(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Try again") }
             }
@@ -149,11 +176,16 @@ fun BoatMotionScreen(paddle: AnalysisSession, load: suspend () -> RecordingMotio
         val m = motion
         when {
             failed -> {}
+            // In the same card as "No boat motion", so the screen's empty states look alike.
+            notFound -> Column(Modifier.box().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(MOTION_NOT_FOUND, color = PsColor.fg, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.semantics { heading() })
+                OutlinedButton(onClick = onBack, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("Back to the paddle") }
+            }
             m == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                 Text("Loading", color = PsColor.muted)
             }
-            m.attitude?.available != true -> NoMotion(m.attitude)
+            m.attitude?.available != true -> NoMotion(m.attitude, openDevice?.let { go -> deviceButton(paddle) to go })
             else -> Motion(m.attitude, paddle.result.avgSR)
         }
     }
@@ -164,11 +196,19 @@ private fun Modifier.box() = fillMaxWidth().background(PsColor.surface, controlS
 /** Charts are data: square corners. */
 private fun Modifier.panel() = fillMaxWidth().background(PsColor.surface).border(1.dp, PsColor.border)
 
+/** "Open phone" for a phone's recording (the server's `source.phone`), else "Open tracker". */
+fun deviceButton(paddle: AnalysisSession) = if (paddle.source.phone == true) "Open phone" else "Open tracker"
+
+/** The motion file hasn't arrived (no attitude, or no reason): not when it came and couldn't be measured. */
+fun motionNotArrived(a: BoatMotion?) = a == null || a.reason.isNullOrEmpty()
+
 @Composable
-private fun NoMotion(a: BoatMotion?) {
+private fun NoMotion(a: BoatMotion?, device: Pair<String, () -> Unit>?) {
     Column(Modifier.box().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("No boat motion for this recording.", color = PsColor.fg, fontWeight = FontWeight.Medium, fontSize = 16.sp)
         Text(noMotionCopy(a), color = PsColor.muted, fontSize = 16.sp)
+        // A way there, not a promise: an older recording never had motion.
+        if (device != null && motionNotArrived(a)) OutlinedButton(onClick = device.second, colors = outlinedColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text(device.first) }
     }
 }
 
@@ -176,13 +216,13 @@ private fun NoMotion(a: BoatMotion?) {
 private fun Motion(a: BoatMotion, avgSR: Double?) {
     Tiles(motionTiles(a, avgSR))
     ChartPanel("Through the session", "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling.",
-        "Roll and pitch through the session, reaching about ${toFixed(envelopeBound(a), 0)} degrees", 3.5f, a.envelope.size >= 2,
+        "Roll and pitch through the session, reaching about ${toFixed(envelopeBound(a), 0)} degrees", 260.dp, a.envelope.size >= 2,
         note = if (a.envelope.size >= 2 && envelopeClipped(a)) clippedNote(a) else null) { t -> envelope(a, t) }
     ChartPanel("Stroke shape", "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides.",
-        "Thirty seconds of roll and pitch at full sample rate", 3.5f, a.excerpt.size >= 2) { t -> excerpt(a, t) }
+        "Thirty seconds of roll and pitch at full sample rate", 260.dp, a.excerpt.size >= 2) { t -> excerpt(a, t) }
     val h = a.rollHistogram
     ChartPanel("Where the boat spent its time", "Bars show how often the boat leaned each way. The dashed line is the same, flipped. If they match, your roll is even.",
-        "Distribution of boat lean, with the mirrored distribution overlaid to show evenness", 3.9f, h != null && h.bins.isNotEmpty()) { t -> histogram(h!!, t) }
+        "Distribution of boat lean, with the mirrored distribution overlaid to show evenness", 230.dp, h != null && h.bins.isNotEmpty()) { t -> histogram(h!!, t) }
     Column(Modifier.box().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Lead("Reading this.", " Rowing: aim for little roll, so the boat stays level. Kayak: the boat should rock with the stroke; what matters is that it rocks evenly.")
         Lead("What this can't tell you.", " We can't tell port from starboard, and a tracker or phone mounted slightly crooked looks like a steady lean." +
@@ -223,18 +263,16 @@ private fun Tile(t: MotionTile, modifier: Modifier) {
 
 /** A chart with its title above and caption below; the chart is one image to a screen reader, and draws nothing with too few points. */
 @Composable
-private fun ChartPanel(title: String, caption: String, label: String, aspect: Float, drawable: Boolean, note: String? = null, draw: DrawScope.(TextMeasurer) -> Unit) {
+private fun ChartPanel(title: String, caption: String, label: String, height: Dp, drawable: Boolean, note: String? = null, draw: DrawScope.(TextMeasurer) -> Unit) {
     val text = rememberTextMeasurer()
     Column(Modifier.panel()) {
         Text(title, color = PsColor.fg, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp).semantics { heading() })
-        if (drawable) BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
-            // About 3.5 wide to 1 high, as the website, but never too short for its labels, at any text size.
-            val scale = androidx.compose.ui.platform.LocalDensity.current.fontScale
-            val h: Dp = max((maxWidth / aspect).value, 150f * scale).dp
-            Canvas(Modifier.fillMaxWidth().height(h).clearAndSetSemantics { contentDescription = label; role = Role.Image }) { draw(text) }
+        // As wide as the panel and the website's height, whatever the width; the text stays 11 sp.
+        if (drawable) Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(height).clearAndSetSemantics { contentDescription = label; role = Role.Image }) { draw(text) }
         } else Box(Modifier.height(12.dp))
-        // Under the chart, not on its time axis: at a real 11 sp it's wider than a phone's plot.
-        note?.let { Text(it, color = PsColor.muted, fontFamily = PlexMono, fontSize = 11.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
+        // Under the chart, outside its image.
+        note?.let { Text(it, color = PsColor.muted, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         Text(caption, color = PsColor.muted, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp))
     }
 }
@@ -248,10 +286,11 @@ private class Frame(scope: DrawScope, m: TextMeasurer, legend: Boolean) {
     private val line = m.measure("-12°", axisText).size
     val l = line.width + with(scope) { 10.dp.toPx() }
     val r = scope.size.width - with(scope) { 6.dp.toPx() }
-    val t = if (legend) line.height + with(scope) { 8.dp.toPx() } else with(scope) { 6.dp.toPx() }
+    /** A legend has its own 34 dp band above the plot (more if large text needs it), so it never covers a band or bar. */
+    val t = if (legend) max(with(scope) { 34.dp.toPx() }, line.height + with(scope) { 8.dp.toPx() }) else with(scope) { 6.dp.toPx() }
     val b = scope.size.height - line.height - with(scope) { 8.dp.toPx() }
-    /** The middle of the legend strip above the plot. */
-    val legendMiddle = (t - with(scope) { 4.dp.toPx() }) / 2f
+    /** The middle of the legend band above the plot. */
+    val legendMiddle = t / 2f
     /** Where the labels under the plot sit (their middle). */
     val under = scope.size.height - line.height / 2f - with(scope) { 2.dp.toPx() }
 }
@@ -261,11 +300,18 @@ private fun DrawScope.label(m: TextMeasurer, s: String, x: Float, y: Float, alig
     drawText(layout, topLeft = Offset(x - layout.size.width * align, y - layout.size.height / 2f))
 }
 
-/** Gridlines and degree labels at the ticks, and the zero line over them. */
+/**
+ * Gridlines and degree labels at the ticks, and the zero line over them. At large text the labels
+ * would touch, so only every [labelEvery]th one (counting from 0) is labelled; every gridline stays.
+ */
 private fun DrawScope.degreeAxis(m: TextMeasurer, f: Frame, bound: Double, y: (Double) -> Float) {
-    axisTicks(bound).forEach { v ->
+    val ticks = axisTicks(bound)
+    val gap = if (ticks.size > 1) abs(y(ticks[1].toDouble()) - y(ticks[0].toDouble())) else Float.MAX_VALUE
+    val every = labelEvery(gap, m.measure("0°", axisText).size.height.toFloat())
+    val step = if (ticks.size > 1) ticks[1] - ticks[0] else 1
+    ticks.forEach { v ->
         drawLine(PsColor.border, Offset(f.l, y(v.toDouble())), Offset(f.r, y(v.toDouble())), 1.dp.toPx())
-        label(m, "$v°", f.l - 6.dp.toPx(), y(v.toDouble()), align = 1f)
+        if ((v / step) % every == 0) label(m, "$v°", f.l - 6.dp.toPx(), y(v.toDouble()), align = 1f)
     }
     drawLine(PsColor.muted, Offset(f.l, y(0.0)), Offset(f.r, y(0.0)), 1.2.dp.toPx())
 }
@@ -278,10 +324,13 @@ private class Key(m: TextMeasurer) {
     val space = line * 0.7f
 }
 
+/** Legend swatches, whatever the opacity of what they stand for, so each stays visible. */
+private const val SWATCH_ALPHA = 0.8f
+
 /** A swatch and its word, centred on [mid]; returns where the next one starts. */
-private fun DrawScope.swatch(m: TextMeasurer, colour: Color, alpha: Float, text: String, x: Float, mid: Float): Float {
+private fun DrawScope.swatch(m: TextMeasurer, colour: Color, text: String, x: Float, mid: Float): Float {
     val k = Key(m)
-    drawRect(colour, Offset(x, mid - k.mark / 2), Size(k.mark, k.mark), alpha = alpha)
+    drawRect(colour, Offset(x, mid - k.mark / 2), Size(k.mark, k.mark), alpha = SWATCH_ALPHA)
     val layout = m.measure(text, axisText)
     drawText(layout, topLeft = Offset(x + k.mark + k.gap, mid - layout.size.height / 2f))
     return x + k.mark + k.gap + layout.size.width + k.space
@@ -312,8 +361,8 @@ private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
     label(m, from, f.l, bottom)
     label(m, to, f.r, bottom, align = 1f)
     var lx = f.r - legendWidth(m, "roll", "pitch")
-    lx = swatch(m, PsColor.split, 0.5f, "roll", lx, f.legendMiddle)
-    swatch(m, PsColor.green, 0.28f, "pitch", lx, f.legendMiddle)
+    lx = swatch(m, PsColor.split, "roll", lx, f.legendMiddle)
+    swatch(m, PsColor.green, "pitch", lx, f.legendMiddle)
 }
 
 private fun DrawScope.excerpt(a: BoatMotion, m: TextMeasurer) {
@@ -335,10 +384,10 @@ private fun DrawScope.excerpt(a: BoatMotion, m: TextMeasurer) {
 private fun DrawScope.histogram(h: RollHistogram, m: TextMeasurer) {
     val f = Frame(this, m, legend = true)
     val maxCount = max(h.bins.maxOf { it.count }, 1L).toDouble()
-    val edge = max(h.bins.maxOf { abs(it.centreDeg) }, 1.0)
-    val bw = (f.r - f.l) / h.bins.size * 0.86f
-    // The end bars' centres sit half a bar in, so no bar hangs past the plot.
-    val x = { d: Double -> (f.l + bw / 2 + (d + edge) / (2 * edge) * (f.r - f.l - bw)).toFloat() }
+    // ±N degrees across the plot, N from the server's bins (histogramRange); each bar 0.86 of a bin wide.
+    val edge = histogramRange(h)
+    val x = { d: Double -> (f.l + (d + edge) / (2 * edge) * (f.r - f.l)).toFloat() }
+    val bw = (0.86 * h.binWidthDeg / (2 * edge) * (f.r - f.l)).toFloat()
     val y = { c: Double -> (f.t + (1 - c / maxCount) * (f.b - f.t)).toFloat() }
     h.bins.forEach { b ->
         drawRect(PsColor.split, Offset(x(b.centreDeg) - bw / 2, y(b.count.toDouble())), Size(bw, max(0f, f.b - y(b.count.toDouble()))), alpha = 0.45f)
@@ -356,7 +405,7 @@ private fun DrawScope.histogram(h: RollHistogram, m: TextMeasurer) {
     label(m, "+$n°", f.r, bottom, align = 1f)
     val mid = f.legendMiddle
     val k = Key(m)
-    val lx = swatch(m, PsColor.split, 0.45f, "actual", f.l + 6.dp.toPx(), mid)
-    drawLine(PsColor.red, Offset(lx, mid), Offset(lx + k.line * 1.2f, mid), 1.6.dp.toPx(), pathEffect = dashes)
+    val lx = swatch(m, PsColor.split, "actual", f.l + 6.dp.toPx(), mid)
+    drawLine(PsColor.red, Offset(lx, mid), Offset(lx + k.line * 1.2f, mid), 1.6.dp.toPx(), pathEffect = dashes, alpha = SWATCH_ALPHA)
     label(m, "mirrored", lx + k.line * 1.2f + k.gap, mid)
 }

@@ -115,6 +115,12 @@ time and isn't obvious from the code.
   `fontScale`, never in fixed dp: fixed margins overlapped at large text. Tile labels are
   long mono words, so tiles go one per row at large text, or they break mid-word.
   `Api.recordingMotion` keeps each answer's ETag and reuses the body on a 304.
+  Since #854, charts are the website's fixed heights (260 dp, the histogram 230), with 11 sp text and a
+  34 dp legend band. A 404 is "We can't find this recording" with Back to the paddle and no Try again.
+  A Try again that fails again moves focus to the error. When the motion file hasn't arrived, Open
+  tracker goes to Trackers and Open phone back to Paddles, where its uploads are (lead's option (a),
+  2026-11-03). The app has no screen for one device. A phone is the paddle's `source.phone`, never the
+  id's shape.
 - A golden that "scrolls to" something already on screen doesn't move. Scroll to a node
   that starts below the fold, or the second golden repeats the first.
 - Recording on the phone (`record/`): `PhoneRecorder` hands SensorEvent and Location values to
