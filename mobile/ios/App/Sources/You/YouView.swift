@@ -1,6 +1,5 @@
 import Account
 import DesignSystem
-import SafariServices
 import SwiftUI
 
 /// The account tab. The account itself is native (AccountView); the public
@@ -136,10 +135,7 @@ struct YouView: View {
                 if id != nil && account.afterSignIn != nil { path = NavigationPath([Route.account]) }
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
-            .sheet(item: $open) { page in
-                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { open = nil }
-                    .ignoresSafeArea()
-            }
+            .safari(url: open.map { PaddlesnitchApp.baseURL.appending(path: $0.path) }) { open = nil }
             .confirmationDialog("Sign out of paddlesnitch?", isPresented: $confirmingSignOut, titleVisibility: .visible)
             {
                 Button("Sign out", role: .destructive) { Task { await account.signOut() } }
@@ -211,52 +207,5 @@ struct YouView: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "\(short) (\(build))"
-    }
-}
-
-/// The website inside the app, in Safari's own view, always in a sheet.
-/// Done calls `close`, which clears the state that shows the sheet. Safari
-/// closes itself, but on iOS 17 not when the sheet sits on another sheet
-/// (the Terms from Create account stayed open through every tap on Done,
-/// #878's CI). So only then, or if Safari's own way out ends with it still
-/// on screen: on newer iOS the sheet is already closing when Done reports,
-/// and closing it again (by `dismiss` or the state) closed the Create
-/// account sheet under it as well.
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    let close: () -> Void
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        let controller = SFSafariViewController(url: url)
-        controller.preferredBarTintColor = UIColor(Palette.bg)
-        controller.preferredControlTintColor = UIColor(Palette.primaryText)
-        controller.delegate = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {
-        context.coordinator.close = close
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(close: close) }
-
-    @MainActor final class Coordinator: NSObject, @preconcurrency SFSafariViewControllerDelegate {
-        var close: () -> Void
-
-        init(close: @escaping () -> Void) { self.close = close }
-
-        func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
-            var leaving: UIViewController? = controller
-            while let view = leaving, !view.isBeingDismissed { leaving = view.parent }
-            // Nothing closing it (iOS 17, a sheet on a sheet): close it.
-            guard let leaving else { return close() }
-            // Newer iOS: Safari's sheet is already on its way out, and
-            // closing it again closes the sheet under it too. Only if that
-            // way out ends with Safari still on screen, close it then.
-            guard let transition = leaving.transitionCoordinator else { return }
-            transition.animate(alongsideTransition: nil) { [weak self, weak controller] _ in
-                if controller?.view.window != nil { self?.close() }
-            }
-        }
     }
 }

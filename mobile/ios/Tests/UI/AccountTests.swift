@@ -37,9 +37,7 @@ final class AccountTests: AppTestCase {
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.appears(timeout: 10), "the page opened")
         XCTAssertFalse(web.disappears(timeout: 3), "and stayed open")
-        let done = safariCloseWhenStill()
-        XCTAssertNotNil(done, "Safari's close, on top and still")
-        done?.tap()
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
         XCTAssertTrue(web.disappears(timeout: 10), "Done closed it")
         XCTAssertTrue(app.navigationBars["Account"].exists, "on Account still")
     }

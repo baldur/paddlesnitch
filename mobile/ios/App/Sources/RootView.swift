@@ -12,7 +12,7 @@ struct RootView: View {
     let samples: SamplePaddles
     @State private var signingIn = false
     @State private var termsOpen = false
-    /// A page opened from the Terms sheet: presented from the sheet's
+    /// A page opened from the Terms sheet: opened from the sheet's
     /// NavigationStack, not its List row (TermsView).
     @State private var termsPage: YouView.WebPage?
     @State private var navigator = AppNavigator()
@@ -84,9 +84,7 @@ struct RootView: View {
             default: break
             }
         }
-        .sheet(item: $websitePage) { url in
-            SafariView(url: url) { websitePage = nil }.ignoresSafeArea()
-        }
+        .safari(url: websitePage) { websitePage = nil }
         .task { await openLaunchFile() }
         .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in
             if PaddlesnitchApp.usesSampleServer { Task { await account.signOut() } }
@@ -135,10 +133,7 @@ struct RootView: View {
                     }
                 }
             }
-            .sheet(item: $termsPage) { page in
-                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { termsPage = nil }
-                    .ignoresSafeArea()
-            }
+            .safari(url: termsPage.map { PaddlesnitchApp.baseURL.appending(path: $0.path) }) { termsPage = nil }
             .preferredColorScheme(.dark)
             .buttonBorderShape(.control)
         }

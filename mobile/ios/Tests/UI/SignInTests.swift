@@ -119,9 +119,7 @@ final class SignInTests: AppTestCase {
         // On main it closed by itself half a second later: the sheet was on
         // TermsView's List row.
         XCTAssertFalse(web.disappears(timeout: 3), "and stayed open")
-        let done = safariCloseWhenStill()
-        XCTAssertNotNil(done, "Safari's close, on top and still")
-        done?.tap()
+        XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
         XCTAssertTrue(web.disappears(timeout: 10), "Done closed the Terms page")
         XCTAssertFalse(sheet.disappears(timeout: 2), "the changed-Terms sheet stays")
         XCTAssertTrue(agree.exists)
@@ -167,9 +165,7 @@ final class SignInTests: AppTestCase {
             XCTAssertTrue(web.appears(timeout: 10), "Terms opened at \(dy) pt")
             // One tap on Done: on iOS 17 it closed nothing here, a sheet on
             // a sheet, until SafariView closed its own sheet (#878's CI).
-            let done = safariCloseWhenStill()
-            XCTAssertNotNil(done, "Safari's close, on top and still")
-            done?.tap()
+            XCTAssertTrue(tapSafariCloseWhenStill(), "Safari's close, still, tapped")
             XCTAssertTrue(web.disappears(timeout: 10), "Done closed the Terms opened at \(dy) pt")
             // Only the Terms: a second close on newer iOS took the form under
             // it too, so check the form stays, with what was typed.

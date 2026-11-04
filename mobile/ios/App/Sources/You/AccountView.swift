@@ -96,9 +96,7 @@ struct AccountView: View {
             item: $downloaded, onDismiss: { account.removeDownloadedData() },
             content: { file in ShareSheet(items: [file.url]).ignoresSafeArea() }
         )
-        .sheet(item: $webPage) { page in
-            SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { webPage = nil }.ignoresSafeArea()
-        }
+        .safari(url: webPage.map { PaddlesnitchApp.baseURL.appending(path: $0.path) }) { webPage = nil }
         .sheet(isPresented: $confirmingDelete) {
             DeleteAccountView(
                 account: account,

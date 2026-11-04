@@ -43,10 +43,8 @@ struct TrackersView: View {
                         id: id, source: ServerPaddles(client: account.client), account: account, openPage: openPage)
                 }
             }
-            .sheet(isPresented: $guide) {
-                SafariView(url: PaddlesnitchApp.baseURL.appending(path: "guide")) { guide = false }.ignoresSafeArea()
-            }
-            .sheet(item: $compare) { url in SafariView(url: url) { compare = nil }.ignoresSafeArea() }
+            .safari(url: guide ? PaddlesnitchApp.baseURL.appending(path: "guide") : nil) { guide = false }
+            .safari(url: compare) { compare = nil }
     }
 
     private func openPage(_ path: String) async -> Bool {

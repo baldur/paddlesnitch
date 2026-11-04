@@ -349,23 +349,28 @@ isn't obvious from the code.
 - `for _ in 0..<n where cond` skips rounds but never ends the loop: every
   test helper that used it kept looking after it was done. Use
   `guard cond else { break }`.
-- Safari's Done closes its own sheet, except on iOS 17 when that sheet sits
-  on another sheet (the Terms from Create account): there it closed
-  nothing, through every tap (#878's CI; first misread as a tap too
-  early, and a retry loop in the test hid it). `SafariView` closes the
-  sheet itself, through each caller's `close`, but only when nothing is
-  already closing it: on newer iOS the sheet is being dismissed when Done
-  reports, and a second close (SwiftUI's `dismiss` or clearing the state)
-  closed the Create account sheet under it too. If that way out ends with
-  Safari still on screen, it closes it then. So a test of a sheet that
-  closes checks that the screen under it stays. Xcode here can't
-  download iOS 17.5; CI's iOS 17 job is the only check.
+- Open the website with `.safari(url:closed:)` (Safari.swift), never
+  SFSafariViewController inside a SwiftUI `.sheet`. In a sheet, Safari's
+  Done misbehaved on every iOS we have: on iOS 17 it closed nothing (from
+  Account, and from a sheet on a sheet, #878's CI); on newer iOS the sheet
+  was already closing when Done reported, and any second close (SwiftUI's
+  `dismiss`, or clearing the state) took the screen under it too. Two
+  guards on that path each failed on CI. `.safari` presents it with
+  UIKit's `present()`, the way Safari's view is made to be shown, so Done
+  takes down exactly Safari. Tests of a page that closes check the screen
+  under it stays, with what was typed. Xcode here can't download iOS
+  17.5; CI's iOS 17 job is the only check.
 - Never put a `.sheet` on a view inside a List row: it was dropped as
   soon as it opened (TermsView's Read the Terms showed the page for half a
   second, in the changed-Terms sheet and on Account, #878). Hand the
   request up (`read`) and present from the screen around the List.
-- Tap Safari's close with `safariCloseWhenStill()`: one query, ours left
-  out by id (`terms-close`, `keyboard-done`), tapped once its frame stands
-  still. Elements by index (`allElementsBoundByIndex`) failed the test
-  ("No matches found for Element at index 1") as Safari's views changed
-  while the page loaded.
+- Close Safari in a test with `tapSafariCloseWhenStill()`: one query,
+  ours left out by id (`terms-close`, `keyboard-done`), then one tap at
+  the button's middle once its frame stands still. XCUITest's tap on the
+  element did nothing, on 26.5 (UIKit-presented Safari, twice 3 s apart)
+  and on CI's iOS 17 (Compare, which had passed with a plain tap), while
+  a tap at its middle closed it: a "Done does nothing" failure can be the
+  test's tap, so check Safari's `safariViewControllerDidFinish` fired.
+  Elements by index (`allElementsBoundByIndex`) failed the test ("No
+  matches found for Element at index 1") as Safari's views changed while
+  the page loaded.

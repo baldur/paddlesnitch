@@ -49,9 +49,7 @@ struct SignInView: View {
                         forgotPassword = false
                     })
             }
-            .sheet(item: $web) { url in
-                SafariView(url: url) { web = nil }.ignoresSafeArea()
-            }
+            .safari(url: web) { web = nil }
         }
         .preferredColorScheme(.dark)
         // Said out loud: a Google refusal shows above the form,

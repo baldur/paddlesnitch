@@ -55,14 +55,17 @@ extension XCUIElement {
 }
 
 extension AppTestCase {
-    /// Safari's own close button ("Done" up to iOS 26, "Close" on 27), once
-    /// it's hittable and has stopped moving; nil if it never does. Not ours:
-    /// the changed-Terms sheet under Safari has a "Close" too
-    /// (`terms-close`), and the keyboard a "Done". Still: a tap while Safari
-    /// slides up is dropped, which looks just like Done closing nothing on
-    /// iOS 17 (#878). Tap it once. One query, not elements by index: those
-    /// fail the test when Safari's views change as the page loads.
-    func safariCloseWhenStill(timeout: TimeInterval = 10) -> XCUIElement? {
+    /// Taps Safari's own close button ("Done" up to iOS 26, "Close" on 27)
+    /// once it's hittable and has stopped moving; false if it never does.
+    /// Not ours: the changed-Terms sheet has a "Close" too (`terms-close`),
+    /// and the keyboard a "Done". Still: a tap while Safari slides up is
+    /// dropped, which looks just like Done closing nothing (#878). One
+    /// query, not elements by index: those fail the test when Safari's views
+    /// change as the page loads. A tap at the button's middle, as a finger:
+    /// XCUITest's tap on the element did nothing on Safari presented by
+    /// UIKit (26.5, twice, 3 s apart), and a tap at its middle closed it.
+    @discardableResult
+    func tapSafariCloseWhenStill(timeout: TimeInterval = 10) -> Bool {
         let button = app.buttons.matching(
             NSPredicate(
                 format: "label IN {'Done', 'Close'} AND NOT (identifier IN {'terms-close', 'keyboard-done'})")
@@ -73,7 +76,9 @@ extension AppTestCase {
             defer { last = frame }
             return !frame.isNull && frame == last && button.isHittable
         }
-        return still ? button : nil
+        guard still else { return false }
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: last.midX, dy: last.midY)).tap()
+        return true
     }
 
     func dismissKeyboard() {
