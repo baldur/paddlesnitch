@@ -9,10 +9,13 @@ import SwiftUI
 /// then the Android app's 500 m splits.
 struct PaddleDetailView: View {
     @State private var model: PaddleDetailModel
+    @State private var compare: CompareOpener
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(id: String, source: any PaddlesSource) {
+    /// `openPage` opens a website page signed in (Compare).
+    init(id: String, source: any PaddlesSource, openPage: @escaping (String) async -> Bool) {
         _model = State(initialValue: PaddleDetailModel(id: id, source: source))
+        _compare = State(initialValue: CompareOpener(openPage: openPage))
     }
 
     var body: some View {
@@ -21,6 +24,7 @@ struct PaddleDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .task { await model.load() }
+            .compareFailedAlert(compare)
     }
 
     @ViewBuilder private var content: some View {
@@ -55,6 +59,17 @@ struct PaddleDetailView: View {
                                 .accessibilityLabel("Your note: \(note)")
                         }
                         summary(paddle)
+                        // After the summary (or the note), before Efforts and rests.
+                        if !model.sameOuting.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(model.sameOuting, id: \.id) { link in
+                                    SameOutingButton(link: link, style: .link, opening: compare.opening == link) {
+                                        Task { await compare.open(paddle: model.id, link: link) }
+                                    }
+                                    .accessibilityIdentifier("same-outing-\(link.id)")
+                                }
+                            }
+                        }
                         if !paddle.efforts.isEmpty || !paddle.rests.isEmpty || !paddle.repeats.isEmpty {
                             efforts(paddle)
                         }

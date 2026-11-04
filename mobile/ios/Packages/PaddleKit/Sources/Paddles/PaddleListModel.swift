@@ -60,7 +60,7 @@ public struct PaddleRow: Identifiable, Hashable, Sendable {
     public let route: [Coordinate]
     public let note: String?
     /// "Also recorded by Strava": the outing's other recordings.
-    public let alsoRecordedBy: [String]
+    public let sameOuting: [SameOutingLink]
 
     public init(_ card: PaddleCard) {
         id = card.id
@@ -73,9 +73,7 @@ public struct PaddleRow: Identifiable, Hashable, Sendable {
         detail = [pace, card.avgSR.map(Format.strokeRate)].compactMap { $0 }.joined(separator: " · ")
         route = noGps ? [] : card.route
         note = card.note.flatMap { $0.isEmpty ? nil : $0 }
-        alsoRecordedBy = (card.sameOuting ?? []).map {
-            "Also recorded by \(Format.alsoRecordedBy($0.sourceType, phone: $0.phone))"
-        }
+        sameOuting = (card.sameOuting ?? []).map(SameOutingLink.init)
     }
 }
 

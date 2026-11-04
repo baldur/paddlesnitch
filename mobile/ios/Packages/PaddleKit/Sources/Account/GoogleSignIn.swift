@@ -88,10 +88,25 @@ extension AccountModel {
     /// one-time web-code link, so the report is filed as it (a recording the
     /// server won't take).
     public func reportPage() async throws -> URL {
-        let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: "/account?report=1"))
-        guard let url = Self.resolve(page.url, against: client.baseURL) else {
+        try await websitePage("/account?report=1")
+    }
+
+    /// A website page signed in as this account, through a one-time
+    /// web-code link (mobile/contract/README.md, "Website pages, signed
+    /// in"). Open it at once, and never fetch it first: that spends it.
+    public func websitePage(_ next: String) async throws -> URL {
+        let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: next))
+        guard let url = Self.resolve(page.url, against: client.baseURL), Self.isOurSite(url, base: client.baseURL)
+        else {
             throw PaddleAPIError.undecodable("web-code link")
         }
         return url
+    }
+
+    /// The link signs the website in as this person, so it opens only on
+    /// our own site: another host could spend the code. Safari's view also
+    /// refuses any scheme but http and https.
+    static func isOurSite(_ url: URL, base: URL) -> Bool {
+        url.scheme == base.scheme && url.host() == base.host() && url.port == base.port
     }
 }

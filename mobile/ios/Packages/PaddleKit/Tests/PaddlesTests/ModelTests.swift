@@ -20,12 +20,18 @@ actor ScriptedSource: PaddlesSource {
     let samples = SamplePaddles(directory: fixtures)
     let summariesPending: Bool
     let summaryFailure: (any Error)?
+    /// The fixture `paddles.sameOuting` answers from, or nil to fail.
+    let sameOutingFixture: String?
     private(set) var written: [String] = []
 
-    init(failure: (any Error)? = nil, summariesPending: Bool = false, summaryFailure: (any Error)? = nil) {
+    init(
+        failure: (any Error)? = nil, summariesPending: Bool = false, summaryFailure: (any Error)? = nil,
+        sameOuting: String? = "paddles.sameOuting.none"
+    ) {
         self.failure = failure
         self.summariesPending = summariesPending
         self.summaryFailure = summaryFailure
+        sameOutingFixture = sameOuting
     }
 
     func fail(with error: (any Error)?) {
@@ -50,6 +56,12 @@ actor ScriptedSource: PaddlesSource {
         var paddle = try await samples.paddle(id: id)
         paddle.insight = "Written just now."
         return paddle
+    }
+
+    func sameOuting(id: String) async throws -> SameOutingList {
+        guard let sameOutingFixture else { throw PaddleAPIError.badResponse(status: 500) }
+        let data = try Data(contentsOf: fixtures.appending(path: "\(sameOutingFixture).json"))
+        return try JSONDecoder.paddlesnitch.decode(SameOutingList.self, from: data)
     }
 }
 
@@ -93,7 +105,7 @@ actor ScriptedSource: PaddlesSource {
         #expect(river.detail.hasSuffix(" spm"))
         #expect(!river.route.isEmpty)
         #expect(river.note == "Headwind on the way back.")
-        #expect(river.alsoRecordedBy == ["Also recorded by Strava"])
+        #expect(river.sameOuting.map(\.text) == ["Also recorded by Strava"])
     }
 
     /// #789: a phone's paddle says Phone, never Tracker, on its card and in
@@ -102,9 +114,9 @@ actor ScriptedSource: PaddlesSource {
         let data = try Data(contentsOf: fixtures.appending(path: "paddles.list.with-phone.json"))
         let rows = try JSONDecoder.paddlesnitch.decode(PaddleList.self, from: data).cards.map(PaddleRow.init)
         #expect(rows[0].heading.hasSuffix(" · Phone"))
-        #expect(rows[0].alsoRecordedBy == ["Also recorded by Strava"])
+        #expect(rows[0].sameOuting.map(\.text) == ["Also recorded by Strava"])
         #expect(rows[1].heading.hasSuffix(" · Tracker"))
-        #expect(rows[1].alsoRecordedBy == ["Also recorded by the phone"])
+        #expect(rows[1].sameOuting == [SameOutingLink(id: "pdl-phone2", sourceType: "device", phone: true)])
     }
 
     @Test func aPaddleWithoutGPSShowsNoRouteEvenIfItHasAStretch() async throws {

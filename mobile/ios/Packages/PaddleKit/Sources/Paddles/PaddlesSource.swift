@@ -9,6 +9,8 @@ public protocol PaddlesSource: Sendable {
     /// Writes the coach summary of a paddle saved without one
     /// (`insightPending`), as the website does when the paddle is opened.
     func writeSummary(id: String) async throws -> AnalysisSession
+    /// The outing's other recordings (`paddles.sameOuting`).
+    func sameOuting(id: String) async throws -> SameOutingList
 }
 
 /// The signed-in user's paddles, from the server.
@@ -29,6 +31,10 @@ public struct ServerPaddles: PaddlesSource {
 
     public func writeSummary(id: String) async throws -> AnalysisSession {
         try await client.call(Procedures.paddlesWriteSummary, ById(id: id))
+    }
+
+    public func sameOuting(id: String) async throws -> SameOutingList {
+        try await client.call(Procedures.paddlesSameOuting, ById(id: id))
     }
 }
 
@@ -64,4 +70,7 @@ public struct SamplePaddles: PaddlesSource {
     public func writeSummary(id: String) async throws -> AnalysisSession {
         try await paddle(id: id)
     }
+
+    /// None: Compare needs an account, and the samples have none.
+    public func sameOuting(id: String) async throws -> SameOutingList { [] }
 }

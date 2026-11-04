@@ -7,6 +7,9 @@ public final class PaddleDetailModel {
     public private(set) var state: Loadable<PaddleSummary> = .loading
     /// The paddle isn't there (deleted, or never was): trying again won't help.
     public private(set) var gone = false
+    /// Links to Compare. None when the call fails: they're extra, never an
+    /// error on the page.
+    public private(set) var sameOuting: [SameOutingLink] = []
     public let id: String
     private let source: any PaddlesSource
 
@@ -26,6 +29,7 @@ public final class PaddleDetailModel {
         }
         gone = false
         state = .loaded(PaddleSummary(paddle))
+        sameOuting = (try? await source.sameOuting(id: id))?.map(SameOutingLink.init) ?? []
         if paddle.insightPending == true { await writeSummary(paddle) }
     }
 

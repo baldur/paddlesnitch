@@ -36,6 +36,23 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(text(containing: "29 s at 1:23").exists, "and the rests, at the end")
     }
 
+    /// The same-outing row in the card and the link on the paddle page
+    /// (Compare), signed in: the samples have no account to compare in.
+    func testSameOutingAtTheLargestTextSize() throws {
+        signInAndWait()
+        let row = element("same-outing-pdl-river-pdl-river-watch")
+        try checkScreen(at: [row])
+        scrollToElement(row)  // the check's jump took it off screen
+        XCTAssertGreaterThanOrEqual(row.frame.height, 44)
+        keep("Same-outing row at the largest text")
+        open("pdl-river")
+        let link = element("same-outing-pdl-river-watch")
+        try checkScreen(at: [link])
+        scrollToElement(link)
+        XCTAssertGreaterThanOrEqual(link.frame.height, 44)
+        keep("Same-outing link at the largest text")
+    }
+
     func testYouAtTheLargestTextSize() throws {
         selectTab("You")
         XCTAssertTrue(app.buttons["Privacy policy"].appears(timeout: 10))

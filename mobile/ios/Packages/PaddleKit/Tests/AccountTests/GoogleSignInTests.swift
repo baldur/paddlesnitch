@@ -132,6 +132,35 @@ import Testing
         #expect(asked.next == "/account?report=1")
     }
 
+    /// Compare (mobile/contract/README.md, "Same outing") goes the same way.
+    @Test func aWebsitePageAsksWebCodeForThatPage() async throws {
+        let account = account()
+        try await account.signIn(email: "pat@example.com", password: SampleServer.password)
+        let url = try await account.websitePage("/paddles/compare?a=pdl-tracker&b=pdl-phone2")
+        let next = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "next" }
+        #expect(next?.value == "/paddles/compare?a=pdl-tracker&b=pdl-phone2")
+    }
+
+    @Test func aWebCodeLinkOpensOnlyOnOurSite() throws {
+        let base = try #require(URL(string: "https://paddlesnitch.com"))
+        func ours(_ link: String) -> Bool {
+            AccountModel.resolve(link, against: base).map { AccountModel.isOurSite($0, base: base) } ?? false
+        }
+        #expect(ours("/att/api/auth/web-code/x?code=1"))
+        #expect(ours("https://paddlesnitch.com/att/api/auth/web-code/x"))
+        #expect(!ours("//evil.example/x"))
+        #expect(!ours("https://evil.example/x"))
+        #expect(!ours("http://paddlesnitch.com/x"))
+        #expect(!ours("javascript:alert(1)"))
+    }
+
+    @Test func aFailedWebCodeThrows() async throws {
+        let account = account()
+        try await account.signIn(email: "pat@example.com", password: SampleServer.password)
+        server.failsWebCode = true
+        await #expect(throws: (any Error).self) { try await account.websitePage("/paddles/compare?a=a&b=b") }
+    }
+
     @Test func aFirstFailedAskSaysSoUntilOneWorks() async {
         let account = account()
         server.options = nil

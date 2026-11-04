@@ -47,10 +47,17 @@ extension SampleServer {
         guard request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Bearer ") == true else {
             return (401, try fixture("account.error"))
         }
+        if failsWebCode { return (500, Data(#"{"error":"Something went wrong."}"#.utf8)) }
         let next = try JSONDecoder().decode(WebPageFor.self, from: request.httpBody ?? Data()).next
         var link = URLComponents(string: Self.webCodePath)
         link?.queryItems = [URLQueryItem(name: "next", value: next)]
         return (200, try JSONEncoder.paddlesnitch.encode(WebPage(url: link?.string ?? Self.webCodePath)))
+    }
+
+    /// Make web-code fail, as when the server is down.
+    public var failsWebCode: Bool {
+        get { lock.withLock { _failsWebCode } }
+        set { lock.withLock { _failsWebCode = newValue } }
     }
 
     /// Where the sample web-code link points, relative to the site.
