@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import com.paddlesnitch.app.ui.Button
 import com.paddlesnitch.app.ui.OutlinedButton
 import com.paddlesnitch.app.ui.outlinedColors
+import com.paddlesnitch.app.ui.TextButton
+import com.paddlesnitch.app.ui.textColors
 import com.paddlesnitch.app.api.ApiFailure
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
@@ -105,6 +107,25 @@ fun motionTiles(a: BoatMotion, avgSR: Double?): List<MotionTile> {
 }
 
 /** The envelope chart's bound: the server's robust one, 10 when it has none. */
+/** The paddle page's two (README § Boat motion, On the paddle): Evenness, then Side-to-side roll, the screen's own tiles. */
+fun balanceTiles(a: BoatMotion): List<MotionTile> = motionTiles(a, null).let { t -> listOf(t.first { it.label == "Evenness" }, t.first { it.label == "Side-to-side roll" }) }
+
+/**
+ * The balance part on the paddle page, only when the motion is in and readable: every other state shows
+ * nothing, and the Boat motion button still leads to the screen, which explains.
+ */
+@Composable
+fun BoatMotionSummary(a: BoatMotion, onAllCharts: () -> Unit) {
+    if (!a.available) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Boat motion", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { heading() })
+            TextButton(onClick = onAllCharts, colors = textColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("All charts →", fontSize = 14.sp) }
+        }
+        Tiles(balanceTiles(a))
+    }
+}
+
 fun envelopeBound(a: BoatMotion) = a.plotBoundDeg ?: 10.0
 
 /** Whether any of the envelope goes past the bound (and is drawn clipped). */

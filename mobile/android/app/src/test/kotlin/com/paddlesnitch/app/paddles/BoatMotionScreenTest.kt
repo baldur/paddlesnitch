@@ -183,19 +183,22 @@ class BoatMotionScreenTest {
         assertEquals(dp(230), height("Distribution of boat lean"))
     }
 
+    /** The paddle's quiet Boat motion button; the summary's heading has the same words. */
+    private fun motionButton() = compose.onNode(hasText("Boat motion") and hasClickAction())
+
     private val fakeMap: MapSlot = { _, m -> Box(m.background(PsColor.surface2), contentAlignment = Alignment.Center) { Text("map", color = PsColor.muted) } }
 
     @Test fun aTrackerPaddleOpensItsBoatMotionAndBackReturns() {
         var askedFor: AnalysisSession? = null
         show { PaddlesHost(list, sample = true, load = { tracker }, map = fakeMap, openPaddle = "pdl-river", loadMotion = { askedFor = it; motion("account.devices-session.json") }) }
-        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        motionButton().performScrollTo().performClick()
         compose.onNodeWithText("← Paddle").assertExists()
         compose.onNodeWithText("Through the session").assertExists()
         assertEquals("S0012", askedFor?.source?.deviceSessionId)
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("← Paddles").assertExists()
-        compose.onNodeWithText("Boat motion").assertExists()
-        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        motionButton().assertExists()
+        motionButton().performScrollTo().performClick()
         compose.onNodeWithText("← Paddle").performClick()
         compose.onNodeWithText("← Paddles").assertExists()
     }
@@ -205,7 +208,7 @@ class BoatMotionScreenTest {
         var trackers = 0
         show { PaddlesHost(list, sample = false, load = { tracker }, map = fakeMap, openPaddle = "pdl-river",
             loadMotion = { motion("account.devices-session.no-motion.json") }, onTrackers = { trackers++ }) }
-        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        motionButton().performScrollTo().performClick()
         compose.onNodeWithText("Open tracker").performClick()
         assertEquals(1, trackers)
     }
@@ -214,7 +217,7 @@ class BoatMotionScreenTest {
         val phone = paddle("paddles.get.with-phone.json")
         show { PaddlesHost(list, sample = false, load = { phone }, map = fakeMap, openPaddle = "pdl-phone",
             loadMotion = { motion("account.devices-session.no-motion.json") }, onTrackers = { error("not for a phone") }) }
-        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        motionButton().performScrollTo().performClick()
         compose.onNodeWithText("Open phone").performClick()
         compose.onNodeWithText("Paddles").assertIsDisplayed()                   // the list's top, where the uploads are
         compose.onNodeWithText("← Paddle").assertDoesNotExist()
@@ -276,13 +279,13 @@ class BoatMotionScreenTest {
 
     @Test fun backFromBoatMotionReturnsToTheSamePlaceOnThePaddle() {
         show { PaddlesHost(list, sample = true, load = { tracker }, map = fakeMap, openPaddle = "pdl-river", loadMotion = { motion("account.devices-session.json") }) }
-        compose.onNodeWithText("Boat motion").performScrollTo()
+        motionButton().performScrollTo()
         compose.onNodeWithText("Efforts and rests").performScrollTo()
         val before = compose.onNodeWithText("Efforts and rests").fetchSemanticsNode().positionInRoot
-        compose.onNodeWithText("Boat motion").performScrollTo().performClick()
+        motionButton().performScrollTo().performClick()
         compose.onNodeWithText("← Paddle").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Boat motion").assertExists()
+        motionButton().assertExists()
         val after = compose.onNodeWithText("Efforts and rests").fetchSemanticsNode().positionInRoot
         assertEquals(before.y, after.y, 1f)
     }
@@ -293,5 +296,75 @@ class BoatMotionScreenTest {
             offersMotion = { it.source.deviceSessionId == com.paddlesnitch.app.SAMPLE_MOTION_RECORDING }) }
         compose.onNodeWithText(PaddleDetail(noGps).title).assertExists()
         compose.onNode(hasText("Boat motion") and hasClickAction()).assertDoesNotExist()
+    }
+
+    // README § Boat motion, On the paddle (#870): the balance part on your own tracker or phone paddle.
+    private fun page(load: suspend (AnalysisSession) -> RecordingMotion, p: AnalysisSession = tracker, fontScale: Float = 1f) =
+        show(fontScale) { PaddlesHost(list, sample = false, load = { p }, map = fakeMap, openPaddle = p.id, loadMotion = load) }
+    private fun allCharts() = compose.onNodeWithText("All charts →")
+
+    @Test fun thePaddleShowsEvennessThenRollWithALinkToTheCharts() {
+        page({ motion("account.devices-session.json") })
+        compose.onNodeWithContentDescription("Side-to-side roll", substring = true).performScrollTo()
+        val even = compose.onNodeWithContentDescription("Evenness,", substring = true).assertExists().fetchSemanticsNode().positionInRoot
+        val roll = compose.onNodeWithContentDescription("Side-to-side roll, 5.8 degrees, typical lean").assertExists().fetchSemanticsNode().positionInRoot
+        assertEquals("one row", even.y, roll.y, 1f)
+        assert(even.x < roll.x) { "Evenness comes first" }
+        // Only those two: pitch and stroke rate stay on the screen.
+        compose.onNodeWithContentDescription("Bow-to-stern pitch", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Stroke rate,", substring = true).assertDoesNotExist()
+        golden("on-the-paddle")
+    }
+
+    @Test fun theTilesAreTheScreensOwnWords() {
+        val a = motion("account.devices-session.json").attitude!!
+        val screen = motionTiles(a, null)
+        assertEquals(listOf(screen[2], screen[0]), balanceTiles(a))
+    }
+
+    @Test fun theSummarySitsAfterTheSummaryTextAndBeforeEffortsAndRests() {
+        page({ motion("account.devices-session.json") })
+        compose.onNodeWithText("Efforts and rests").performScrollTo()
+        val heading = compose.onNode(hasText("Boat motion") and hasClickAction().not()).fetchSemanticsNode().positionInRoot.y
+        val efforts = compose.onNodeWithText("Efforts and rests").fetchSemanticsNode().positionInRoot.y
+        val button = motionButton().fetchSemanticsNode().positionInRoot.y
+        assert(button < heading && heading < efforts) { "button $button, heading $heading, efforts $efforts" }
+    }
+
+    @Test fun allChartsOpensBoatMotionAndIsATapTargetOfItsOwn() {
+        page({ motion("account.devices-session.json") })
+        val link = allCharts().performScrollTo().fetchSemanticsNode()
+        assert(with(compose.density) { link.size.height.toDp() } >= 48.dp) { "48 dp tall" }
+        allCharts().performClick()
+        compose.onNodeWithText("← Paddle").assertExists()
+        compose.onNodeWithText("Through the session").assertExists()
+    }
+
+    @Test fun atLargeTextTheTilesStackAsOnTheScreen() {
+        page({ motion("account.devices-session.json") }, fontScale = 2f)
+        compose.onNodeWithContentDescription("Side-to-side roll", substring = true).performScrollTo()
+        golden("on-the-paddle.large-text")
+    }
+
+    @Test fun noMotionShowsNothingOnThePaddle() = nothingFor { motion("account.devices-session.no-motion.json") }
+    @Test fun motionThatCouldntBeMeasuredShowsNothingOnThePaddle() = nothingFor { motion("account.devices-session.motion-unusable.json") }
+    @Test fun aRecordingThatIsntThereShowsNothingOnThePaddle() = nothingFor { throw ApiFailure("We can't find this recording", 404) }
+    @Test fun aFailureShowsNothingOnThePaddle() = nothingFor { throw ApiFailure("Couldn’t read this recording.", 500) }
+    @Test fun whileLoadingThePaddleShowsNothing() = nothingFor { kotlinx.coroutines.awaitCancellation() }
+
+    private fun nothingFor(load: suspend (AnalysisSession) -> RecordingMotion) {
+        page(load)
+        motionButton().performScrollTo()                       // the way to the screen, which explains
+        compose.onNodeWithText("Efforts and rests").performScrollTo()
+        allCharts().assertDoesNotExist()
+        compose.onNode(hasText("Boat motion") and hasClickAction().not()).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Evenness,", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun aPaddleThatDoesntOfferBoatMotionNeverAsksForIt() {
+        val strava = paddle("paddles.get.strava.json")
+        page({ error("not asked") }, p = strava)
+        compose.onNodeWithText(PaddleDetail(strava).title).assertExists()
+        allCharts().assertDoesNotExist()
     }
 }

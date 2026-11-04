@@ -129,6 +129,8 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     // Extra links, never an error: a failed call shows nothing, as an empty list does.
     var others by remember(id) { mutableStateOf<SameOutingList>(emptyList()) }
     LaunchedEffect(id) { if (sameOuting != null) others = runCatching { sameOuting(id) }.getOrDefault(emptyList()) }
+    // The balance part on the page (README § Boat motion, On the paddle): shown only when it's in and readable, nothing otherwise.
+    var balance by remember(id) { mutableStateOf<com.paddlesnitch.app.api.BoatMotion?>(null) }
     LaunchedEffect(id, attempt) {
         error = null
         val loaded = runCatching { load(id) }.onFailure { notFound = (it as? ApiFailure)?.status == 404; error = if (notFound) "We can’t find this paddle." else it.shown("Couldn’t open this paddle. Please try again.") }.getOrNull() ?: return@LaunchedEffect
@@ -143,6 +145,10 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     val s = session
     // Boat motion only for a paddle from one of your trackers (README § Boat motion).
     val onMotion = if (s != null && loadMotion != null && hasBoatMotion(s) && offersMotion(s)) ({ motionOpen = true }) else null
+    val offered = onMotion != null
+    LaunchedEffect(s?.id, offered) {
+        if (s != null && loadMotion != null && offered) balance = runCatching { loadMotion(s).attitude }.getOrNull()?.takeIf { it.available }
+    }
     if (motionOpen && s != null && loadMotion != null) {
         BackHandler { motionOpen = false }
         Column(modifier.fillMaxSize()) {
@@ -157,6 +163,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
         TextButton(onClick = onBack, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
         when {
             d != null -> PaddlePage(d, map, onMotion = onMotion, scroll = scroll,
+                boatMotion = balance?.takeIf { onMotion != null }?.let { a -> { BoatMotionSummary(a, onAllCharts = onMotion!!) } },
                 sameOuting = if (compare != null && others.isNotEmpty()) { { others.forEach { o -> SameOutingLink(id, o.id, o.sourceType, o.phone, compare) } } } else null)
             error != null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(error!!, color = PsColor.red)
@@ -172,7 +179,9 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
 @Composable
 fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Modifier, onMotion: (() -> Unit)? = null, scroll: ScrollState = rememberScrollState(),
                /** The same outing's links, after the summary (or the note) and before Efforts and rests. */
-               sameOuting: (@Composable () -> Unit)? = null) {
+               sameOuting: (@Composable () -> Unit)? = null,
+               /** Evenness and roll with a link to the charts, after the summary and before the same outing's links, as on the website. */
+               boatMotion: (@Composable () -> Unit)? = null) {
     Column(modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (d.route.isNotEmpty() && d.bounds != null) Column {
             map(d, Modifier.fillMaxWidth().height(320.dp))
@@ -194,6 +203,7 @@ fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Mo
                     if (d.insightPending) Text("Writing your summary…", color = PsColor.muted, fontSize = 14.sp)
                 }
             }
+            boatMotion?.invoke()
             sameOuting?.let { links -> Column { links() } }
             if (d.efforts.isNotEmpty() || d.rests.isNotEmpty() || d.repeats.isNotEmpty()) Efforts(d)
             if (d.splits.isNotEmpty()) Splits(d.splits)
