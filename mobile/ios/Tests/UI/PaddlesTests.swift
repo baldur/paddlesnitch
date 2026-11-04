@@ -18,6 +18,16 @@ final class PaddlesTests: AppTestCase {
         XCTAssertTrue(text(containing: "from the SW").exists)
     }
 
+    /// The whole row opens the paddle, its empty parts too: a tap between
+    /// the words and the chevron did nothing (#870's CI: at the largest
+    /// text, beside the thumbnail).
+    func testATapOnARowsEmptySpaceOpensThePaddle() {
+        let row = scrollTo("paddle-pdl-river")
+        XCTAssertTrue(row.exists)
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
+    }
+
     func testAPaddleShowsItsSpeedLegendEffortsAndRests() {
         open("pdl-river")
         XCTAssertTrue(text(containing: "Speed colours: blue 17:44/500, red 2:31/500").appears(timeout: 10))

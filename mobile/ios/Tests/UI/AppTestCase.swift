@@ -267,10 +267,13 @@ class AppTestCase: XCTestCase {
             if row.exists && row.frame.minY < readableArea.minY { app.swipeDown() } else { app.swipeUp() }
         }
         // A swipe leaves the list gliding, and a tap on a moving list only
-        // stops it (#864, newest iOS: the paddle never opened). Wait for
-        // the row to stand still.
+        // stops it. Wait for two looks in a row to agree. (#864's and
+        // #870's misses were a dead spot in the row, since fixed.)
         var last = CGRect.null
-        for _ in 0..<20 where row.exists && row.frame != last { last = row.frame }
+        for _ in 0..<20 {
+            guard row.exists, row.frame != last else { break }
+            last = row.frame
+        }
         let slice = visibleSlice(of: row)
         guard slice.height >= 44 else {
             XCTFail("\(paddle) isn't on screen to tap", file: file, line: line)

@@ -5,9 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 
 // The view itself is tested elsewhere: here only what SavedPaddle passes it.
 vi.mock('@/components/analysis/AnalysisView', () => ({
-  default: (p: { data: { insight: string }; summaryPending?: boolean }) => <div>{p.data.insight}{p.summaryPending ? ' | pending' : ''}</div>,
+  default: (p: { data: { insight: string; source?: unknown }; summaryPending?: boolean }) => { t.source = p.data.source; return <div>{p.data.insight}{p.summaryPending ? ' | pending' : ''}</div> },
 }))
-const t = vi.hoisted(() => ({ data: null as null | Record<string, unknown>, mutate: vi.fn() }))
+const t = vi.hoisted(() => ({ data: null as null | Record<string, unknown>, mutate: vi.fn(), source: undefined as unknown }))
 vi.mock('@/lib/trpc', () => ({
   trpc: {
     useUtils: () => ({ paddles: { get: { setData: () => {} } } }),
@@ -43,5 +43,19 @@ describe('SavedPaddle', () => {
     await mount()
     expect(t.mutate).not.toHaveBeenCalled()
     expect(container.textContent).toBe('Plain summary.')
+  })
+
+  // #866: the paddle page needs the recording's ids to show its boat motion,
+  // and `phone` so a phone's paddle says Phone.
+  it("passes a tracker paddle's recording ids through to the view", async () => {
+    t.data = paddle({ source: { type: 'device', deviceId: 'C0FFEE01', deviceSessionId: 'rec1' } })
+    await mount()
+    expect(t.source).toEqual({ type: 'device', deviceId: 'C0FFEE01', deviceSessionId: 'rec1', phone: undefined })
+  })
+
+  it("passes a phone paddle's phone flag through", async () => {
+    t.data = paddle({ source: { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 'rec2', phone: true } })
+    await mount()
+    expect(t.source).toMatchObject({ deviceSessionId: 'rec2', phone: true })
   })
 })

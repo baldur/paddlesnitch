@@ -283,6 +283,16 @@ one accessibility element, read as label, value, note, with "°" spoken as
 - Evenness: `fmtEvenness(symmetry.imbalancePct)`, "uneven"; `symmetry` null: "—" and no note
 - Stroke rate: the paddle's `result.avgSR` rounded, "spm"; null: "—", "not measured"
 
+**On the paddle** (#866): your own tracker or phone paddle's page also shows
+the balance part, between the summary and Efforts and rests. Call the same
+route; on the website it asks with `&motion=1` for the same slim answer the
+apps get with their header. Only when `attitude.available`: a heading "Boat
+motion" with a link "All charts →" (a 44 pt tap target) to the Boat motion
+screen, then two tiles in one row, exactly as on that screen: Evenness first,
+then Side-to-side roll. In every other state (loading, no motion, 404,
+failure) show nothing: the paddle's Boat motion button still leads to the
+screen, which explains. Not on a buddy's paddle.
+
 **Charts**: each a square-cornered panel (`surface`, `border`) with its title
 as a heading above the chart and its caption (small, `muted`) below. Each
 chart is one image element with the accessibility label given below; its

@@ -43,6 +43,12 @@ struct PaddleRowView: View {
                 .accessibilityHidden(true)
         }
         .padding(.vertical, 4)
+        // The whole row is the button: a plain button otherwise takes taps
+        // only on what's drawn, not the space beside the thumbnail or
+        // before the chevron. Full width: at accessibility sizes the stack
+        // is only as wide as its longest line.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
