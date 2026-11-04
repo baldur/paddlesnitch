@@ -151,6 +151,18 @@ import Testing
         #expect(tiles[1].spoken == "Bow-to-stern pitch, 1 degree, typical tilt")
     }
 
+    /// On the paddle (#866): Evenness, then Side-to-side roll, the very
+    /// tiles the screen shows.
+    @Test func thePaddlePageShowsEvennessThenRoll() throws {
+        let summary = try measured()
+        #expect(summary.onPaddle.map(\.label) == ["Evenness", "Side-to-side roll"])
+        #expect(summary.onPaddle == [summary.tiles[2], summary.tiles[0]])
+        var attitude = try #require(try motion("account.devices-session").attitude)
+        attitude.symmetry = nil
+        let uneven = BoatMotionSummary(attitude, strokeRate: nil).onPaddle[0]
+        #expect(uneven.value == "—" && uneven.note == nil && uneven.spoken == "Evenness, not measured")
+    }
+
     @Test func missingValuesAreADash() throws {
         var attitude = try #require(try motion("account.devices-session").attitude)
         attitude.symmetry = nil
@@ -259,7 +271,7 @@ import Testing
             BoatMotionWords.envelopeTitle, BoatMotionWords.envelopeCaption, BoatMotionWords.excerptTitle,
             BoatMotionWords.excerptCaption, BoatMotionWords.excerptSpoken, BoatMotionWords.histogramTitle,
             BoatMotionWords.histogramCaption, BoatMotionWords.histogramSpoken, BoatMotionWords.readingThis,
-            BoatMotionWords.cantTell, BoatMotionSummary.readingThis,
+            BoatMotionWords.cantTell, BoatMotionSummary.readingThis, BoatMotionWords.allCharts,
             "\"\(BoatMotionWords.roll)\"", "\"\(BoatMotionWords.pitch)\"", "\"\(BoatMotionWords.actual)\"",
             "\"\(BoatMotionWords.mirrored)\"", "\"\(BoatMotionWords.level)\"",
         ]

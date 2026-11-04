@@ -8,20 +8,21 @@ import SwiftUI
 /// (mobile/contract/README.md, "Boat motion"). Every number comes from the
 /// server; this draws.
 struct BoatMotionView: View {
-    @State private var model: BoatMotionModel
+    /// The paddle page's: what this screen loads also fills its tiles.
+    let model: BoatMotionModel
     @Environment(AppNavigator.self) private var navigator
     @Environment(\.dismiss) private var dismiss
     @AccessibilityFocusState private var errorFocused: Bool
     @State private var width: CGFloat = 0
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(recording: MotionRecording, account: AccountModel) {
-        _model = State(
-            initialValue: BoatMotionModel(recording: recording) { etag in
-                try await account.client.sendIfChanged(
-                    Endpoints.getAccountDevicesSessionsBySessionId, RecordingOf(deviceId: recording.deviceId),
-                    pathValues: ["sessionId": recording.sessionId], etag: etag)
-            })
+    /// A model that reads the recording's motion as the signed-in account.
+    static func model(_ recording: MotionRecording, account: AccountModel) -> BoatMotionModel {
+        BoatMotionModel(recording: recording) { etag in
+            try await account.client.sendIfChanged(
+                Endpoints.getAccountDevicesSessionsBySessionId, RecordingOf(deviceId: recording.deviceId),
+                pathValues: ["sessionId": recording.sessionId], etag: etag)
+        }
     }
 
     var body: some View {
@@ -139,7 +140,7 @@ struct BoatMotionView: View {
     /// drops rows that grow off screen.
     @ViewBuilder private func tiles(_ tiles: [BoatMotionSummary.Tile]) -> some View {
         if typeSize.isAccessibilitySize {
-            VStack(spacing: 8) { ForEach(tiles, id: \.label) { tile($0) } }
+            VStack(spacing: 8) { ForEach(tiles, id: \.label) { MotionTile(tile: $0) } }
         } else {
             let columns = width >= 640 ? 4 : 2
             let rows = stride(from: 0, to: tiles.count, by: columns).map {
@@ -147,13 +148,28 @@ struct BoatMotionView: View {
             }
             Grid(alignment: .topLeading, horizontalSpacing: 8, verticalSpacing: 8) {
                 ForEach(rows, id: \.first?.label) { row in
-                    GridRow { ForEach(row, id: \.label) { tile($0) } }
+                    GridRow { ForEach(row, id: \.label) { MotionTile(tile: $0) } }
                 }
             }
         }
     }
 
-    private func tile(_ tile: BoatMotionSummary.Tile) -> some View {
+    private func box(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8, content: content)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.surface)
+            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.control))
+    }
+}
+
+/// One tile: its label as an eyebrow, the value, a note; read as one
+/// element in words. Also on the paddle page.
+struct MotionTile: View {
+    let tile: BoatMotionSummary.Tile
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Eyebrow(tile.label.uppercased())
                 .fixedSize(horizontal: false, vertical: true)
@@ -172,15 +188,6 @@ struct BoatMotionView: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.control))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tile.spoken)
-    }
-
-    private func box(@ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8, content: content)
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.surface)
-            .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(Palette.border))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.control))
     }
 }
 

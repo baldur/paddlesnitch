@@ -14,8 +14,9 @@ extension SampleServer {
         case notFound
         /// Fails every time, as when the server is down.
         case fails
-        /// Fails once, then answers from the fixtures.
-        case failsOnce
+        /// Fails this many times, then answers from the fixtures. Two: the
+        /// paddle page's call, then the screen's first.
+        case failsFirst(Int)
     }
 
     public var motionAnswer: MotionAnswer {
@@ -33,11 +34,11 @@ extension SampleServer {
         }
         let answer = lock.withLock {
             let answer = _motionAnswer
-            if answer == .failsOnce { _motionAnswer = .fixtures }
+            if case .failsFirst(let times) = answer { _motionAnswer = times > 1 ? .failsFirst(times - 1) : .fixtures }
             return answer
         }
         switch answer {
-        case .fails, .failsOnce: return (502, Data("<html>Bad gateway</html>".utf8))
+        case .fails, .failsFirst: return (502, Data("<html>Bad gateway</html>".utf8))
         case .notFound: return (404, try fixture("account.devices-session.not-found"))
         case .unusable: return (200, try fixture("account.devices-session.motion-unusable"))
         case .fixtures:

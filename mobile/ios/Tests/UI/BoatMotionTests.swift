@@ -63,12 +63,16 @@ final class BoatMotionTests: AppTestCase {
         XCTAssertFalse(text(containing: "too few samples").exists, "never the engine's reason")
     }
 
+    /// The paddle page's call fails, then the screen's first: Try again
+    /// on the screen fills the page's tiles too (one model).
     func testAFailedCallCanBeTriedAgain() {
-        relaunch(with: "-MotionFailsOnce")
+        relaunch(with: "-MotionFailsTwice")
         openMotion("pdl-river")
         XCTAssertTrue(text(containing: "Couldn’t read this recording.").appears(timeout: 10))
         app.buttons["motion-try-again"].tap()
         XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(element("motion-on-paddle").appears(timeout: 10))
     }
 
     func testARecordingThatIsGoneSaysSoWithoutTryAgain() {
@@ -80,11 +84,49 @@ final class BoatMotionTests: AppTestCase {
         XCTAssertTrue(element("open-motion").appears(timeout: 10))
     }
 
+    // MARK: On the paddle (README "On the paddle", #866)
+
+    func testTheMeasuredPaddleShowsEvennessThenRollAndLinksToTheCharts() {
+        signInAndWait()
+        open("pdl-river")
+        let section = scrollTo("motion-on-paddle")
+        XCTAssertTrue(section.appears(timeout: 10))
+        let evenness = section.descendants(matching: .any)["Evenness, 10%, uneven"]
+        let roll = section.descendants(matching: .any)["Side-to-side roll, 5.8 degrees, typical lean"]
+        XCTAssertTrue(evenness.exists && roll.exists, "the screen's two tiles, read in words")
+        XCTAssertLessThan(evenness.frame.maxX, roll.frame.minX, "Evenness first, in one row")
+        XCTAssertEqual(evenness.frame.minY, roll.frame.minY, accuracy: 1)
+        XCTAssertFalse(section.descendants(matching: .any)["Stroke rate, 64, strokes per minute"].exists)
+        let link = section.buttons["motion-all-charts"]
+        XCTAssertEqual(link.label, "All charts")
+        XCTAssertGreaterThanOrEqual(link.frame.height, 44)
+        keep("Boat motion on the paddle")
+        link.tap()
+        XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+    }
+
+    /// No motion file yet: nothing on the paddle; its button explains.
+    func testNoMotionShowsNothingOnThePaddle() {
+        signInAndWait()
+        open("pdl-motion")
+        XCTAssertTrue(element("open-motion").appears(timeout: 10))
+        XCTAssertFalse(element("motion-on-paddle").appears(timeout: 3))
+    }
+
+    func testAFailedCallShowsNothingOnThePaddle() {
+        relaunch(with: "-MotionFails")
+        signInAndWait()
+        open("pdl-river")
+        XCTAssertTrue(element("open-motion").appears(timeout: 10))
+        XCTAssertFalse(element("motion-on-paddle").appears(timeout: 3))
+    }
+
     func testOnlyYourOwnTrackerPaddleOffersIt() {
         // The samples have no account.
         open("pdl-river")
         XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
         XCTAssertFalse(element("open-motion").exists)
+        XCTAssertFalse(element("motion-on-paddle").exists)
         app.terminate()
         app.launch()
         signInAndWait()

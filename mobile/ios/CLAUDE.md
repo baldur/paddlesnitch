@@ -303,8 +303,20 @@ isn't obvious from the code.
   answers `GET /api/account/devices/sessions/<id>` with an ETag (304 on
   `If-None-Match`): S0012 measured, others no motion;
   `-MotionUnusable`, `-MotionNotFound`, `-MotionFails`,
-  `-MotionFailsOnce`. On the screen's large-text check the page jumps
+  `-MotionFailsTwice` (the page's call, then the screen's first). On the screen's large-text check the page jumps
   back up after each audit, as a List does: `checkScreen(at:)` the parts.
+  On your own paddle's page (`BoatMotionOnPaddle`, README "On the
+  paddle") the page owns the `BoatMotionModel` and hands it to the screen,
+  so a Try again there fills the page too. The page shows Evenness and
+  roll (`summary.onPaddle`, the screen's own tiles) only in `.loaded`;
+  every other state shows nothing. An
+  `accessibilityIdentifier` on a stack goes to each child and hides
+  theirs: give the stack `.accessibilityElement(children: .contain)`.
+- Wait for a list to stop gliding before tapping a row in it
+  (`open(_:)` waits for the row's frame to stay put). A tap on a list
+  still moving after a swipe only stops it: on #864 the paddle never
+  opened, on the newest iOS only, once a taller card changed where it
+  stopped.
 - Going to another tab's screen (Open tracker → You → Trackers):
   `AppNavigator` in the environment holds the request until that tab's
   view takes it (`onChange(…, initial: true)`): a tab never shown yet

@@ -51,6 +51,21 @@ final class LargeTextTests: AppTestCase {
         try checkScreen(at: [element("motion-envelope"), text(containing: "What this can't tell you.")])
     }
 
+    /// Boat motion on the paddle page: the tiles go to one column.
+    func testBoatMotionOnThePaddleAtTheLargestTextSize() throws {
+        signInAndWait()
+        open("pdl-river")
+        let link = element("motion-all-charts")
+        XCTAssertTrue(link.appears(timeout: 10))
+        // Its parts, not the whole: about a screen tall, the whole section
+        // had the scrolling overshoot back and forth (300 s).
+        let roll = app.descendants(matching: .any)["Side-to-side roll, 5.8 degrees, typical lean"]
+        try checkScreen(at: [link, roll])
+        scrollToElement(link)
+        XCTAssertGreaterThanOrEqual(link.frame.height, 44)
+        keep("Boat motion on the paddle at the largest text")
+    }
+
     /// The same-outing row in the card and the link on the paddle page
     /// (Compare), signed in: the samples have no account to compare in.
     func testSameOutingAtTheLargestTextSize() throws {
