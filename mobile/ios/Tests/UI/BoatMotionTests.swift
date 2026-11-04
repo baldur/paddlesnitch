@@ -19,13 +19,15 @@ final class BoatMotionTests: AppTestCase {
         try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
     }
 
-    /// The system's back button stays, so the edge swipe goes back.
-    func testASwipeFromTheEdgeGoesBackToThePaddle() {
+    /// The system's back button stays (so the edge swipe works too): it
+    /// is named after the paddle, or "Back". A synthesized edge swipe
+    /// didn't trigger iOS 17's back gesture on CI, so this taps it.
+    func testTheSystemBackButtonGoesBackToThePaddle() {
         openMotion("pdl-river")
         XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
-        let window = app.windows.firstMatch
-        let edge = window.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
-        edge.press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(["Tue, 1 Sep 2026", "Back"].contains(back.label), "the system's back button: \(back.label)")
+        back.tap()
         XCTAssertTrue(element("open-motion").appears(timeout: 10))
     }
 

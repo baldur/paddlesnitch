@@ -293,4 +293,7 @@ isn't obvious from the code.
   view takes it (`onChange(…, initial: true)`): a tab never shown yet
   has no view to see a change. Keep the system back button (the
   README's "← Paddle" is the website's link): hiding it to draw "Paddle"
-  turns off the edge swipe back.
+  turns off the edge swipe back. Test the back button, not a swipe: a
+  synthesized drag from the screen edge didn't trigger iOS 17's back
+  gesture on CI (it did on 26.5). The button's label is the screen
+  below's title, or "Back".
