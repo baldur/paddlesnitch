@@ -15,11 +15,14 @@ import { etagMatches } from '@/lib/etag'
 //
 // The apps (x-paddlesnitch-app) get only the boat motion they draw
 // (mobile/contract RecordingMotion), not the raw GPS rows of the technical details.
+// So does the website's summary on the paddle page (`?motion=1`, #866), which
+// shows a few numbers and shouldn't download the rows to do it.
 export async function GET(req: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const user = await getRequestUser(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { sessionId } = await params
-  const deviceId = (new URL(req.url).searchParams.get('deviceId') ?? '').toUpperCase()
+  const query = new URL(req.url).searchParams
+  const deviceId = (query.get('deviceId') ?? '').toUpperCase()
 
   const version = await recordingReportVersion(user.id, deviceId, sessionId)
   if (!version) return NextResponse.json({ error: 'not_found' }, { status: 404 })
@@ -30,6 +33,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ sessionI
 
   const r = await recordingReport(user.id, deviceId, sessionId)
   if (!r) return NextResponse.json({ error: 'not_found' }, { status: 404 })
-  const app = req.headers.has('x-paddlesnitch-app')
-  return NextResponse.json(app ? { attitude: r.attitude, cadence: r.cadence } : r, { headers })
+  const slim = req.headers.has('x-paddlesnitch-app') || query.get('motion') === '1'
+  return NextResponse.json(slim ? { attitude: r.attitude, cadence: r.cadence } : r, { headers })
 }

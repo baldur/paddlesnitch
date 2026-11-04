@@ -20,6 +20,7 @@ import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass
 import { isMotionOnly, isPhonePaddle, alsoRecordedBy } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import PortageSuggestions from './PortageSuggestions'
+import BoatMotionSummary from './BoatMotionSummary'
 
 const compass = (d?: number) => (d == null ? '' : compassPoint(d))
 const PANEL = 'bg-surface/95 border border-border rounded-control backdrop-blur-sm'
@@ -36,7 +37,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; deviceId?: string; phone?: boolean } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; deviceId?: string; deviceSessionId?: string; phone?: boolean } }
 
 // One paddle: the site header, the map (with only the colour scale, the replay
 // bar and section picking over it), then everything to read below it, and the
@@ -570,6 +571,10 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             <p className="text-base leading-relaxed text-fg">{data.insight}</p>
             {summaryPending && <p className="text-sm text-muted mt-1" role="status">Writing your summary…</p>}
           </div>
+
+          {owner && isTracker && data.source?.deviceId && data.source?.deviceSessionId && (
+            <BoatMotionSummary paddleId={sessionId!} deviceId={data.source.deviceId} deviceSessionId={data.source.deviceSessionId} />
+          )}
 
           {sameOuting.length > 0 && (
             <div className="flex flex-col gap-1">
