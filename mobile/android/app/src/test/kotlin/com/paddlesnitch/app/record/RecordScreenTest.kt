@@ -137,6 +137,50 @@ class RecordScreenTest {
         compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
     }
 
+    // Tester on #882: the button stays until the service posts Stopped (here it never does), so one stop only.
+    private fun holdFully() {
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_800)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+    }
+
+    @Test fun aTapAfterAFullHoldNeitherStopsAgainNorSaysToKeepHolding() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        holdFully()
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center); up() }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(1, stops)
+        assertEquals(1, felt.size)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+    @Test fun aSecondFullHoldWhileStoppingDoesntStopAgain() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        holdFully()
+        holdFully()
+        assertEquals(1, stops)
+        assertEquals(listOf(HapticFeedbackType.LongPress), felt)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+    @Test fun talkBacksActionDuringAHoldStopsOnce() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.runOnUiThread { stopRecordingAction().action!!.invoke() }
+        compose.mainClock.advanceTimeBy(1_300)                          // the hold carries on to 1.8 s
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(1, stops)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
     @Test fun slidingOffTheButtonPartWayThroughSaysToKeepHolding() {
         var stops = 0
         show(recording, onStop = { stops++ })

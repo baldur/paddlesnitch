@@ -368,6 +368,15 @@ private fun HoldToStop(onStop: () -> Unit) {
     val fill = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var hint by remember { mutableStateOf(false) }
+    // One stop per recording, by hold or by TalkBack's action: until the service says Stopped this button stays
+    // on screen, and a second hold or a tap must neither stop again nor say to keep holding.
+    var stopped by remember { mutableStateOf(false) }
+    fun stop(haptic: Boolean) {
+        if (stopped) return
+        stopped = true; hint = false
+        if (haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onStop()
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(
             // A filled red button; a lighter fill sweeps across it as it's held (README § Recording screen).
@@ -377,14 +386,12 @@ private fun HoldToStop(onStop: () -> Unit) {
                 .drawBehind { drawRect(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.35f), size = size.copy(width = size.width * fill.value)) }
                 .pointerInput(Unit) {
                     detectTapGestures(onPress = {
+                        if (stopped) return@detectTapGestures
                         hint = false
                         // Stops, with the haptic, the moment the fill completes, finger still down: never waits for the lift (#881).
-                        var stopped = false
                         val held = scope.launch {
                             fill.animateTo(1f, tween(HOLD_TO_STOP_MS, easing = LinearEasing))
-                            stopped = true
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onStop()
+                            stop(haptic = true)
                         }
                         tryAwaitRelease()
                         if (!stopped) {
@@ -398,7 +405,7 @@ private fun HoldToStop(onStop: () -> Unit) {
                 // TalkBack: "Hold to stop" as what it is, and a named action that stops at once.
                 .clearAndSetSemantics {
                     role = Role.Button; contentDescription = "Hold to stop"
-                    customActions = listOf(CustomAccessibilityAction("Stop recording") { onStop(); true })
+                    customActions = listOf(CustomAccessibilityAction("Stop recording") { stop(haptic = false); true })
                 },
             contentAlignment = Alignment.Center,
         ) { Text("Hold to stop", color = PsColor.bg, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
