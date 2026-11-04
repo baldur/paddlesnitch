@@ -465,8 +465,8 @@ Both apps, laid out the same (design-usability, #767):
   number the app works out itself), then the GPS line below. A problem (a failed
   write) shows in place of the "Recording" heading.
 - Stop: a filled red button; hold for 1.5 s, a lighter fill sweeping across it as
-  you hold, with a haptic; a tap says
-  "Keep holding to stop." Stop in the Android notification needs an unlock
+  you hold, with a haptic; a tap, or letting go before it fills, says
+  "Keep holding to stop." (#880) Stop in the Android notification needs an unlock
   (`setAuthenticationRequired`). Hold to stop is pinned to the bottom.
 - Hold to stop has a named accessibility action, "Stop recording" (VoiceOver
   custom action; Android `customActions`), which stops at once. Its label is
