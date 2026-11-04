@@ -314,3 +314,9 @@ isn't obvious from the code.
   synthesized drag from the screen edge didn't trigger iOS 17's back
   gesture on CI (it did on 26.5). The button's label is the screen
   below's title, or "Back".
+- A `.buttonStyle(.plain)` button takes taps only on what its label
+  draws, while XCUITest's frame (and the user's eye) is the whole row:
+  the space beside a paddle row's thumbnail did nothing (#870's CI, at
+  the largest text; the test tapped the row's visible slice). Give the
+  label `.contentShape(Rectangle())`; `testATapOnARowsEmptySpaceOpensThePaddle`
+  taps a row's empty part.
