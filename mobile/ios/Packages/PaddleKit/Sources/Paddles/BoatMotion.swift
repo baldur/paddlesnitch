@@ -89,6 +89,9 @@ public final class BoatMotionModel {
             failures = 0
             state = .notFound
         } catch {
+            // Cancelled (the screen opened, or the page went away): not a
+            // failure, and what's on screen stays.
+            if Task.isCancelled { return }
             failures += 1
             state = .failed
         }
@@ -176,6 +179,9 @@ public struct BoatMotionSummary: Hashable, Sendable {
     }
 
     public let tiles: [Tile]
+    /// The paddle page's two (README "On the paddle", #866): Evenness,
+    /// then Side-to-side roll, the same tiles as the screen's.
+    public var onPaddle: [Tile] { [tiles[2], tiles[0]] }
     public let envelope: Envelope
     public let excerpt: Excerpt
     /// Nil without bins: the panel stays, the chart doesn't.
@@ -300,6 +306,8 @@ public struct BoatMotionSummary: Hashable, Sendable {
 /// README.md, "Boat motion"): here so a test checks each against the README.
 public enum BoatMotionWords {
     public static let title = "Boat motion"
+    /// The paddle page's link to this screen.
+    public static let allCharts = "All charts →"
     public static let loading = "Loading"
     public static let failed = "Couldn’t read this recording."
     public static let tryAgain = "Try again"

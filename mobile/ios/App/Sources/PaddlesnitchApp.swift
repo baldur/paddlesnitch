@@ -61,7 +61,7 @@ struct PaddlesnitchApp: App {
         // Boat motion: how the recording's motion answers.
         let motion: [String: SampleServer.MotionAnswer] = [
             "-MotionUnusable": .unusable, "-MotionNotFound": .notFound, "-MotionFails": .fails,
-            "-MotionFailsOnce": .failsOnce,
+            "-MotionAnswersThirdOnly": .answersOnly(call: 3),
         ]
         if let answer = motion.first(where: { arguments.contains($0.key) })?.value { server.motionAnswer = answer }
         // Phone recordings (C3): what the server does with an upload.
