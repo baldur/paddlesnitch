@@ -349,7 +349,6 @@ private struct HoldToStopButton: View {
                     // (#880). A held press isn't a tap, so it said nothing.
                     hint = !down && !stopped
                 }
-                .sensoryFeedback(.success, trigger: stopped)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Hold to stop")
                 .accessibilityAddTraits(.isButton)
@@ -363,8 +362,15 @@ private struct HoldToStopButton: View {
         }
     }
 
+    /// The haptic plays here, not from `.sensoryFeedback` on this view: the
+    /// stop removes the view in the same update, so a trigger on it most
+    /// likely never fired (design-usability, #880; check on a phone, #879).
+    /// The hint is cleared here too, whatever order SwiftUI reports the
+    /// press ending in.
     private func finish() {
         stopped = true
+        hint = false
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
         stop()
     }
 }
