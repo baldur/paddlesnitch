@@ -149,7 +149,9 @@ final class RecordTests: AppTestCase {
         app.launch()
         signIn()
         XCTAssertTrue(element("sample-notice").appears(timeout: 15), "signed out")
-        app.buttons["sample-notice-action"].tap()
+        // The sign-in sheet can still be closing over it: 0.7 s after Sign
+        // in, the tap found it covered (#873's CI, newest iOS).
+        tapWhenClear(app.buttons["sample-notice-action"])
         XCTAssertTrue(
             element("sign-in-account-deleted").appears(timeout: 10)
                 && text(containing: "This account was deleted").exists)
