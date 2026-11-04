@@ -335,6 +335,10 @@ class BoatMotionScreenTest {
         page({ motion("account.devices-session.json") })
         val link = allCharts().performScrollTo().fetchSemanticsNode()
         assert(with(compose.density) { link.size.height.toDp() } >= 48.dp) { "48 dp tall" }
+        // Flush with the tiles' right edge, as on the website (design review).
+        val roll = compose.onNodeWithContentDescription("Side-to-side roll", substring = true).fetchSemanticsNode()
+        val tileEdge = roll.positionInRoot.x + roll.size.width + with(compose.density) { 12.dp.toPx() }   // the tile's text sits 12 dp inside its box
+        assertEquals(tileEdge, link.positionInRoot.x + link.size.width, 1f)
         allCharts().performClick()
         compose.onNodeWithText("← Paddle").assertExists()
         compose.onNodeWithText("Through the session").assertExists()

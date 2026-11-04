@@ -255,7 +255,7 @@ private fun LeftRule(colour: Color, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SectionTitle(text: String) =
+internal fun SectionTitle(text: String) =
     Text(text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
 
 @Composable

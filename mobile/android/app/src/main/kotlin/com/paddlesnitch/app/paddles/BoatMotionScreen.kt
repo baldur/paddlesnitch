@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,7 +108,6 @@ fun motionTiles(a: BoatMotion, avgSR: Double?): List<MotionTile> {
     )
 }
 
-/** The envelope chart's bound: the server's robust one, 10 when it has none. */
 /** The paddle page's two (README § Boat motion, On the paddle): Evenness, then Side-to-side roll, the screen's own tiles. */
 fun balanceTiles(a: BoatMotion): List<MotionTile> = motionTiles(a, null).let { t -> listOf(t.first { it.label == "Evenness" }, t.first { it.label == "Side-to-side roll" }) }
 
@@ -119,13 +120,16 @@ fun BoatMotionSummary(a: BoatMotion, onAllCharts: () -> Unit) {
     if (!a.available) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Boat motion", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { heading() })
-            TextButton(onClick = onAllCharts, colors = textColors(), modifier = Modifier.heightIn(min = 48.dp)) { Text("All charts →", fontSize = 14.sp) }
+            Box(Modifier.weight(1f)) { SectionTitle("Boat motion") }
+            // Flush with the tiles' edge, as the website's link; still 48 dp each way to tap.
+            TextButton(onClick = onAllCharts, colors = textColors(), contentPadding = PaddingValues(start = 12.dp),
+                modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("All charts →", fontSize = 14.sp) }
         }
         Tiles(balanceTiles(a))
     }
 }
 
+/** The envelope chart's bound: the server's robust one, 10 when it has none. */
 fun envelopeBound(a: BoatMotion) = a.plotBoundDeg ?: 10.0
 
 /** Whether any of the envelope goes past the bound (and is drawn clipped). */
