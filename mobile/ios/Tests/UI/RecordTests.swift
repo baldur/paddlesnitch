@@ -72,6 +72,22 @@ final class RecordTests: AppTestCase {
         XCTAssertTrue(line.disappears(timeout: 10))
     }
 
+    /// Let go before 1.5 s and it keeps recording: only a full hold stops
+    /// (a bump in a drybag mustn't end a paddle). 0.5 s and 1.2 s, short
+    /// and nearly there; each wait outlasts the 1.5 s so a late stop shows.
+    func testLettingGoEarlyKeepsRecording() throws {
+        try startRecording(allow: true)
+        let stop = element("record-stop")
+        XCTAssertTrue(element("record-recording").appears(timeout: 10))
+        for seconds in [0.5, 1.2] {
+            stop.press(forDuration: seconds)
+            XCTAssertFalse(element("record-recording").disappears(timeout: 2), "still recording after \(seconds) s")
+            XCTAssertTrue(stop.exists)
+        }
+        stop.press(forDuration: 2)
+        XCTAssertTrue(element("record-recording").disappears(timeout: 10), "a full hold stops it")
+    }
+
     func testWhileTheServerIsDownTheRecordingWaits() throws {
         try record(with: "-UploadsDown")
         let line = element("upload-line")
