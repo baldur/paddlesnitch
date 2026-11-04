@@ -374,6 +374,19 @@ class BoatMotionScreenTest {
         golden("on-the-paddle.large-text")
     }
 
+    // README § Boat motion, On the paddle (#876): at accessibility text sizes the tiles stack, one per row; below them, one row.
+    private fun rollAgainstEvenness(scale: Float): Pair<Float, Float> {
+        page({ measured }, fontScale = scale)
+        compose.onNodeWithContentDescription("Side-to-side roll", substring = true).performScrollTo()
+        val even = compose.onNodeWithContentDescription("Evenness,", substring = true).fetchSemanticsNode()
+        val roll = compose.onNodeWithContentDescription("Side-to-side roll", substring = true).fetchSemanticsNode()
+        return (roll.positionInRoot.y - even.positionInRoot.y) to (roll.positionInRoot.x - even.positionInRoot.x)
+    }
+
+    @Test fun at150PercentTextRollStacksBelowEvenness() = rollAgainstEvenness(1.5f).let { (dy, dx) -> assert(dy > 0f && dx == 0f) { "dy $dy, dx $dx" } }
+    @Test fun at200PercentTextRollStacksBelowEvenness() = rollAgainstEvenness(2f).let { (dy, dx) -> assert(dy > 0f && dx == 0f) { "dy $dy, dx $dx" } }
+    @Test fun at130PercentTextTheyStillShareARow() = rollAgainstEvenness(1.3f).let { (dy, dx) -> assert(dy == 0f && dx > 0f) { "dy $dy, dx $dx" } }
+
     @Test fun noMotionShowsNothingOnThePaddle() = nothingFor { motion("account.devices-session.no-motion.json") }
     @Test fun motionThatCouldntBeMeasuredShowsNothingOnThePaddle() = nothingFor { motion("account.devices-session.motion-unusable.json") }
     @Test fun aRecordingThatIsntThereShowsNothingOnThePaddle() = nothingFor { throw ApiFailure("We can't find this recording", 404) }
