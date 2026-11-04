@@ -279,3 +279,17 @@ isn't obvious from the code.
   a 2 s look for it and cover the code field through a 5 s wait: wait
   with `becomesClear` (decline, wait 3 s, three times), never one look
   then one wait.
+- Boat motion (`BoatMotionView`, model in `Paddles/BoatMotion.swift`):
+  the model works out every chart bound, clamp and mirror from the
+  server's answer, so the tests are pure; the view only maps them to
+  points (Canvas, chart text at a fixed 11 pt). The sample server
+  answers `GET /api/account/devices/sessions/<id>` with an ETag (304 on
+  `If-None-Match`): S0012 measured, others no motion;
+  `-MotionUnusable`, `-MotionNotFound`, `-MotionFails`,
+  `-MotionFailsOnce`. On the screen's large-text check the page jumps
+  back up after each audit, as a List does: `checkScreen(at:)` the parts.
+- Going to another tab's screen (Open tracker → You → Trackers):
+  `AppNavigator` in the environment holds the request until that tab's
+  view takes it (`onChange(…, initial: true)`): a tab never shown yet
+  has no view to see a change. A toolbar `Label` showed its icon alone
+  on iOS 26; draw the words when they must show.

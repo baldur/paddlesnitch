@@ -1,3 +1,4 @@
+import Account
 import DesignSystem
 import PaddleAPI
 import Paddles
@@ -10,6 +11,8 @@ struct PaddleListView: View {
     /// Which paddles `source` holds; a change reloads the list.
     let sourceID: String
     let isSample: Bool
+    /// Signed in: for a paddle's Boat motion.
+    let account: AccountModel?
     /// The account must accept changed Terms on the website (as on Android:
     /// a notice, not a block).
     let needsTerms: Bool
@@ -31,9 +34,11 @@ struct PaddleListView: View {
     @State private var loadedID: String?
     @State private var choosingFile = false
     @State private var openedID: String?
+    @Environment(AppNavigator.self) private var navigator
 
     init(
-        source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
+        source: any PaddlesSource, sourceID: String, isSample: Bool, account: AccountModel?, needsTerms: Bool,
+        signIn: @escaping () -> Void,
         openTerms: @escaping () -> Void, adding: AddPaddleModel,
         openFile: @escaping (URL) -> Void, openRecord: @escaping () -> Void, uploads: UploadQueue?,
         openReport: @escaping () async -> Bool
@@ -41,6 +46,7 @@ struct PaddleListView: View {
         self.source = source
         self.sourceID = sourceID
         self.isSample = isSample
+        self.account = account
         self.needsTerms = needsTerms
         self.signIn = signIn
         self.openTerms = openTerms
@@ -64,10 +70,10 @@ struct PaddleListView: View {
                 .navigationTitle("Paddles")
                 .toolbarBackground(Palette.bg, for: .navigationBar)
                 .navigationDestination(for: PaddleRow.self) { row in
-                    PaddleDetailView(id: row.id, source: source)
+                    PaddleDetailView(id: row.id, source: source, account: account)
                 }
                 .navigationDestination(item: $openedID) { id in
-                    PaddleDetailView(id: id, source: source)
+                    PaddleDetailView(id: id, source: source, account: account)
                 }
                 .toolbar {
                     if !isSample {
@@ -97,6 +103,13 @@ struct PaddleListView: View {
             if case .done(let outcome) = state, !outcome.failed { Task { await model.load() } }
             // The card appears away from VoiceOver's focus: read it out.
             if let words = state.announcement { AccessibilityNotification.Announcement(words).post() }
+        }
+        // Boat motion's Open phone: back to the list.
+        .onChange(of: navigator.paddlesListWanted, initial: true) { _, wanted in
+            guard wanted else { return }
+            path = []
+            openedID = nil
+            navigator.paddlesListWanted = false
         }
         .task(id: sourceID) {
             // Signed in or out: back to the top, and load the other paddles.

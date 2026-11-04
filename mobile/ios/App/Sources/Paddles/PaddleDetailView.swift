@@ -1,3 +1,4 @@
+import Account
 import DesignSystem
 import MapKit
 import PaddleAPI
@@ -9,10 +10,15 @@ import SwiftUI
 /// then the Android app's 500 m splits.
 struct PaddleDetailView: View {
     @State private var model: PaddleDetailModel
+    /// Signed in: Boat motion for a paddle from a tracker or phone. The
+    /// samples have none.
+    let account: AccountModel?
+    @State private var motionOpen = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(id: String, source: any PaddlesSource) {
+    init(id: String, source: any PaddlesSource, account: AccountModel?) {
         _model = State(initialValue: PaddleDetailModel(id: id, source: source))
+        self.account = account
     }
 
     var body: some View {
@@ -43,6 +49,17 @@ struct PaddleDetailView: View {
                     }
                     VStack(alignment: .leading, spacing: 20) {
                         header(paddle)
+                        if paddle.motion != nil && account != nil {
+                            Button {
+                                motionOpen = true
+                            } label: {
+                                Text("Boat motion")
+                                    .font(.plexSans(.body))
+                                    .frame(minHeight: 44)
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("open-motion")
+                        }
                         statsGrid(paddle.stats + paddle.conditions)
                         if let message = paddle.noGpsMessage {
                             card { Text(message).font(.plexSans(.body)).foregroundStyle(Palette.fg) }
@@ -65,6 +82,9 @@ struct PaddleDetailView: View {
                 .padding(.bottom, 24)
             }
             .navigationTitle(paddle.title)
+            .navigationDestination(isPresented: $motionOpen) {
+                if let motion = paddle.motion, let account { BoatMotionView(recording: motion, account: account) }
+            }
         }
     }
 

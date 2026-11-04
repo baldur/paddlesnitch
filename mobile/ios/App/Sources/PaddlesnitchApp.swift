@@ -50,6 +50,12 @@ struct PaddlesnitchApp: App {
         if arguments.contains("-OptionsSayStrava") { server.options = SignInOptions(google: true, strava: true) }
         // UI tests: asking which ways in are on fails.
         if arguments.contains("-OptionsFail") { server.options = nil }
+        // Boat motion: how the recording's motion answers.
+        let motion: [String: SampleServer.MotionAnswer] = [
+            "-MotionUnusable": .unusable, "-MotionNotFound": .notFound, "-MotionFails": .fails,
+            "-MotionFailsOnce": .failsOnce,
+        ]
+        if let answer = motion.first(where: { arguments.contains($0.key) })?.value { server.motionAnswer = answer }
         // Phone recordings (C3): what the server does with an upload.
         let uploads: [String: PhoneUploads] = [
             "-UploadsDown": .down, "-UploadsRefused": .refused, "-UploadsNoFix": .noFix,
