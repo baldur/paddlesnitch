@@ -31,6 +31,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.junit.Test
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.geometry.Offset
@@ -54,12 +57,15 @@ class RecordScreenTest {
     // 1 h 5 min 3 s in.
     private val recording = RecordingService.State.Recording(files, MutableStateFlow(notReady), startedAt = 1_000L)
     private val now = { 1_000L + 3_903_000L }
+    /** Every haptic the screen asks for. */
+    private val felt = mutableListOf<HapticFeedbackType>()
+    private val haptics = object : HapticFeedback { override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) { felt += hapticFeedbackType } }
 
     private fun show(state: RecordingService.State, fontScale: Float = 1f, onStart: () -> Unit = {}, onStop: () -> Unit = {},
                      onSettings: () -> Unit = {}, notificationsOn: Boolean = true, location: LocationReady = LocationReady.Ready,
                      onLocationSettings: () -> Unit = {}) = compose.setContent {
         val d = LocalDensity.current
-        CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale)) {
+        CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale), LocalHapticFeedback provides haptics) {
             PaddlesnitchTheme { Surface(color = PsColor.bg) {
                 RecordScreen(state, onStart, onStop, location = location, onSettings = onSettings, onLocationSettings = onLocationSettings,
                     notificationsOn = notificationsOn, now = now)
@@ -104,15 +110,106 @@ class RecordScreenTest {
         assertEquals(0, stops)
     }
 
-    @Test fun holdingForOneAndAHalfSecondsStopsIt() {
+    // #880, README § Recording screen (#881): a tap, or letting go before it fills, says to keep holding, and it keeps recording.
+    private fun pressAndLetGo(ms: Long): Int {
         var stops = 0
         show(recording, onStop = { stops++ })
         compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
-        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS + 100L)
+        compose.mainClock.advanceTimeBy(ms)
         compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
-        compose.mainClock.advanceTimeBy(100)
+        compose.mainClock.advanceTimeBy(2_000)
+        return stops
+    }
+
+    @Test fun lettingGoAfterHalfASecondSaysToKeepHolding() {
+        assertEquals(0, pressAndLetGo(500))
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
+    @Test fun lettingGoAfterOnePointTwoSecondsSaysToKeepHolding() {
+        assertEquals(0, pressAndLetGo(1_200))
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
+    @Test fun aFullHoldStopsWithNoHint() {
+        assertEquals(1, pressAndLetGo(HOLD_TO_STOP_MS + 100L))
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+    // Tester on #882: the button stays until the service posts Stopped (here it never does), so one stop only.
+    private fun holdFully() {
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_800)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+    }
+
+    @Test fun aTapAfterAFullHoldNeitherStopsAgainNorSaysToKeepHolding() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        holdFully()
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center); up() }
+        compose.mainClock.advanceTimeBy(500)
         assertEquals(1, stops)
+        assertEquals(1, felt.size)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+    @Test fun aSecondFullHoldWhileStoppingDoesntStopAgain() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        holdFully()
+        holdFully()
+        assertEquals(1, stops)
+        assertEquals(listOf(HapticFeedbackType.LongPress), felt)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+    @Test fun talkBacksActionDuringAHoldStopsOnce() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.runOnUiThread { stopRecordingAction().action!!.invoke() }
+        compose.mainClock.advanceTimeBy(1_300)                          // the hold carries on to 1.8 s
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(1, stops)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+    @Test fun slidingOffTheButtonPartWayThroughSaysToKeepHolding() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { moveTo(Offset(centerX, -200f)); up() }
+        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS.toLong())
+        assertEquals(0, stops)
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
+    // Lead, 2026-11-04 (#881): it stops, with the haptic, the moment the fill completes, finger still down.
+    @Test fun holdingStopsAtOneAndAHalfSecondsWithTheFingerStillDown() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS - 100L)
+        assertEquals("not yet", 0, stops)
+        assertEquals(emptyList<HapticFeedbackType>(), felt)
+        compose.mainClock.advanceTimeBy(1_800L - (HOLD_TO_STOP_MS - 100L))   // 1.8 s in, never lifted
+        assertEquals(1, stops)
+        assertEquals(listOf(HapticFeedbackType.LongPress), felt)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("the lift adds nothing", 1, stops)
+        assertEquals(1, felt.size)
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
     }
 
     @Test fun talkBackStopsItWithANamedStopRecordingAction() {
