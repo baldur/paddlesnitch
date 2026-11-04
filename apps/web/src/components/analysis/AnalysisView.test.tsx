@@ -134,6 +134,37 @@ describe('AnalysisView BOAT MOTION', () => {
     await mount(<AnalysisView data={{ ...data, source: { type: 'device' } }} sessionId="t-rec1" readOnly />)
     expect(link()).toBeUndefined()
   })
+
+  // #866: the balance bits (roll, pitch, evenness) read on the paddle itself
+  // when the recording carries them, with the full charts a link away.
+  it('shows the boat-motion summary on an owner tracker paddle that has motion', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      attitude: { available: true, rollRmsDeg: 4, pitchRmsDeg: 1.9, symmetry: { imbalancePct: 13.5 } },
+    })))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await mount(<AnalysisView data={{ ...data, source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' } }} sessionId="t-rec1" />)
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+      expect(fetchMock).toHaveBeenCalledWith('/api/account/devices/sessions/rec1?deviceId=435AC17C')
+      expect(container.textContent).toContain('Evenness')
+      const chartsLink = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('See the charts'))
+      expect(chartsLink?.getAttribute('href')).toBe('/paddles/t-rec1/motion')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not read the recording for the summary on a shared view', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}'))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await mount(<AnalysisView data={{ ...data, source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' } }} sessionId="t-rec1" readOnly />)
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 // The same outing from another source (one-paddle.md, phase 4).
