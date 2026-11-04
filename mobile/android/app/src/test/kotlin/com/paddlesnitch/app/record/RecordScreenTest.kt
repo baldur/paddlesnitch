@@ -104,6 +104,46 @@ class RecordScreenTest {
         assertEquals(0, stops)
     }
 
+    // #880, README § Recording screen (#881): a tap, or letting go before it fills, says to keep holding, and it keeps recording.
+    private fun pressAndLetGo(ms: Long): Int {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(ms)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(2_000)
+        return stops
+    }
+
+    @Test fun lettingGoAfterHalfASecondSaysToKeepHolding() {
+        assertEquals(0, pressAndLetGo(500))
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
+    @Test fun lettingGoAfterOnePointTwoSecondsSaysToKeepHolding() {
+        assertEquals(0, pressAndLetGo(1_200))
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
+    @Test fun aFullHoldStopsWithNoHint() {
+        assertEquals(1, pressAndLetGo(HOLD_TO_STOP_MS + 100L))
+        compose.onNodeWithText(KEEP_HOLDING).assertDoesNotExist()
+    }
+
+
+    @Test fun slidingOffTheButtonPartWayThroughSaysToKeepHolding() {
+        var stops = 0
+        show(recording, onStop = { stops++ })
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithContentDescription("Hold to stop").performTouchInput { moveTo(Offset(centerX, -200f)); up() }
+        compose.mainClock.advanceTimeBy(HOLD_TO_STOP_MS.toLong())
+        assertEquals(0, stops)
+        compose.onNodeWithText(KEEP_HOLDING).assertExists()
+    }
+
     @Test fun holdingForOneAndAHalfSecondsStopsIt() {
         var stops = 0
         show(recording, onStop = { stops++ })

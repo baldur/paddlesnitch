@@ -359,7 +359,7 @@ private fun MotionTrace(trace: RecorderCore.Trace) {
 
 /**
  * Stops only after [HOLD_TO_STOP_MS] held, filling as it goes: a wet hand or a
- * drybag mustn't end a paddle by brushing it. A tap says to keep holding.
+ * drybag mustn't end a paddle by brushing it. Letting go early says to keep holding.
  * TalkBack gets a named action, Stop recording, that stops at once.
  */
 @Composable
@@ -379,13 +379,14 @@ private fun HoldToStop(onStop: () -> Unit) {
                     detectTapGestures(onPress = {
                         hint = false
                         val held = scope.launch { fill.animateTo(1f, tween(HOLD_TO_STOP_MS, easing = LinearEasing)) }
-                        val released = tryAwaitRelease()
+                        tryAwaitRelease()
                         if (fill.value >= 1f) {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             onStop()
                         } else {
                             held.cancel()
-                            if (released) hint = true
+                            // Any early end, a release or a finger slid off the button, says to keep holding.
+                            hint = true
                             scope.launch { fill.animateTo(0f, tween(150)) }
                         }
                     })
