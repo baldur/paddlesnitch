@@ -166,7 +166,9 @@ isn't obvious from the code.
   (Waiting.swift), which taps again until the form is there.
   The same goes for iOS's own alerts: a location answer tapped while the
   alert grows in misses, so use `answerLocation(_:)` (RecordTests.swift),
-  which taps until the alert has gone.
+  which taps until the alert has gone. Safari's Done is no different: iOS
+  17 dropped one tapped while the page slid in and loaded, and it stayed
+  open (#878's CI). Wait for it to be hittable, and tap again until it goes.
 - Phone uploads (C3): a queue per signed-in account (RootView). Its
   client's token is that account's only (nil once another signs in), and a
   stopped queue writes nothing: otherwise an old queue's in-flight pieces
