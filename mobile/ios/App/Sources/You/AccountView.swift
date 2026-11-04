@@ -97,7 +97,7 @@ struct AccountView: View {
             content: { file in ShareSheet(items: [file.url]).ignoresSafeArea() }
         )
         .sheet(item: $webPage) { page in
-            SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)).ignoresSafeArea()
+            SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { webPage = nil }.ignoresSafeArea()
         }
         .sheet(isPresented: $confirmingDelete) {
             DeleteAccountView(
@@ -238,7 +238,7 @@ struct TermsView: View {
         .listRowBackground(Palette.surface)
         .task { await load() }
         .sheet(item: $reading) { page in
-            SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)).ignoresSafeArea()
+            SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { reading = nil }.ignoresSafeArea()
         }
     }
 

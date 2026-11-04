@@ -44,9 +44,9 @@ struct TrackersView: View {
                 }
             }
             .sheet(isPresented: $guide) {
-                SafariView(url: PaddlesnitchApp.baseURL.appending(path: "guide")).ignoresSafeArea()
+                SafariView(url: PaddlesnitchApp.baseURL.appending(path: "guide")) { guide = false }.ignoresSafeArea()
             }
-            .sheet(item: $compare) { url in SafariView(url: url).ignoresSafeArea() }
+            .sheet(item: $compare) { url in SafariView(url: url) { compare = nil }.ignoresSafeArea() }
     }
 
     private func openPage(_ path: String) async -> Bool {

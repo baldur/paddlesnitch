@@ -50,7 +50,7 @@ struct SignInView: View {
                     })
             }
             .sheet(item: $web) { url in
-                SafariView(url: url).ignoresSafeArea()
+                SafariView(url: url) { web = nil }.ignoresSafeArea()
             }
         }
         .preferredColorScheme(.dark)

@@ -137,7 +137,7 @@ struct YouView: View {
             }
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .sheet(item: $open) { page in
-                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path))
+                SafariView(url: PaddlesnitchApp.baseURL.appending(path: page.path)) { open = nil }
                     .ignoresSafeArea()
             }
             .confirmationDialog("Sign out of paddlesnitch?", isPresented: $confirmingSignOut, titleVisibility: .visible)
@@ -214,16 +214,45 @@ struct YouView: View {
     }
 }
 
-/// The website inside the app, in Safari's own view.
+/// The website inside the app, in Safari's own view, always in a sheet.
+/// Done calls `close`, which clears the state that shows the sheet. Safari
+/// closes itself, but on iOS 17 not when the sheet sits on another sheet
+/// (the Terms from Create account stayed open through every tap on Done,
+/// #878's CI). So only then: on newer iOS the sheet is already closing
+/// when Done reports, and closing it again (by `dismiss` or the state)
+/// closed the Create account sheet under it as well.
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
+    let close: () -> Void
 
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let controller = SFSafariViewController(url: url)
         controller.preferredBarTintColor = UIColor(Palette.bg)
         controller.preferredControlTintColor = UIColor(Palette.primaryText)
+        controller.delegate = context.coordinator
         return controller
     }
 
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {
+        context.coordinator.close = close
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(close: close) }
+
+    @MainActor final class Coordinator: NSObject, @preconcurrency SFSafariViewControllerDelegate {
+        var close: () -> Void
+
+        init(close: @escaping () -> Void) { self.close = close }
+
+        func safariViewControllerDidFinish(_ controller: SFSafariViewController) {
+            // Newer iOS: Safari's sheet is already on its way out, and
+            // closing it again closes the sheet under it too.
+            var shown: UIViewController? = controller
+            while let view = shown {
+                if view.isBeingDismissed { return }
+                shown = view.parent
+            }
+            close()
+        }
+    }
 }

@@ -82,7 +82,7 @@ struct RootView: View {
             }
         }
         .sheet(item: $websitePage) { url in
-            SafariView(url: url).ignoresSafeArea()
+            SafariView(url: url) { websitePage = nil }.ignoresSafeArea()
         }
         .task { await openLaunchFile() }
         .onReceive(NotificationCenter.default.publisher(for: .signOutForTest)) { _ in

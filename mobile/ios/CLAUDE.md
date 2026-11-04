@@ -166,9 +166,7 @@ isn't obvious from the code.
   (Waiting.swift), which taps again until the form is there.
   The same goes for iOS's own alerts: a location answer tapped while the
   alert grows in misses, so use `answerLocation(_:)` (RecordTests.swift),
-  which taps until the alert has gone. Safari's Done is no different: iOS
-  17 dropped one tapped while the page slid in and loaded, and it stayed
-  open (#878's CI). Wait for it to be hittable, and tap again until it goes.
+  which taps until the alert has gone.
 - Phone uploads (C3): a queue per signed-in account (RootView). Its
   client's token is that account's only (nil once another signs in), and a
   stopped queue writes nothing: otherwise an old queue's in-flight pieces
@@ -339,3 +337,13 @@ isn't obvious from the code.
 - `for _ in 0..<n where cond` skips rounds but never ends the loop: every
   test helper that used it kept looking after it was done. Use
   `guard cond else { break }`.
+- Safari's Done closes its own sheet, except on iOS 17 when that sheet sits
+  on another sheet (the Terms from Create account): there it closed
+  nothing, through every tap (#878's CI; first misread as a tap too
+  early, and a retry loop in the test hid it). `SafariView` closes the
+  sheet itself, through each caller's `close`, but only when nothing is
+  already closing it: on newer iOS the sheet is being dismissed when Done
+  reports, and a second close (SwiftUI's `dismiss` or clearing the state)
+  closed the Create account sheet under it too. So a test of a sheet that
+  closes checks that the screen under it stays. Xcode here can't
+  download iOS 17.5; CI's iOS 17 job is the only check.

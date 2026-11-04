@@ -119,15 +119,15 @@ final class SignInTests: AppTestCase {
             tap(read.frame.midX, read.frame.midY + dy)
             let close = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
             XCTAssertTrue(close.appears(timeout: 10), "Terms opened at \(dy) pt")
-            // iOS 17 dropped a Done tapped while Safari was still sliding in
-            // and loading, so the page stayed open (#878's CI run). Wait for
-            // Done to take taps, and tap again if the page is still there.
-            for _ in 0..<3 {
-                guard close.exists else { break }
-                if close.becomesHittable(timeout: 5) { close.tap() }
-                _ = close.disappears(timeout: 5)
-            }
-            XCTAssertFalse(close.exists, "Terms closed after the tap at \(dy) pt")
+            // One tap on Done: on iOS 17 it closed nothing here, a sheet on
+            // a sheet, until SafariView closed its own sheet (#878's CI).
+            XCTAssertTrue(close.becomesHittable(timeout: 5))
+            close.tap()
+            XCTAssertTrue(close.disappears(timeout: 10), "Done closed the Terms opened at \(dy) pt")
+            // Only the Terms: Safari closes itself on newer iOS and SafariView
+            // dismisses too, so check the form under it stays, and stays.
+            XCTAssertFalse(app.textFields["Display name"].disappears(timeout: 2), "Create account still up")
+            XCTAssertTrue(tick.exists)
         }
     }
 
