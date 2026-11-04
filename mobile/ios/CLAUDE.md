@@ -318,5 +318,7 @@ isn't obvious from the code.
   draws, while XCUITest's frame (and the user's eye) is the whole row:
   the space beside a paddle row's thumbnail did nothing (#870's CI, at
   the largest text; the test tapped the row's visible slice). Give the
-  label `.contentShape(Rectangle())`; `testATapOnARowsEmptySpaceOpensThePaddle`
-  taps a row's empty part.
+  label `.contentShape(Rectangle())` (and full width: a vertical stack
+  is only as wide as its longest line). `testATapOnARowsEmptySpaceOpensThePaddle`
+  and `LargeTextTests.testATapBesideTheThumbnailOpensThePaddle` tap a
+  row's empty part; the second failed exactly as CI did without it.

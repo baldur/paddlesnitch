@@ -68,6 +68,20 @@ final class LargeTextTests: AppTestCase {
         keep("Same-outing link at the largest text")
     }
 
+    /// Beside the thumbnail, which has its own line at this size: the
+    /// row's widest line is shorter than the row, and a tap there did
+    /// nothing (#870's CI).
+    func testATapBesideTheThumbnailOpensThePaddle() {
+        let row = scrollTo("paddle-pdl-river")
+        XCTAssertTrue(row.exists)
+        // On the screen, not a share of the row's own frame: a narrow row
+        // has a narrow frame.
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: window.frame.width * 0.85, dy: row.frame.minY + 24 - window.frame.minY)).tap()
+        XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
+    }
+
     func testYouAtTheLargestTextSize() throws {
         selectTab("You")
         XCTAssertTrue(app.buttons["Privacy policy"].appears(timeout: 10))
