@@ -240,4 +240,6 @@ time and isn't obvious from the code.
 - Hold to stop (#880, #881) stops, with the haptic, the moment the fill completes, with the finger still
   down. The stop runs at the end of the fill's own coroutine, never after `tryAwaitRelease`. Any early end,
   a release or a finger slid off (a cancelled press, where `tryAwaitRelease` returns false), says "Keep
-  holding to stop.". Tests pass a fake `LocalHapticFeedback` and step `mainClock` with the finger down.
+  holding to stop.". Tests pass a fake `LocalHapticFeedback` and step `mainClock` with the finger down. One remembered
+  `stopped` flag, set by the hold or the Stop recording action, makes it stop once: the button stays on
+  screen until the service posts Stopped, and a tap or a second hold then does nothing (tester, #882).
