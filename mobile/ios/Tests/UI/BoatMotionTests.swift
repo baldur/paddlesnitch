@@ -19,14 +19,28 @@ final class BoatMotionTests: AppTestCase {
         try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
     }
 
-    func testBackGoesToThePaddle() {
+    /// The system's back button stays, so the edge swipe goes back.
+    func testASwipeFromTheEdgeGoesBackToThePaddle() {
         openMotion("pdl-river")
-        let back = element("motion-back")
-        XCTAssertTrue(back.appears(timeout: 10))
-        XCTAssertEqual(back.label, "Paddle")
-        XCTAssertGreaterThan(back.frame.width, 60, "the word shows, not the chevron alone")
-        back.tap()
+        XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+        let window = app.windows.firstMatch
+        let edge = window.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+        edge.press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
         XCTAssertTrue(element("open-motion").appears(timeout: 10))
+    }
+
+    /// Try again keeps working after a second failure (focus then goes
+    /// back to the error: `BoatMotionModel.focusError`).
+    func testTryAgainKeepsWorkingWhileItFails() {
+        relaunch(with: "-MotionFails")
+        openMotion("pdl-river")
+        let again = app.buttons["motion-try-again"]
+        XCTAssertTrue(again.appears(timeout: 10))
+        again.tap()
+        XCTAssertTrue(again.appears(timeout: 10))
+        again.tap()
+        XCTAssertTrue(again.appears(timeout: 10))
+        XCTAssertTrue(text(containing: "Couldn’t read this recording.").exists)
     }
 
     func testNoMotionFileYetOpensTheTrackers() {
@@ -64,7 +78,7 @@ final class BoatMotionTests: AppTestCase {
         XCTAssertTrue(element("open-motion").appears(timeout: 10))
     }
 
-    func testOnlyAYourOwnTrackerPaddleOffersIt() {
+    func testOnlyYourOwnTrackerPaddleOffersIt() {
         // The samples have no account.
         open("pdl-river")
         XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))

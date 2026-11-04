@@ -59,6 +59,8 @@ public final class BoatMotionModel {
     /// How many loads in a row have failed: from the second, accessibility
     /// focus goes back to the error.
     public private(set) var failures = 0
+    /// From the second failure in a row, focus goes back to the error.
+    public var focusError: Bool { failures >= 2 }
     public let recording: MotionRecording
     private let fetch: Fetch
     private var etag: String?
@@ -199,9 +201,14 @@ public struct BoatMotionSummary: Hashable, Sendable {
 
     static func tiles(_ attitude: BoatMotion, strokeRate: Double?) -> [Tile] {
         func degrees(_ label: String, _ value: Double?, _ note: String) -> Tile {
-            let shown = value.map { "\(Format.plain($0))°" } ?? Format.dash
-            let spoken = value.map { "\(Format.plain($0)) degrees" } ?? "not measured"
-            return Tile(label: label, value: shown, note: note, spoken: "\(label), \(spoken), \(note)")
+            // Without a value the note would describe a number that isn't there.
+            guard let value else {
+                return Tile(label: label, value: Format.dash, note: nil, spoken: "\(label), not measured")
+            }
+            let unit = value == 1 ? "degree" : "degrees"
+            return Tile(
+                label: label, value: "\(Format.plain(value))°", note: note,
+                spoken: "\(label), \(Format.plain(value)) \(unit), \(note)")
         }
         let evenness =
             attitude.symmetry.map {
@@ -287,4 +294,34 @@ public struct BoatMotionSummary: Hashable, Sendable {
             maxCount: max(bins.map(\.count).max() ?? 1, 1), leftLabel: "\u{2212}\(rounded)°",
             rightLabel: "+\(rounded)°")
     }
+}
+
+/// The screen's fixed words, the website's exactly (mobile/contract/
+/// README.md, "Boat motion"): here so a test checks each against the README.
+public enum BoatMotionWords {
+    public static let title = "Boat motion"
+    public static let loading = "Loading"
+    public static let failed = "Couldn’t read this recording."
+    public static let tryAgain = "Try again"
+    public static let notFound = "We can't find this recording"
+    public static let backToPaddle = "Back to the paddle"
+    public static let noMotion = "No boat motion for this recording."
+    public static let envelopeTitle = "Through the session"
+    public static let envelopeCaption =
+        "The shaded band shows how far the boat rolled and pitched through the recording. "
+        + "Roll is the side-to-side lean, pitch the bow rising and falling."
+    public static let excerptTitle = "Stroke shape"
+    public static let excerptCaption =
+        "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
+    public static let excerptSpoken = "Thirty seconds of roll and pitch at full sample rate"
+    public static let histogramTitle = "Where the boat spent its time"
+    public static let histogramCaption =
+        "Bars show how often the boat leaned each way. The dashed line is the same, flipped. "
+        + "If they match, your roll is even."
+    public static let histogramSpoken =
+        "Distribution of boat lean, with the mirrored distribution overlaid to show evenness"
+    public static let readingThis = "Reading this."
+    public static let cantTell = "What this can't tell you."
+    /// Chart words, in quotes in the README.
+    public static let roll = "roll", pitch = "pitch", actual = "actual", mirrored = "mirrored", level = "level"
 }

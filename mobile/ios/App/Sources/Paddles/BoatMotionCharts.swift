@@ -66,8 +66,8 @@ struct EnvelopeChart: View {
                     Frame.text(envelope.xLabels[1]), at: CGPoint(x: width - Frame.right, y: height - 8),
                     anchor: .trailing)
             }
-            Frame.swatch(context, Palette.split, "roll", at: width - Frame.right - 108)
-            Frame.swatch(context, Palette.green, "pitch", at: width - Frame.right - 58)
+            Frame.swatch(context, Palette.split, BoatMotionWords.roll, at: width - Frame.right - 108)
+            Frame.swatch(context, Palette.green, BoatMotionWords.pitch, at: width - Frame.right - 58)
         }
         .frame(height: 260)
         .accessibilityElement()
@@ -103,7 +103,7 @@ struct ExcerptChart: View {
         }
         .frame(height: 260)
         .accessibilityElement()
-        .accessibilityLabel("Thirty seconds of roll and pitch at full sample rate")
+        .accessibilityLabel(BoatMotionWords.excerptSpoken)
         .accessibilityAddTraits(.isImage)
         .accessibilityIdentifier("motion-excerpt")
     }
@@ -140,21 +140,21 @@ struct HistogramChart: View {
             level.move(to: CGPoint(x: x(0), y: Frame.legendTop))
             level.addLine(to: CGPoint(x: x(0), y: height - bottom))
             context.stroke(level, with: .color(Palette.muted), lineWidth: 1.2)
-            context.draw(Frame.text("level"), at: CGPoint(x: x(0), y: height - 14), anchor: .center)
+            context.draw(Frame.text(BoatMotionWords.level), at: CGPoint(x: x(0), y: height - 14), anchor: .center)
             context.draw(Frame.text(histogram.leftLabel), at: CGPoint(x: Frame.left, y: height - 14), anchor: .leading)
             context.draw(
                 Frame.text(histogram.rightLabel), at: CGPoint(x: width - Frame.right, y: height - 14), anchor: .trailing
             )
-            Frame.swatch(context, Palette.split, "actual", at: Frame.left + 6)
+            Frame.swatch(context, Palette.split, BoatMotionWords.actual, at: Frame.left + 6)
             var key = Path()
             key.move(to: CGPoint(x: Frame.left + 70, y: 9))
             key.addLine(to: CGPoint(x: Frame.left + 88, y: 9))
             context.stroke(key, with: .color(Palette.red.opacity(0.8)), style: dashed)
-            context.draw(Frame.text("mirrored"), at: CGPoint(x: Frame.left + 94, y: 9), anchor: .leading)
+            context.draw(Frame.text(BoatMotionWords.mirrored), at: CGPoint(x: Frame.left + 94, y: 9), anchor: .leading)
         }
         .frame(height: 230)
         .accessibilityElement()
-        .accessibilityLabel("Distribution of boat lean, with the mirrored distribution overlaid to show evenness")
+        .accessibilityLabel(BoatMotionWords.histogramSpoken)
         .accessibilityAddTraits(.isImage)
         .accessibilityIdentifier("motion-histogram")
     }

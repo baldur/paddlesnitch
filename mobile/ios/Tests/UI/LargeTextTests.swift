@@ -47,10 +47,8 @@ final class LargeTextTests: AppTestCase {
         XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
         keep("Boat motion at the largest text")
         // Each check jumps the page back up: go to each part in turn.
-        try checkScreen(at: [
-            element("motion-envelope"), element("motion-excerpt"), element("motion-histogram"),
-            text(containing: "What this can't tell you."),
-        ])
+        // The tiles, a caption and the notes: chart text doesn't grow.
+        try checkScreen(at: [element("motion-envelope"), text(containing: "What this can't tell you.")])
     }
 
     func testYouAtTheLargestTextSize() throws {

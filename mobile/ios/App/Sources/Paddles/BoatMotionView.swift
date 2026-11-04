@@ -31,7 +31,7 @@ struct BoatMotionView: View {
                     Text(Format.dayTime(model.recording.paddledAt, zone: .current))
                         .font(.plexSans(.subheadline))
                         .foregroundStyle(Palette.muted)
-                    Text("Boat motion")
+                    Text(BoatMotionWords.title)
                         .font(.plexSans(.title2, weight: .semibold))
                         .foregroundStyle(Palette.fg)
                         .accessibilityAddTraits(.isHeader)
@@ -51,24 +51,6 @@ struct BoatMotionView: View {
         .task { await model.load() }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.bg, for: .navigationBar)
-        // "← Paddle", as the website's back link.
-        .navigationBarBackButtonHidden()
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    dismiss()
-                } label: {
-                    // Drawn, not a Label: iOS 26's toolbar showed the icon alone.
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.backward")
-                        Text("Paddle").font(.plexSans(.body))
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Paddle")
-                }
-                .accessibilityIdentifier("motion-back")
-            }
-        }
     }
 
     @ViewBuilder private var content: some View {
@@ -76,30 +58,34 @@ struct BoatMotionView: View {
         case .loading:
             HStack(spacing: 8) {
                 ProgressView().tint(Palette.muted)
-                Text("Loading").font(.plexSans(.body)).foregroundStyle(Palette.muted)
+                Text(BoatMotionWords.loading).font(.plexSans(.body)).foregroundStyle(Palette.muted)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(BoatMotionWords.loading)
         case .failed:
             VStack(alignment: .leading, spacing: 12) {
-                Text("Couldn’t read this recording.")
+                Text(BoatMotionWords.failed)
                     .font(.plexSans(.body))
                     .foregroundStyle(Palette.red)
                     .accessibilityFocused($errorFocused)
-                Button("Try again") { Task { await model.load() } }
+                Button(BoatMotionWords.tryAgain) { Task { await model.load() } }
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("motion-try-again")
             }
-            .onChange(of: model.failures) { _, failures in errorFocused = failures >= 2 }
+            // `initial`: Try again rebuilds this view with the count already
+            // at 2, so a plain onChange never saw it.
+            .onChange(of: model.failures, initial: true) { errorFocused = model.focusError }
         case .notFound:
             VStack(alignment: .leading, spacing: 12) {
-                Text("We can't find this recording")
+                Text(BoatMotionWords.notFound)
                     .font(.plexSans(.title3, weight: .semibold))
                     .foregroundStyle(Palette.fg)
-                Button("Back to the paddle") { dismiss() }
+                Button(BoatMotionWords.backToPaddle) { dismiss() }
                     .buttonStyle(.bordered)
             }
         case .noMotion(let none):
             box {
-                Text("No boat motion for this recording.")
+                Text(BoatMotionWords.noMotion)
                     .font(.plexSans(.body, weight: .medium))
                     .foregroundStyle(Palette.fg)
                 Text(none.copy).font(.plexSans(.body)).foregroundStyle(Palette.muted)
@@ -120,29 +106,28 @@ struct BoatMotionView: View {
         VStack(alignment: .leading, spacing: 16) {
             tiles(summary.tiles)
             ChartPanel(
-                title: "Through the session",
-                caption: "The shaded band shows how far the boat rolled and pitched through the recording. "
-                    + "Roll is the side-to-side lean, pitch the bow rising and falling.",
+                title: BoatMotionWords.envelopeTitle,
+                caption: BoatMotionWords.envelopeCaption,
                 note: summary.envelope.clippedNote
             ) {
                 EnvelopeChart(envelope: summary.envelope)
             }
             ChartPanel(
-                title: "Stroke shape",
-                caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
+                title: BoatMotionWords.excerptTitle,
+                caption: BoatMotionWords.excerptCaption
             ) {
                 ExcerptChart(excerpt: summary.excerpt)
             }
             ChartPanel(
-                title: "Where the boat spent its time",
-                caption: "Bars show how often the boat leaned each way. The dashed line is the same, flipped. "
-                    + "If they match, your roll is even."
+                title: BoatMotionWords.histogramTitle,
+                caption: BoatMotionWords.histogramCaption
             ) {
                 HistogramChart(histogram: summary.histogram)
             }
             box {
-                (Text("Reading this. ").foregroundStyle(Palette.fg) + Text(BoatMotionSummary.readingThis))
-                (Text("What this can't tell you. ").foregroundStyle(Palette.fg) + Text(summary.cantTell))
+                (Text(BoatMotionWords.readingThis + " ").foregroundStyle(Palette.fg)
+                    + Text(BoatMotionSummary.readingThis))
+                (Text(BoatMotionWords.cantTell + " ").foregroundStyle(Palette.fg) + Text(summary.cantTell))
             }
             .font(.plexSans(.subheadline))
             .foregroundStyle(Palette.muted)

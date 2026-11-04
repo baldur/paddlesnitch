@@ -109,9 +109,9 @@ import Testing
                 .success(.changed(measured, etag: nil)),
             ]))
         await model.load()
-        #expect(model.state == .failed && model.failures == 1)
+        #expect(model.state == .failed && !model.focusError)
         await model.load()
-        #expect(model.state == .failed && model.failures == 2, "the second failure moves focus back")
+        #expect(model.state == .failed && model.focusError, "the second failure moves focus back")
         await model.load()
         #expect(model.failures == 0)
         guard case .loaded = model.state else { return #expect(Bool(false)) }
@@ -139,6 +139,16 @@ import Testing
         #expect(tiles.map(\.note) == ["typical lean", "typical tilt", "uneven", "spm"])
         #expect(tiles[0].spoken == "Side-to-side roll, 5.8 degrees, typical lean")
         #expect(tiles[3].spoken == "Stroke rate, 64, strokes per minute")
+    }
+
+    @Test func aMissingAngleIsADashWithNoNote() throws {
+        var attitude = try #require(try motion("account.devices-session").attitude)
+        attitude.rollRmsDeg = nil
+        attitude.pitchRmsDeg = 1
+        let tiles = BoatMotionSummary(attitude, strokeRate: nil).tiles
+        #expect(tiles[0].value == "—" && tiles[0].note == nil)
+        #expect(tiles[0].spoken == "Side-to-side roll, not measured")
+        #expect(tiles[1].spoken == "Bow-to-stern pitch, 1 degree, typical tilt")
     }
 
     @Test func missingValuesAreADash() throws {
@@ -204,10 +214,21 @@ import Testing
         #expect(histogram?.halfRange == 1.6)
     }
 
+    /// The README's floors: a stroke shape's bound is at least 1° (×1.1),
+    /// the histogram's range at least ±1.
+    @Test func calmWaterKeepsTheMinimumBounds() throws {
+        var attitude = try #require(try motion("account.devices-session").attitude)
+        attitude.excerpt = [.init(pitch: 0.1, roll: 0.2, t: 0), .init(pitch: -0.1, roll: -0.3, t: 100)]
+        attitude.rollHistogram = RollHistogram(binWidthDeg: 0.2, bins: [.init(centreDeg: 0, count: 4)])
+        let summary = BoatMotionSummary(attitude, strokeRate: nil)
+        #expect(abs(summary.excerpt.bound - 1.1) < 1e-9)
+        #expect(summary.histogram?.halfRange == 1)
+    }
+
     @Test func fewerThanTwoPointsDrawNothing() throws {
         var attitude = try #require(try motion("account.devices-session").attitude)
         attitude.envelope = Array(attitude.envelope.prefix(1))
-        attitude.excerpt = []
+        attitude.excerpt = Array(attitude.excerpt.prefix(1))
         attitude.rollHistogram?.bins = []
         let summary = BoatMotionSummary(attitude, strokeRate: nil)
         #expect(summary.envelope.bands.isEmpty && summary.envelope.xLabels.isEmpty)
@@ -222,5 +243,33 @@ import Testing
         #expect(
             BoatMotionSummary(attitude, strokeRate: nil).cantTell.hasSuffix(
                 " Roll and pitch were hard to tell apart in this recording."))
+    }
+
+    /// Every fixed word on the screen is the README's (the website's),
+    /// apostrophes and all.
+    @Test func theWordsAreTheREADMEs() throws {
+        let readme = try String(
+            contentsOf: fixtures.deletingLastPathComponent().deletingLastPathComponent().appending(path: "README.md"),
+            encoding: .utf8
+        )
+        .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let words = [
+            BoatMotionWords.title, BoatMotionWords.loading, BoatMotionWords.failed, BoatMotionWords.tryAgain,
+            BoatMotionWords.notFound, BoatMotionWords.backToPaddle, BoatMotionWords.noMotion,
+            BoatMotionWords.envelopeTitle, BoatMotionWords.envelopeCaption, BoatMotionWords.excerptTitle,
+            BoatMotionWords.excerptCaption, BoatMotionWords.excerptSpoken, BoatMotionWords.histogramTitle,
+            BoatMotionWords.histogramCaption, BoatMotionWords.histogramSpoken, BoatMotionWords.readingThis,
+            BoatMotionWords.cantTell, BoatMotionSummary.readingThis,
+            "\"\(BoatMotionWords.roll)\"", "\"\(BoatMotionWords.pitch)\"", "\"\(BoatMotionWords.actual)\"",
+            "\"\(BoatMotionWords.mirrored)\"", "\"\(BoatMotionWords.level)\"",
+        ]
+        for word in words { #expect(readme.contains(word), "\(word)") }
+        let summary = try measured()
+        #expect(readme.contains(summary.cantTell))
+        var unsure = try #require(try motion("account.devices-session").attitude)
+        unsure.axisConfident = false
+        #expect(
+            readme.contains(
+                BoatMotionSummary(unsure, strokeRate: nil).cantTell.components(separatedBy: ". ").last ?? "?"))
     }
 }

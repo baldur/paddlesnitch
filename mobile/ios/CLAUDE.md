@@ -291,5 +291,6 @@ isn't obvious from the code.
 - Going to another tab's screen (Open tracker → You → Trackers):
   `AppNavigator` in the environment holds the request until that tab's
   view takes it (`onChange(…, initial: true)`): a tab never shown yet
-  has no view to see a change. A toolbar `Label` showed its icon alone
-  on iOS 26; draw the words when they must show.
+  has no view to see a change. Keep the system back button (the
+  README's "← Paddle" is the website's link): hiding it to draw "Paddle"
+  turns off the edge swipe back.
