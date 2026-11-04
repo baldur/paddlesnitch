@@ -42,6 +42,7 @@ import com.paddlesnitch.app.api.RecordingMotion
 import com.paddlesnitch.app.api.Api
 import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
+import com.paddlesnitch.app.api.SameOutingList
 import com.paddlesnitch.app.api.SignedOut
 import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
@@ -227,6 +228,8 @@ private fun MyPaddles(
     recordEntry: (@Composable () -> Unit)?,
     onReport: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val sameOuting = remember(api) { sameOutingCalls(api) { url, private -> openInBrowser(context, url, private) } }
     var list by remember { mutableStateOf<PaddleList?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -252,6 +255,7 @@ private fun MyPaddles(
         current != null -> PaddlesHost(current, sample = false, load = { api.paddle(it) }, writeSummary = { api.writeSummary(it) }, modifier = modifier,
             openPaddle = openPaddle, onOpened = onOpened,
             loadMotion = { s -> api.recordingMotion(s.source.deviceSessionId!!, s.source.deviceId!!) },
+            sameOuting = sameOuting.sameOuting, openCompare = sameOuting.openCompare,
             notice = notice, action = {
             Row {
                 TextButton(onClick = pick, enabled = !adding, colors = textColors()) { Text("Add paddle") }
@@ -294,17 +298,42 @@ private suspend fun readMotionSample(context: android.content.Context): Recordin
     context.assets.open("api/account.devices-session.json").bufferedReader().use { ApiJson.decodeFromString(RecordingMotion.serializer(), it.readText()) }
 }
 
+/** Compare for two paddles, as the path web-code is asked for. */
+internal fun compareNext(a: String, b: String) = "/paddles/compare?a=${Uri.encode(a)}&b=${Uri.encode(b)}"
+
+/** What a signed-in Paddles gets for the same outing (README § Same outing). */
+internal class SameOutingCalls(val sameOuting: suspend (String) -> SameOutingList, val openCompare: suspend (String, String) -> Unit)
+
+/**
+ * The real calls: paddles.sameOuting, and Compare (not native yet) as the website's page signed in
+ * through web-code, opened by [open] (url, private tab?) in a private tab. A failure throws, so the
+ * screen says so.
+ */
+internal fun sameOutingCalls(api: Api, open: (url: String, private: Boolean) -> Boolean) = SameOutingCalls(
+    sameOuting = { api.sameOuting(it) },
+    openCompare = { a, b -> check(open(api.signedInPage(compareNext(a, b)), true)) { "no browser" } },
+)
+
+/** A Custom Tab in [browser], private when [ephemeral] (only where the browser supports it). */
+internal fun customTab(browser: String, ephemeral: Boolean): CustomTabsIntent =
+    CustomTabsIntent.Builder().setEphemeralBrowsingEnabled(ephemeral).build().apply { intent.setPackage(browser) }
+
 /**
  * A paddlesnitch.com page the app has no screen for. The browser is named, since
  * an unnamed link to paddlesnitch.com/paddles/… would come straight back here.
+ * [ephemeral]: a private tab where the browser offers one (a signed-in page from web-code).
+ * Never prefetched or warmed up: a web-code link works once (NoPrefetchTest). False if nothing opened.
  */
-private fun openInBrowser(context: Context, url: String) {
+internal fun openInBrowser(context: Context, url: String, ephemeral: Boolean = false): Boolean {
     val browser = chooseBrowser(
         customTabs = CustomTabsClient.getPackageName(context, null),
         default = context.packageManager.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")), 0)?.activityInfo?.packageName,
         self = context.packageName,
-    ) ?: return
-    runCatching { CustomTabsIntent.Builder().build().apply { intent.setPackage(browser) }.launchUrl(context, Uri.parse(url)) }
+    ) ?: return false
+    val private = ephemeral && runCatching { CustomTabsClient.isEphemeralBrowsingSupported(context, browser) }.getOrDefault(false)
+    return runCatching {
+        customTab(browser, private).launchUrl(context, Uri.parse(url))
+    }.isSuccess
 }
 
 /** The browser to name: one with Custom Tabs, else the default; never this app or the system chooser ("android"). */

@@ -46,6 +46,11 @@ import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.RecordingMotion
+import com.paddlesnitch.app.api.SameOutingList
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import com.paddlesnitch.app.ui.PsColor
 import com.paddlesnitch.app.ui.PlexMono
 import com.paddlesnitch.app.ui.textColors
@@ -77,22 +82,36 @@ fun PaddlesHost(
     loadMotion: (suspend (AnalysisSession) -> RecordingMotion)? = null,
     /** Which paddles offer it: any from a tracker, unless a caller narrows it (the samples have one motion answer). */
     offersMotion: (AnalysisSession) -> Boolean = ::hasBoatMotion,
+    /** The other recordings of a paddle's outing (paddles.sameOuting); null shows no links on the page. */
+    sameOuting: (suspend (id: String) -> SameOutingList)? = null,
+    /** Opens Compare for two paddles (web-code, then the browser); null: same-outing rows don't link. */
+    openCompare: (suspend (a: String, b: String) -> Unit)? = null,
 ) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val latestOpen by rememberUpdatedState(openCompare)
+    val compareState = remember { Compare(scope, snackbar) { a, b -> latestOpen?.invoke(a, b) } }
+    val compare = compareState.takeIf { openCompare != null }
     LaunchedEffect(openPaddle) { if (openPaddle != null) { open = openPaddle; onOpened() } }
     val listState = rememberLazyListState()
     val id = open
-    if (id == null) {
-        PaddlesScreen(list, sample, modifier, action, notice, listState, onOpen = { open = it })
-    } else {
-        BackHandler { open = null }
-        PaddleLoader(id, load, writeSummary, onBack = { open = null }, modifier, map, loadMotion, offersMotion)
+    Box(modifier) {
+        if (id == null) {
+            PaddlesScreen(list, sample, Modifier, action, notice, listState, onOpen = { open = it }, compare = compare)
+        } else {
+            BackHandler { open = null }
+            PaddleLoader(id, load, writeSummary, onBack = { open = null }, Modifier, map, loadMotion, offersMotion,
+                sameOuting.takeIf { compare != null }, compare)
+        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
 }
 
 @Composable
 private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, writeSummary: (suspend (String) -> AnalysisSession)?, onBack: () -> Unit, modifier: Modifier, map: MapSlot,
-                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean) {
+                         loadMotion: (suspend (AnalysisSession) -> RecordingMotion)?, offersMotion: (AnalysisSession) -> Boolean,
+                         sameOuting: (suspend (String) -> SameOutingList)?, compare: Compare?) {
     var detail by remember(id) { mutableStateOf<PaddleDetail?>(null) }
     var session by remember(id) { mutableStateOf<AnalysisSession?>(null) }
     var motionOpen by rememberSaveable(id) { mutableStateOf(false) }
@@ -101,6 +120,9 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     var error by remember(id) { mutableStateOf<String?>(null) }
     var attempt by remember(id) { mutableIntStateOf(0) }
     var notFound by remember(id) { mutableStateOf(false) }
+    // Extra links, never an error: a failed call shows nothing, as an empty list does.
+    var others by remember(id) { mutableStateOf<SameOutingList>(emptyList()) }
+    LaunchedEffect(id) { if (sameOuting != null) others = runCatching { sameOuting(id) }.getOrDefault(emptyList()) }
     LaunchedEffect(id, attempt) {
         error = null
         val loaded = runCatching { load(id) }.onFailure { notFound = (it as? ApiFailure)?.status == 404; error = if (notFound) "We can’t find this paddle." else it.shown("Couldn’t open this paddle. Please try again.") }.getOrNull() ?: return@LaunchedEffect
@@ -126,7 +148,8 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     Column(modifier.fillMaxSize()) {
         TextButton(onClick = onBack, colors = textColors(), modifier = Modifier.padding(horizontal = 4.dp).heightIn(min = 48.dp)) { Text("← Paddles", fontSize = 16.sp) }
         when {
-            d != null -> PaddlePage(d, map, onMotion = onMotion, scroll = scroll)
+            d != null -> PaddlePage(d, map, onMotion = onMotion, scroll = scroll,
+                sameOuting = if (compare != null && others.isNotEmpty()) { { others.forEach { o -> SameOutingLink(id, o.id, o.sourceType, o.phone, compare) } } } else null)
             error != null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(error!!, color = PsColor.red)
                 // Trying again can't find a paddle that isn't there: "← Paddles" above is the way on.
@@ -139,7 +162,9 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
 
 /** One paddle, read only, top to bottom as the website's paddle page. */
 @Composable
-fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Modifier, onMotion: (() -> Unit)? = null, scroll: ScrollState = rememberScrollState()) {
+fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Modifier, onMotion: (() -> Unit)? = null, scroll: ScrollState = rememberScrollState(),
+               /** The same outing's links, after the summary (or the note) and before Efforts and rests. */
+               sameOuting: (@Composable () -> Unit)? = null) {
     Column(modifier.fillMaxSize().verticalScroll(scroll).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         if (d.route.isNotEmpty() && d.bounds != null) Column {
             map(d, Modifier.fillMaxWidth().height(320.dp))
@@ -161,6 +186,7 @@ fun PaddlePage(d: PaddleDetail, map: MapSlot = routeMap, modifier: Modifier = Mo
                     if (d.insightPending) Text("Writing your summary…", color = PsColor.muted, fontSize = 14.sp)
                 }
             }
+            sameOuting?.let { links -> Column { links() } }
             if (d.efforts.isNotEmpty() || d.rests.isNotEmpty() || d.repeats.isNotEmpty()) Efforts(d)
             if (d.splits.isNotEmpty()) Splits(d.splits)
         }
