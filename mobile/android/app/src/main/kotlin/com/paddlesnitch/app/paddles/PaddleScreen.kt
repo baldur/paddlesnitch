@@ -147,7 +147,7 @@ private fun PaddleLoader(id: String, load: suspend (String) -> AnalysisSession, 
     val onMotion = if (s != null && loadMotion != null && hasBoatMotion(s) && offersMotion(s)) ({ motionOpen = true }) else null
     val offered = onMotion != null
     LaunchedEffect(s?.id, offered) {
-        if (s != null && loadMotion != null && offered) balance = runCatching { loadMotion(s).attitude }.getOrNull()?.takeIf { it.available }
+        if (s != null && loadMotion != null && offered) balance = runCatching { loadMotion(s).attitude }.getOrNull()
     }
     if (motionOpen && s != null && loadMotion != null) {
         BackHandler { motionOpen = false }
