@@ -145,9 +145,9 @@ describe('AnalysisView BOAT MOTION', () => {
     try {
       await mount(<AnalysisView data={{ ...data, source: { type: 'device', deviceId: '435AC17C', deviceSessionId: 'rec1' } }} sessionId="t-rec1" />)
       await act(async () => { await new Promise(r => setTimeout(r, 0)) })
-      expect(fetchMock).toHaveBeenCalledWith('/api/account/devices/sessions/rec1?deviceId=435AC17C')
+      expect(fetchMock).toHaveBeenCalledWith('/api/account/devices/sessions/rec1?deviceId=435AC17C&motion=1')
       expect(container.textContent).toContain('Evenness')
-      const chartsLink = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('See the charts'))
+      const chartsLink = Array.from(container.querySelectorAll('a')).find(a => a.textContent?.includes('All charts'))
       expect(chartsLink?.getAttribute('href')).toBe('/paddles/t-rec1/motion')
     } finally {
       vi.unstubAllGlobals()

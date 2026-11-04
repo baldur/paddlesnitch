@@ -12,13 +12,14 @@ const section = readme.slice(readme.indexOf('### Boat motion'), readme.indexOf('
 // What the website renders these from, with JSX's escapes undone.
 const site = [
   'apps/web/src/components/devices/BoatMotion.tsx',
+  'apps/web/src/components/analysis/BoatMotionSummary.tsx',
   'apps/web/src/app/paddles/[id]/motion/page.tsx',
   'apps/web/src/components/devices/ReadError.tsx',
   'apps/web/src/lib/tracker-copy.ts',
 ].map(read).join('\n').replace(/<\/?span[^>]*>/g, '').replace(/&apos;/g, "'").replace(/\{' '\}/g, ' ').replace(/\s+/g, ' ')
 
 // Templates and examples, not words on the screen.
-// Spoken forms for screen readers are the apps' own (the website has none).
+// Spoken forms for screen readers are built in code (BoatMotion's Tile), not quoted.
 const NOT_WORDS = /\bN\b|<|^x-|^-6°$|^\+N°$|^−N°$|^0 min$|^what you have is|^at … Hz$|^degrees$|^strokes per minute$/
 
 describe("the contract README's boat-motion words are the website's", () => {
