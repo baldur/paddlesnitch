@@ -20,6 +20,7 @@ import { BOAT_CLASSES, BOAT_CLASS_INFO, expectedSeats, seatLabel, type BoatClass
 import { isMotionOnly, isPhonePaddle, alsoRecordedBy } from '@paddlesnitch/core/paddles'
 import { trpc } from '@/lib/trpc'
 import PortageSuggestions from './PortageSuggestions'
+import PaddleBoatMotionSummary from './PaddleBoatMotionSummary'
 
 const compass = (d?: number) => (d == null ? '' : compassPoint(d))
 const PANEL = 'bg-surface/95 border border-border rounded-control backdrop-blur-sm'
@@ -36,7 +37,7 @@ function WindRose({ dir }: { dir: number }) {
   )
 }
 
-export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; deviceId?: string; phone?: boolean } }
+export type ViewData = AnalysisResult & { insightModel?: string; paddledAt?: string; source?: { type: 'file' | 'strava' | 'trial' | 'device'; deviceId?: string; deviceSessionId?: string; phone?: boolean } }
 
 // One paddle: the site header, the map (with only the colour scale, the replay
 // bar and section picking over it), then everything to read below it, and the
@@ -440,6 +441,9 @@ export default function AnalysisView({ data: dataProp, sessionId, initialNote = 
             {c?.flowM3s != null && <Stat label="River" value={<span className="text-flow">{c.flowM3s.toFixed(1)} m³/s</span>} sub={c.flowStation ? `at ${c.flowStation}` : undefined} />}
           </div>
           {motionOnly && data.noGps && <p className="text-sm text-muted">{noPaddleMessage(data.noGps.reason, true)}</p>}
+          {owner && isTracker && data.source?.deviceId && data.source?.deviceSessionId && (
+            <PaddleBoatMotionSummary sessionId={sessionId!} deviceId={data.source.deviceId} deviceSessionId={data.source.deviceSessionId} />
+          )}
         </div>
 
         {/* What you can do with it. Panels open in place, not over the map. */}

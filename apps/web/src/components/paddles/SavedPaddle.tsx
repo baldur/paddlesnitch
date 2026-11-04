@@ -38,5 +38,8 @@ export default function SavedPaddle({ id }: { id: string }) {
   )
 
   const session = q.data
-  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} initialHiddenFromBuddies={!!session.hiddenFromBuddies} summaryPending={pending && !write.isError} />
+  // deviceId + deviceSessionId are threaded through so the paddle page can show
+  // a compact boat-motion readout for a tracker paddle (#866); the recording
+  // read is owner-gated, so this is the owner's own page only.
+  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type, deviceId: session.source.deviceId, deviceSessionId: session.source.deviceSessionId } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} initialHiddenFromBuddies={!!session.hiddenFromBuddies} summaryPending={pending && !write.isError} />
 }
