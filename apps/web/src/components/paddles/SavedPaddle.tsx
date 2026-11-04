@@ -38,5 +38,7 @@ export default function SavedPaddle({ id }: { id: string }) {
   )
 
   const session = q.data
-  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} initialHiddenFromBuddies={!!session.hiddenFromBuddies} summaryPending={pending && !write.isError} />
+  // The full source (deviceId + deviceSessionId) lets a tracker/phone paddle
+  // show its boat-motion summary (#866); markPhone has already set `phone`.
+  return <AnalysisView data={{ ...session.result, paddledAt: session.paddledAt, source: { type: session.source.type, deviceId: session.source.deviceId, deviceSessionId: session.source.deviceSessionId, phone: session.source.phone } }} sessionId={session.id} initialNote={session.note} initialBoatClass={session.boatClass} initialSeat={session.seat} initialHiddenFromBuddies={!!session.hiddenFromBuddies} summaryPending={pending && !write.isError} />
 }
