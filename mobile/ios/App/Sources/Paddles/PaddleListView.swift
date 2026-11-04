@@ -26,20 +26,21 @@ struct PaddleListView: View {
     /// The website's issue form, for a recording the server won't take:
     /// false if it couldn't open.
     let openReport: () async -> Bool
-    /// Compare on the website for this paddle (`a`) and another recording
-    /// of the outing (`b`): false if it couldn't open.
-    let openCompare: (_ a: String, _ b: String) async -> Bool
+    /// A website page signed in as this account (Compare): false if it
+    /// couldn't open.
+    let openPage: (String) async -> Bool
     @State private var model: PaddleListModel
     @State private var path: [PaddleRow] = []
     @State private var loadedID: String?
     @State private var choosingFile = false
     @State private var openedID: String?
+    @State private var compare: CompareOpener
 
     init(
         source: any PaddlesSource, sourceID: String, isSample: Bool, needsTerms: Bool, signIn: @escaping () -> Void,
         openTerms: @escaping () -> Void, adding: AddPaddleModel,
         openFile: @escaping (URL) -> Void, openRecord: @escaping () -> Void, uploads: UploadQueue?,
-        openReport: @escaping () async -> Bool, openCompare: @escaping (_ a: String, _ b: String) async -> Bool
+        openReport: @escaping () async -> Bool, openPage: @escaping (String) async -> Bool
     ) {
         self.source = source
         self.sourceID = sourceID
@@ -52,7 +53,8 @@ struct PaddleListView: View {
         self.openRecord = openRecord
         self.uploads = uploads
         self.openReport = openReport
-        self.openCompare = openCompare
+        self.openPage = openPage
+        _compare = State(initialValue: CompareOpener(openPage: openPage))
         _model = State(initialValue: PaddleListModel(source: source))
     }
 
@@ -68,10 +70,10 @@ struct PaddleListView: View {
                 .navigationTitle("Paddles")
                 .toolbarBackground(Palette.bg, for: .navigationBar)
                 .navigationDestination(for: PaddleRow.self) { row in
-                    PaddleDetailView(id: row.id, source: source, openCompare: openCompare)
+                    PaddleDetailView(id: row.id, source: source, openPage: openPage)
                 }
                 .navigationDestination(item: $openedID) { id in
-                    PaddleDetailView(id: id, source: source, openCompare: openCompare)
+                    PaddleDetailView(id: id, source: source, openPage: openPage)
                 }
                 .toolbar {
                     if !isSample {
@@ -102,6 +104,7 @@ struct PaddleListView: View {
             // The card appears away from VoiceOver's focus: read it out.
             if let words = state.announcement { AccessibilityNotification.Announcement(words).post() }
         }
+        .compareFailedAlert(compare)
         .task(id: sourceID) {
             // Signed in or out: back to the top, and load the other paddles.
             if let loadedID, loadedID != sourceID {
@@ -167,6 +170,8 @@ struct PaddleListView: View {
                     .accessibilityAddTraits(.isLink)
                     .listRowBackground(Palette.surface)
                     .accessibilityIdentifier("paddle-\(row.id)")
+                    // Its same-outing rows draw their own divider, inside the card.
+                    .listRowSeparator(row.sameOuting.isEmpty ? .automatic : .hidden, edges: .bottom)
                     sameOutingRows(row)
                 }
             } header: {
@@ -256,10 +261,17 @@ extension PaddleListView {
                     Text(link.text)
                         .font(.plexSans(.subheadline))
                         .foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 } else {
-                    SameOutingButton(link: link, style: .row) { await openCompare(row.id, link.id) }
+                    SameOutingButton(link: link, style: .row, opening: compare.opening == link) {
+                        Task { await compare.open(paddle: row.id, link: link) }
+                    }
                 }
             }
+            // The whole row is the tap target, under a `border` divider.
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .overlay(alignment: .top) { Rectangle().fill(Palette.border).frame(height: 1) }
+            .listRowSeparator(.hidden, edges: .top)
             .listRowBackground(Palette.surface)
             .accessibilityIdentifier("same-outing-\(row.id)-\(link.id)")
         }

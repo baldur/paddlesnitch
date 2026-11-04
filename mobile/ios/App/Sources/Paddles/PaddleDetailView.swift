@@ -9,13 +9,13 @@ import SwiftUI
 /// then the Android app's 500 m splits.
 struct PaddleDetailView: View {
     @State private var model: PaddleDetailModel
-    /// Compare on the website with another recording of this outing.
-    let openCompare: (_ a: String, _ b: String) async -> Bool
+    @State private var compare: CompareOpener
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(id: String, source: any PaddlesSource, openCompare: @escaping (_ a: String, _ b: String) async -> Bool) {
+    /// `openPage` opens a website page signed in (Compare).
+    init(id: String, source: any PaddlesSource, openPage: @escaping (String) async -> Bool) {
         _model = State(initialValue: PaddleDetailModel(id: id, source: source))
-        self.openCompare = openCompare
+        _compare = State(initialValue: CompareOpener(openPage: openPage))
     }
 
     var body: some View {
@@ -24,6 +24,7 @@ struct PaddleDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Palette.bg, for: .navigationBar)
             .task { await model.load() }
+            .compareFailedAlert(compare)
     }
 
     @ViewBuilder private var content: some View {
@@ -62,8 +63,10 @@ struct PaddleDetailView: View {
                         if !model.sameOuting.isEmpty {
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(model.sameOuting, id: \.id) { link in
-                                    SameOutingButton(link: link, style: .link) { await openCompare(model.id, link.id) }
-                                        .accessibilityIdentifier("same-outing-\(link.id)")
+                                    SameOutingButton(link: link, style: .link, opening: compare.opening == link) {
+                                        Task { await compare.open(paddle: model.id, link: link) }
+                                    }
+                                    .accessibilityIdentifier("same-outing-\(link.id)")
                                 }
                             }
                         }

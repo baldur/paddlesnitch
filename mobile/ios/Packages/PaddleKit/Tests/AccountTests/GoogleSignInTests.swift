@@ -141,6 +141,19 @@ import Testing
         #expect(next?.value == "/paddles/compare?a=pdl-tracker&b=pdl-phone2")
     }
 
+    @Test func aWebCodeLinkOpensOnlyOnOurSite() throws {
+        let base = try #require(URL(string: "https://paddlesnitch.com"))
+        func ours(_ link: String) -> Bool {
+            AccountModel.resolve(link, against: base).map { AccountModel.isOurSite($0, base: base) } ?? false
+        }
+        #expect(ours("/att/api/auth/web-code/x?code=1"))
+        #expect(ours("https://paddlesnitch.com/att/api/auth/web-code/x"))
+        #expect(!ours("//evil.example/x"))
+        #expect(!ours("https://evil.example/x"))
+        #expect(!ours("http://paddlesnitch.com/x"))
+        #expect(!ours("javascript:alert(1)"))
+    }
+
     @Test func aFailedWebCodeThrows() async throws {
         let account = account()
         try await account.signIn(email: "pat@example.com", password: SampleServer.password)

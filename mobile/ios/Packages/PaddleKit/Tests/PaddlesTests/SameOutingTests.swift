@@ -45,4 +45,51 @@ import Testing
     @Test func theSamplesHaveNoLinks() async throws {
         #expect(try await SamplePaddles(directory: fixtures).sameOuting(id: "pdl-river").isEmpty)
     }
+
+    @Test func compareHasThePaddleOnScreenAsA() async {
+        let asked = Asked()
+        let opener = CompareOpener { path in
+            await asked.add(path)
+            return true
+        }
+        let phone = SameOutingLink(id: "pdl-phone2", sourceType: "device", phone: true)
+        await opener.open(paddle: "pdl-tracker", link: phone)
+        #expect(await asked.paths == ["/paddles/compare?a=pdl-tracker&b=pdl-phone2"])
+        #expect(!opener.failed)
+        #expect(opener.opening == nil)
+    }
+
+    /// Each web-code link works once: a second tap while the first asks
+    /// asks nothing.
+    @Test func aSecondTapWhileAskingAsksNothing() async {
+        let asked = Asked()
+        let release = AsyncStream<Void>.makeStream()
+        let opener = CompareOpener { path in
+            await asked.add(path)
+            for await _ in release.stream { break }
+            return true
+        }
+        let link = SameOutingLink(id: "b", sourceType: "strava", phone: nil)
+        let first = Task { await opener.open(paddle: "a", link: link) }
+        while await asked.paths.isEmpty { await Task.yield() }
+        #expect(opener.opening == link, "a spinner on the tapped one")
+        await opener.open(paddle: "a", link: link)
+        await opener.open(paddle: "a", link: SameOutingLink(id: "c", sourceType: "file", phone: nil))
+        release.continuation.yield()
+        await first.value
+        #expect(await asked.paths.count == 1)
+        #expect(opener.opening == nil)
+    }
+
+    @Test func aFailedAskSaysSo() async {
+        let opener = CompareOpener { _ in false }
+        await opener.open(paddle: "a", link: SameOutingLink(id: "b", sourceType: "strava", phone: nil))
+        #expect(opener.failed)
+        #expect(opener.opening == nil, "it can be tried again")
+    }
+}
+
+actor Asked {
+    private(set) var paths: [String] = []
+    func add(_ path: String) { paths.append(path) }
 }

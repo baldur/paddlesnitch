@@ -290,3 +290,9 @@ isn't obvious from the code.
 - After `checkScreen` in LargeTextTests the List has jumped back to the
   top, so an element it checked is off screen and has no frame:
   `scrollToElement` again before measuring it.
+- `.accessibilityElement(children: .ignore)` on a `Button` makes a new
+  element that is not a button (XCUITest reads `.other`; VoiceOver
+  doesn't say "button"): add `.accessibilityAddTraits(.isButton)` back,
+  and check `elementType == .button` in the UI test. State a List row
+  must keep through a scroll (a spinner, a failure alert) lives in the
+  screen (`CompareOpener`), not in the row.

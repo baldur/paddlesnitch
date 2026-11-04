@@ -16,33 +16,26 @@ struct SameOutingButton: View {
 
     let link: SameOutingLink
     let style: Style
-    /// Asks web-code and opens Compare; false if it couldn't.
-    let open: () async -> Bool
-    @State private var opening = false
-    @State private var failed = false
+    /// This one is asking web-code: a spinner, and no more taps.
+    let opening: Bool
+    let tap: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        Button {
-            opening = true
-            Task {
-                failed = await !open()
-                opening = false
-            }
-        } label: {
+        Button(action: tap) {
             label
                 .font(.plexSans(.subheadline))
+                .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DimsWhenPressed())
         .disabled(opening)
+        // A new element, which doesn't keep the Button's trait: add it back
+        // (SameOutingTests checks it reads as a button).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(link.spoken)
         .accessibilityAddTraits(.isButton)
-        .alert("Couldn't open Compare. Please try again.", isPresented: $failed) {
-            Button("OK", role: .cancel) {}
-        }
     }
 
     @ViewBuilder private var label: some View {
@@ -71,5 +64,20 @@ struct SameOutingButton: View {
                 if opening { ProgressView().tint(Palette.muted) }
             }
         }
+    }
+}
+
+extension View {
+    func compareFailedAlert(_ opener: CompareOpener) -> some View {
+        alert("Couldn't open Compare. Please try again.", isPresented: Bindable(opener).failed) {
+            Button("OK", role: .cancel) {}
+        }
+    }
+}
+
+/// Plain, but the label dims while held: the browser takes a moment.
+private struct DimsWhenPressed: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.6 : 1)
     }
 }

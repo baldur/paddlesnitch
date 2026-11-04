@@ -96,9 +96,17 @@ extension AccountModel {
     /// in"). Open it at once, and never fetch it first: that spends it.
     public func websitePage(_ next: String) async throws -> URL {
         let page = try await client.send(Endpoints.authWebCode, WebPageFor(next: next))
-        guard let url = Self.resolve(page.url, against: client.baseURL) else {
+        guard let url = Self.resolve(page.url, against: client.baseURL), Self.isOurSite(url, base: client.baseURL)
+        else {
             throw PaddleAPIError.undecodable("web-code link")
         }
         return url
+    }
+
+    /// The link signs the website in as this person, so it opens only on
+    /// our own site: another host could spend the code. Safari's view also
+    /// refuses any scheme but http and https.
+    static func isOurSite(_ url: URL, base: URL) -> Bool {
+        url.scheme == base.scheme && url.host() == base.host() && url.port == base.port
     }
 }

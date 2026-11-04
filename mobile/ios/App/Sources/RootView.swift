@@ -46,7 +46,7 @@ struct RootView: View {
                     openFile: { url in Task { await open(url) } },
                     openRecord: { recording.open(in: account.user.map { account.recordings(for: $0.id) }) },
                     uploads: uploads,
-                    openReport: openReport, openCompare: openCompare
+                    openReport: openReport, openPage: openPage
                 )
                 .tabItem { Label("Paddles", systemImage: "water.waves") }
                 .tag("paddles")
@@ -143,11 +143,11 @@ struct RootView: View {
         }
     }
 
-    /// Compare on the website, signed in as this account. The button that
+    /// A website page signed in as this account (Compare). The button that
     /// asked says if it couldn't open.
-    private func openCompare(_ a: String, _ b: String) async -> Bool {
+    private func openPage(_ path: String) async -> Bool {
         do {
-            websitePage = try await account.websitePage(SameOutingLink.comparePath(a: a, b: b))
+            websitePage = try await account.websitePage(path)
             return true
         } catch {
             return false

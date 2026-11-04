@@ -39,7 +39,7 @@ struct TrackersView: View {
                 switch route {
                 case .tracker(let id): TrackerDetailView(account: account, model: model, deviceId: id)
                 case .paddle(let id):
-                    PaddleDetailView(id: id, source: ServerPaddles(client: account.client), openCompare: openCompare)
+                    PaddleDetailView(id: id, source: ServerPaddles(client: account.client), openPage: openPage)
                 }
             }
             .sheet(isPresented: $guide) {
@@ -48,9 +48,9 @@ struct TrackersView: View {
             .sheet(item: $compare) { url in SafariView(url: url).ignoresSafeArea() }
     }
 
-    private func openCompare(_ a: String, _ b: String) async -> Bool {
+    private func openPage(_ path: String) async -> Bool {
         do {
-            compare = try await account.websitePage(SameOutingLink.comparePath(a: a, b: b))
+            compare = try await account.websitePage(path)
             return true
         } catch {
             return false

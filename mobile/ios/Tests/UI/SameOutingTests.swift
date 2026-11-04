@@ -13,9 +13,11 @@ final class SameOutingTests: AppTestCase {
         signInAndWait()
         let row = scrollTo("same-outing-pdl-river-pdl-river-watch")
         XCTAssertEqual(row.label, "Compare with the recording from Strava", "one element, the arrow not read")
+        XCTAssertEqual(row.elementType, .button)
         XCTAssertTrue(row.isHittable)
         XCTAssertGreaterThanOrEqual(row.frame.height, 44)
         try audit(XCUIAccessibilityAuditType.all.subtracting([.dynamicType, .contrast, .textClipped]))
+        keep("Same-outing row in its card")
         row.tap()
         XCTAssertTrue(safariDone.appears(timeout: 10), "Compare opens in the in-app browser")
         safariDone.tap()
@@ -28,6 +30,7 @@ final class SameOutingTests: AppTestCase {
         open("pdl-river")
         let link = scrollTo("same-outing-pdl-river-watch")
         XCTAssertEqual(link.label, "Compare with the recording from Strava")
+        XCTAssertEqual(link.elementType, .button)
         XCTAssertGreaterThanOrEqual(link.frame.height, 44)
         let summary = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Summary: '"))
             .firstMatch
@@ -45,7 +48,7 @@ final class SameOutingTests: AppTestCase {
         signInAndWait()
         open("pdl-strava")
         XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
-        XCTAssertEqual(sameOutingElements.count, 0)
+        XCTAssertFalse(anySameOutingComes(), "no links")
     }
 
     /// The links are extra: a failed call shows nothing, not an error.
@@ -54,7 +57,7 @@ final class SameOutingTests: AppTestCase {
         signInAndWait()
         open("pdl-river")
         XCTAssertTrue(text(containing: "Headwind on the way back.").appears(timeout: 10))
-        XCTAssertEqual(sameOutingElements.count, 0)
+        XCTAssertFalse(anySameOutingComes(), "no links")
         XCTAssertFalse(text(containing: "Couldn").exists)
     }
 
@@ -71,8 +74,20 @@ final class SameOutingTests: AppTestCase {
         XCTAssertFalse(text(containing: "PACE").exists, "the paddle didn't open")
     }
 
-    private var sameOutingElements: XCUIElementQuery {
-        app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'same-outing-'"))
+    /// The samples have no account to compare in: their row is words, not
+    /// a button.
+    func testTheSamplesRowIsNotAButton() {
+        let row = scrollTo("same-outing-pdl-river-pdl-river-watch")
+        XCTAssertEqual(row.label, "Also recorded by Strava")
+        XCTAssertNotEqual(row.elementType, .button)
+        XCTAssertFalse(app.buttons["same-outing-pdl-river-pdl-river-watch"].exists)
+    }
+
+    /// The links come after the page: watch for 3 s, not one look.
+    private func anySameOutingComes() -> Bool {
+        let links = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'same-outing-'"))
+        return poll(timeout: 3) { links.count > 0 }
     }
 
     private func relaunch(with argument: String) {
