@@ -326,11 +326,14 @@ isn't obvious from the code.
   lines) proves the full width.
 - iOS takes a tap that lands near a control: within about 17 pt of
   anything drawn (a paddle row's chevron caught taps from 17 pt left of
-  it), and 20 pt above and below the Terms tick and "Read them", which
-  XCUITest calls 21 pt tall. So a small frame isn't a small target, and
-  a dead spot is only real if it's further than that from everything
-  drawn. Measure with a sweep of taps before calling a target too small
-  (#872 was closed that way). To test a dead spot, tap well clear of
-  every drawn thing and check it fails without the fix.
-- `for _ in 0..<n where cond` skips rounds but never ends the loop: use
+  it), and 22 pt above and below the middle of the Terms tick and "Read
+  them" (44 pt in all), which XCUITest calls 21 pt tall. Measured on
+  iPhone 17, iOS 26.5; CI's iOS 17 job runs the same tests. So a small
+  frame isn't a small target, and a dead spot is only real if it's
+  further than that from everything drawn. Measure with a sweep of taps
+  before calling a target too small (#872). To test a dead spot, tap
+  well clear of every drawn thing, check it fails without the fix, and
+  say in the test which sample words it depends on.
+- `for _ in 0..<n where cond` skips rounds but never ends the loop: every
+  test helper that used it kept looking after it was done. Use
   `guard cond else { break }`.

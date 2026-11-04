@@ -132,7 +132,8 @@ final class MotionTraceLargeTextTests: AppTestCase {
     /// as a tap).
     private func scrollAboveTheBar(_ target: XCUIElement) {
         let window = app.windows.firstMatch
-        for _ in 0..<8 where target.frame.maxY > barTop {
+        for _ in 0..<8 {
+            guard target.frame.maxY > barTop else { break }
             let fromY = barTop - 10
             let distance = min(max(target.frame.maxY - barTop + 8, 30), fromY - readableArea.minY - 10)
             let from = window.coordinate(withNormalizedOffset: .zero)

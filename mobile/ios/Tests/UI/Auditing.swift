@@ -39,7 +39,8 @@ extension AppTestCase {
         // before each, and it fails only if all three report it. Not when
         // such a report can't fail anyway: those looks were ~40% of a
         // large-text test.
-        for _ in 0..<2 where unpinnedFails && found.pinned.isEmpty && !found.unpinned.isEmpty {
+        for _ in 0..<2 {
+            guard unpinnedFails && found.pinned.isEmpty && !found.unpinned.isEmpty else { break }
             keepScreenshot("Audit issue on no element")
             nudgePage()
             found = try auditIssues(types)

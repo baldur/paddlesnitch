@@ -62,7 +62,8 @@ final class ForgotPasswordTests: AppTestCase {
     private func settle() {
         let field = app.textFields.firstMatch
         var last = CGRect.null
-        for _ in 0..<20 where field.frame != last {
+        for _ in 0..<20 {
+            guard field.frame != last else { break }
             last = field.frame
             usleep(150_000)
         }

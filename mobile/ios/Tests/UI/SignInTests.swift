@@ -95,9 +95,10 @@ final class SignInTests: AppTestCase {
         XCTAssertTrue(text(containing: "The Terms of Service have changed").exists)
     }
 
-    /// The Terms tick and "Read them" take taps 20 pt above and below
-    /// their words, which is 41 pt or more in all (#872). XCUITest calls
-    /// each 21 pt tall, but iOS takes a tap that lands near a control.
+    /// The Terms tick and "Read them" take taps 22 pt above and below the
+    /// middle of their words, 44 pt in all, and in the gap between the box
+    /// and its words (#872). XCUITest calls each 21 pt tall, but iOS takes a
+    /// tap that lands near a control.
     func testTheTermsTickAndReadThemTakeTapsAroundTheirWords() {
         app.buttons["sample-notice-action"].tap()
         showCreateAccount()
@@ -107,13 +108,14 @@ final class SignInTests: AppTestCase {
             window.coordinate(withNormalizedOffset: .zero)
                 .withOffset(CGVector(dx: x - window.frame.minX, dy: y - window.frame.minY)).tap()
         }
-        for dy: CGFloat in [-20, 20] {
+        // Over the words above and below, then between the box and the "I".
+        for (dx, dy): (CGFloat, CGFloat) in [(60, -22), (60, 22), (24, 0)] {
             let before = tick.value as? String
-            tap(tick.frame.minX + 60, tick.frame.midY + dy)
-            XCTAssertTrue(poll(timeout: 2) { tick.value as? String != before }, "ticked or not at \(dy) pt")
+            tap(tick.frame.minX + dx, tick.frame.midY + dy)
+            XCTAssertTrue(poll(timeout: 2) { tick.value as? String != before }, "ticked or not at (\(dx), \(dy))")
         }
         let read = app.buttons["Read them"]
-        for dy: CGFloat in [-20, 20] {
+        for dy: CGFloat in [-22, 22] {
             tap(read.frame.midX, read.frame.midY + dy)
             let close = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
             XCTAssertTrue(close.appears(timeout: 10), "Terms opened at \(dy) pt")
