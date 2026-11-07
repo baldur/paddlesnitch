@@ -21,6 +21,18 @@ OpenNext v4 bundles the Next.js server into a single Lambda. No API Gateway — 
 
 **Deploy is not atomic — asset ordering matters (both directions).** Next.js chunks are content-hashed, so a deploy that changes shared code (e.g. the header) rehashes every page's bundle. Two guards in `infra/lib/att-stack.ts` keep the site from breaking mid-deploy: (1) the asset `BucketDeployment`s use **`prune:false`** so the PREVIOUS build's hashed files survive for in-flight/cached OLD HTML (a lifecycle rule expires orphans later); and (2) the server Lambda (`ServerFn`) has an explicit **`.node.addDependency(deployAssets)`** so CloudFormation uploads the NEW chunks to S3 *before* flipping the Lambda that serves HTML referencing them — otherwise the new HTML 404s on `/_next/static/*` for the duration of the upload. The BucketDeployments deliberately carry **no** `distribution`/`distributionPaths` (that built-in invalidation would depend on the distribution → serverFn and force the wrong order / a cycle); invalidation isn't needed for immutable hashed assets — invalidate a changed non-hashed `public/` path manually if that ever comes up.
 
+**Only CloudFront may call the server (#908).** The server's function URL is public (`authType: NONE`): Lambda OAC would make every POST carry an `x-amz-content-sha256` body hash, which browsers, the apps and the trackers don't send. Instead CloudFront adds `x-origin-verify` on the server origin (the default behaviour and `/plan/data/*`; the S3 origins and the image function don't need it), and `apps/web/src/proxy.ts` checks it first on every request (`src/lib/origin-verify.ts`). The value is the SSM **String** `/att/origin-verify` (`current`, or `current,previous` while rotating), read by CloudFormation at every deploy: CloudFront sends the first value, the Lambda gets all of them as `ORIGIN_VERIFY_SECRETS`. `ORIGIN_VERIFY_MODE` is `report` (warn `origin_verify` in the server log, refuse nothing) or `enforce` (403). It must exist before a deploy (CloudFormation fails without it):
+
+```bash
+F=$(mktemp); openssl rand -hex 32 | tr -d '\n' > "$F"
+aws ssm put-parameter --name /att/origin-verify --type String --value "file://$F" --profile paddlesnitch --region eu-west-1; rm "$F"
+```
+
+- **Turning it on:** never deploy `enforce` together with a header change: the server Lambda updates before the distribution, so for the minutes CloudFront takes to deploy every request would be refused. Deploy `report` first, check the server log has no `origin_verify` warnings from real traffic, then switch to `enforce`.
+- **Rotating:** put `NEW,OLD` (no spaces: both sides split on the comma and nothing is trimmed) and deploy (the server accepts both while edges switch), then put `NEW` and deploy again.
+- **Rolling back fast:** set `ORIGIN_VERIFY_MODE` back to `report` (a one-line PR), or in an emergency edit that variable on the server Lambda in the console; the next deploy restores the stack's value.
+- The value is readable by anyone who can read the distribution, the Lambda configuration or SSM in this account; it is never in git, the template or the deploy log.
+
 Cognito is the identity store. The server function has IAM permission for an explicit list of `cognito-idp` actions on the user pool and `ses:SendEmail` for the `paddlesnitch.com` identity. The S3 data bucket holds *only* course/trial/entry data — no user records, no sessions.
 
 ## Deploy sequence
