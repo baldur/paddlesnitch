@@ -302,24 +302,34 @@ pitch `green`, the mirrored line `red`, gridlines `border`, the zero line and
 all chart text `muted` (mono). Angles in degrees, `t` in milliseconds. The
 website draws each chart as wide as the panel, 260 pt high (the histogram
 230), with chart text at 11 pt whatever the width: never scale the text down
-with the chart, or it can't be read on a phone. Legend swatches are drawn at
-0.8 opacity, not the opacity of what they stand for, so each stays visible.
-A chart with a legend ("Through the session" and the histogram) keeps it in
-a 34 pt band above the plot, so it never covers the tallest band or bar.
+with the chart, or it can't be read on a phone. Legend swatches (the filled
+squares) are filled at 0.8 opacity, not the opacity of what they stand for,
+so each stays visible. Every chart has a legend, kept in a 34 pt band above
+the plot, so it never covers the tallest band, line or bar. Roll and pitch
+never differ by colour alone: pitch is always dashed (4 pt on, 3 pt off) and
+roll solid, in the chart and in its key.
 Y-axis ticks are `axisTicks`
 (format.json) of the chart's bound, labelled with the plain number and "°"
 (a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
 - "Through the session" from `envelope`: a band per bucket from min to max
-  (roll at 0.5 opacity over pitch at 0.28), y from −`plotBoundDeg` to
+  (roll at 0.5 opacity over pitch at 0.28), each band outlined at full colour
+  in 1.2 pt, roll solid and pitch dashed (4 pt on, 3 pt off), both outlines
+  over both fills. y from −`plotBoundDeg` to
   +`plotBoundDeg` (10 when null), values beyond clamped to the edge, and then
   a note under the chart (small, `muted`, outside the chart image) "A few
   moments went past ±N° and are clipped at the chart’s edge.". X labels from
   `envelopeXLabels` (format.json): "0 min" and the length in whole minutes,
-  or seconds under two minutes. Legend "roll" and "pitch".
+  or seconds under two minutes. Legend "roll" and "pitch", top right: each
+  key a 10 pt swatch outlined like its band (pitch's outline dashed), 4 pt
+  before its word.
   Accessibility label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
   Caption: "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
-- "Stroke shape" from `excerpt`: roll and pitch lines, y bound = the largest
-  absolute value (at least 1°) ×1.1. X-axis label "<seconds, rounded> s at
+- "Stroke shape" from `excerpt`: roll and pitch lines at full opacity (roll
+  solid, 1.8 pt; pitch dashed, 4 pt on, 3 pt off, 1.2 pt), y bound = the
+  largest absolute value (at least 1°) ×1.1. Legend "roll" and "pitch", top
+  right, with each word at the same x as on "Through the session". Keys are
+  18 pt lines, the same width, dash and colour as their series, 6 pt before
+  their word. X-axis label "<seconds, rounded> s at
   <sampleRateHz> Hz" (leave out " at … Hz" when `sampleRateHz` is null).
   Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
   Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."

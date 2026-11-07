@@ -22,13 +22,13 @@ const summary = (id: string, paddledAt: string, over: object = {}) => ({
   cruiseSpeed: 2.4, effortCount: 0, avgDps: null, note: '', insight: '', route: [[51.5, -0.9], [51.51, -0.9]], ...over,
 })
 
-async function mount(sessions: object[]) {
+async function mount(sessions: object[] | null) {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
   qc.setQueryData(getQueryKey(trpc.me, undefined, 'query'), { user: { id: 'u', email: 'u@example.com', displayName: 'U' } })
-  qc.setQueryData(getQueryKey(trpc.paddles.sessions, undefined, 'query'), sessions)
+  if (sessions) qc.setQueryData(getQueryKey(trpc.paddles.sessions, undefined, 'query'), sessions)
   const client = trpc.createClient({ links: [httpBatchLink({ url: 'http://localhost/api/trpc' })] })
   await act(async () => {
     root.render(<trpc.Provider client={client} queryClient={qc}><QueryClientProvider client={qc}><PaddlesList /></QueryClientProvider></trpc.Provider>)
@@ -48,13 +48,27 @@ describe('Paddles list, where a paddle came from', () => {
     expect(row('t')).toContain('· Tracker')
   })
 
-  it('says the phone recorded the same outing too', async () => {
+  it('says the phone recorded the same outing too, as the server grouped it', async () => {
+    const at = '2026-10-11T07:00:00Z'
+    await mount([
+      summary('t', at, { source: { type: 'device', deviceId: 'A1B2C3D4' }, sameOuting: [{ id: 'p', sourceType: 'device', phone: true }] }),
+      summary('p', at, { source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }),
+    ])
+    expect(container.textContent).toContain('Also recorded by the phone')
+    expect(container.querySelector('a[href="/paddles/p"]')).toBeNull()
+    expect(container.querySelector('a[href="/paddles/compare?a=t&b=p"]')).not.toBeNull()
+  })
+
+  // #852: the list no longer groups by time alone; the paddle page wouldn't link them.
+  it('shows two recordings at the same time as two paddles when the server did not group them', async () => {
     const at = '2026-10-11T07:00:00Z'
     await mount([
       summary('t', at, { source: { type: 'device', deviceId: 'A1B2C3D4' } }),
       summary('p', at, { source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }),
     ])
-    expect(container.textContent).toContain('Also recorded by the phone')
+    expect(container.textContent).not.toContain('Also recorded by')
+    expect(container.querySelector('a[href="/paddles/t"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/paddles/p"]')).not.toBeNull()
   })
 })
 
@@ -77,5 +91,22 @@ describe('Paddles list, a paddle without a map', () => {
     expect(container.querySelectorAll('input[aria-label="Compare"]').length).toBe(1)
     // Counted, with its time; its km is nothing.
     expect(container.textContent).toContain('In all: 2 paddles, 8.5 km, 2:41:00 on the water')
+  })
+})
+
+// Review of #891: a failed list spun forever (no retry, no error branch).
+describe('Paddles list that could not load', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+  it("says it couldn't load your paddles and offers Try again", async () => {
+    const fetch = vi.fn(async () => new Response('{}', { status: 500 }))
+    vi.stubGlobal('fetch', fetch)
+    await mount(null)
+    await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+    expect(container.textContent).toContain("Couldn't load your paddles")
+    expect(container.textContent).not.toContain('Loading')
+    const again = [...container.querySelectorAll('button')].find(b => b.textContent === 'Try again')!
+    const calls = fetch.mock.calls.length
+    await act(async () => { again.click(); await new Promise(r => setTimeout(r, 20)) })
+    expect(fetch.mock.calls.length).toBeGreaterThan(calls)
   })
 })

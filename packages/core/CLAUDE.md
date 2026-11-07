@@ -5,7 +5,7 @@ Moved from the root `CLAUDE.md` (Shared packages). Import per-file subpaths, nev
 ## `@paddlesnitch/core` (`packages/core/src`)
 
 Platform primitives:
-- `storage` — S3 (prod) / local-fs (dev) object store: `getJson`/`putJson`/`getObject`/`putObject`/`listKeys`/`deleteObject`.
+- `storage` — S3 (prod) / local-fs (dev) object store: `getJson`/`putJson`/`getObject`/`putObject`/`listKeys`/`deleteObject`, and `putObjectIfAbsent` for one-use claims (atomic: S3 If-None-Match, locally an exclusive create; exactly one racing caller gets true).
 - `auth` — `getAuthUser()` (reads the `tt_id` cookie, verifies the JWT, silent-refreshes via `tt_refresh`).
 - `cognito` — Cognito SDK wrapper (signUp, signIn, refresh, revoke, verifyIdToken).
 - `url` — URL helpers.
