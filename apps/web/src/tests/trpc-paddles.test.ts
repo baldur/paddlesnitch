@@ -21,9 +21,9 @@ async function writeSession(dir: string, id: string, s: Record<string, unknown> 
 
 // One boat heading north from 09:00 on 6 Oct at 2.2 m/s, recorded from `at`
 // for `seconds`, one point a second: where it is depends on the clock.
-function boatTrack(at: string, seconds: number, lng = -0.93, sr: number | null = null) {
+function boatTrack(at: string, seconds: number, lng = -0.93, sr: number | null = null, offsetM = 0) {
   const since = (Date.parse(at) - Date.parse('2026-10-06T09:00:00Z')) / 1000
-  return Array.from({ length: seconds }, (_, t) => ({ t, lat: 51.46 + (since + t) * 2.2 / 111_000, lng, speed: 2.2, sr, dps: null }))
+  return Array.from({ length: seconds }, (_, t) => ({ t, lat: 51.46 + ((since + t) * 2.2 + offsetM) / 110_540, lng, speed: 2.2, sr, dps: null }))
 }
 
 let dir: string
@@ -237,13 +237,13 @@ describe('paddles.byRecording', () => {
 
 describe('the same outing from two sources (paddles.sameOuting, paddles.compareOuting)', () => {
   // One boat heading north from 09:00 at 2.2 m/s, recorded from `at`.
-  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number; deviceId?: string } = {}) =>
+  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number; deviceId?: string; offsetM?: number } = {}) =>
     writeSession(dir, id, {
       id, userId: USER.id, paddledAt: at, source: { type, ...(opts.deviceId ? { deviceId: opts.deviceId } : {}) },
       result: {
         durationS: seconds - 1, distanceKm: seconds * 2.2 / 1000, cruiseSpeed: 2.2, avgSR: opts.sr ?? null,
         surges: [], stops: [], sets: [],
-        points: boatTrack(at, seconds, opts.lng, opts.sr ?? null),
+        points: boatTrack(at, seconds, opts.lng, opts.sr ?? null, opts.offsetM),
       },
     })
 
@@ -295,10 +295,42 @@ describe('the same outing from two sources (paddles.sameOuting, paddles.compareO
     expect(cards.map(c => [c.id, c.sameOuting])).toEqual([['t-rec1', [{ id: 'p-rec1', sourceType: 'device', phone: true }]]])
     const sessions = await caller.paddles.sessions()
     expect(sessions.find(s => s.id === 't-rec1')?.sameOuting).toEqual([{ id: 'p-rec1', sourceType: 'device', phone: true }])
-    expect(sessions.some(s => 'places' in s)).toBe(false)                // the minute-by-minute places stay on the server
+    expect(sessions.some(s => 'places' in s)).toBe(false)                // places stay on the server
+    expect(cards.some(c => 'places' in c)).toBe(false)
     expect((await caller.paddles.sameOuting({ id: 't-rec1' })).map(o => o.id)).toEqual(['p-rec1'])
     expect((await caller.paddles.sameOuting({ id: 'p-rec1' })).map(o => o.id)).toEqual(['t-rec1'])
     expect((await caller.paddles.compareOuting({ a: 't-rec1', b: 'p-rec1' })).same).toBe(true)
+  })
+
+  // Review of #891: a phone 60 m off the tracker but 30 m off the watch chained
+  // all three into one card, and the order of the list decided which.
+  for (const [name, starts] of [['tracker first', ['09:00:00', '09:00:20', '09:00:40']], ['phone first', ['09:00:40', '09:00:00', '09:00:20']]] as const) {
+    it(`groups a recording with the lead only, never through another (${name})`, async () => {
+      const [ta, tb, tc] = starts.map(t => `2026-10-06T${t}Z`)
+      await outing('A', ta, 1200, 'device', { deviceId: 'A1B2C3D4' })                       // the tracker
+      await outing('B', tb, 1100, 'device', { deviceId: 'P0123456789ABCDEF', offsetM: 60 })  // the phone: 60 m off the tracker
+      await outing('C', tc, 1100, 'strava', { offsetM: 30 })                                // the watch: 30 m off each
+      const caller = createCaller({ user: USER })
+      const { cards } = await caller.paddles.list()
+      expect(cards.map(c => [c.id, c.sameOuting?.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['B', undefined]])
+      const sessions = await caller.paddles.sessions()
+      expect(sessions.map(s => [s.id, s.sameOuting?.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['B', undefined], ['C', undefined]])
+      const links = async (id: string) => (await caller.paddles.sameOuting({ id })).map(o => o.id)
+      expect([await links('A'), await links('B'), await links('C')]).toEqual([['C'], [], ['A']])
+      expect((await caller.paddles.compareOuting({ a: 'A', b: 'C' })).same).toBe(true)
+      expect((await caller.paddles.compareOuting({ a: 'A', b: 'B' })).same).toBe(false)
+    })
+  }
+
+  // The 40 m edge, through the list and the page (core tests pin every edge).
+  it('groups recordings 39 m apart and not 41 m apart, on the list and the page alike', async () => {
+    await outing('t', '2026-10-06T09:00:00Z', 1200, 'device', { deviceId: 'A1B2C3D4' })
+    await outing('near', '2026-10-06T09:00:30Z', 1100, 'strava', { offsetM: 39 })
+    await outing('far', '2026-10-06T09:00:30Z', 1100, 'file', { offsetM: 41 })
+    const caller = createCaller({ user: USER })
+    expect((await caller.paddles.list()).cards.map(c => [c.id, c.sameOuting?.map(o => o.id)]).sort()).toEqual([['far', undefined], ['t', ['near']]])
+    expect((await caller.paddles.sameOuting({ id: 't' })).map(o => o.id)).toEqual(['near'])
+    expect(await caller.paddles.sameOuting({ id: 'far' })).toEqual([])
   })
 })
 

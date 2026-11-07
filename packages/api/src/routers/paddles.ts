@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
 import { summaryToCard } from '@paddlesnitch/core/paddle-store'
-import { paddleTotals, paddleLogbook, groupSameOuting, sameOuting, isPhonePaddle, markPhone } from '@paddlesnitch/core/paddles'
+import { paddleTotals, paddleLogbook, groupSameOuting, sameOutingLinks, isPhonePaddle, markPhone } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
@@ -87,14 +87,13 @@ export const paddlesRouter = router({
     }, others)
   }),
 
-  // The same outing recorded by another source (one-paddle.md, phase 4): the
-  // user's other paddles that overlap this one in time AND in place, by the
-  // rule the list groups with (`sameOuting`), from the summaries alone.
+  // The same outing recorded by another source (one-paddle.md, phase 4): by
+  // the list's own grouping (time AND place, `sameOuting`), from the summaries
+  // alone. The lead's page links its others; another recording links its lead.
   sameOuting: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
     const all = await listSessionSummaries(ctx.user.id)
-    const me = all.find(s => s.id === input.id)
-    if (!me) throw new TRPCError({ code: 'NOT_FOUND' })
-    return all.filter(s => s.id !== me.id && sameOuting(me, s)).map(s => ({ ...outingRef(s), paddledAt: s.paddledAt }))
+    if (!all.some(s => s.id === input.id)) throw new TRPCError({ code: 'NOT_FOUND' })
+    return sameOutingLinks(groupSameOuting(all), input.id).map(s => ({ ...outingRef(s), paddledAt: s.paddledAt }))
   }),
 
   // The two recordings of one outing side by side: how far apart they put you

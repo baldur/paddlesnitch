@@ -148,7 +148,11 @@ export default function PaddlesList() {
           )
         })()}
 
-        {sessions === undefined && <LoadingState label="Loading" className="py-10" />}
+        {sessions === undefined && !q.isError && <LoadingState label="Loading" className="py-10" />}
+        {sessions === undefined && q.isError && (
+          <EmptyState title="Couldn't load your paddles"
+            action={<button type="button" onClick={() => q.refetch()} disabled={q.isFetching} className={buttonClass('primary')}>{q.isFetching ? 'Try again…' : 'Try again'}</button>} />
+        )}
         {empty && (
           <EmptyState title="No paddles yet" body="Add one from a GPS file or a time trial. A tracker adds its own."
             action={<Link href="/paddles/new" className={buttonClass('primary')}>Add paddle</Link>} />

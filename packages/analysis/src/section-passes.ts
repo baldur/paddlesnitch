@@ -83,7 +83,7 @@ export async function sectionPasses(viewerId: string, sec: Section): Promise<Sec
   const owners = [viewerId]
   for (const b of await listBuddies(viewerId)) if ((await getBuddySharing(b.userId)).paddles) owners.push(b.userId)
   const perOwner = await Promise.all(owners.map(async owner => {
-    const summaries = (await listSessionSummaries(owner)).filter(s => owner === viewerId || !s.hiddenFromBuddies)
+    const summaries = (await listSessionSummaries(owner, { writeBack: owner === viewerId })).filter(s => owner === viewerId || !s.hiddenFromBuddies)
     const near = (await Promise.all(summaries.map(async s => ({ s, ok: cellOverlap(sectionCells, await getRouteCells(owner, s.id)) >= SECTION_OVERLAP }))))
       .filter(x => x.ok).map(x => x.s)
     const found = await Promise.all(near.map(async sum => {

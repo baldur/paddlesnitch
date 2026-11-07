@@ -148,17 +148,29 @@ outside moving stretches; a tracker paddle's efforts get a stroke rate.
 - **Detecting it** (one rule, `sameOuting` in `@paddlesnitch/core/paddles`,
   for the Paddles list, the paddle page and Compare, #852): two of the user's
   paddles overlap in time by at least half the shorter one, AND **at the same
-  clock moments** (each whole minute both recorded, at least three) at least
-  70% of positions are within 40 m of each other. Comparing by clock rather
-  than "near the other route" measures what QA wants (how far apart two devices
-  put you at once) and doesn't match an out-and-back to itself, two people on
-  another river at the same time, or a phone left on the bank. The positions
-  are each paddle's `places` (`outingPlaces`: one rounded [lat, lng] per whole
-  UTC minute, ~2.4 KB for two hours), kept in its `summary.json`, so the list
-  never reads a track. A summary from before `places` is rebuilt from its
-  paddle once, and only when another paddle overlaps it in time.
-  (Until #852 the list grouped by time alone and the page sampled the full
-  tracks every 10 s, so the two could disagree.)
+  clock instants** (every 20 s both recorded, at least three) at least 70% of
+  positions are within 40 m of each other. Comparing by clock rather than "near
+  the other route" measures what QA wants (how far apart two devices put you at
+  once) and doesn't match an out-and-back to itself, two people on another
+  river at the same time, or a phone left on the bank. The positions are each
+  paddle's `places` (`outingPlaces`: one position per 20 s of UTC, ~1 m,
+  delta-encoded, about 2 KB for two hours; none at an instant inside a gap of
+  more than 30 s between points, so a gap never cuts a bend), kept in its
+  `summary.json`, so the list never reads a track. Compare's distances come
+  from the same samples (`placesGap`), so "same outing" and its numbers agree.
+- **Grouping:** a recording joins a group only if it is the same outing as the
+  group's lead (tracker, then Strava, then the rest), never through another
+  recording, so the list's order can't change the answer. The lead's page links
+  its others; another recording's page links the lead.
+- **Older paddles:** a summary from before `places` is rebuilt from its paddle
+  only when another paddle overlaps it in time, at most 20 a list call and 4 at
+  a time, and written only if the summary didn't change meanwhile. A paddle
+  that can't be read gets empty places (never grouped, not retried). A buddy's
+  or section list never writes the owner's summaries.
+- **Clocks:** the tracker's points are GPS time. A phone's are the fix's own
+  time (Android `Location.time`, iOS `CLLocation.timestamp`), which follow the
+  phone's network-set clock; a second off at a 5 m/s sprint is 5 m, well inside
+  the 40 m corridor.
 - **On the paddle:** "ALSO RECORDED BY STRAVA →" (or BY THE TRACKER), linking to
   the comparison.
 - **The comparison** (`/paddles/compare?a=&b=`) gains a SAME OUTING section when

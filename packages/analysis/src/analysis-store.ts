@@ -4,7 +4,7 @@
 import { nanoid } from 'nanoid'
 import { getJson, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { thumbRoute, isMotionOnly, timeOverlapShare, MIN_TIME_OVERLAP, type OutingPlaces } from '@paddlesnitch/core/paddles'
+import { thumbRoute, isMotionOnly, overlapsInTime, encodePlaces, PLACES_EVERY_S, type OutingPlaces } from '@paddlesnitch/core/paddles'
 import { routeCells } from './route-match'
 import { outingPlaces } from './same-outing'
 import type { AnalysisResult } from './analysis'
@@ -80,7 +80,7 @@ export type SessionSummary = {
   route?: [number, number][]
   // A paddle without a map: the tracker's GPS failed (#414). Test with isMotionOnly().
   noGps?: true
-  // Where the paddle was at each whole minute (outingPlaces, ~2 KB for two
+  // Where the paddle was every 20 s of clock time (outingPlaces, ~2.6 KB for two
   // hours), so lists can tell one outing recorded twice without reading a
   // track (#852). Absent on a paddle without a map, and on summaries written
   // before it existed (listSessionSummaries fills those in when it matters).
@@ -289,10 +289,37 @@ function toSummary(s: AnalysisSession): SessionSummary {
   }
 }
 
+// Rebuilding summaries from before `places` (#852), per list call: at most
+// this many, this many at a time, so the first list after a deploy stays quick.
+// The rest wait for the next call (until then they aren't grouped).
+export const PLACES_REBUILD_MAX = 20
+export const PLACES_REBUILD_AT_ONCE = 4
+
+/** Runs `fn` over `items`, at most `atOnce` at a time. */
+export async function eachLimited<T>(items: T[], atOnce: number, fn: (x: T) => Promise<void>): Promise<void> {
+  let next = 0
+  const worker = async () => { while (next < items.length) await fn(items[next++]) }
+  await Promise.all(Array.from({ length: Math.min(atOnce, items.length) }, worker))
+}
+
+// A summary from an unreadable paddle: never thrown out of a whole list.
+function safeSummary(full: AnalysisSession | null): SessionSummary | null {
+  if (!full?.id) return null
+  try { return toSummary(full) } catch (err) {
+    console.warn('[analysis-store] paddle unreadable for its summary', full.id, err)
+    return null
+  }
+}
+
 // All of a user's sessions as summaries, newest paddle first. Reads each
 // paddle's small summary.json; a paddle saved before summaries existed is read
 // in full once, and its summary written for next time.
-export async function listSessionSummaries(userId: string): Promise<SessionSummary[]> {
+//
+// `writeBack: false` for anyone but the owner (a buddy, someone's sections):
+// they never write the owner's summaries (a stale copy could undo a hide, or
+// bring one back after a delete), and don't rebuild old ones.
+export async function listSessionSummaries(userId: string, opts: { writeBack?: boolean } = {}): Promise<SessionSummary[]> {
+  const writeBack = opts.writeBack ?? true
   const keys = await listKeys(`analysis/${userId}/`)
   const has = new Set(keys)
   const ids = keys.map(k => /^analysis\/[^/]+\/([^/]+)\/session\.json$/.exec(k)?.[1]).filter((x): x is string => !!x)
@@ -301,26 +328,36 @@ export async function listSessionSummaries(userId: string): Promise<SessionSumma
       const sum = await getJson<SessionSummary>(summaryKey(userId, id)).catch(() => null)
       if (sum) return sum
     }
-    const full = await getJson<AnalysisSession>(key(userId, id))
-    if (!full) return null
-    const sum = toSummary(full)
-    await putJson(summaryKey(userId, id), sum).catch(() => {})
+    const sum = safeSummary(await getJson<AnalysisSession>(key(userId, id)).catch(() => null))
+    if (sum && writeBack) await putJson(summaryKey(userId, id), sum).catch(() => {})
     return sum
   }))
   const sums = out.filter((s): s is SessionSummary => !!s)
-  // A summary from before `places` (#852) is rebuilt from its paddle, once, and
-  // only when another paddle overlaps it in time: the one case places decide.
-  const placed = (s: SessionSummary) => !!s.places || isMotionOnly(s)
-  await Promise.all(sums.map(async (s, i) => {
-    if (placed(s) || !sums.some(o => o !== s && !isMotionOnly(o) && timeOverlapShare(s, o) >= MIN_TIME_OVERLAP)) return
-    const full = await getJson<AnalysisSession>(key(userId, s.id)).catch(() => null)
-    if (!full) return
-    sums[i] = toSummary(full)
-    await putJson(summaryKey(userId, s.id), sums[i]).catch(() => {})
-  }))
+  if (writeBack) await addMissingPlaces(userId, sums)
   return sums.sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
 }
 
+// A summary from before `places` (#852) is rebuilt from its paddle, once, and
+// only when another paddle overlaps it in time: the one case places decide.
+// A paddle that can't be read gets empty places, so it isn't tried again on
+// every call (saving it again writes a fresh summary).
+async function addMissingPlaces(userId: string, sums: SessionSummary[]): Promise<void> {
+  const near = overlapsInTime(sums)
+  const todo = sums.map((s, i) => i)
+    .filter(i => !sums[i].places && !isMotionOnly(sums[i]) && near[i].some(j => !isMotionOnly(sums[j])))
+    .slice(0, PLACES_REBUILD_MAX)
+  await eachLimited(todo, PLACES_REBUILD_AT_ONCE, async i => {
+    const was = sums[i]
+    const full = await getJson<AnalysisSession>(key(userId, was.id)).catch(() => null)
+    const fresh = safeSummary(full) ?? { ...was, places: encodePlaces(0, PLACES_EVERY_S, []) }
+    // Written only if the summary is still the one we started from: a save
+    // meanwhile (a hide, a note) or a delete wins. Read just before writing.
+    const now = await getJson<SessionSummary>(summaryKey(userId, was.id)).catch(() => null)
+    if (!now || JSON.stringify(now) !== JSON.stringify(was)) { if (now) sums[i] = now; return }
+    sums[i] = fresh
+    await putJson(summaryKey(userId, was.id), fresh).catch(() => {})
+  })
+}
 // All of a user's sessions in full (incl. `result.points`), unordered. Heavier
 // than the summaries — used by the similar-sections matcher, which needs every
 // paddle's track. Small scale (a user's own paddles), so read-all is fine.

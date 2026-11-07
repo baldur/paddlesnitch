@@ -7,7 +7,8 @@ import { readFileSync, readdirSync, statSync } from 'fs'
 import os from 'os'
 import path from 'path'
 import fs from 'fs/promises'
-import { saveSession, deleteSession, listSessionSummaries, updateSessionNote } from '@paddlesnitch/analysis/analysis-store'
+import { saveSession, deleteSession, listSessionSummaries, updateSessionNote, eachLimited, PLACES_REBUILD_MAX, PLACES_REBUILD_AT_ONCE } from '@paddlesnitch/analysis/analysis-store'
+import { decodePlaces } from '@paddlesnitch/core/paddles'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 
 const U = 'user-sum'
@@ -46,29 +47,99 @@ describe('paddle summaries', () => {
   })
 
   // #852: lists tell one outing recorded twice from these, not from the tracks.
-  it('carry where the paddle was each minute, small enough for a list', async () => {
+  it('carry where the paddle was every 20 s, small enough for a list', async () => {
     await saveSession(paddle('p1') as never)
     const sum = JSON.parse(await fs.readFile(file('p1', 'summary.json'), 'utf8'))
     expect(sum.places.from).toBe(t0 / 1000)
-    expect(sum.places.pts).toHaveLength(5)                            // 10:00 to 10:04, a 300 s paddle
-    expect(sum.places.pts[1][0]).toBeCloseTo(51.5 + 60 * 0.00003, 5)
+    const pts = decodePlaces(sum.places)
+    expect(pts).toHaveLength(15)                                      // 10:00:00 to 10:04:40, a 300 s paddle
+    expect(pts[3]![0]).toBeCloseTo(51.5 + 60 * 0.00003, 5)
   })
 
-  it('from before places existed get them, once, only when another paddle overlaps in time', async () => {
+  describe('from before places existed', () => {
+    // A paddle saved with a summary that has no places, as before #852.
     const old = async (id: string, paddledAt: string) => {
       await saveSession({ ...paddle(id), paddledAt } as never)
       const sum = JSON.parse(await fs.readFile(file(id, 'summary.json'), 'utf8'))
       delete sum.places
       await fs.writeFile(file(id, 'summary.json'), JSON.stringify(sum))
     }
-    await old('a', '2026-09-01T10:00:00Z')
-    await old('b', '2026-09-01T10:00:30Z')                            // the same outing, from another source
-    await old('alone', '2026-09-05T10:00:00Z')
-    const byId = Object.fromEntries((await listSessionSummaries(U)).map(s => [s.id, s]))
-    expect(byId.a.places?.pts.length).toBeGreaterThan(0)
-    expect(byId.b.places?.pts.length).toBeGreaterThan(0)
-    expect(byId.alone.places).toBeUndefined()                         // nothing to tell apart: not read in full
-    expect(JSON.parse(await fs.readFile(file('a', 'summary.json'), 'utf8')).places).toBeDefined()   // written back
+    const stored = async (id: string) => JSON.parse(await fs.readFile(file(id, 'summary.json'), 'utf8'))
+    const byId = async (opts?: { writeBack?: boolean }) => Object.fromEntries((await listSessionSummaries(U, opts)).map(s => [s.id, s]))
+
+    it('get them, written back, only when another paddle overlaps in time', async () => {
+      await old('a', '2026-09-01T10:00:00Z')
+      await old('b', '2026-09-01T10:00:30Z')                          // the same outing, from another source
+      await old('alone', '2026-09-05T10:00:00Z')
+      const s = await byId()
+      expect(s.a.places?.d.length).toBeGreaterThan(0)
+      expect(s.b.places?.d.length).toBeGreaterThan(0)
+      expect(s.alone.places).toBeUndefined()                          // nothing to tell apart: not read in full
+      expect((await stored('a')).places.d.length).toBeGreaterThan(0)
+    })
+
+    it('get them only once: the second list reads no paddle in full', async () => {
+      await old('a', '2026-09-01T10:00:00Z')
+      await old('b', '2026-09-01T10:00:30Z')
+      await listSessionSummaries(U)
+      // Spoil both paddles: a second rebuild would read them and mark them empty.
+      await fs.writeFile(file('a', 'session.json'), '{ not json')
+      await fs.writeFile(file('b', 'session.json'), '{ not json')
+      const s = await byId()
+      expect(s.a.places?.d.length).toBeGreaterThan(0)
+      expect(s.b.places?.d.length).toBeGreaterThan(0)
+    })
+
+    it(`rebuild at most ${PLACES_REBUILD_MAX} a call; the rest wait for the next`, async () => {
+      for (let i = 0; i < PLACES_REBUILD_MAX + 5; i++) await old(`p${String(i).padStart(2, '0')}`, new Date(t0 + i * 1000).toISOString())
+      const first = Object.values(await byId())
+      expect(first.filter(s => s.places).length).toBe(PLACES_REBUILD_MAX)
+      expect(first.filter(s => !s.places).length).toBe(5)              // not grouped yet
+      expect(Object.values(await byId()).every(s => s.places)).toBe(true)
+    })
+
+    it('mark an unreadable paddle so it is not tried on every call, and never fail the list', async () => {
+      await old('a', '2026-09-01T10:00:00Z')
+      await old('b', '2026-09-01T10:00:30Z')
+      await old('c', '2026-09-01T10:00:40Z')
+      await fs.writeFile(file('a', 'session.json'), '{ not json')                 // corrupt
+      await fs.writeFile(file('b', 'session.json'), JSON.stringify({ id: 'b' }))  // readable, but no result: toSummary throws
+      const s = await byId()
+      expect(s.a.places).toEqual({ from: 0, every: 20, d: [] })                   // marked: empty places, never grouped
+      expect(s.b.places).toEqual({ from: 0, every: 20, d: [] })
+      expect(s.c.places?.d.length).toBeGreaterThan(0)
+      expect((await stored('a')).places.d).toEqual([])
+    })
+
+    it('a paddle without a summary that cannot be read is left out, not the whole list', async () => {
+      await saveSession(paddle('good') as never)
+      await fs.mkdir(path.dirname(file('bad', 'session.json')), { recursive: true })
+      await fs.writeFile(file('bad', 'session.json'), JSON.stringify({ id: 'bad', paddledAt: '2026-09-01T10:00:00Z' }))
+      expect((await listSessionSummaries(U)).map(s => s.id)).toEqual(['good'])
+    })
+
+    it("are never written for anyone but the owner (a buddy's list, their sections)", async () => {
+      await old('a', '2026-09-01T10:00:00Z')
+      await old('b', '2026-09-01T10:00:30Z')
+      await fs.mkdir(path.dirname(file('nosum', 'session.json')), { recursive: true })
+      await fs.writeFile(file('nosum', 'session.json'), JSON.stringify({ ...paddle('nosum'), paddledAt: '2026-09-07T10:00:00Z' }))
+      const before = await stored('a')
+      const s = await byId({ writeBack: false })
+      expect(Object.keys(s).sort()).toEqual(['a', 'b', 'nosum'])
+      expect(s.a.places).toBeUndefined()
+      expect(await stored('a')).toEqual(before)
+      await expect(fs.stat(file('nosum', 'summary.json'))).rejects.toThrow()
+    })
+  })
+
+  it('rebuilds at most four at a time', async () => {
+    let now = 0, most = 0
+    await eachLimited(Array.from({ length: 20 }, (_, i) => i), PLACES_REBUILD_AT_ONCE, async () => {
+      most = Math.max(most, ++now)
+      await new Promise(r => setTimeout(r, 2))
+      now--
+    })
+    expect(most).toBe(4)
   })
 
   it('follow an edit and go with a delete', async () => {
