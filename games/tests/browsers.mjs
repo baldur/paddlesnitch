@@ -89,6 +89,8 @@ const CASES = [
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
   { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
+  // The leaderboards page when one course's board doesn't load: it says so, with Try again.
+  { name: 'webkit, desktop, a leaderboard that fails', engine: webkit, ctx: desktop, boards: true },
   { name: 'webkit, desktop, race friends from the bridge', engine: webkit, ctx: desktop, club: true, friends: true, site: true },
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
@@ -139,7 +141,20 @@ async function play(c, page, errors) {
       }
     });
   }
-  await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
+  // One course's board fails until Try again; the others answer with no times.
+  let boardFails = true;
+  // Served under /games/ (the local files behind it) and signed out, so the
+  // game asks the site; the site here is these routes.
+  if (c.boards) {
+    await page.route(`${base}/games/**`, async (route) => route.fulfill({ response: await route.fetch({ url: route.request().url().replace('/games/', '/') }) }));
+    await page.route(/\/api\/trpc\/me\b/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { user: null } } }) }));
+  }
+  if (c.boards) await page.route(/\/api\/trpc\/games\.leaderboard/, (route) => {
+    const course = JSON.parse(new URL(route.request().url()).searchParams.get('input') ?? '{}').course;
+    return boardFails && course === 'loop' ? route.fulfill({ status: 500, body: '{}' })
+      : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { top: [] } } }) });
+  });
+  await page.goto(`${base}${c.site || c.boards ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -161,6 +176,21 @@ async function play(c, page, errors) {
     const join = await page.evaluate(() => ({ join: document.getElementById('liveJoinTab').getAttribute('aria-pressed'), code: document.getElementById('liveCode').value }));
     if (!(join.join === 'true' && join.code === 'ABCD')) errors.push(`the race link opened ${JSON.stringify(join)}`);
     return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}, the race dialog on Join with ${join.code}`;
+  }
+  if (c.boards) {
+    await page.waitForFunction(() => document.getElementById('menu').open, null, { timeout: 15_000 });
+    // A first visit opens on making your paddler: Skip to the races, then Leaderboards.
+    await page.locator('#menu .step:not([hidden]) [data-skip]').click();
+    await page.locator('#boards').click();
+    const failed = page.locator('#boardlist div', { hasText: "Couldn't load this course's times." });
+    await failed.waitFor({ timeout: 15_000 }).catch(async () => errors.push(`no message for the board that failed: ${(await page.locator('#boardlist').textContent()).slice(0, 200)}`));
+    const others = await page.locator('#boardlist div', { hasText: 'No times yet.' }).count();
+    if (others < 2) errors.push(`expected the other courses to load, got ${others}`);
+    boardFails = false;
+    await failed.getByRole('button', { name: 'Try again' }).click();
+    await page.waitForFunction(() => !/Couldn't load/.test(document.getElementById('boardlist').textContent) && document.querySelectorAll('#boardlist div').length > 2, null, { timeout: 15_000 })
+      .catch(() => errors.push("Try again didn't reload the boards"));
+    return `one board failed: said so with Try again (${others} others loaded), and Try again reloaded it`;
   }
   // Offline (no site behind the game), there's nobody to race: no racing-friends buttons.
   if (c.club && !c.site && (await page.locator('#clubCards .friend').count())) errors.push('racing-friends buttons offline');
@@ -698,7 +728,8 @@ for (const c of CASES) {
     if (c.strip) await context.addInitScript(STRIP);
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    // (The failing-board case's 500 is the browser's own line for the answer it was given.)
+    page.on('console', (m) => { if (m.type() === 'error' && !(c.boards && /status of 500/.test(m.text()))) errors.push(m.text()); });
     try {
       line = await play(c, page, errors);
     } catch (e) {

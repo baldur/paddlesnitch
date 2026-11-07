@@ -1,7 +1,7 @@
 // The site's words follow a short style guide (docs: CLAUDE.md "Writing for
 // the site"): one name per thing, plain words, errors that say what to do.
-// This scans every page, component and route for phrases we removed, so they
-// don't creep back. Comments are skipped; only code and text are checked.
+// This scans every page, component and route, and the games (#851), for
+// phrases we removed, so they don't creep back. Comments are skipped; only code and text are checked.
 // The Android and iPhone apps' words get the same list (#794): their string
 // resources and the quoted text in their main sources, without comments, log
 // lines, keys or tests.
@@ -10,25 +10,52 @@ import { readFileSync, readdirSync, statSync } from 'fs'
 import path from 'path'
 
 const repo = path.resolve(__dirname, '../../../..')
-const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src']
+const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src', 'games']
 
 // Lists of words to keep OUT of what users read: the AI summary's banned
 // phrases (voice-lists.ts) name "journey" and the like so the check can reject them.
 const NOT_COPY = ['packages/analysis/src/voice-lists.ts']
+// The site is TypeScript; the games (#851) are plain .html, .js, .mjs and
+// .css (its content: text), with their browser and Node checks in games/tests,
+// which no player reads.
+const COPY_FILE = /\.(ts|tsx|js|mjs|html|css)$/
+const NOT_COPY_DIRS = ['games/tests']
 
 function files(dir: string): string[] {
   const out: string[] = []
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name)
-    if (statSync(full).isDirectory()) out.push(...files(full))
-    else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name) && !NOT_COPY.includes(path.relative(repo, full))) out.push(full)
+    if (statSync(full).isDirectory()) { if (!NOT_COPY_DIRS.includes(path.relative(repo, full))) out.push(...files(full)) }
+    else if (COPY_FILE.test(name) && !/\.test\./.test(name) && !NOT_COPY.includes(path.relative(repo, full))) out.push(full)
   }
   return out
 }
 
-// Code and visible text only: drop // and /* */ comments and JSX {/* */}.
-function withoutComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/(^|\s)\/\/.*$/, '')).join('\n')
+// Code and visible text only: drop // and /* */ comments, JSX {/* */} and
+// HTML <!-- -->, in one pass so whichever opens first wins: a `/*` inside a
+// `//` comment ("courses/*.json") once blanked 2,950 lines of the game's
+// main.js, up to the next `*/`. A quoted string is text and kept whole, so a
+// '/*' or '//' inside one hides nothing. Newlines are kept, so line numbers
+// stay right. A `//` counts only at a line's start or after a space, not in
+// "https://".
+const STRING = /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/.source
+const COMMENT = /(^|\s)\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/.source
+export function withoutComments(src: string): string {
+  return src.replace(new RegExp(`(${STRING})|${COMMENT}`, 'gm'), (m, str, before = '') =>
+    str ? m : before + m.slice(before.length).replace(/[^\n]/g, ''))
+}
+
+// Lines that match a phrase but aren't words anyone reads, each named: the
+// file, the phrase it excuses, and the whole line (trimmed, anchored). It
+// excuses only that phrase on that line: anything added to the line, or any
+// other banned phrase on it, still fails. Never a whole file or folder.
+const NOT_WORDS: [string, RegExp, RegExp][] = [
+  // The Screen Orientation API's own name, when the game leaves full screen.
+  ['games/reading-thames/main.js', /unlock/g, /^else screen\.orientation\?\.unlock\?\.\(\);$/],
+]
+// The line as the check sees it: an excused phrase taken out of an excused line.
+function excused(f: string, line: string): string {
+  return NOT_WORDS.reduce((l, [nf, phrase, whole]) => (nf === f && whole.test(line.trim()) ? l.replace(phrase, '') : l), line)
 }
 
 // [phrase, why it's banned]
@@ -59,8 +86,42 @@ describe('site copy follows the style guide', () => {
 
   it.each(BANNED)('nothing says %s', (re, why) => {
     const hits = sources.flatMap(({ f, text }) =>
-      text.split('\n').flatMap((line, i) => (re.test(line) ? [`${f}:${i + 1}: ${line.trim().slice(0, 100)}`] : [])))
+      text.split('\n').flatMap((line, i) => (re.test(excused(f, line)) ? [`${f}:${i + 1}: ${line.trim().slice(0, 100)}`] : [])))
     expect(hits, why).toEqual([])
+  })
+
+  it("reads the games' pages and scripts, not their tests (#851)", () => {
+    const names = sources.map(s => s.f)
+    expect(names).toContain('games/reading-thames/index.html')
+    expect(names).toContain('games/reading-thames/main.js')
+    expect(names).toContain('games/shared/audio.js')
+    expect(names.filter(f => f.startsWith('games/tests/'))).toEqual([])
+    // Read, and not blanked by a stray comment opener: most of each file is left.
+    for (const f of ['games/reading-thames/main.js', 'games/reading-thames/index.html']) {
+      const lines = sources.find(s => s.f === f)!.text.split('\n')
+      expect(lines.filter(l => l.trim()).length, f).toBeGreaterThan(lines.length / 2)
+    }
+  })
+
+  it('a /* inside a // comment, or // inside a string, hides nothing after it', () => {
+    const src = ["// courses/*.json, made by the script", "const a = 'https://x.com/a'", "show('Could not join')", '/* a real', 'block */ go()'].join('\n')
+    expect(withoutComments(src).split('\n')).toEqual(['', "const a = 'https://x.com/a'", "show('Could not join')", '', ' go()'])
+  })
+
+  it('a /* inside a string is text, and hides nothing after it', () => {
+    const src = ["show('a /* b')", "show('Could not join')", 'const c = "x // y"', "go() // see */"].join('\n')
+    expect(withoutComments(src).split('\n')).toEqual(["show('a /* b')", "show('Could not join')", 'const c = "x // y"', 'go() '])
+  })
+
+  it('each exception matches exactly one line of its file (a stale one fails), and excuses only its phrase there', () => {
+    for (const [f, , whole] of NOT_WORDS) {
+      const text = sources.find(s => s.f === f)?.text ?? ''
+      expect(text.split('\n').filter(l => whole.test(l.trim())).length, `${f} ${whole}`).toBe(1)
+    }
+    const [f] = NOT_WORDS[0]
+    expect(excused(f, '  else screen.orientation?.unlock?.();')).not.toMatch(/unlock/)
+    expect(excused(f, "  else screen.orientation?.unlock?.(); show('Unlock your journey')")).toMatch(/journey/)
+    expect(excused('games/shared/audio.js', 'else screen.orientation?.unlock?.();')).toMatch(/unlock/)
   })
 })
 

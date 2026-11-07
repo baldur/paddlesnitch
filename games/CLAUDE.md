@@ -12,6 +12,8 @@ The kayak game came from `baldur/games.snitchmedia.com` on 2026-10-17, with its 
 - **Phone, keyboard and gamepad** all work.
 - **Keep links relative** (`../shared/site.css`) so a game also works from `pnpm games` locally. The one absolute link is the favicon (`/favicon.ico`, the site's own).
 
+**The site's writing rules apply to the games** (root `CLAUDE.md` § Writing for the site). `apps/web/src/lib/copy-style.test.ts` scans every `.html` and `.js` under `games/` (not `games/tests/`) for the retired phrases, outside comments, code included: `unlock` as a function name failed it, so the audio starter is `startAudio`. If a word is right in a game but banned on the site, or a browser API's name matches (`screen.orientation.unlock`), add a line to `NOT_WORDS` in the test (the file, the phrase, and the whole line anchored `^…$`): it excuses only that phrase on that line, and fails when it no longer matches exactly one line. Never a file or folder skip. Comments are stripped in one pass and quoted strings kept whole (a `/*` in a `//` comment once hid most of `main.js` from the scan). `.mjs` and `.css` are scanned too. Errors follow rule 4, "Couldn't …" and what to do: a leaderboard that didn't load says so with Try again (browser case "a leaderboard that fails"). Run `pnpm --filter web exec vitest run src/lib/copy-style.test.ts` after changing a game's words.
+
 ## Commands
 
 ```sh
@@ -41,7 +43,7 @@ A game must run in current Chrome, Edge, Safari and Firefox, desktop and phone (
 | Gamepad API | Firefox on Android | `navigator.getGamepads?.() ?? []` — never call it bare |
 | Motion sensors | desktops; iOS without HTTPS or permission | touch play gets the balance assist |
 | Speech | some browsers have none; iOS needs a first word in a tap | on-screen captions for every call; a silent word on the race button |
-| Audio start | phones only count the end of a touch as a gesture | `shared/audio.js` unlocks on pointerup/touchend too, and resumes iOS's 'interrupted' state |
+| Audio start | phones only count the end of a touch as a gesture | `shared/audio.js` starts sound on pointerup/touchend too, and resumes iOS's 'interrupted' state |
 | Vibration, orientation lock | iOS | optional calls (`?.`, `.catch`) |
 | Full screen (hides the address bar) | iPhone (pages can't; only video) | the game added to the Home Screen opens without the browser (`manifest.json`, Apple's tags in `index.html`) |
 | Storage | private modes | every read and write in `try` |

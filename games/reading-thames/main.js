@@ -1596,7 +1596,7 @@ async function submitResult(time) {
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
       : rank ? `Your best on the ${mode.label} leaderboard is ${ordinal(rank)}.` : '';
   } catch {
-    els.ranked.textContent = "Couldn't reach the leaderboard.";
+    els.ranked.textContent = "Couldn't reach the leaderboard. Please try again.";
   }
 }
 
@@ -1621,14 +1621,17 @@ async function showBoards() {
       top.push(p);
     }
   }
+  const again = () => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = 'Try again';
+    b.addEventListener('click', showBoards);
+    return b;
+  };
   // None of them loaded: one message, and a way to try again.
   if (boards.every(([, b]) => !b)) {
-    const again = document.createElement('button');
-    again.type = 'button';
-    again.textContent = 'Try again';
-    again.addEventListener('click', showBoards);
     const p = make(`<p>Couldn't load the ${rowing ? 'honours board' : 'leaderboards'}. </p>`);
-    p.append(again);
+    p.append(again());
     return els.boardlist.replaceChildren(...top, p);
   }
   els.boardlist.replaceChildren(...top, ...boards.map(([m, b]) => {
@@ -1637,7 +1640,9 @@ async function showBoards() {
     title.textContent = m.label;
     div.append(title);
     if (!b?.top.length) {
-      div.append(!b ? "Couldn't load this course." : rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
+      // One that didn't load: say so, and a way to try again (the same as when none did).
+      if (!b) div.append("Couldn't load this course's times. ", again());
+      else div.append(rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
       return div;
     }
     const table = document.createElement('table');
