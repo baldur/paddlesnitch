@@ -57,3 +57,20 @@ describe('only CloudFront may call the server (#908): the stack', () => {
     expect(stack).toContain(`'${ORIGIN_VERIFY_HEADER}'`)
   })
 })
+
+describe('only CloudFront may call the server (#908): every deploy checks it', () => {
+  const deploy = readFileSync(path.join(root, '.github/workflows/deploy.yml'), 'utf8')
+  const step = deploy.slice(deploy.indexOf('- name: Only CloudFront reaches the server'))
+
+  it('a direct call to the function URL must get 403, after the smoke test', () => {
+    expect(deploy.indexOf('- name: Only CloudFront reaches the server')).toBeGreaterThan(deploy.indexOf('- name: Smoke test'))
+    expect(step).toContain('get-function-url-config')
+    expect(step).toContain('[ "$code" = 403 ]')
+  })
+
+  it('masks the URL before anything could print it (the log is public)', () => {
+    expect(step.indexOf('::add-mask::$url')).toBeGreaterThan(0)
+    expect(step.indexOf('::add-mask::$url')).toBeLessThan(step.indexOf('curl'))
+    expect(step).not.toMatch(/set -x|echo "\$url"|echo \$url/)
+  })
+})
