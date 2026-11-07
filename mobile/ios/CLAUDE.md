@@ -299,7 +299,14 @@ isn't obvious from the code.
 - Boat motion (`BoatMotionView`, model in `Paddles/BoatMotion.swift`):
   the model works out every chart bound, clamp and mirror from the
   server's answer, so the tests are pure; the view only maps them to
-  points (Canvas, chart text at a fixed 11 pt). The sample server
+  points (Canvas, chart text at a fixed 11 pt). Legends sit in the 34 pt
+  band above the plot, centred, at a fixed 11 pt with fixed keys (not
+  Dynamic Type, like the axis text); roll/pitch words are placed by width
+  measured with `context.resolve(text).measure(in:)`, shared by both
+  charts (`Frame.legendWords`). Roll solid, pitch dashed, never colour
+  alone (#855). A Canvas can't be read by XCUITest: pixel-test it from
+  `chart.screenshot()` (`Pixels`), finding keys by colour on the legend's
+  centre line, not by fixed x. The sample server
   answers `GET /api/account/devices/sessions/<id>` with an ETag (304 on
   `If-None-Match`): S0012 measured, others no motion;
   `-MotionUnusable`, `-MotionNotFound`, `-MotionFails`,
