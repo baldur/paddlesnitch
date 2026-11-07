@@ -79,10 +79,13 @@ const ROW_MODES = {
 };
 for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: true });
 // Your scull and its colour are in the kit (kit.js), so they follow you on the account.
-// Anyone can paddle practice, the drills and one race (Hasler Div 7-9: Try it now), and row;
-// the other kayak races, the leaderboard and live races need an account.
+// Guests (signed out, on the site) get the river cruise; everything else needs
+// an account (owner 2026-11-07). Served on its own, with no site, it's all open.
+// A first visit's Try it now (signed in) is the Hasler Div 7-9 race.
 const OPEN_RACE = 'hasler79';
-const OPEN = new Set(['practice', OPEN_RACE, ...Object.keys(DRILL_MODES), ...Object.keys(OUTING_MODES), ...Object.keys(ROW_MODES)]);
+const OPEN = new Set(['cruise']);
+const guest = () => !account.offline && !account.user;
+const OPEN_LINE = `The ${OUTINGS.cruise.label.toLowerCase()} is open to everyone.`;
 // #debug (playtests), #tilt (the sensor readout), #race=CODE (a live race link).
 const HASH = new URLSearchParams(location.hash.slice(1));
 // The walk to the club (club.js) is what opens (owner 2026-10-31). #menu opens
@@ -636,7 +639,7 @@ async function choose(value, { race = false } = {}) {
   if (value === 'live') return openLive();
   const next = MODES[value] ?? DRILL_MODES[value] ?? OUTING_MODES[value] ?? ROW_MODES[value];
   if (!next) return;
-  if (!OPEN.has(next.key) && !account.offline && !account.user) {
+  if (!OPEN.has(next.key) && (await whoami, guest())) {
     location.href = SIGN_IN;
     return;
   }
@@ -941,12 +944,23 @@ function arrive(place) {
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
+  // A guest on the bridge: the river cruise first, as it is; the others say
+  // they need an account and go to sign in (the row above the cards says why,
+  // even on a phone on its side, where the cards show only their names).
+  if (place === 'path' && !hiring && guest()) {
+    const closed = { 'Canoe Club': 'Sign in to paddle here', 'Rowing Club': 'Sign in to row here', [OUTINGS.hire.label]: 'Sign in to hire one' };
+    for (const spot of spots) {
+      const why = spot.card && Object.entries(closed).find(([name]) => spot.card.name.endsWith(name))?.[1];
+      if (why) Object.assign(spot, { card: { ...spot.card, line: why }, act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
+    }
+    spots.sort((a, b) => !!b.play - !!a.play);
+  }
   // Race again first among the cards (it was last, alone on a row of its own on a phone).
-  if (place === 'path' && !hiring && label(club.plan)) {
+  else if (place === 'path' && !hiring && label(club.plan)) {
     spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
-  // Nothing paddled yet: straight into the open race (anyone can, signed in or
-  // not), always a race, whatever format was last picked; it teaches as it goes.
+  // Nothing paddled yet: straight into the open race, always a race, whatever
+  // format was last picked; it teaches as it goes.
   else if (place === 'path' && !hiring) {
     spots.unshift({ card: { name: 'Try it now', line: `A 7.9 km race against ${MODES[OPEN_RACE].rivals.length} others` }, act: () => choose(OPEN_RACE, { race: true }), go: true });
   }
@@ -1011,6 +1025,15 @@ function arrive(place) {
       row.append(b);
       return { ...spot, el: b };
     }
+    // (Off to sign in: no full screen to ask for on the way out.)
+    if (spot.signIn) {
+      const { picture = '', name, line, pin } = spot.card;
+      b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
+      b.classList.add('closed');
+      b.addEventListener('click', spot.act);
+      clubCards.append(b);
+      return { ...spot, el: b };
+    }
     if (spot.card) {
       const { picture = '', name, line, pin } = spot.card;
       b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
@@ -1024,6 +1047,12 @@ function arrive(place) {
     (spot.card ? clubCards : clubDoors).append(b);
     return { ...spot, el: b };
   });
+  if (place === 'path' && !hiring && guest()) {
+    const row = document.createElement('p');
+    row.className = 'guest';
+    row.append(link('Sign in', SIGN_IN), ` to play everything. ${OPEN_LINE}`);
+    clubCards.prepend(row);
+  }
   menu.classList.toggle('rowing', place === 'rchanging');
   if (place === 'changing' || place === 'rchanging') sheet('paddler', true);
   if (place === 'clubhouse') sheet('home', true);
@@ -1566,6 +1595,7 @@ function clubGamepad(pressed) {
 // --- account and leaderboards ---------------------------------------------------
 
 let account = { user: null, offline: true }; // until the site answers
+const whoami = whoAmI().then((a) => { account = a; }); // (asked at once: a race picked before it answers waits for it)
 
 function link(text, href) {
   const a = document.createElement('a');
@@ -1580,9 +1610,10 @@ function showAccount() {
   if (account.user) {
     els.account.textContent = `Signed in as ${account.user.displayName || account.user.email}: your race times go on the leaderboards.`;
   } else {
-    els.account.replaceChildren(link('Sign in', SIGN_IN), ` to race the other courses, race friends and get on the leaderboards. ${MODES[OPEN_RACE].label} and practice are open to everyone.`);
+    els.account.replaceChildren(link('Sign in', SIGN_IN), ` to play everything. ${OPEN_LINE}`);
   }
 }
+
 
 // A finished race's time goes on the course's leaderboard (signed in only).
 async function submitResult(time) {
@@ -2975,11 +3006,11 @@ try {
 }
 reset();
 toMenu();
-whoAmI().then((a) => {
-  account = a;
+whoami.then(() => {
   showAccount();
   // The walk's buttons that need the site (racing friends, the leaderboards) once we know it's there.
-  if (club && !club.to) arrive(club.place);
+  // A guest back from last time inside a club starts on the bridge: the clubs need an account.
+  if (club && !club.to) arrive(guest() ? 'path' : club.place);
   if (account.user) loadKit();
   // Opened from a live race's link.
   if (HASH.get('race') && state === 'menu') {

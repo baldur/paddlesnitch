@@ -169,7 +169,7 @@ try {
     check(true, 'anyone can see it on the leaderboards page: Ann H. 4:20.4');
     await fresh.click('#stepBoards .back');
 
-    // Signed out, a race button goes to sign in; practice doesn't.
+    // Signed out, a race button goes to sign in (everything but the river cruise does).
     await fresh.waitForFunction(() => document.getElementById('account').textContent.includes('Sign in'));
     await Promise.all([fresh.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), fresh.click('#menu button[value="race"]')]);
     check(true, 'signed out, Division 9 sends you to sign in');
