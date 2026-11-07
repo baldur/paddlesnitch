@@ -20,12 +20,17 @@ export type MetricEvent =
   | 'game_play'        // one race, outing or drill
   | 'game_kit'         // the paddler when play starts, and after a change
   | 'game_session'     // time in the game since the last send, on hide/close
+  | 'visit'            // server only: where a visit came from, without the tab id (#906)
 
 export const METRIC_EVENTS: readonly MetricEvent[] = [
   'pageview', 'signup', 'login', 'upload', 'trial_create', 'course_create',
   'campaign_cta', 'campaign_signup', 'app_open', 'crash_report', 'client_error',
-  'game_play', 'game_kit', 'game_session',
+  'game_play', 'game_kit', 'game_session', 'visit',
 ]
+
+/** Events only the server writes: the track route drops them from a client.
+ *  A client `visit` would carry the tab id, which a visit never may. */
+export const SERVER_ONLY_EVENTS: ReadonlySet<MetricEvent> = new Set<MetricEvent>(['visit'])
 
 // The game events' props: only these keys, each with its own rule, so nothing
 // a player typed and no colour or skin tone reaches the logs. A key with a
@@ -79,9 +84,54 @@ export function gameEventProps(event: MetricEvent, props: unknown): unknown {
 // here is dropped, so nothing typed, no id and no field named like the
 // event's own (Event, ts, _aws) gets into the logs or the archive.
 const CAMPAIGN = test(/^[a-z0-9_-]{1,40}$/)
+// Where a visit came from (#906), sent with a tab's first page view only:
+// `visit: '1'` marks it, `ref` is the referring site's host name (never a URL),
+// and the three utm tags are short plain words. The track route moves these
+// onto the `visit` record, which has no tab id; the page view keeps none.
+const REF = /^(?=.{1,100}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/
+const UTM = /^[a-z0-9_.-]{1,40}$/
+export const VISIT_SOURCE_PROPS = ['ref', 'utm_source', 'utm_medium', 'utm_campaign'] as const
 const CLIENT_EVENT_PROPS: Partial<Record<MetricEvent, Readonly<Record<string, Rule>>>> = {
-  pageview: { campaign: CAMPAIGN },
+  pageview: {
+    campaign: CAMPAIGN, visit: oneOf('1'),
+    ref: test(REF), utm_source: test(UTM), utm_medium: test(UTM), utm_campaign: test(UTM),
+  },
   campaign_cta: { campaign: CAMPAIGN },
+}
+
+const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, '')
+
+const hostOf = (url: string): string | undefined => {
+  try { return bareHost(new URL(url).hostname) || undefined } catch { return undefined }
+}
+const isOwn = (host: string, ownHost: string) =>
+  host === bareHost(ownHost) || host === 'paddlesnitch.com' || host.endsWith('.paddlesnitch.com')
+
+/** True when the referrer is our own site (`ownHost`, or paddlesnitch.com):
+ *  a new tab opened from one of our pages, not a new visit. */
+export function fromOwnSite(referrer: string, ownHost: string): boolean {
+  const host = referrer ? hostOf(referrer) : undefined
+  return !!host && isOwn(host, ownHost)
+}
+
+/** The referring site's host name, or undefined: never the path or query, and
+ *  nothing when it's empty or our own site (`ownHost`, or paddlesnitch.com). */
+export function refFrom(referrer: string, ownHost: string): string | undefined {
+  const host = referrer ? hostOf(referrer) : undefined
+  if (!host || isOwn(host, ownHost)) return undefined
+  return REF.test(host) ? host : undefined
+}
+
+/** The landing page's utm_source / utm_medium / utm_campaign: trimmed,
+ *  lower-cased, spaces as hyphens, at most 40 characters, plain words only. */
+export function utmFrom(search: string): Record<string, string> {
+  const q = new URLSearchParams(search)
+  const out: Record<string, string> = {}
+  for (const k of ['utm_source', 'utm_medium', 'utm_campaign']) {
+    const v = q.get(k)?.trim().toLowerCase().replace(/\s+/g, '-').slice(0, 40)
+    if (v && UTM.test(v)) out[k] = v
+  }
+  return out
 }
 
 /** The props a client may send with this event: a game event's own rules, the

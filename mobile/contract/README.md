@@ -311,9 +311,16 @@ website draws each chart as wide as the panel, 260 pt high (the histogram
 with the chart, or it can't be read on a phone. Legend swatches (the filled
 squares) are filled at 0.8 opacity, not the opacity of what they stand for,
 so each stays visible. Every chart has a legend, kept in a 34 pt band above
-the plot, so it never covers the tallest band, line or bar. Roll and pitch
-never differ by colour alone: pitch is always dashed (4 pt on, 3 pt off) and
-roll solid, in the chart and in its key.
+the plot and centred vertically in the band, so it never covers the tallest
+band, line or bar. Roll and pitch never differ by colour alone: pitch is
+always dashed (4 pt on, 3 pt off) and roll solid, in the chart and in its key.
+Both roll/pitch legends put their words at the same x: "pitch" ends at the
+plot's right edge, and "roll" ends 8 pt before where pitch's 18 pt line key
+starts (so on "Through the session" there's more room before the pitch
+swatch). Word widths are measured (the website draws "pitch" end-anchored
+and takes Plex Mono as 0.6 em a character for the rest). Key sizes and gaps scale with the text
+size (Android in sp; iOS scaled with Dynamic Type); the website's chart text
+is a fixed 11 pt, so its keys are fixed too.
 Y-axis ticks are `axisTicks`
 (format.json) of the chart's bound, labelled with the plain number and "°"
 (a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
@@ -333,10 +340,10 @@ Y-axis ticks are `axisTicks`
 - "Stroke shape" from `excerpt`: roll and pitch lines at full opacity (roll
   solid, 1.8 pt; pitch dashed, 4 pt on, 3 pt off, 1.2 pt), y bound = the
   largest absolute value (at least 1°) ×1.1. Legend "roll" and "pitch", top
-  right, with each word at the same x as on "Through the session". Keys are
-  18 pt lines, the same width, dash and colour as their series, 6 pt before
-  their word. X-axis label "<seconds, rounded> s at
-  <sampleRateHz> Hz" (leave out " at … Hz" when `sampleRateHz` is null).
+  right, placed as above. Keys are 18 pt lines, the same width, dash and
+  colour as their series, 6 pt before their word. X-axis label "<seconds,
+  rounded> s at <sampleRateHz> Hz" (leave out " at … Hz" when
+  `sampleRateHz` is null).
   Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
   Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
 - "Where the boat spent its time" from `rollHistogram`: bars by `centreDeg`

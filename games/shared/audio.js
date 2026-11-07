@@ -10,12 +10,12 @@ let ctx = null;
 let muted = false;
 try { muted = localStorage.getItem(STORAGE_KEY) === '1'; } catch {}
 
-function unlock() {
+function startAudio() {
   ctx ??= new AudioContext();
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
 }
 for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) {
-  addEventListener(type, unlock, { capture: true });
+  addEventListener(type, startAudio, { capture: true });
 }
 
 export function isMuted() { return muted; }
