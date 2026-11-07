@@ -7,6 +7,7 @@ import { loadNational } from '@paddlesnitch/waterways/national'
 import { DEFAULT_PACE_KMH, DEFAULT_PORTAGE_MINUTES, routePlan, timePlan } from '@paddlesnitch/waterways/plan'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { fail, ok, options, planResponse } from '@/lib/api-v1'
+import { canonicalBaseUrl } from '@paddlesnitch/core/url'
 
 export const dynamic = 'force-dynamic'
 export const OPTIONS = options
@@ -43,5 +44,5 @@ export async function GET(req: NextRequest) {
   const routed = routePlan(ds, { start, finish, shape }, [...await listPublicPortages(), ...ds.portages])
   if (typeof routed === 'string') return fail(422, routed, PLAN_ERRORS[routed])
   const plan = timePlan({ ...routed, line: simplify(routed.line, 8) }, { paceKmh, portageMinutes, startAt })
-  return ok(planResponse(plan, { from: start, to: finish, shape, paceKmh, portageMinutes, startAt }, req.nextUrl.origin), 300)
+  return ok(planResponse(plan, { from: start, to: finish, shape, paceKmh, portageMinutes, startAt }, canonicalBaseUrl(req)), 300)
 }
