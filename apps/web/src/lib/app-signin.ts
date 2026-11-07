@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'crypto'
-import { deleteObject, getJson, putJson } from '@paddlesnitch/core/storage'
+import { deleteObject, getJson, putJson, putObject, putObjectIfAbsent, type ObjectTags } from '@paddlesnitch/core/storage'
 import { requestSignIn } from '@paddlesnitch/core/auth'
 
 // Sign in with Google from a phone app (docs/features/mobile-apps.md, C2): the
@@ -27,6 +27,7 @@ export const isChallenge = (s: string | null | undefined): s is string => !!s &&
 /** Set by web-code on the browser it signs in: the account it was signed in as. */
 export const FROM_LINK_COOKIE = 'tt_from_link'
 const WEB_PREFIX = 'auth/web-codes/'
+const WEB_REDEEMED_PREFIX = `${WEB_PREFIX}redeemed/`
 const WEB_CODE_TTL_MS = 60_000
 
 type WebPending = { email: string; userId: string; expiresAt: number }
@@ -42,6 +43,10 @@ export async function redeemWebCode(code: string, now = Date.now()): Promise<{ e
   const key = keyFor(code, WEB_PREFIX)
   const pending = await getJson<WebPending>(key)
   if (!pending) return null
+  // Two requests can both read the code before either deletes it, so the
+  // redeem is a claim only one can win: a conditional create (#853). The
+  // claim lives under the same prefix, so the bucket's one-day rule sweeps it.
+  if (!(await putObjectIfAbsent(keyFor(code, WEB_REDEEMED_PREFIX), '{}'))) return null
   await deleteObject(key)
   return pending.expiresAt < now ? null : { email: pending.email, userId: pending.userId }
 }
@@ -50,10 +55,17 @@ export async function redeemWebCode(code: string, now = Date.now()): Promise<{ e
 // auth_time is "now" even though nobody proved who they are just then. So the
 // session it makes is recorded, and never counts as a recent sign-in
 // (security review, 2026-10-25). Kept under users/{id}/, so erasure removes it.
+// Each one is written once and never needed after its session ends: at most
+// 30 days, the refresh token's life (infra). They're tagged, and a bucket
+// lifecycle rule drops them after that (#853); no prefix can match
+// users/*/link-sessions/.
 const linkSessionKey = (userId: string, session: string) => `users/${userId}/link-sessions/${sha256(session).toString('hex')}.json`
 
+/** The tag on link-session records: the bucket's `expire-link-sessions` rule drops them after 30 days. */
+export const LINK_SESSION_TAG: ObjectTags = { lifecycle: 'link-session' }
+
 export async function markLinkSession(userId: string, session: string, now = Date.now()): Promise<void> {
-  await putJson(linkSessionKey(userId, session), { at: new Date(now).toISOString() })
+  await putObject(linkSessionKey(userId, session), JSON.stringify({ at: new Date(now).toISOString() }), { tags: LINK_SESSION_TAG })
 }
 
 /** Deleting the account needs a real sign-in from the last 10 minutes. */

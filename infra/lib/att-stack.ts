@@ -215,6 +215,16 @@ export class AttStack extends cdk.Stack {
         expiration: cdk.Duration.days(30),
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
+        // Records of the sessions web-code links made (apps/web/src/lib/app-signin.ts),
+        // one per link opened. A session lasts at most as long as its refresh
+        // token (refreshTokenValidity, 30 days), so the record is useless after
+        // that. They live under users/{id}/…, so they're tagged on write
+        // (LINK_SESSION_TAG) (#853).
+        id: 'expire-link-sessions',
+        tagFilters: { lifecycle: 'link-session' },
+        expiration: cdk.Duration.days(30),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      }, {
         // Job bookkeeping (#413): attempts of jobs in flight, and jobs that
         // failed every attempt (kept a month to look at, then gone).
         id: 'expire-job-state',

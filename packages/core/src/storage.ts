@@ -95,6 +95,37 @@ export async function putObject(key: string, body: Buffer | string, opts: { tags
   )
 }
 
+/**
+ * Creates `key` only if nothing is there yet, atomically: of any number of
+ * callers at the same moment, exactly one gets true. For one-use claims (a
+ * web code's redeem, #853). S3: a conditional PutObject (If-None-Match: *),
+ * where 412 means the key exists and 409 means a racing write to it is in
+ * flight; both lose. Locally: an exclusive create.
+ */
+export async function putObjectIfAbsent(key: string, body: Buffer | string): Promise<boolean> {
+  if (isDev()) {
+    const filePath = path.join(localRoot(), key)
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    try {
+      await fs.writeFile(filePath, body, { flag: 'wx' })
+      return true
+    } catch (e) {
+      if ((e as { code?: string }).code === 'EEXIST') return false
+      throw e
+    }
+  }
+  const { PutObjectCommand } = await import('@aws-sdk/client-s3')
+  const s3 = await client()
+  try {
+    await s3.send(new PutObjectCommand({ Bucket: process.env.DATA_BUCKET!, Key: key, Body: body, IfNoneMatch: '*' }))
+    return true
+  } catch (e) {
+    const status = (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+    if (status === 412 || status === 409) return false
+    throw e
+  }
+}
+
 export async function listKeys(prefix: string): Promise<string[]> {
   if (isDev()) {
     const dir = path.join(localRoot(), prefix)
