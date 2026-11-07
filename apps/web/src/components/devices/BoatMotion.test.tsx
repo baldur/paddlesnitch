@@ -197,8 +197,21 @@ describe('boat motion charts', () => {
       const keyX = Number(pitchKey.getAttribute('x') ?? pitchKey.getAttribute('x1'))
       const rollEnd = Number(rollWord.getAttribute('x')) + 'roll'.length * ch
       expect(keyX - rollEnd).toBeGreaterThanOrEqual(8 - 0.01)
-      const pitchEnd = Number(pitchWord.getAttribute('x')) + 'pitch'.length * ch
-      expect(pitchEnd).toBeCloseTo(W - CHART_MARGIN.R, 1)
+      expect(pitchWord.getAttribute('text-anchor')).toBe('end')
+      expect(Number(pitchWord.getAttribute('x'))).toBe(W - CHART_MARGIN.R)
+    }
+  })
+
+  it('centres every legend key in the band above the plot, as Android does (it hugged the top)', async () => {
+    atWidth(PHONE_CHART_PX)
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    const keys = [...container.querySelectorAll('svg [data-legend]')]
+    expect(keys.length).toBe(5)
+    for (const k of keys) {
+      const mid = k.tagName === 'rect'
+        ? Number(k.getAttribute('y')) + Number(k.getAttribute('height')) / 2
+        : Number(k.getAttribute('y1'))
+      expect(mid).toBe(CHART_MARGIN.TL / 2)
     }
   })
 
