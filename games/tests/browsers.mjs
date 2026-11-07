@@ -200,6 +200,9 @@ async function play(c, page, errors) {
         href: box.querySelector('a.signin')?.getAttribute('href'),
         outside: names('#clubCards > .card'),
         open: [...document.querySelectorAll('#clubCards > .card.open')].length,
+        // The cruise last and right-most, after the box (owner: the far right of the bridge).
+        last: document.querySelector('#clubCards').lastElementChild?.querySelector('.name')?.textContent,
+        rightmost: (() => { const right = (el) => el.getBoundingClientRect().right; const cruise = document.querySelector('#clubCards > .card.open'); return !!cruise && [...document.querySelectorAll('#clubCards .card, #clubCards .signin')].every((el) => right(el) <= right(cruise) + 1); })(),
         described: [...box.querySelectorAll('.card')].every((b) => b.getAttribute('aria-describedby') === box.getAttribute('aria-labelledby')),
         // The clubs' cards in the order their pins stand in the scene, left to right.
         sides: ['rowing', 'canoe'].map((pin) => [document.querySelector(`#clubDoors .pin.${pin}`)?.getBoundingClientRect().left, document.querySelector(`#clubCards .card .pin.${pin}`)?.getBoundingClientRect().left]),
@@ -214,6 +217,7 @@ async function play(c, page, errors) {
     if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Rowing Club,Reading Canoe Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
     // The cruise marked as the thing to play; each card in the box says it needs sign in to a screen reader.
     if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
+    if (got.last !== 'River cruise' || !got.rightmost) errors.push(`the river cruise isn't last on the right: last ${got.last}, right-most ${got.rightmost}`);
     if (got.covered.length) errors.push(`the guest's cards cover the scene's pins: ${got.covered.join(', ')}`);
     const [[rowPin, rowCard], [canoePin, canoeCard]] = got.sides;
     if (!(rowPin < canoePin && rowCard < canoeCard)) errors.push(`the clubs' cards aren't in the order their pins stand: ${JSON.stringify(got.sides)}`);
@@ -255,8 +259,10 @@ async function play(c, page, errors) {
   // Racing friends from the bridge (signed in): Invite friends opens the race dialog to make one, Join a race at the code box.
   if (c.friends) {
     await page.waitForFunction(() => document.querySelectorAll('#clubCards .friend').length === 2, null, { timeout: 15_000 });
-    // Signed in, no sign-in box: every card as it is.
+    // Signed in, no sign-in box: every card as it is, the river cruise last (on the right).
     if (await page.locator('#clubCards .signin-box').count()) errors.push('signed in, the bridge still shows the sign-in box');
+    const lastCard = await page.evaluate(() => [...document.querySelectorAll('#clubCards > .card')].at(-1)?.querySelector('.name')?.textContent);
+    if (lastCard !== 'River cruise') errors.push(`signed in, the last card is ${lastCard}, not the river cruise`);
     const opens = async (label, tab, focus) => {
       await page.locator('#clubCards .friend', { hasText: label }).click();
       const got = await page.evaluate((tab) => ({ open: document.getElementById('live').open, tab: document.getElementById(tab).getAttribute('aria-pressed'), focus: document.activeElement?.id }), tab);

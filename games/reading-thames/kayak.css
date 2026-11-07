@@ -518,6 +518,7 @@ summary { cursor: pointer; }
    says they need an account, with Sign in (its heading shows at every size: on
    a phone on its side the cards lose their lines). Signed in, no box. */
 #clubCards > .card.open { background: #d6452b; border-color: #d6452b; } /* the one thing a guest can play: the game's "start here" red */
+#clubCards > .card:last-child { margin-left: auto; } /* the river cruise, on the right even when the cards wrap */
 #clubCards .signin-box { pointer-events: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem 0.5rem; border: 2px solid #f2c230; border-radius: 18px; background: rgba(10, 18, 18, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 #clubCards .signin-box .card { background: rgba(10, 18, 18, 0.55); }
 #clubCards .signin-box .card svg { opacity: 0.7; } /* a little quieter than the open card: they need an account */
@@ -531,6 +532,9 @@ summary { cursor: pointer; }
   #clubCards .card.go small { display: block; } /* Race again says which course */
   /* A guest's box in one row (its heading kept for screen readers, Sign in says it), so the scene's club pins show above the cards. */
   #clubCards .signin-box { padding: 0.3rem; }
+  #clubCards .card { padding-inline: 0.55rem; } /* the box and the cruise in one row on the SE */
+  #clubCards .card .name, #clubCards .signin-box .signin { font-size: 0.85rem; }
+  #clubCards .signin-box .signin { padding: 0 0.8rem; }
   #clubCards .signin-box .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 /* An upright phone: a guest's cards two by two, so the stack stays low, under the scene's pins. */

@@ -940,22 +940,22 @@ function arrive(place) {
       { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
       { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
-      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true, mode: 'cruise' },
       { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => { club.hiring = true; arrive('path'); }, hire: true },
+      // The river cruise on the far right (owner, 2026-11-07): last for everyone, after a guest's sign-in box.
+      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true, mode: 'cruise' },
       { pin: 'canoe', at: shots.doors.path.club },
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
   // A guest on the bridge (owner, 2026-11-07): a card for an open mode (the
-  // river cruise) on its own; every other card (a new one too) in a "Sign in to
-  // play" box, as it is, going to sign in. Signed in, there's no box.
+  // river cruise) on its own, on the right; every other card (a new one too) in
+  // a "Sign in to play" box, as it is, going to sign in. Signed in, there's no box.
   if (place === 'path' && !hiring && guest()) {
     for (const spot of spots) {
       if (!spot.card || !spot.act || OPEN.has(spot.mode)) continue;
       Object.assign(spot, { act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
     }
     for (const spot of spots) if (spot.card && OPEN.has(spot.mode)) spot.open = true;
-    spots.sort((a, b) => !!b.play - !!a.play);
   }
   // Race again first among the cards (it was last, alone on a row of its own on a phone).
   else if (place === 'path' && !hiring && label(club.plan)) {
@@ -1078,7 +1078,8 @@ function arrive(place) {
 // Again when the labels and cards first show: a browser drops focus on a hidden button.
 function focusFirst() {
   if (menu.open || clubEl.classList.contains('waiting') || clubEl.classList.contains('asking')) return;
-  (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  // (A guest's first focus is the one thing they can play, though it's on the right.)
+  (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg || x.open)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
 }
 // The erg room: a 500 m on your erg, the rower on the next one keeping a
 // steady 2:08. Both sides together for a stroke; the monitor shows how it's going.
