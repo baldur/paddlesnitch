@@ -44,12 +44,24 @@ describe('links say paddlesnitch.com when the request arrives at the function UR
   })
 
   it('trial links, listed and one at a time', async () => {
-    noFunctionUrl(await (await trials(req('/api/v1/trials'))).text())
-    noFunctionUrl(await (await trial(req('/api/v1/trials/pub'), { params: Promise.resolve({ trialId: 'pub' }) })).text())
+    const listed = await (await trials(req('/api/v1/trials'))).json()
+    expect(listed.trials[0].links.page).toBe('https://paddlesnitch.com/att/trials/pub')
+    noFunctionUrl(JSON.stringify(listed))
+    const one = await (await trial(req('/api/v1/trials/pub'), { params: Promise.resolve({ trialId: 'pub' }) })).json()
+    expect(one.trial.links.leaderboard).toMatch(/^https:\/\/paddlesnitch\.com\//)
+    noFunctionUrl(JSON.stringify(one))
   })
 
   it('the plan page link', async () => {
-    noFunctionUrl(await (await plan(req('/api/v1/plan?from=guyers-lock&to=aldermaston-wharf'))).text())
+    const body = await (await plan(req('/api/v1/plan?from=guyers-lock&to=aldermaston-wharf'))).json()
+    expect(body.links.page).toMatch(/^https:\/\/paddlesnitch\.com\/plan\?/)
+    noFunctionUrl(JSON.stringify(body))
+  })
+
+  it('locally (no NEXT_PUBLIC_BASE_URL) links follow the dev server, whatever its port', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', undefined)
+    const res = await openapi(new NextRequest('http://localhost:3123/api/v1/openapi.json'))
+    expect((await res.json()).servers[0].url).toBe('http://localhost:3123')
   })
 
   it('links in MCP tool results', async () => {
