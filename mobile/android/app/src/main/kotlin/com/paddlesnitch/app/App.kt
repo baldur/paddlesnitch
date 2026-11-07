@@ -221,7 +221,7 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 }
 
 @Composable
-private fun MyPaddles(
+internal fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, onTrackers: () -> Unit, modifier: Modifier,
     /** The way to Record (WithRecording). */
@@ -231,15 +231,16 @@ private fun MyPaddles(
     val context = LocalContext.current
     val sameOuting = remember(api) { sameOutingCalls(api) { url, private -> openInBrowser(context, url, private) } }
     var list by remember { mutableStateOf<PaddleList?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    // Our words, never the exception's (#892): it can name codes and vendors.
+    var failed by remember { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
     // A phone recording that reached the server is a paddle now: load the list again.
     val uploaded by com.paddlesnitch.app.record.Uploads.sent.collectAsState()
     LaunchedEffect(attempt, added, uploaded) {
-        error = null
+        failed = false
         runCatching { api.paddles() }
             .onSuccess { list = it }
-            .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
+            .onFailure { if (it is SignedOut) onSignedOut() else failed = true }
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
@@ -263,8 +264,8 @@ private fun MyPaddles(
                 account()
             }
         })
-        error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(error!!, color = PsColor.red)
+        failed -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Couldn’t load your paddles", color = PsColor.red)
             Button(onClick = { attempt++ }) { Text("Try again") }
             account()
         }
