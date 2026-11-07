@@ -84,8 +84,6 @@ const CASES = [
   // The walk to the club (#club, prototype): from the bridge to the club, to the water, and off.
   { name: 'iphone safari, the walk to the club', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true },
   { name: 'iphone se, the walk to the club', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true },
-  // A time trial picked last time: a first visit's Try it now is still a race, the Hasler Div 7-9.
-  { name: 'webkit, desktop, try it now from the bridge', engine: webkit, ctx: desktop, club: true, tryIt: true, site: true },
   // Signed out on the site: only the river cruise; the bridge says so, and the rest goes to sign in.
   { name: 'webkit, desktop, a guest on the bridge', engine: webkit, ctx: desktop, club: true, guest: true, site: true, signedOut: true, slowMe: true },
   { name: 'iphone se, a guest on the bridge', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true },
@@ -121,12 +119,11 @@ async function play(c, page, errors) {
       await r.fulfill({ json: { result: { data: me ? { user: c.signedOut ? null : { id: 'test', displayName: 'Pat R.' } } : null } } });
     }).catch(() => {});
   }
-  if (c.tryIt) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:format', 'interval'));
   // A guest who was outside the canoe club last time, and has raced the Loop
   // (they start on the bridge, with no Race again or racing friends); sign in is a blank page here.
   if (c.guest) await page.addInitScript(() => { if (!sessionStorage.getItem('seen')) { localStorage.setItem('snitchmedia:kayak:place', 'club'); localStorage.setItem('snitchmedia:kayak:last', 'loop'); } sessionStorage.setItem('seen', '1'); });
   if (c.guest || c.guestMenu) await page.route(/\/signin\b/, (r) => r.fulfill({ contentType: 'text/html', body: '<title>Sign in</title>' }));
-  // Racing friends: someone who's paddled before (a first visit's bridge leads with Try it now instead).
+  // Racing friends: someone who's paddled before (a first visit's bridge has none).
   if (c.friends) await page.addInitScript(() => localStorage.setItem('snitchmedia:kayak:last', 'loop'));
   // On a phone the walk's taps ask for full screen (Android's browsers allow it): count the asks, as
   // a browser that allows it would see them, without really going full screen. (Not where the case
@@ -176,9 +173,9 @@ async function play(c, page, errors) {
     if (!(join.join === 'true' && join.code === 'ABCD')) errors.push(`the race link opened ${JSON.stringify(join)}`);
     return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}, the race dialog on Join with ${join.code}`;
   }
-  // A guest: the rule above the cards, with Sign in; the river cruise first, as
-  // it is; the clubs and Hire a boat say they need an account and go to sign in;
-  // no Try it now, no racing friends. The cruise itself starts.
+  // A guest: the river cruise on its own; the clubs and Hire a boat in a "Sign
+  // in to play" box, with Sign in, going to sign in; no Race again, no racing
+  // friends. The cruise itself starts.
   if (c.guest) {
     const press = (l) => (c.touch ? l.tap() : l.click());
     // Until the site says who's signed in, no cards at all (never the open bridge first).
@@ -188,46 +185,41 @@ async function play(c, page, errors) {
       if (before.asked) errors.push('the site answered before the bridge drew: this case needs the bridge first');
       else if (before.shown !== 'hidden') errors.push('before the site answered, the bridge showed its cards');
     }
-    await page.locator('#clubCards .guest').waitFor({ timeout: 60_000 });
+    await page.locator('#clubCards .signin-box').waitFor({ timeout: 60_000 });
     // Keyboard focus starts on the cruise.
     const focused = await page.evaluate(() => document.activeElement?.querySelector?.('.name')?.textContent ?? document.activeElement?.tagName);
     if (!c.touch && focused !== 'River cruise') errors.push(`a guest's first focus is on ${focused}, not the river cruise`);
-    const got = await page.evaluate(() => ({
-      place: window.kayak.club?.place,
-      row: document.querySelector('#clubCards .guest').textContent,
-      href: document.querySelector('#clubCards .guest a')?.getAttribute('href'),
-      cards: [...document.querySelectorAll('#clubCards .card')].map((b) => [b.querySelector('.name').textContent, b.querySelector('small').textContent]),
-      friends: document.querySelectorAll('#clubCards .friend').length,
-    }));
-    const line = (name) => got.cards.find(([n]) => n.endsWith(name))?.[1];
-    if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
-    if (got.row !== 'Sign in to play everything. The river cruise is open to everyone.' || !got.href?.startsWith('/signin?next=/games/reading-thames/')) errors.push(`the guest's row says "${got.row}", links ${got.href}`);
-    if (got.cards[0]?.[0] !== 'River cruise' || line('Canoe Club') !== 'Sign in to paddle here' || line('Rowing Club') !== 'Sign in to row here' || line('Hire a boat') !== 'Sign in to hire one'
-      || got.cards.some(([n]) => /Try it now|Race again/.test(n)) || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
-    // The row and its Sign in on screen, even on a phone on its side; Sign in a full tap target.
-    const { width, height } = page.viewportSize();
-    const row = await page.locator('#clubCards .guest').boundingBox();
-    if (!row || row.x < 0 || row.y < 0 || row.x + row.width > width || row.y + row.height > height) errors.push(`the guest's row is off screen: ${JSON.stringify(row)}`);
-    // (Its hit area reaches past the text: a tap 22 px above or below the middle is still on it.)
-    const reach = await page.evaluate(() => {
-      const a = document.querySelector('#clubCards .guest a');
-      const r = a.getBoundingClientRect();
-      const x = r.left + r.width / 2, y = r.top + r.height / 2;
-      return [y - 21, y + 21].every((yy) => document.elementFromPoint(x, yy) === a);
+    const got = await page.evaluate(() => {
+      const box = document.querySelector('#clubCards .signin-box');
+      const names = (sel) => [...document.querySelectorAll(sel)].map((b) => b.querySelector('.name').textContent);
+      return {
+        place: window.kayak.club?.place,
+        head: box.querySelector('.head').textContent,
+        group: `${box.getAttribute('role')} ${document.getElementById(box.getAttribute('aria-labelledby'))?.textContent}`,
+        href: box.querySelector('a.signin')?.getAttribute('href'),
+        outside: names('#clubCards > .card'),
+        inside: names('#clubCards .signin-box .card'),
+        friends: document.querySelectorAll('#clubCards .friend').length,
+      };
     });
-    if (!reach) errors.push("the guest's Sign in is under 44 px to tap");
-    // A closed card says where it goes to a screen reader, even where its line is hidden.
-    const named = await page.locator('#clubCards .card', { hasText: 'Rowing Club' }).getAttribute('aria-label');
-    if (!/Rowing Club: Sign in to row here$/.test(named ?? '')) errors.push(`the guest's Rowing Club card is named "${named}"`);
+    if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
+    if (got.head !== 'Sign in to play' || got.group !== 'group Sign in to play' || !got.href?.startsWith('/signin?next=/games/reading-thames/')) errors.push(`the guest's box: ${JSON.stringify(got)}`);
+    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Canoe Club,Reading Rowing Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
+    // The box and its Sign in on screen, even on a phone on its side; Sign in a full tap target.
+    const { width, height } = page.viewportSize();
+    const box = await page.locator('#clubCards .signin-box').boundingBox();
+    if (!box || box.x < 0 || box.y < 0 || box.x + box.width > width || box.y + box.height > height) errors.push(`the guest's box is off screen: ${JSON.stringify(box)}`);
+    const signIn = await page.locator('#clubCards .signin-box a.signin').boundingBox();
+    if (!signIn || signIn.height < 44) errors.push(`the guest's Sign in is ${signIn?.height} px tall, under 44`);
     // A closed card goes to sign in, and back again the cruise starts.
     await Promise.all([page.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), press(page.locator('#clubCards .card', { hasText: 'Canoe Club' }))])
       .catch(() => errors.push("a guest's Canoe Club didn't go to sign in"));
     await page.goBack();
-    await page.locator('#clubCards .guest').waitFor({ timeout: 60_000 });
+    await page.locator('#clubCards .signin-box').waitFor({ timeout: 60_000 });
     await press(page.locator('#clubCards .card', { hasText: 'River cruise' }));
     await page.waitForFunction(() => window.kayak.mode?.key === 'cruise' && !window.kayak.club, null, { timeout: 60_000 })
       .catch(async () => errors.push(`a guest's River cruise didn't start: ${await page.evaluate(() => `${window.kayak.mode?.key} at ${window.kayak.club?.place} ${location.pathname}`)}`));
-    return `a guest: ${got.cards.map(([n]) => n).join(', ')}; the closed ones go to sign in, the cruise starts`;
+    return `a guest: ${got.outside.join()} on its own; in the sign-in box ${got.inside.join(', ')}, going to sign in; the cruise starts`;
   }
   // A guest at the menu: practice and a drill go to sign in, even picked before
   // the site answers (the pick waits for it); the cruise starts.
@@ -251,6 +243,8 @@ async function play(c, page, errors) {
   // Racing friends from the bridge (signed in): Invite friends opens the race dialog to make one, Join a race at the code box.
   if (c.friends) {
     await page.waitForFunction(() => document.querySelectorAll('#clubCards .friend').length === 2, null, { timeout: 15_000 });
+    // Signed in, no sign-in box: every card as it is.
+    if (await page.locator('#clubCards .signin-box').count()) errors.push('signed in, the bridge still shows the sign-in box');
     const opens = async (label, tab, focus) => {
       await page.locator('#clubCards .friend', { hasText: label }).click();
       const got = await page.evaluate((tab) => ({ open: document.getElementById('live').open, tab: document.getElementById(tab).getAttribute('aria-pressed'), focus: document.activeElement?.id }), tab);
@@ -283,20 +277,13 @@ async function play(c, page, errors) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
     // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
-    const steps = c.tryIt ? [['Try it now', null]] : c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
+    const steps = c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
       : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null], ['@midpiece', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
         ['Boathouse', 'boathouse'], ['@clear', null], ['Paint your boat', null], ['#clubBack', 'boathouse'], ['@closed', null], ['#clubBack', 'club'],
         ['Clubhouse', 'clubhouse'], ['@practice', null], ['#clubBack', 'clubhouse'], ['@plan', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
-    // Try it now says what it is, in full, even on a phone.
-    // (A first visit to the bridge always has it: wait for it, don't skip.)
-    const tryLine = page.locator('#clubCards .card.go small');
-    if (!c.friends && !c.outing && !c.row) {
-      await tryLine.first().waitFor({ state: 'visible', timeout: 60_000 });
-      const cut = await tryLine.first().evaluate((el) => el.scrollWidth > el.clientWidth + 1 && el.textContent);
-      if (cut) errors.push(`Try it now's line is cut off: "${cut}"`);
-    }
+    await page.locator('#clubCards .card').first().waitFor({ state: 'visible', timeout: 60_000 });
     for (const [label, place] of steps) {
       // Keys with the picker open: Backspace in one of its fields stays put, Esc goes back.
       if (label === '@backspace') {
@@ -396,20 +383,7 @@ async function play(c, page, errors) {
       const asks = await page.evaluate(() => window.fullScreenAsks);
       if (!asks.length || asks[0] !== 'hide') errors.push(`the walk's taps asked for full screen ${JSON.stringify(asks)} on a phone`);
     }
-    // (Signed out, a closed race goes to sign in: say so, not a timeout.)
-    if (c.tryIt && await page.waitForURL(/signin/, { timeout: 3000 }).then(() => true, () => false)) return void errors.push('Try it now sent a signed-in player to sign in');
     if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
-    if (c.tryIt) {
-      await page.waitForFunction(() => window.kayak.mode?.key === 'hasler79' && window.kayak.race?.racers.length > 1, null, { timeout: 60_000 }).catch(() => {});
-      const got = await page.evaluate(() => ({ racers: window.kayak.race.racers.length, course: window.kayak.mode?.key, format: window.kayak.format, easy: window.kayak.race.easy, help: document.getElementById('touchhelp').textContent }));
-      if (!(got.racers > 1 && got.course === 'hasler79' && got.format === 'mass' && got.easy && got.help.startsWith('After the horn'))) errors.push(`Try it now started ${JSON.stringify(got)}, expected the Hasler Div 7-9 race`);
-      const after = await page.evaluate(async () => {
-        await window.kayak.submitResult(100);
-        return { saved: localStorage.getItem('snitchmedia:kayak:format'), menu: document.querySelector('#menu [data-format="interval"]').getAttribute('aria-pressed') };
-      });
-      // The player's own pick stands, saved and on the menu, for the next course they choose.
-      if (after.saved !== 'interval' || after.menu !== 'true') errors.push(`Try it now changed the picked format: ${JSON.stringify(after)}`);
-    }
     // The kayak erg: a side at a time, left, right; the numbers at the top count
     // down the 500 m, clear of the place's name and the header's buttons, and
     // alternating is never called a weak stroke.
@@ -505,7 +479,7 @@ async function play(c, page, errors) {
   if (!c.club) await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
   // On a phone the race is locked sideways once full screen comes, even when the tap that asked
-  // for full screen also started the race (a first visit's Try it now).
+  // for full screen also started the race.
   if (c.touch && !c.strip && !c.erg) {
     const locked = await page.waitForFunction(() => window.screenLocks?.at(-1) === 'landscape', null, { timeout: 5000 }).then(() => true, () => false);
     if (!locked) errors.push(`a race on a phone wasn't locked sideways: ${JSON.stringify(await page.evaluate(() => window.screenLocks))}`);
@@ -747,7 +721,7 @@ async function play(c, page, errors) {
   // Out of full screen mid-race (the back gesture): it pauses; End race asks for full screen
   // again and goes back to the walk, which unlocks the screen; and having left full screen on
   // purpose on the walk, walking about doesn't ask again.
-  if (c.club && c.touch && !c.strip && !c.outing && !c.row && !c.erg && !c.tryIt) {
+  if (c.club && c.touch && !c.strip && !c.outing && !c.row && !c.erg) {
     await page.evaluate(() => window.leaveFullScreen());
     if (!(await page.waitForFunction(() => document.getElementById('paused').open, null, { timeout: 10_000 }).then(() => true, () => false))) errors.push("leaving full screen mid-race didn't pause");
     else {

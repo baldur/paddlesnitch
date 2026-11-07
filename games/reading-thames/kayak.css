@@ -514,11 +514,13 @@ summary { cursor: pointer; }
 #clubCards .friend small { font-size: 0.74rem; opacity: 0.85; }
 #clubCards .friend:hover { border-color: #fff; }
 #clubCards .friend:focus-visible { outline: 3px solid #fff; outline-offset: 2px; } /* plain to see on the yellow, for a keyboard or a d-pad */
-/* A guest on the bridge: what's open, in a row of its own above the cards (shown at every size: on a phone on its side the cards lose their lines). */
-#clubCards .guest { flex-basis: 100%; margin: 0; pointer-events: auto; text-align: center; padding: 0.7rem 1rem; border-radius: 12px; background: rgba(10, 18, 18, 0.8); color: #fff; font: 0.9rem/1.3 system-ui, sans-serif; }
-#clubCards .guest a { position: relative; color: #f2c230; font-weight: 700; }
-#clubCards .guest a::after { content: ""; position: absolute; inset: -14px -8px; } /* 44 px to tap, without spacing the lines apart when the row wraps */
-#clubCards .guest a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* A guest on the bridge: the river cruise on its own, the rest in a box that
+   says they need an account, with Sign in (its heading shows at every size: on
+   a phone on its side the cards lose their lines). Signed in, no box. */
+#clubCards .signin-box { pointer-events: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem 0.5rem; border: 1px solid rgba(242, 194, 48, 0.8); border-radius: 18px; background: rgba(10, 18, 18, 0.45); }
+#clubCards .signin-box .head { flex-basis: 100%; margin: 0; text-align: center; color: #f2c230; font: 700 0.85rem/1.2 system-ui, sans-serif; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+#clubCards .signin-box .signin { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.1rem; border-radius: 14px; background: #f2c230; color: #1b1a14; font: 700 0.92rem system-ui, sans-serif; text-decoration: none; }
+#clubCards .signin-box .signin:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 /* A phone held sideways: one row for everything, names only, so the scene (and the canoe club's pin) shows. */
 @media (max-height: 500px) {
   #clubCards .friends { flex-basis: auto; }

@@ -81,8 +81,6 @@ for (const [key, m] of Object.entries(ROW_MODES)) Object.assign(m, { key, row: t
 // Your scull and its colour are in the kit (kit.js), so they follow you on the account.
 // Guests (signed out, on the site) get the river cruise; everything else needs
 // an account (owner 2026-11-07). Served on its own, with no site, it's all open.
-// A first visit's Try it now (signed in) is the Hasler Div 7-9 race.
-const OPEN_RACE = 'hasler79';
 const OPEN = new Set(['cruise']);
 const guest = () => !account.offline && !account.user;
 const OPEN_LINE = `The ${OUTINGS.cruise.label.toLowerCase()} is open to everyone.`;
@@ -947,26 +945,19 @@ function arrive(place) {
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
-  // A guest on the bridge: a card for an open mode (the river cruise) first,
-  // as it is; every other card (a new one too) says it needs an account and
-  // goes to sign in (the row above the cards says why, even on a phone on its
-  // side, where the cards show only their names).
+  // A guest on the bridge (owner, 2026-11-07): a card for an open mode (the
+  // river cruise) on its own; every other card (a new one too) in a "Sign in to
+  // play" box, as it is, going to sign in. Signed in, there's no box.
   if (place === 'path' && !hiring && guest()) {
     for (const spot of spots) {
       if (!spot.card || !spot.act || OPEN.has(spot.mode)) continue;
-      const why = spot.card.pin === 'canoe' ? 'Sign in to paddle here' : spot.card.pin === 'rowing' ? 'Sign in to row here' : spot.hire ? 'Sign in to hire one' : 'Sign in to play here';
-      Object.assign(spot, { card: { ...spot.card, line: why }, act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
+      Object.assign(spot, { act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
     }
     spots.sort((a, b) => !!b.play - !!a.play);
   }
   // Race again first among the cards (it was last, alone on a row of its own on a phone).
   else if (place === 'path' && !hiring && label(club.plan)) {
     spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
-  }
-  // Nothing paddled yet: straight into the open race, always a race, whatever
-  // format was last picked; it teaches as it goes.
-  else if (place === 'path' && !hiring) {
-    spots.unshift({ card: { name: 'Try it now', line: `A 7.9 km race against ${MODES[OPEN_RACE].rivals.length} others` }, act: () => choose(OPEN_RACE, { race: true }), go: true });
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
@@ -1005,6 +996,7 @@ function arrive(place) {
     spots.push({ label: 'The plan', at: shots.boards.plan, act: () => sheet('home') });
     if (!account.offline) spots.push({ label: 'Leaderboards', at: shots.boards.leaders, act: () => boards(null) });
   }
+  let signInBox = null; // a guest's: the cards that need an account
   club.spots = spots.map((spot) => {
     // A pin only marks a building; it isn't a control.
     if (!spot.act) {
@@ -1029,15 +1021,20 @@ function arrive(place) {
       row.append(b);
       return { ...spot, el: b };
     }
-    // (Off to sign in: no full screen to ask for on the way out.)
+    // In the sign-in box, off to sign in: no full screen to ask for on the way out.
     if (spot.signIn) {
       const { picture = '', name, line, pin } = spot.card;
       b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
-      b.classList.add('closed');
-      // (On a phone on its side the line is hidden: the name alone would hide where it goes.)
-      b.setAttribute('aria-label', `${b.querySelector('.name').textContent}: ${line}`);
       b.addEventListener('click', spot.act);
-      clubCards.append(b);
+      if (!signInBox) {
+        signInBox = document.createElement('div');
+        signInBox.className = 'signin-box';
+        signInBox.setAttribute('role', 'group');
+        signInBox.setAttribute('aria-labelledby', 'signInHead');
+        signInBox.innerHTML = '<p id="signInHead" class="head">Sign in to play</p>';
+        clubCards.append(signInBox);
+      }
+      signInBox.append(b);
       return { ...spot, el: b };
     }
     if (spot.card) {
@@ -1053,11 +1050,10 @@ function arrive(place) {
     (spot.card ? clubCards : clubDoors).append(b);
     return { ...spot, el: b };
   });
-  if (place === 'path' && !hiring && guest()) {
-    const row = document.createElement('p');
-    row.className = 'guest';
-    row.append(link('Sign in', SIGN_IN), ` to play everything. ${OPEN_LINE}`);
-    clubCards.prepend(row);
+  if (signInBox) {
+    const a = link('Sign in', SIGN_IN);
+    a.className = 'signin';
+    signInBox.append(a);
   }
   menu.classList.toggle('rowing', place === 'rchanging');
   if (place === 'changing' || place === 'rchanging') sheet('paddler', true);
