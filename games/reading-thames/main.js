@@ -53,7 +53,7 @@ const MODES = {
 for (const [key, m] of Object.entries(MODES)) m.key = key;
 const FORMATS = { mass: 'race', interval: 'time trial' };
 let format = 'mass';
-let asRace = false; // Try it now: this race is a race, whatever format is picked (not saved, not kept)
+let asRace = false; // The easy first race (unused since Try it now went, 2026-11-07; see games/CLAUDE.md): a race, whatever format is picked (not saved, not kept)
 try { if (FORMATS[localStorage.getItem(FORMAT_KEY)]) format = localStorage.getItem(FORMAT_KEY); } catch {}
 // Your best on a course, per format (the loop's time trial keeps the key it always had).
 const bestKey = (m, f) => (m.solo || f === 'interval' ? `snitchmedia:kayak:${m.key}` : `snitchmedia:kayak:${m.key}:race`);
@@ -953,6 +953,7 @@ function arrive(place) {
       if (!spot.card || !spot.act || OPEN.has(spot.mode)) continue;
       Object.assign(spot, { act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
     }
+    for (const spot of spots) if (spot.card && OPEN.has(spot.mode)) spot.open = true;
     spots.sort((a, b) => !!b.play - !!a.play);
   }
   // Race again first among the cards (it was last, alone on a row of its own on a phone).
@@ -1008,7 +1009,7 @@ function arrive(place) {
     }
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = [spot.card ? 'card' : spot.friend ? 'friend' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on'].filter(Boolean).join(' ');
+    b.className = [spot.card ? 'card' : spot.friend ? 'friend' : 'spot', spot.door && 'door', spot.go && 'go', spot.small && 'small', spot.on && 'on', spot.open && 'open'].filter(Boolean).join(' ');
     if (spot.friend) {
       b.innerHTML = `<span class="name">${spot.friend.name}</span><small>${spot.friend.line}</small>`;
       let row = clubCards.querySelector('.friends');
@@ -1026,6 +1027,7 @@ function arrive(place) {
       const { picture = '', name, line, pin } = spot.card;
       b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
       b.addEventListener('click', spot.act);
+      b.setAttribute('aria-describedby', 'signInHead'); // heard on each card, not only on entering the box
       if (!signInBox) {
         signInBox = document.createElement('div');
         signInBox.className = 'signin-box';

@@ -87,6 +87,7 @@ const CASES = [
   // Signed out on the site: only the river cruise; the bridge says so, and the rest goes to sign in.
   { name: 'webkit, desktop, a guest on the bridge', engine: webkit, ctx: desktop, club: true, guest: true, site: true, signedOut: true, slowMe: true },
   { name: 'iphone se, a guest on the bridge', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true },
+  { name: 'iphone se upright, a guest on the bridge', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, guest: true, site: true, signedOut: true },
   // …and from the menu, picked before the site has answered who's signed in: only the cruise starts.
   { name: 'webkit, desktop, a guest at the menu', engine: webkit, ctx: desktop, guestMenu: true, site: true, signedOut: true, slowMe: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
@@ -198,6 +199,10 @@ async function play(c, page, errors) {
         group: `${box.getAttribute('role')} ${document.getElementById(box.getAttribute('aria-labelledby'))?.textContent}`,
         href: box.querySelector('a.signin')?.getAttribute('href'),
         outside: names('#clubCards > .card'),
+        open: [...document.querySelectorAll('#clubCards > .card.open')].length,
+        described: [...box.querySelectorAll('.card')].every((b) => b.getAttribute('aria-describedby') === box.getAttribute('aria-labelledby')),
+        // The scene's club pins: nothing of the cards over them.
+        covered: [...document.querySelectorAll('#clubDoors .pin')].filter((p) => { const r = p.getBoundingClientRect(); return r.width && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('#clubCards'); }).map((p) => p.className),
         inside: names('#clubCards .signin-box .card'),
         friends: document.querySelectorAll('#clubCards .friend').length,
       };
@@ -205,6 +210,9 @@ async function play(c, page, errors) {
     if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
     if (got.head !== 'Sign in to play' || got.group !== 'group Sign in to play' || !got.href?.startsWith('/signin?next=/games/reading-thames/')) errors.push(`the guest's box: ${JSON.stringify(got)}`);
     if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Canoe Club,Reading Rowing Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
+    // The cruise marked as the thing to play; each card in the box says it needs sign in to a screen reader.
+    if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
+    if (got.covered.length) errors.push(`the guest's cards cover the scene's pins: ${got.covered.join(', ')}`);
     // The box and its Sign in on screen, even on a phone on its side; Sign in a full tap target.
     const { width, height } = page.viewportSize();
     const box = await page.locator('#clubCards .signin-box').boundingBox();
