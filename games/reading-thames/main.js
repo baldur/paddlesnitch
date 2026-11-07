@@ -936,8 +936,9 @@ function arrive(place) {
     ]
     : place === 'path'
     ? [
-      { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
+      // Left to right as the clubs stand from the bridge: the rowing club's pin is left of the canoe club's.
       { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
+      { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
       { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true, mode: 'cruise' },
       { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => { club.hiring = true; arrive('path'); }, hire: true },

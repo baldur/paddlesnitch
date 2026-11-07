@@ -201,6 +201,8 @@ async function play(c, page, errors) {
         outside: names('#clubCards > .card'),
         open: [...document.querySelectorAll('#clubCards > .card.open')].length,
         described: [...box.querySelectorAll('.card')].every((b) => b.getAttribute('aria-describedby') === box.getAttribute('aria-labelledby')),
+        // The clubs' cards in the order their pins stand in the scene, left to right.
+        sides: ['rowing', 'canoe'].map((pin) => [document.querySelector(`#clubDoors .pin.${pin}`)?.getBoundingClientRect().left, document.querySelector(`#clubCards .card .pin.${pin}`)?.getBoundingClientRect().left]),
         // The scene's club pins: nothing of the cards over them.
         covered: [...document.querySelectorAll('#clubDoors .pin')].filter((p) => { const r = p.getBoundingClientRect(); return r.width && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('#clubCards'); }).map((p) => p.className),
         inside: names('#clubCards .signin-box .card'),
@@ -209,10 +211,12 @@ async function play(c, page, errors) {
     });
     if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
     if (got.head !== 'Sign in to play' || got.group !== 'group Sign in to play' || !got.href?.startsWith('/signin?next=/games/reading-thames/')) errors.push(`the guest's box: ${JSON.stringify(got)}`);
-    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Canoe Club,Reading Rowing Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
+    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Rowing Club,Reading Canoe Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
     // The cruise marked as the thing to play; each card in the box says it needs sign in to a screen reader.
     if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
     if (got.covered.length) errors.push(`the guest's cards cover the scene's pins: ${got.covered.join(', ')}`);
+    const [[rowPin, rowCard], [canoePin, canoeCard]] = got.sides;
+    if (!(rowPin < canoePin && rowCard < canoeCard)) errors.push(`the clubs' cards aren't in the order their pins stand: ${JSON.stringify(got.sides)}`);
     // The box and its Sign in on screen, even on a phone on its side; Sign in a full tap target.
     const { width, height } = page.viewportSize();
     const box = await page.locator('#clubCards .signin-box').boundingBox();
