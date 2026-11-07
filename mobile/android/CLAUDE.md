@@ -243,3 +243,4 @@ time and isn't obvious from the code.
   holding to stop.". Tests pass a fake `LocalHapticFeedback` and step `mainClock` with the finger down. One remembered
   `stopped` flag, set by the hold or the Stop recording action, makes it stop once: the button stays on
   screen until the service posts Stopped, and a tap or a second hold then does nothing (tester, #882).
+- **Boat motion legends** (#855, contract #887): roll and pitch never differ by colour alone: pitch is dashed 4/3 dp everywhere (lines, band outlines, keys), roll solid. `legendWords` places "roll" and "pitch" once, and `legendKeys` hangs 10 sp swatches (4 sp gap) or 18 sp lines (6 sp gap) before them, so the words share an x on both charts. Room before each word is for the wider line key. Key sizes are in sp so they grow with large text. `BoatMotionLegendTest` tests the layout; the goldens catch styles (a 0.7 alpha on pitch fails them).

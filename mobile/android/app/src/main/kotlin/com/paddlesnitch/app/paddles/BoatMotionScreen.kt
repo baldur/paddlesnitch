@@ -344,7 +344,6 @@ private fun DrawScope.degreeAxis(m: TextMeasurer, f: Frame, bound: Double, y: (D
 /** A legend's sizes follow its text, so they keep their spacing at large text. */
 private class Key(m: TextMeasurer) {
     val line = m.measure("pitch", axisText).size.height.toFloat()
-    val mark = line * 0.6f
     val gap = line * 0.3f
     val space = line * 0.7f
 }
@@ -352,18 +351,52 @@ private class Key(m: TextMeasurer) {
 /** Legend swatches, whatever the opacity of what they stand for, so each stays visible. */
 private const val SWATCH_ALPHA = 0.8f
 
-/** A swatch and its word, centred on [mid]; returns where the next one starts. */
-private fun DrawScope.swatch(m: TextMeasurer, colour: Color, text: String, x: Float, mid: Float): Float {
+/** A 10 sp swatch at [x] and its word 4 sp after it, centred on [mid], outlined in [outline] when given; returns where the next one starts. */
+private fun DrawScope.swatch(m: TextMeasurer, colour: Color, text: String, x: Float, mid: Float, outline: Stroke? = null): Float {
     val k = Key(m)
-    drawRect(colour, Offset(x, mid - k.mark / 2), Size(k.mark, k.mark), alpha = SWATCH_ALPHA)
+    val side = SWATCH_SP.sp.toPx()
+    drawRect(colour, Offset(x, mid - side / 2), Size(side, side), alpha = SWATCH_ALPHA)
+    outline?.let { drawRect(colour, Offset(x, mid - side / 2), Size(side, side), style = it) }
     val layout = m.measure(text, axisText)
-    drawText(layout, topLeft = Offset(x + k.mark + k.gap, mid - layout.size.height / 2f))
-    return x + k.mark + k.gap + layout.size.width + k.space
+    val wordX = x + side + SWATCH_GAP_SP.sp.toPx()
+    drawText(layout, topLeft = Offset(wordX, mid - layout.size.height / 2f))
+    return wordX + layout.size.width + k.space
 }
 
-private fun DrawScope.legendWidth(m: TextMeasurer, vararg texts: String): Float {
-    val k = Key(m)
-    return texts.sumOf { (k.mark + k.gap + m.measure(it, axisText).size.width + k.space).toDouble() }.toFloat() - k.space
+/* Roll and pitch never differ by colour alone: pitch is dashed (4 on, 3 off), roll solid, in the chart and in its key. */
+private fun DrawScope.pitchDash() = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
+private fun DrawScope.rollLine() = Stroke(ROLL_LINE_DP.dp.toPx())
+private fun DrawScope.pitchLine() = Stroke(PITCH_LINE_DP.dp.toPx(), pathEffect = pitchDash())
+private fun DrawScope.rollOutline() = Stroke(OUTLINE_DP.dp.toPx())
+private fun DrawScope.pitchOutline() = Stroke(OUTLINE_DP.dp.toPx(), pathEffect = pitchDash())
+
+/** The roll and pitch legends' words, at the same x on Through the session and Stroke shape: top right. */
+private fun DrawScope.rollPitchWords(m: TextMeasurer, f: Frame) = legendWords(f.r,
+    m.measure("roll", axisText).size.width.toFloat(), m.measure("pitch", axisText).size.width.toFloat(), 1.sp.toPx())
+
+/** Where a legend key starts, how wide it is, and where its word starts, in px. */
+internal data class LegendKey(val series: String, val keyX: Float, val keyWidth: Float, val wordX: Float)
+
+internal const val SWATCH_SP = 10f
+internal const val SWATCH_GAP_SP = 4f
+internal const val LINE_KEY_SP = 18f
+internal const val LINE_KEY_GAP_SP = 6f
+/** Between one word and the next key. */
+internal const val KEY_SPACE_SP = 8f
+internal const val ROLL_LINE_DP = 1.8f
+internal const val PITCH_LINE_DP = 1.2f
+internal const val OUTLINE_DP = 1.2f
+
+/** The two words right-aligned to [right], each with room before it for the wider (line) key, so swatches and lines can share them. */
+internal fun legendWords(right: Float, rollWidth: Float, pitchWidth: Float, sp: Float): Pair<Float, Float> {
+    val pitch = right - pitchWidth
+    return pitch - (LINE_KEY_SP + LINE_KEY_GAP_SP + KEY_SPACE_SP) * sp - rollWidth to pitch
+}
+
+/** The keys for [words]: 10 sp swatches 4 sp before the word (Through the session), or 18 sp lines 6 sp before it (Stroke shape). */
+internal fun legendKeys(words: Pair<Float, Float>, lines: Boolean, sp: Float): List<LegendKey> {
+    val (w, g) = if (lines) LINE_KEY_SP to LINE_KEY_GAP_SP else SWATCH_SP to SWATCH_GAP_SP
+    return listOf("roll" to words.first, "pitch" to words.second).map { (series, x) -> LegendKey(series, x - (w + g) * sp, w * sp, x) }
 }
 
 private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
@@ -379,20 +412,25 @@ private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
         env.asReversed().forEach { b -> lineTo(x(b.t), y(lo(b))) }
         close()
     }
-    drawPath(band({ it.pitchMin }, { it.pitchMax }), PsColor.green, alpha = 0.28f)
-    drawPath(band({ it.rollMin }, { it.rollMax }), PsColor.split, alpha = 0.5f)
+    val pitchBand = band({ it.pitchMin }, { it.pitchMax })
+    val rollBand = band({ it.rollMin }, { it.rollMax })
+    drawPath(pitchBand, PsColor.green, alpha = 0.28f)
+    drawPath(rollBand, PsColor.split, alpha = 0.5f)
+    // Both outlines over both fills, at full colour.
+    drawPath(pitchBand, PsColor.green, style = pitchOutline())
+    drawPath(rollBand, PsColor.split, style = rollOutline())
     val bottom = f.under
     val (from, to) = envelopeXLabels(t1 - t0)
     label(m, from, f.l, bottom)
     label(m, to, f.r, bottom, align = 1f)
-    var lx = f.r - legendWidth(m, "roll", "pitch")
-    lx = swatch(m, PsColor.split, "roll", lx, f.legendMiddle)
-    swatch(m, PsColor.green, "pitch", lx, f.legendMiddle)
+    val (roll, pitch) = legendKeys(rollPitchWords(m, f), lines = false, 1.sp.toPx())
+    swatch(m, PsColor.split, "roll", roll.keyX, f.legendMiddle, rollOutline())
+    swatch(m, PsColor.green, "pitch", pitch.keyX, f.legendMiddle, pitchOutline())
 }
 
 private fun DrawScope.excerpt(a: BoatMotion, m: TextMeasurer) {
     val ex = a.excerpt
-    val f = Frame(this, m, legend = false)
+    val f = Frame(this, m, legend = true)
     val bound = excerptBound(ex)
     val t0 = ex.first().t; val t1 = ex.last().t
     val x = { t: Double -> (f.l + (t - t0) / max(1.0, t1 - t0) * (f.r - f.l)).toFloat() }
@@ -401,9 +439,16 @@ private fun DrawScope.excerpt(a: BoatMotion, m: TextMeasurer) {
     fun line(pick: (AttitudeSample) -> Double) = Path().apply {
         ex.forEachIndexed { i, s -> if (i == 0) moveTo(x(s.t), y(pick(s))) else lineTo(x(s.t), y(pick(s))) }
     }
-    drawPath(line { it.pitch }, PsColor.green, alpha = 0.7f, style = Stroke(1.2.dp.toPx()))
-    drawPath(line { it.roll }, PsColor.split, style = Stroke(1.8.dp.toPx()))
+    drawPath(line { it.pitch }, PsColor.green, style = pitchLine())
+    drawPath(line { it.roll }, PsColor.split, style = rollLine())
     label(m, excerptLabel(a), f.l, f.under)
+    // Keys are lines the same width, dash and colour as their series.
+    val mid = f.legendMiddle
+    legendKeys(rollPitchWords(m, f), lines = true, 1.sp.toPx()).forEach { k ->
+        val (colour, stroke) = if (k.series == "roll") PsColor.split to rollLine() else PsColor.green to pitchLine()
+        drawLine(colour, Offset(k.keyX, mid), Offset(k.keyX + k.keyWidth, mid), stroke.width, pathEffect = stroke.pathEffect)
+        label(m, k.series, k.wordX, mid)
+    }
 }
 
 private fun DrawScope.histogram(h: RollHistogram, m: TextMeasurer) {
