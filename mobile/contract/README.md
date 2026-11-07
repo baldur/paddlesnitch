@@ -304,8 +304,8 @@ website draws each chart as wide as the panel, 260 pt high (the histogram
 230), with chart text at 11 pt whatever the width: never scale the text down
 with the chart, or it can't be read on a phone. Legend swatches are drawn at
 0.8 opacity, not the opacity of what they stand for, so each stays visible.
-A chart with a legend ("Through the session" and the histogram) keeps it in
-a 34 pt band above the plot, so it never covers the tallest band or bar.
+Every chart has a legend, kept in a 34 pt band above the plot, so it never
+covers the tallest band, line or bar.
 Y-axis ticks are `axisTicks`
 (format.json) of the chart's bound, labelled with the plain number and "°"
 (a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
@@ -318,8 +318,11 @@ Y-axis ticks are `axisTicks`
   or seconds under two minutes. Legend "roll" and "pitch".
   Accessibility label: "Roll and pitch through the session, reaching about N degrees" (N = the bound, rounded).
   Caption: "The shaded band shows how far the boat rolled and pitched through the recording. Roll is the side-to-side lean, pitch the bow rising and falling."
-- "Stroke shape" from `excerpt`: roll and pitch lines, y bound = the largest
-  absolute value (at least 1°) ×1.1. X-axis label "<seconds, rounded> s at
+- "Stroke shape" from `excerpt`: roll and pitch lines (roll solid, 1.8 pt;
+  pitch dashed 4 on 3 off, 1.2 pt at 0.7 opacity, so they differ by more than
+  colour), y bound = the largest absolute value (at least 1°) ×1.1. Legend
+  "roll" and "pitch", top right as on "Through the session", each with a short
+  line drawn as its own (pitch dashed). X-axis label "<seconds, rounded> s at
   <sampleRateHz> Hz" (leave out " at … Hz" when `sampleRateHz` is null).
   Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
   Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."

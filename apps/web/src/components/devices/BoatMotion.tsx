@@ -216,7 +216,7 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
   const t0 = ex[0].t, t1 = ex[ex.length - 1].t
   const maxDeg = Math.max(...ex.map(s => Math.max(Math.abs(s.roll), Math.abs(s.pitch))), 1) * 1.1
   const x = (t: number) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R)
-  const y = (d: number) => T + ((maxDeg - d) / (2 * maxDeg)) * (H - T - B)
+  const y = (d: number) => TL + ((maxDeg - d) / (2 * maxDeg)) * (H - TL - B)
   const line = (pick: (s: typeof ex[0]) => number) =>
     ex.map((s, i) => `${i ? 'L' : 'M'} ${x(s.t).toFixed(1)} ${y(pick(s)).toFixed(1)}`).join(' ')
 
@@ -231,11 +231,18 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
         </g>
       ))}
       <line x1={L} y1={y(0)} x2={W - R} y2={y(0)} stroke={C.muted} strokeWidth={1.2} />
-      <path d={line(s => s.pitch)} fill="none" stroke={C.pitch} strokeWidth={1.2} opacity={0.7} />
+      {/* Pitch dashed, so the lines differ by more than colour (#855). */}
+      <path d={line(s => s.pitch)} fill="none" stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" opacity={0.7} />
       <path d={line(s => s.roll)} fill="none" stroke={C.roll} strokeWidth={1.8} />
       <text x={L} y={H - 8} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">
         {Math.round((t1 - t0) / 1000)} s at {report.sampleRateHz} Hz
       </text>
+      <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
+        <line data-legend x1={W - R - 122} y1={9} x2={W - R - 104} y2={9} stroke={C.roll} strokeWidth={1.8} />
+        <text x={W - R - 98} y={13} fill={C.muted}>roll</text>
+        <line data-legend x1={W - R - 64} y1={9} x2={W - R - 46} y2={9} stroke={C.pitch} strokeWidth={1.6} strokeDasharray="4 3" />
+        <text x={W - R - 40} y={13} fill={C.muted}>pitch</text>
+      </g>
     </svg>
     </div>
   )

@@ -133,6 +133,25 @@ describe('boat motion charts', () => {
     for (const s of swatches) expect(Number(s.getAttribute('opacity') ?? 1)).toBeGreaterThanOrEqual(0.8)
   })
 
+  it('names roll and pitch on the Stroke shape chart, by dash as well as colour (#855: colour alone)', async () => {
+    atWidth(PHONE_CHART_PX)
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    const stroke = svgs()[1]
+    const legend = [...stroke.querySelectorAll('line[data-legend]')]
+    expect(legend.map(l => l.nextElementSibling?.textContent)).toEqual(['roll', 'pitch'])
+    const [rollKey, pitchKey] = legend
+    // The key's dash matches its line's, and the two lines differ by more than colour.
+    const lineOf = (key: Element) => stroke.querySelector(`path[stroke="${key.getAttribute('stroke')}"]`)!
+    for (const key of legend) expect(lineOf(key).getAttribute('stroke-dasharray')).toBe(key.getAttribute('stroke-dasharray'))
+    expect(rollKey.getAttribute('stroke-dasharray')).toBeNull()
+    expect(pitchKey.getAttribute('stroke-dasharray')).toBeTruthy()
+    // In the band above the plot, as on the other two charts.
+    for (const key of legend) expect(Number(key.getAttribute('y1'))).toBeLessThanOrEqual(CHART_MARGIN.TL)
+    for (const v of stroke.querySelectorAll('g > line:not([data-legend])')) {
+      expect(Number(v.getAttribute('y1'))).toBeGreaterThanOrEqual(CHART_MARGIN.TL)
+    }
+  })
+
   it('keeps each legend in a band above the plot, clear of the tallest bars', async () => {
     atWidth(PHONE_CHART_PX)
     await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
