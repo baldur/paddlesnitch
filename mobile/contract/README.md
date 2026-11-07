@@ -92,6 +92,12 @@ other recording links to the comparison, as on the website.
   snackbar (Android) or a short alert (iOS), and leave the page as it was. The
   website's own header and tab bar show inside the browser; Done or the close
   button brings the person back.
+- **The in-app browser's bar** is the app's dark background (`bg`) on both
+  phones, for every page the app opens this way (Compare, the guide, Terms,
+  Privacy, Report an issue). Android sets it on every Custom Tab through one
+  shared builder; Custom Tabs can't tint the controls, so they stay the
+  browser's own. iOS sets `preferredBarTintColor` to `bg` and
+  `preferredControlTintColor` to `primaryText`.
 
 Tests each app adds: a card with two rows (`paddles.list.with-phone`) where a
 row tap asks for Compare and doesn't open the paddle; the paddle page with
