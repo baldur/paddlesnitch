@@ -15,7 +15,7 @@
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install --with-deps chromium",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "cognito": "cognito-local",
+    "cognito": "node --import ./src/tests/cognito-serial-writes.mjs node_modules/cognito-local/lib/bin/start.js",
     "cognito:init": "tsx --env-file-if-exists=.env.local scripts/cognito-init.ts",
     "rivers": "tsx scripts/download-rivers.ts",
     "waterways": "tsx scripts/waterways/build-region.ts",
