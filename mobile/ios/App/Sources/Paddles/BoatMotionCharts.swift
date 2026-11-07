@@ -195,7 +195,7 @@ struct HistogramChart: View {
             var key = Path()
             key.move(to: CGPoint(x: Frame.left + 70, y: Frame.legendMid))
             key.addLine(to: CGPoint(x: Frame.left + 88, y: Frame.legendMid))
-            context.stroke(key, with: .color(Palette.red.opacity(0.8)), style: dashed)
+            context.stroke(key, with: .color(Palette.red), style: dashed)
             context.draw(
                 Frame.text(BoatMotionWords.mirrored), at: CGPoint(x: Frame.left + 94, y: Frame.legendMid),
                 anchor: .leading)

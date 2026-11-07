@@ -304,9 +304,14 @@ isn't obvious from the code.
   Dynamic Type, like the axis text); roll/pitch words are placed by width
   measured with `context.resolve(text).measure(in:)`, shared by both
   charts (`Frame.legendWords`). Roll solid, pitch dashed, never colour
-  alone (#855). A Canvas can't be read by XCUITest: pixel-test it from
-  `chart.screenshot()` (`Pixels`), finding keys by colour on the legend's
-  centre line, not by fixed x. The sample server
+  alone (#855). A Canvas can't be read by XCUITest: pixel-test it with
+  `ChartShot` (`BoatMotionChartTests`), finding keys and words by colour on
+  the legend's rows, not by fixed x. Dashed vs solid: `dashes(of:)` (share
+  of ink in pieces under 8 pt). Line thickness: summed coverage
+  (`thickness(of:)`); counting pixels near a colour misreads
+  anti-aliased lines (1.8 pt read as 1.3). Prove such tests with
+  mutations of the drawing, each failing a test: tester's first pass
+  found six that passed (#910). The sample server
   answers `GET /api/account/devices/sessions/<id>` with an ETag (304 on
   `If-None-Match`): S0012 measured, others no motion;
   `-MotionUnusable`, `-MotionNotFound`, `-MotionFails`,
