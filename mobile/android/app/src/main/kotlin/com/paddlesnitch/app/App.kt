@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.ui.graphics.toArgb
 import com.paddlesnitch.app.account.AccountScreen
 import com.paddlesnitch.app.account.TermsScreen
 import com.paddlesnitch.app.account.clearExport
@@ -327,7 +328,16 @@ internal fun sameOutingCalls(api: Api, open: (url: String, private: Boolean) -> 
 
 /** A Custom Tab in [browser], private when [ephemeral] (only where the browser supports it). */
 internal fun customTab(browser: String, ephemeral: Boolean): CustomTabsIntent =
-    CustomTabsIntent.Builder().setEphemeralBrowsingEnabled(ephemeral).build().apply { intent.setPackage(browser) }
+    tabBuilder().setEphemeralBrowsingEnabled(ephemeral).build().apply { intent.setPackage(browser) }
+
+/**
+ * Every Custom Tab starts here: the app's dark bar (PsColor.bg) whatever the phone's theme, as iOS tints
+ * Safari (#889). Custom Tabs can't tint the controls; the browser picks icons that read on the bar.
+ */
+internal fun tabBuilder(): CustomTabsIntent.Builder = CustomTabsIntent.Builder()
+    .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+    .setDefaultColorSchemeParams(androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+        .setToolbarColor(PsColor.bg.toArgb()).setNavigationBarColor(PsColor.bg.toArgb()).build())
 
 /**
  * A paddlesnitch.com page the app has no screen for. The browser is named, since

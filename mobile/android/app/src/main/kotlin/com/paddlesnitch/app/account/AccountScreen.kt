@@ -16,7 +16,6 @@ import com.paddlesnitch.app.auth.emailUs
 import com.paddlesnitch.app.Reauth
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -460,4 +459,4 @@ private fun Link(label: String, onClick: () -> Unit) {
 }
 
 internal fun openTab(context: Context, url: String) =
-    runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url)) }
+    runCatching { com.paddlesnitch.app.tabBuilder().build().launchUrl(context, Uri.parse(url)) }
