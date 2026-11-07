@@ -89,6 +89,10 @@ const CASES = [
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
   { name: 'webkit, desktop, a race link', engine: webkit, ctx: desktop, raceLink: true },
+  // The leaderboards page when one course's board doesn't load: it says so, with Try again
+  // (on a phone, a full tap target); and a finish whose time doesn't get saved, the same.
+  { name: 'webkit, desktop, a leaderboard that fails', engine: webkit, ctx: desktop, boards: true },
+  { name: 'iphone safari upright, a leaderboard that fails', engine: webkit, ctx: devices['iPhone 15'], touch: true, boards: true },
   { name: 'webkit, desktop, race friends from the bridge', engine: webkit, ctx: desktop, club: true, friends: true, site: true },
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
@@ -139,7 +143,27 @@ async function play(c, page, errors) {
       }
     });
   }
-  await page.goto(`${base}${c.site ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
+  // One course's board fails until Try again; the others answer with no times.
+  // A finished race's time fails to save until Try again, then it's a new best.
+  let boardFails = true;
+  let submitFails = true;
+  // Served under /games/ (the local files behind it) and signed in, so the
+  // game asks the site; the site here is these routes.
+  if (c.boards) {
+    await page.route(`${base}/games/**`, async (route) => route.fulfill({ response: await route.fetch({ url: route.request().url().replace('/games/', '/') }) }));
+    // (The site's other calls, a saved kit say, answer with nothing; the routes after this win.)
+    await page.route('**/api/trpc/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: null } }) }));
+    await page.route(/\/api\/trpc\/me\b/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { user: { id: 'test', displayName: 'Pat R.' } } } }) }));
+    // (A failed save takes a moment, so the case sees Try again while it waits.)
+    await page.route(/\/api\/trpc\/games\.submit/, async (route) => (submitFails ? setTimeout(() => route.fulfill({ status: 500, body: '{}' }), 500)
+      : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { best: true, rank: 3 } } }) })));
+  }
+  if (c.boards) await page.route(/\/api\/trpc\/games\.leaderboard/, (route) => {
+    const course = JSON.parse(new URL(route.request().url()).searchParams.get('input') ?? '{}').course;
+    return boardFails && course === 'loop' ? route.fulfill({ status: 500, body: '{}' })
+      : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { top: [] } } }) });
+  });
+  await page.goto(`${base}${c.site || c.boards ? '/games' : ''}/reading-thames/${c.query ?? ''}#debug${c.raceLink ? '&race=ABCD' : c.club ? '' : '&menu'}`); // the walk opens unless #menu (or a race link)
   // A machine with no graphics at all (CI's Firefox) can't run the game;
   // there the fallback is the menu's message, so check that instead.
   if (!(await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2')))) {
@@ -161,6 +185,51 @@ async function play(c, page, errors) {
     const join = await page.evaluate(() => ({ join: document.getElementById('liveJoinTab').getAttribute('aria-pressed'), code: document.getElementById('liveCode').value }));
     if (!(join.join === 'true' && join.code === 'ABCD')) errors.push(`the race link opened ${JSON.stringify(join)}`);
     return `a race link: walk ${opened.walk ? 'opened (wrong)' : 'stayed shut'}, the race dialog on Join with ${join.code}`;
+  }
+  if (c.boards) {
+    await page.waitForFunction(() => document.getElementById('menu').open, null, { timeout: 15_000 });
+    // A first visit opens on making your paddler: Skip to the races, then Leaderboards.
+    await page.locator('#menu .step:not([hidden]) [data-skip]').click();
+    await page.locator('#boards').click();
+    const failed = page.locator('#boardlist div', { hasText: "Couldn't load this course's times." });
+    await failed.waitFor({ timeout: 15_000 }).catch(async () => errors.push(`no message for the board that failed: ${(await page.locator('#boardlist').textContent()).slice(0, 200)}`));
+    const others = await page.locator('#boardlist div', { hasText: 'No times yet.' }).count();
+    if (others < 2) errors.push(`expected the other courses to load, got ${others}`);
+    // Try again names its course for a screen reader, and is a full tap target.
+    const course = await failed.locator('h4').textContent();
+    const again = failed.getByRole('button', { name: `Try again: ${course}` });
+    const box = await again.boundingBox().catch(() => null);
+    if (!box) errors.push(`no "Try again: ${course}" button`);
+    else if (box.height < 44) errors.push(`the board's Try again is ${box.height.toFixed(0)} px tall, under 44`);
+    boardFails = false;
+    await again.click();
+    await page.waitForFunction(() => !/Couldn't load/.test(document.getElementById('boardlist').textContent) && document.querySelectorAll('#boardlist div').length > 2, null, { timeout: 15_000 })
+      .catch(() => errors.push("Try again didn't reload the boards"));
+    // Its button went with the reload: focus is on the first board, and loading is over.
+    const after = await page.evaluate(() => ({ focus: document.activeElement === document.querySelector('#boardlist h4'), busy: document.getElementById('boardlist').getAttribute('aria-busy') }));
+    if (!after.focus || after.busy !== 'false') errors.push(`after Try again: ${JSON.stringify(after)}, expected focus on the first board and aria-busy false`);
+    // A finish whose time doesn't save: Try again (not Go again) sends the same time again.
+    await page.evaluate(() => document.getElementById('finished').showModal());
+    await page.evaluate(() => window.kayak.submitResult(100));
+    const retry = page.locator('#ranked button', { hasText: 'Try again' });
+    const rbox = await retry.boundingBox().catch(() => null);
+    if (!rbox) errors.push(`a finish that didn't save said "${await page.locator('#ranked').textContent()}", with no Try again`);
+    else {
+      if (rbox.height < 44) errors.push(`the finish's Try again is ${rbox.height.toFixed(0)} px tall, under 44`);
+      // Failing again: while it waits the button says so (rule 2: the verb and …), then
+      // a new Try again, and focus on it (the one pressed went).
+      await retry.click();
+      const waiting = await page.evaluate(() => { const b = document.querySelector('#ranked button'); return `${b?.textContent} ${b?.disabled}`; });
+      if (waiting !== 'Trying again… true') errors.push(`while the finish's Try again waits, its button is "${waiting}"`);
+      await page.waitForFunction(() => document.querySelector('#ranked button:not([disabled])'), null, { timeout: 15_000 });
+      if (!(await page.evaluate(() => document.activeElement === document.querySelector('#ranked button')))) errors.push("after a Try again that failed too, focus isn't on the new Try again");
+      submitFails = false;
+      await retry.click();
+      await page.waitForFunction(() => /new best/.test(document.getElementById('ranked').textContent), null, { timeout: 15_000 })
+        .catch(async () => errors.push(`the finish's Try again ended with "${await page.locator('#ranked').textContent()}"`));
+      if (!(await page.evaluate(() => document.activeElement?.id === 'ranked'))) errors.push("after the finish's Try again, focus isn't on its answer");
+    }
+    return `one board failed: said so with Try again (${others} others loaded, ${box?.height.toFixed(0)} px), which reloaded it; a finish that didn't save, the same`;
   }
   // Offline (no site behind the game), there's nobody to race: no racing-friends buttons.
   if (c.club && !c.site && (await page.locator('#clubCards .friend').count())) errors.push('racing-friends buttons offline');
@@ -645,8 +714,8 @@ async function play(c, page, errors) {
       if (closed?.props.course !== `hire-${id}`) errors.push(`analytics course ${closed?.props.course}, expected hire-${id}`);
     }
   }
-  // The finish on a small phone, signed out (its extra line), with every
-  // button: all of them on screen without scrolling.
+  // The finish on a small phone, with its longest extra line (a time that
+  // didn't save, and Try again) and every button: all on screen without scrolling.
   if (c.course === 'hasler79' && c.touch) {
     await page.evaluate(() => {
       const { race } = window.kayak;
@@ -655,10 +724,14 @@ async function play(c, page, errors) {
     });
     await page.waitForFunction(() => document.getElementById('finished').open, null, { timeout: 15_000 });
     const cut = await page.evaluate(() => {
-      document.getElementById('ranked').textContent = 'Sign in to put your time on the leaderboard.';
+      document.getElementById('ranked').innerHTML = 'Couldn&#39;t save your time to the Hasler Div 7-9 leaderboard. <button type="button">Try again</button>';
       const dialog = document.getElementById('finished');
       for (const b of dialog.querySelectorAll('button')) b.hidden = false;
-      return [...dialog.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().bottom > Math.min(innerHeight, dialog.getBoundingClientRect().bottom)).map((b) => b.textContent);
+      const cut = [...dialog.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().bottom > Math.min(innerHeight, dialog.getBoundingClientRect().bottom)).map((b) => b.textContent);
+      // …and the sticky buttons don't cover the race's details.
+      const over = document.getElementById('details').getBoundingClientRect().bottom - dialog.querySelector('form').getBoundingClientRect().top;
+      if (over > 0) cut.push(`the end of the details (${Math.round(over)} px)`);
+      return cut;
     });
     if (cut.length) errors.push(`the finish on a phone hides ${cut.join(', ')} below the fold`);
   }
@@ -698,7 +771,8 @@ for (const c of CASES) {
     if (c.strip) await context.addInitScript(STRIP);
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    // (The failing-board case's 500 is the browser's own line for the answer it was given.)
+    page.on('console', (m) => { if (m.type() === 'error' && !(c.boards && /status of 500/.test(m.text()))) errors.push(m.text()); });
     try {
       line = await play(c, page, errors);
     } catch (e) {

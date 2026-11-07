@@ -45,6 +45,7 @@ import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SameOutingList
 import com.paddlesnitch.app.api.SignedOut
+import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.PrefsGoogleVerifierStore
@@ -222,7 +223,7 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 }
 
 @Composable
-private fun MyPaddles(
+internal fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, onTrackers: () -> Unit, modifier: Modifier,
     /** The way to Record (WithRecording). */
@@ -232,15 +233,22 @@ private fun MyPaddles(
     val context = LocalContext.current
     val sameOuting = remember(api) { sameOutingCalls(api) { url, private -> openInBrowser(context, url, private) } }
     var list by remember { mutableStateOf<PaddleList?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    // Our words, never the exception's (#892): it can name codes and vendors. [failed]: the first load
+    // failed, with the words to show under ours ("" for none). [refreshFailed]: a later one failed, so the list stays (as iOS).
+    var failed by remember { mutableStateOf<String?>(null) }
+    var refreshFailed by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     // A phone recording that reached the server is a paddle now: load the list again.
     val uploaded by com.paddlesnitch.app.record.Uploads.sent.collectAsState()
     LaunchedEffect(attempt, added, uploaded) {
-        error = null
+        failed = null
         runCatching { api.paddles() }
-            .onSuccess { list = it }
-            .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
+            .onSuccess { list = it; refreshFailed = null }
+            .onFailure {
+                if (it is SignedOut) onSignedOut()
+                else if (list == null) failed = it.shown("")
+                else refreshFailed = it.shown("")
+            }
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
@@ -248,6 +256,7 @@ private fun MyPaddles(
     // Record, then each recording that isn't a paddle yet (README § After Stop).
     val notice: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            refreshFailed?.let { Text("Couldn’t refresh your paddles. $it".trimEnd(), color = PsColor.red, fontSize = 14.sp) }
             recordEntry?.invoke()
             if (accountId != null) com.paddlesnitch.app.record.UploadLines(accountId, onReport)
         }
@@ -264,8 +273,9 @@ private fun MyPaddles(
                 account()
             }
         })
-        error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(error!!, color = PsColor.red)
+        failed != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Couldn’t load your paddles", color = PsColor.red)
+            failed?.takeIf { it.isNotEmpty() }?.let { Text(it, color = PsColor.muted) }
             Button(onClick = { attempt++ }) { Text("Try again") }
             account()
         }

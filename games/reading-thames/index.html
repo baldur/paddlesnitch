@@ -363,12 +363,12 @@
     <form method="dialog" class="dialog-links"><button value="back">&larr; Back</button></form>
   </dialog>
 
-  <dialog id="finished">
+  <dialog id="finished" aria-labelledby="result" aria-describedby="details ranked">
     <h2 id="result"></h2>
     <p id="details"></p>
     <ol id="standings"></ol>
-    <p id="ranked"></p>
     <form method="dialog">
+      <p id="ranked" aria-live="polite" tabindex="-1"></p>
       <button value="again" autofocus>Go again</button>
       <button value="boards" hidden>Leaderboards</button>
       <button value="menu">&larr; Back</button>
