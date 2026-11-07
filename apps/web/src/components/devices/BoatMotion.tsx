@@ -186,16 +186,21 @@ function EnvelopeChart({ report }: { report: AttitudeReport }) {
         </g>
       ))}
       <line x1={L} y1={y(0)} x2={W - R} y2={y(0)} stroke={C.muted} strokeWidth={1.2} />
-      <path d={band(b => b.pitchMin, b => b.pitchMax)} fill={C.pitch} opacity={0.28} />
-      <path d={band(b => b.rollMin, b => b.rollMax)} fill={C.roll} opacity={0.5} />
+      <path data-series="pitch" d={band(b => b.pitchMin, b => b.pitchMax)} fill={C.pitch} opacity={0.28} />
+      <path data-series="roll" d={band(b => b.rollMin, b => b.rollMax)} fill={C.roll} opacity={0.5} />
+      {/* Edges at full colour, pitch dashed, so the bands differ by more than
+          colour (#855); the fills alone are under 3:1. */}
+      <path data-series="pitch" d={band(b => b.pitchMin, b => b.pitchMax)} fill="none" stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
+      <path data-series="roll" d={band(b => b.rollMin, b => b.rollMax)} fill="none" stroke={C.roll} strokeWidth={1.2} />
       <text x={L} y={H - 8} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">{startLabel}</text>
       <text x={W - R} y={H - 8} fill={C.muted} fontSize={11} textAnchor="end" fontFamily="var(--font-mono, monospace)">{endLabel}</text>
-      {/* Legend swatches at 0.8, not the bands' own opacity: pitch at 0.28 was
-          close to invisible on the surface. */}
+      {/* Legend swatches filled at 0.8, not the bands' own opacity: pitch at
+          0.28 was close to invisible on the surface. Outlined like the band
+          edges, pitch dashed. */}
       <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
-        <rect data-legend x={W - R - 108} y={4} width={10} height={10} fill={C.roll} opacity={0.8} />
+        <rect data-legend data-series="roll" x={W - R - 108} y={4} width={10} height={10} fill={C.roll} fillOpacity={0.8} stroke={C.roll} strokeWidth={1.2} />
         <text x={W - R - 94} y={13} fill={C.muted}>roll</text>
-        <rect data-legend x={W - R - 58} y={4} width={10} height={10} fill={C.pitch} opacity={0.8} />
+        <rect data-legend data-series="pitch" x={W - R - 58} y={4} width={10} height={10} fill={C.pitch} fillOpacity={0.8} stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
         <text x={W - R - 44} y={13} fill={C.muted}>pitch</text>
       </g>
     </svg>
@@ -216,7 +221,7 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
   const t0 = ex[0].t, t1 = ex[ex.length - 1].t
   const maxDeg = Math.max(...ex.map(s => Math.max(Math.abs(s.roll), Math.abs(s.pitch))), 1) * 1.1
   const x = (t: number) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R)
-  const y = (d: number) => T + ((maxDeg - d) / (2 * maxDeg)) * (H - T - B)
+  const y = (d: number) => TL + ((maxDeg - d) / (2 * maxDeg)) * (H - TL - B)
   const line = (pick: (s: typeof ex[0]) => number) =>
     ex.map((s, i) => `${i ? 'L' : 'M'} ${x(s.t).toFixed(1)} ${y(pick(s)).toFixed(1)}`).join(' ')
 
@@ -231,11 +236,19 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
         </g>
       ))}
       <line x1={L} y1={y(0)} x2={W - R} y2={y(0)} stroke={C.muted} strokeWidth={1.2} />
-      <path d={line(s => s.pitch)} fill="none" stroke={C.pitch} strokeWidth={1.2} opacity={0.7} />
-      <path d={line(s => s.roll)} fill="none" stroke={C.roll} strokeWidth={1.8} />
+      {/* Pitch dashed, so the lines differ by more than colour (#855). */}
+      <path data-series="pitch" d={line(s => s.pitch)} fill="none" stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
+      <path data-series="roll" d={line(s => s.roll)} fill="none" stroke={C.roll} strokeWidth={1.8} />
       <text x={L} y={H - 8} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">
         {Math.round((t1 - t0) / 1000)} s at {report.sampleRateHz} Hz
       </text>
+      {/* Keys match their lines; words line up with the session chart's. */}
+      <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
+        <line data-legend data-series="roll" x1={W - R - 118} y1={9} x2={W - R - 100} y2={9} stroke={C.roll} strokeWidth={1.8} />
+        <text x={W - R - 94} y={13} fill={C.muted}>roll</text>
+        <line data-legend data-series="pitch" x1={W - R - 68} y1={9} x2={W - R - 50} y2={9} stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
+        <text x={W - R - 44} y={13} fill={C.muted}>pitch</text>
+      </g>
     </svg>
     </div>
   )
