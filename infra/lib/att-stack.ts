@@ -216,9 +216,10 @@ export class AttStack extends cdk.Stack {
         noncurrentVersionExpiration: cdk.Duration.days(1),
       }, {
         // Records of the sessions web-code links made (apps/web/src/lib/app-signin.ts),
-        // one per link opened. A session lasts at most as long as its refresh
-        // token (refreshTokenValidity, 30 days), so the record is useless after
-        // that. They live under users/{id}/…, so they're tagged on write
+        // one per link opened. The tight bound is RECENT_SIGN_IN_S (10 min);
+        // 30 days, the refresh token's life (refreshTokenValidity), is a safe
+        // ceiling in case Cognito resets auth_time on a refresh. Don't change
+        // refreshTokenValidity to suit this rule. They live under users/{id}/…, so they're tagged on write
         // (LINK_SESSION_TAG) (#853).
         id: 'expire-link-sessions',
         tagFilters: { lifecycle: 'link-session' },

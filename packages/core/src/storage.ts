@@ -121,6 +121,9 @@ export async function putObjectIfAbsent(key: string, body: Buffer | string): Pro
     return true
   } catch (e) {
     const status = (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+    // 412: the key exists. 409: another conditional write to it is in flight.
+    // Both lose, so a claim fails closed: rarely, a good code fails and the
+    // person signs in by hand.
     if (status === 412 || status === 409) return false
     throw e
   }

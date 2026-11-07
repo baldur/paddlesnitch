@@ -55,9 +55,12 @@ export async function redeemWebCode(code: string, now = Date.now()): Promise<{ e
 // auth_time is "now" even though nobody proved who they are just then. So the
 // session it makes is recorded, and never counts as a recent sign-in
 // (security review, 2026-10-25). Kept under users/{id}/, so erasure removes it.
-// Each one is written once and never needed after its session ends: at most
-// 30 days, the refresh token's life (infra). They're tagged, and a bucket
-// lifecycle rule drops them after that (#853); no prefix can match
+// Each one is written once. The tight bound is RECENT_SIGN_IN_S (10 minutes):
+// a session older than that fails hasRecentSignIn anyway, as long as Cognito
+// keeps auth_time across a refresh (unverified on prod). 30 days, the refresh
+// token's life (infra), is the safe ceiling either way: don't shorten
+// refreshTokenValidity to match. They're tagged, and a bucket lifecycle rule
+// drops them after 30 days (#853); no prefix can match
 // users/*/link-sessions/.
 const linkSessionKey = (userId: string, session: string) => `users/${userId}/link-sessions/${sha256(session).toString('hex')}.json`
 

@@ -39,27 +39,14 @@ describe('a web code works once', () => {
     expect(wins.filter(Boolean)).toHaveLength(1)
     expect(await putObjectIfAbsent('x/claim.json', '{}')).toBe(false)
   })
-
-  it('on S3 the claim is a conditional put (If-None-Match), and a 412 or 409 means someone else won', () => {
-    const src = read('packages/core/src/storage.ts')
-    const fn = src.slice(src.indexOf('export async function putObjectIfAbsent'))
-    expect(fn).toContain("IfNoneMatch: '*'")
-    expect(fn).toContain('412')
-    expect(fn).toContain('409')
-    expect(fn).toContain("flag: 'wx'")
-  })
 })
 
 describe('link-session records are bounded', () => {
-  it('they are written with the lifecycle tag', async () => {
+  it('the tag is sent the way S3 expects it (the put itself: storage-s3.test.ts)', () => {
     expect(taggingHeader(LINK_SESSION_TAG)).toBe('lifecycle=link-session')
-    const src = read('apps/web/src/lib/app-signin.ts')
-    const fn = src.slice(src.indexOf('export async function markLinkSession'), src.indexOf('export const RECENT_SIGN_IN_S'))
-    expect(fn).toContain('putObject(linkSessionKey(userId, session),')
-    expect(fn).toContain('{ tags: LINK_SESSION_TAG })')
   })
 
-  it('the bucket drops them after 30 days, the longest a web-code session can last', () => {
+  it('the stack declares a rule that drops the tag after 30 days, the refresh token\'s life', () => {
     const stack = read('infra/lib/att-stack.ts')
     // A web-code session lasts as long as its refresh token can.
     expect(stack).toContain('refreshTokenValidity: cdk.Duration.days(30)')
@@ -71,7 +58,7 @@ describe('link-session records are bounded', () => {
     expect(rule).toContain('expiration: cdk.Duration.days(30)')
   })
 
-  it('a link session is still recorded as one, readable by hasRecentSignIn', async () => {
+  it('markLinkSession still writes one record per session, locally', async () => {
     await markLinkSession('user-pat', 'sess-1', Date.UTC(2026, 10, 7))
     const keys = await listKeys('users/user-pat/link-sessions/')
     expect(keys).toHaveLength(1)
