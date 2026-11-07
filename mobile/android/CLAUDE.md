@@ -243,3 +243,4 @@ time and isn't obvious from the code.
   holding to stop.". Tests pass a fake `LocalHapticFeedback` and step `mainClock` with the finger down. One remembered
   `stopped` flag, set by the hold or the Stop recording action, makes it stop once: the button stays on
   screen until the service posts Stopped, and a tap or a second hold then does nothing (tester, #882).
+- **Web pages open in a Custom Tab, never `LocalUriHandler.openUri`** (#885): `openUri` hands the link to the browser app and the person leaves the app. Use `openTab` (a public page like /terms) or `openInBrowser` (a paddlesnitch.com link the app could catch, or a private tab). Test it with `nextStartedActivity.hasExtra(CustomTabsIntent.EXTRA_SESSION)`: a plain browser intent has no session extra.

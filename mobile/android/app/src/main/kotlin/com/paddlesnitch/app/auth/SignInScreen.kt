@@ -33,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -129,7 +128,6 @@ fun SignInScreen(
     val passwordFocus = remember { FocusRequester() }
     var focusField by remember { mutableStateOf<FocusRequester?>(null) }
     val scope = rememberCoroutineScope()
-    val uri = LocalUriHandler.current
     val context = LocalContext.current
 
     // Asked each time the screen opens: Google can be switched on and off on the server.
@@ -247,7 +245,7 @@ fun SignInScreen(
         if (creating) Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(agreed, { agreed = it }, colors = checkboxColors())
             Text("I agree to the ", fontSize = MaterialTheme.typography.bodyMedium.fontSize)
-            TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
+            TextButton(onClick = { com.paddlesnitch.app.account.openTab(context, "${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
         }
         // Always in the layout, so TalkBack reads each new error.
         Box(Modifier.fillMaxWidth().testTag("signin-error").semantics { liveRegion = LiveRegionMode.Polite }) {

@@ -2,6 +2,7 @@ package com.paddlesnitch.app.auth
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertCountEquals
@@ -116,6 +117,34 @@ class SignInScreenTest {
         compose.onNodeWithText(MADE_WITH_STRAVA).assertExists()
         compose.onNodeWithText("Create account").performClick()
         compose.onNodeWithText(MADE_WITH_STRAVA).assertDoesNotExist()
+    }
+
+    // #885: the Terms open in a Custom Tab over the app, like every other web page, not in the browser app.
+    @Test fun theTermsLinkOnCreateAccountOpensInACustomTab() {
+        show(Reauth(), null)
+        compose.onNodeWithText("Create account").performClick()
+        compose.onNodeWithText("Terms of Service").performScrollTo().performClick()
+        val opened = Shadows.shadowOf(compose.activity).nextStartedActivity
+        assertEquals(com.paddlesnitch.app.BuildConfig.API_BASE_URL + "/terms", opened.data.toString())
+        assertTrue("a Custom Tab, not a plain browser intent", opened.hasExtra(androidx.browser.customtabs.CustomTabsIntent.EXTRA_SESSION))
+    }
+
+    // Back from the Terms comes to the same form, even if Android let the app go meanwhile.
+    @Test fun theFormIsStillFilledInAfterTheTerms() {
+        val restore = androidx.compose.ui.test.junit4.StateRestorationTester(compose)
+        restore.setContent { PaddlesnitchTheme {
+            SignInScreen(api, google = google, googleReturn = null, onGoogleReturnHandled = {},
+                onSignedIn = {}, onCancel = {}, loadOptions = { SignInOptions(google = false, strava = false) })
+        } }
+        compose.onNodeWithText("Create account").performClick()
+        compose.onNode(hasSetTextAction() and hasText("Email")).performTextInput("a@example.com")
+        compose.onNode(hasSetTextAction() and hasText("Display name")).performTextInput("Pat")
+        compose.onNode(androidx.compose.ui.test.isToggleable()).performScrollTo().performClick()
+        compose.onNodeWithText("Terms of Service").performScrollTo().performClick()
+        restore.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("a@example.com").assertExists()
+        compose.onNodeWithText("Pat").assertExists()
+        compose.onNode(androidx.compose.ui.test.isToggleable()).assertIsOn()
     }
 
     @Test fun whenOptionsFailItSaysSoAndCanAskAgain() {
