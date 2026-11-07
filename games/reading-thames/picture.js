@@ -154,6 +154,27 @@ export function clubSvg(which) {
       <path d="M100 52q8 2 16 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/><path d="M4 58q10 -3 20 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
     </svg>`;
   }
+  // Caversham Boat Services from the river: the white boathouse with its
+  // black-and-white timbered gable and balcony, the sign, the two white lions
+  // on the bank and the Union flag (drawn from a photo, owner 2026-11-07).
+  if (which === 'boathouse') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true" data-picture="boathouse">${sky}
+      <circle cx="10" cy="34" r="14" fill="#4d7a3a"/><circle cx="24" cy="26" r="12" fill="#5b8a44"/><circle cx="104" cy="28" r="15" fill="#3f6b33"/><circle cx="116" cy="40" r="12" fill="#4d7a3a"/>
+      <rect y="54" width="120" height="4" fill="#9a9a92"/><rect y="58" width="120" height="22" fill="#4f7f86"/>
+      <rect x="38" y="26" width="44" height="28" fill="#f4f2ec"/>
+      <path d="M34 27L60 11L86 27Z" fill="#232323"/><path d="M40 26L60 14L80 26Z" fill="#f4f2ec"/>
+      <path d="M60 14v12M50 20v6M70 20v6M46 26l14 -9l14 9" stroke="#232323" stroke-width="1.3" fill="none"/>
+      <rect x="36" y="37" width="48" height="2" fill="#232323"/>
+      ${[38, 44, 50, 56, 62, 68, 74, 80].map((x) => `<rect x="${x}" y="33" width="1" height="4" fill="#232323"/>`).join('')}<rect x="36" y="32.5" width="48" height="1" fill="#232323"/>
+      <rect x="49" y="28" width="22" height="5" fill="#ffffff" stroke="#232323" stroke-width="0.6"/><rect x="51" y="29.6" width="18" height="0.8" fill="#c8332b"/><rect x="53" y="31.2" width="14" height="0.6" fill="#232323"/>
+      <rect x="41" y="28.5" width="5" height="4" fill="#33475a"/><rect x="74" y="28.5" width="5" height="4" fill="#33475a"/>
+      <rect x="42" y="42" width="6" height="7" fill="#33475a"/><rect x="72" y="42" width="6" height="7" fill="#33475a"/><rect x="55" y="42" width="10" height="12" fill="#1f5236"/>
+      ${[[49, -1], [71, 1]].map(([x, d]) => `<g stroke="#a9a59a" stroke-width="0.4"><path d="M${x} 52.8q${d * 1} -2.6 ${d * 5} -2.4h${d * 2}v4.1h${-d * 7}z" fill="#fbfaf6"/><path d="M${x} 52.6q${-d * 1.5} -0.4 ${-d * 2} 1" fill="none"/><circle cx="${x + d * 7.4}" cy="49.6" r="2.9" fill="#ece5d2"/><circle cx="${x + d * 8.1}" cy="49.9" r="1.7" fill="#fbfaf6"/><rect x="${Math.min(x + d * 6.4, x + d * 9.4)}" y="52" width="3" height="2.5" fill="#fbfaf6"/></g>`).join('')}
+      <rect x="30" y="18" width="1" height="36" fill="#d8d8d2"/><rect x="31" y="18" width="7" height="5" fill="#2a4fa0"/>
+      <rect x="95" y="20" width="1.2" height="34" fill="#d8d8d2"/><rect x="96.2" y="20" width="11" height="7" fill="#1c3880"/><path d="M96.2 20l11 7M107.2 20l-11 7" stroke="#ffffff" stroke-width="1.4"/><path d="M96.2 23.5h11M101.7 20v7" stroke="#ffffff" stroke-width="2"/><path d="M96.2 23.5h11M101.7 20v7" stroke="#c8332b" stroke-width="1"/>
+      <path d="M6 66q12 -3 24 0q12 3 24 0M70 72q12 -3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
+    </svg>`;
+  }
   if (which === 'speedboat') {
     return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
       <rect y="48" width="120" height="32" fill="#4f7f86"/>

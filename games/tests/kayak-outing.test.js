@@ -369,3 +369,11 @@ test('a bump off the bank stops a hired boat\'s slide', async () => {
   }
   assert.ok(bumped, 'it reached the bank');
 });
+
+test("Hire a boat's card shows the boathouse at Caversham; the launch keeps its own picture", async () => {
+  const { clubSvg } = await import('../reading-thames/picture.js');
+  const boathouse = clubSvg('boathouse');
+  assert.match(boathouse, /data-picture="boathouse"/);
+  assert.notEqual(boathouse, clubSvg('hire'));
+  assert.doesNotMatch(clubSvg('hire'), /data-picture="boathouse"/);
+});

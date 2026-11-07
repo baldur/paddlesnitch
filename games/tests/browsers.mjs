@@ -210,6 +210,8 @@ async function play(c, page, errors) {
         covered: [...document.querySelectorAll('#clubDoors .pin')].filter((p) => { const r = p.getBoundingClientRect(); return r.width && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('#clubCards'); }).map((p) => p.className),
         inside: names('#clubCards .signin-box .card'),
         friends: document.querySelectorAll('#clubCards .friend').length,
+        // Hire a boat's picture is the boathouse at Caversham (the launch keeps its own, in the choice of boats).
+        hirePicture: [...box.querySelectorAll('.card')].find((b) => b.textContent.includes('Hire a boat'))?.querySelector('svg')?.dataset.picture,
       };
     });
     if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
@@ -219,6 +221,7 @@ async function play(c, page, errors) {
     if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
     if (got.last !== 'River cruise' || !got.rightmost) errors.push(`the river cruise isn't last on the right: last ${got.last}, right-most ${got.rightmost}`);
     if (got.covered.length) errors.push(`the guest's cards cover the scene's pins: ${got.covered.join(', ')}`);
+    if (got.hirePicture !== 'boathouse') errors.push(`Hire a boat's picture is ${got.hirePicture}, not the boathouse`);
     const [[rowPin, rowCard], [canoePin, canoeCard]] = got.sides;
     if (!(rowPin < canoePin && rowCard < canoeCard)) errors.push(`the clubs' cards aren't in the order their pins stand: ${JSON.stringify(got.sides)}`);
     // The box and its Sign in on screen, even on a phone on its side; Sign in a full tap target.
