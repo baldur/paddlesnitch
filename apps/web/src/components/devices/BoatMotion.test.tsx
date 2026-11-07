@@ -183,6 +183,25 @@ describe('boat motion charts', () => {
     expect(words(svgs()[1])).toEqual(words(svgs()[0]))
   })
 
+  // #894: "roll" ended where pitch's line key began on Stroke shape, and "pitch"
+  // stopped about 11 px short of the right edge. Android (#893) keeps 8 sp from
+  // a word to the next key and right-aligns "pitch". Plex Mono is 0.6 em wide.
+  it('keeps 8 px between "roll" and pitch\'s key and ends "pitch" at the right edge (they touched)', async () => {
+    atWidth(PHONE_CHART_PX)
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    const ch = 11 * 0.6
+    for (const svg of svgs().slice(0, 2)) {
+      const W = viewBoxWidth(svg)
+      const [rollWord, pitchWord] = [...svg.querySelectorAll('[data-legend] + text')]
+      const pitchKey = svg.querySelector('[data-legend][data-series="pitch"]')!
+      const keyX = Number(pitchKey.getAttribute('x') ?? pitchKey.getAttribute('x1'))
+      const rollEnd = Number(rollWord.getAttribute('x')) + 'roll'.length * ch
+      expect(keyX - rollEnd).toBeGreaterThanOrEqual(8 - 0.01)
+      const pitchEnd = Number(pitchWord.getAttribute('x')) + 'pitch'.length * ch
+      expect(pitchEnd).toBeCloseTo(W - CHART_MARGIN.R, 1)
+    }
+  })
+
   it('keeps each legend in a band above the plot, clear of the tallest bars', async () => {
     atWidth(PHONE_CHART_PX)
     await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)

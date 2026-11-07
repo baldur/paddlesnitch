@@ -329,7 +329,8 @@ Y-axis ticks are `axisTicks`
   largest absolute value (at least 1°) ×1.1. Legend "roll" and "pitch", top
   right, with each word at the same x as on "Through the session". Keys are
   18 pt lines, the same width, dash and colour as their series, 6 pt before
-  their word. X-axis label "<seconds, rounded> s at
+  their word. "pitch" ends at the plot's right edge, and "roll" ends 8 pt
+  before pitch's line key, so there is room for the line keys on both charts. X-axis label "<seconds, rounded> s at
   <sampleRateHz> Hz" (leave out " at … Hz" when `sampleRateHz` is null).
   Accessibility label: "Thirty seconds of roll and pitch at full sample rate".
   Caption: "30 seconds of typical paddling. An even stroke crosses the centre line equally on both sides."
