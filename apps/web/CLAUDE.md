@@ -249,6 +249,7 @@ App code never branches on environment. Only the Cognito SDK endpoint differs:
 
 #### Access control
 
+- **Only CloudFront may call the server (#908):** the proxy's first step refuses (403) a request without CloudFront's `x-origin-verify` header (`src/lib/origin-verify.ts`; setup, rollout and rotation in `infra/CLAUDE.md`). Off when `ORIGIN_VERIFY_SECRETS` is unset, so local dev, vitest and Playwright need nothing. Keep it ahead of every exemption, and keep new route handlers inside the proxy matcher (it skips only `_next/static`, `_next/image`, `favicon.ico`).
 - **Proxy (`src/proxy.ts`)**: cheap cookie-presence check at the edge — does NOT verify the JWT (keeps middleware fast). Redirects to `/signin?next={path}` if absent. Real verification happens in API/page handlers via `getAuthUser()`.
 - Public without login: home (open trials list), leaderboard, upload form (shows sign-in prompt).
 - Admin pages require login.

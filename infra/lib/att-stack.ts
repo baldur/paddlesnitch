@@ -491,6 +491,17 @@ export class AttStack extends cdk.Stack {
     // Compute — OpenNext v4 outputs to server-functions/default
     // ---------------------------------------------------------------------------
 
+    // Only CloudFront may call the server (#908). The function URL below is
+    // public (AWS_IAM + OAC would need every POST to carry a body hash, which
+    // browsers, the apps and the trackers don't send), so CloudFront adds a
+    // secret header on the server origin and src/proxy.ts refuses requests
+    // without it (apps/web/src/lib/origin-verify.ts). The value lives in the
+    // SSM String /att/origin-verify, never in git: "current", or
+    // "current,previous" while rotating. CloudFormation reads it at every
+    // deploy, so a new value reaches CloudFront and the server on the next
+    // deploy. CloudFront sends the first; the server accepts either.
+    const originVerify = ssm.StringParameter.valueForStringParameter(this, '/att/origin-verify')
+
     const serverFn = new lambda.Function(this, 'ServerFn', {
       logRetention: LOG_RETENTION,
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -542,6 +553,14 @@ export class AttStack extends cdk.Stack {
         // not a flag in storage: no route can grant it, so escalating needs a
         // deploy. Unset means nobody, which is the safe default.
         ADMIN_USER_IDS: process.env.ADMIN_USER_IDS ?? '',
+        // The accepted x-origin-verify values (above, #908).
+        ORIGIN_VERIFY_SECRETS: originVerify,
+        // 'report' only warns about requests that didn't come through
+        // CloudFront; 'enforce' refuses them (403). The server Lambda updates
+        // before the distribution in a deploy, so the first deploy must not
+        // enforce: CloudFront isn't sending the header yet. Switch to
+        // 'enforce' once the logs show no origin_verify warnings.
+        ORIGIN_VERIFY_MODE: 'report',
       },
     })
 
@@ -744,8 +763,12 @@ export class AttStack extends cdk.Stack {
     // CloudFront — behaviors match OpenNext v4 output manifest
     // Assets are deployed under _assets/ prefix; origin path translates back
     // ---------------------------------------------------------------------------
+    // Every behaviour that reaches the server uses this one origin (the
+    // default, /plan/data/*), so they all carry the header. CloudFront
+    // overwrites a viewer's own x-origin-verify with this value.
     const serverOrigin = new origins.HttpOrigin(
-      cdk.Fn.select(2, cdk.Fn.split('/', serverUrl.url))
+      cdk.Fn.select(2, cdk.Fn.split('/', serverUrl.url)),
+      { customHeaders: { 'x-origin-verify': cdk.Fn.select(0, cdk.Fn.split(',', originVerify)) } },
     )
 
     const imageOptOrigin = new origins.HttpOrigin(

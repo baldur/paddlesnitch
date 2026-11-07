@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { refuseDirectRequest } from '@/lib/origin-verify'
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // Only CloudFront may call the server (#908, src/lib/origin-verify.ts).
+  // First, before any exemption: it covers pages, tRPC, uploads and the
+  // tracker endpoints alike. Off when ORIGIN_VERIFY_SECRETS is unset (local).
+  if (refuseDirectRequest(req)) {
+    return new NextResponse('Forbidden', { status: 403 })
+  }
 
   // The tracker's claim QR carries an UPPERCASE URL on purpose: all-caps puts it
   // in QR alphanumeric mode, which packs 2 characters per 11 bits and drops the
@@ -76,6 +84,9 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Run on all routes except Next.js internals and static files
+  // Run on all routes except Next.js internals and static files. The
+  // CloudFront check above (#908) skips only these: built files and public
+  // images anyone can fetch through CloudFront anyway (no remote images are
+  // allowed in next.config, so /_next/image can't fetch other sites).
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
