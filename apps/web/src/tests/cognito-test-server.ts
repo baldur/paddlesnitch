@@ -51,7 +51,8 @@ export async function startCognito(port: number): Promise<TestPoolHandle> {
 
   const proc = spawn(
     'node',
-    [require.resolve('cognito-local/lib/bin/start.js')],
+    // Whole, in-order writes of its database file (#901): see the preload.
+    ['--require', require.resolve('./cognito-serial-writes.cjs'), require.resolve('cognito-local/lib/bin/start.js')],
     {
       env: { ...process.env, COGNITO_LOCAL_DEVMODE: '1', PORT: String(port) },
       cwd: dataDir,
