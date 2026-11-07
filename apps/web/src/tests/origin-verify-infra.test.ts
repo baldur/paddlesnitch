@@ -26,6 +26,10 @@ describe('only CloudFront may call the server (#908): the stack', () => {
   it('the server Lambda gets every accepted value and refuses requests without one', () => {
     expect(serverFn).toContain('ORIGIN_VERIFY_SECRETS: originVerify,')
     expect(serverFn).toContain("ORIGIN_VERIFY_MODE: 'enforce',")
+    // Set in exactly one place, not commented out, not overridden later
+    // (e.g. by addEnvironment).
+    expect(stack.match(/ORIGIN_VERIFY_MODE/g)).toHaveLength(1)
+    expect(stack).not.toMatch(/^\s*\/\/.*ORIGIN_VERIFY_MODE/m)
   })
 
   it('every behaviour names one of the known origins; only serverOrigin reaches the server (so carries the header)', () => {

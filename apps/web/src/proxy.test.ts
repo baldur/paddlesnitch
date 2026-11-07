@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import { proxy } from './proxy'
+import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server'
+import { proxy, config } from './proxy'
 import { resetOriginVerifyWarnings } from './lib/origin-verify'
 
 // Build a request with the given method + path and (optionally) an auth cookie.
@@ -139,6 +140,15 @@ describe('only CloudFront may call the server (#908)', () => {
   }
   const refused = (res: Response) => res.status === 403
 
+  it('the proxy (and so the check) runs on every route family; only built files, image resizing and the favicon skip it', () => {
+    const runs = (path: string) => unstable_doesMiddlewareMatch({ config, url: path })
+    for (const [, path] of families) expect(runs(path), path).toBe(true)
+    for (const path of ['/robots.txt', '/games/kayak/', '/_next/data/build/paddles.json'])
+      expect(runs(path), path).toBe(true)
+    for (const path of ['/_next/static/chunks/app.js', '/_next/image?url=%2Flogo.png&w=64&q=75', '/favicon.ico'])
+      expect(runs(path), path).toBe(false)
+  })
+
   it.each(families)('enforced: %s %s is refused without the header or with a wrong one, and passes with it', (method, path, headers) => {
     vi.stubEnv('ORIGIN_VERIFY_SECRETS', 'right-secret')
     vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
@@ -205,15 +215,15 @@ describe('only CloudFront may call the server (#908)', () => {
     expect(String(warn.mock.calls[0][0])).toContain('"refused":false')
   })
 
-  it('enforce without any secret warns once instead of going quietly open', () => {
+  it('enforce without any secret logs an error once (we broke the deploy) instead of going quietly open', () => {
     resetOriginVerifyWarnings()
     vi.stubEnv('ORIGIN_VERIFY_SECRETS', undefined)
     vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(refused(proxy(viewer('GET', '/paddles')))).toBe(false)
     expect(refused(proxy(viewer('GET', '/paddles')))).toBe(false)
-    expect(warn).toHaveBeenCalledTimes(1)
-    expect(String(warn.mock.calls[0][0])).toContain('origin_verify_off')
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(String(error.mock.calls[0][0])).toContain('origin_verify_off')
     resetOriginVerifyWarnings()
   })
 
