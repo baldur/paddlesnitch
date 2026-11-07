@@ -826,6 +826,12 @@ export class AttStack extends cdk.Stack {
         responseHeadersPolicy: securityHeaders,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        // Every viewer header but Host (a function URL answers 403 to any Host
+        // but its own), plus CloudFront's device and location headers. The
+        // server reads only country, region and city from those (#906,
+        // apps/web/src/lib/visitor-location.ts). A custom policy can't drop
+        // Host AND add CloudFront headers, and an allow list is capped at 10
+        // headers, fewer than the app needs: see infra/CLAUDE.md.
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
       additionalBehaviors: {

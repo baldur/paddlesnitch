@@ -21,6 +21,7 @@ export const KEEP = new Set([
   'mode', 'course', 'end', 'secs', 'place', 'swims', 'knocked', 'bumps', 'km', 'from',
   'body', 'hair', 'hat', 'beard', 'aid', 'glasses', 'sleeves', 'boat', 'paddle', 'shape',
   'plays', 'places', 'input', 'gpu',          // game events
+  'country', 'region', 'city', 'ref', 'utm_source', 'utm_medium', 'utm_campaign', // where visits come from (#906)
 ])
 
 const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
@@ -51,7 +52,21 @@ export function cleanPath(path) {
 // older lines the backfill reads, logged before it did.
 const SID = /^[A-Za-z0-9._-]{1,64}$/
 const VALUE = /^[A-Za-z0-9_.,:|$<>()\/[\]-]{1,200}$/
-const looksSafe = (k, v) => k === 'sid' ? SID.test(v) : k === 'os' ? /^[A-Za-z0-9 ._-]{1,40}$/.test(v) : VALUE.test(v)
+// Where visits come from (#906): nothing finer than a city, a referrer only as
+// a host name (never a URL), and the city only on a `visit`, which has no sid.
+// Postcodes, latitude/longitude, metro codes and time zones aren't in KEEP.
+const RULES = {
+  sid: (v) => SID.test(v),
+  os: (v) => /^[A-Za-z0-9 ._-]{1,40}$/.test(v),
+  country: (v) => /^[A-Z]{2}$/.test(v),
+  region: (v) => /^[A-Z0-9]{1,3}$/.test(v),
+  city: (v) => /^[\p{L}\p{M}][\p{L}\p{M} .'’-]{0,59}$/u.test(v),
+  ref: (v) => /^(?=.{1,100}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v),
+  utm_source: (v) => /^[a-z0-9_.-]{1,40}$/.test(v),
+  utm_medium: (v) => /^[a-z0-9_.-]{1,40}$/.test(v),
+  utm_campaign: (v) => /^[a-z0-9_.-]{1,40}$/.test(v),
+}
+const looksSafe = (k, v) => (RULES[k] ?? ((x) => VALUE.test(x)))(v)
 
 /** One log line → the event it carries, or null. The JSON starts at the first `{`. */
 export function eventFromLine(message) {
@@ -66,6 +81,10 @@ export function eventFromLine(message) {
   // A result on a public leaderboard (name, course, time) could be matched to
   // this event; without the tab id that match names nothing else.
   if (o.Event === 'game_play') delete out.sid
+  // A city is kept only on a visit record, and a visit record never has a tab
+  // id or a path: the city must not be joinable to the pages someone viewed.
+  if (o.Event === 'visit') { delete out.sid; delete out.path }
+  else delete out.city
   // To the hour: close enough for use over time, too coarse to line a page
   // view up with a public result or entry made the same minute.
   out.ts = Math.floor(o._aws.Timestamp / 3600000) * 3600000

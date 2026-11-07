@@ -27,6 +27,34 @@ describe('dashboards', () => {
   })
 })
 
+// Where visitors come from (#906).
+describe('visitor location', () => {
+  it('the health dashboard shows page views by country and region, visits by city (fewer than 5 = other), and by source and campaign', () => {
+    expect(dashboards).toContain("table('Page views by country and region', [")
+    expect(dashboards).toContain("'stats count(*) as views, count_distinct(sid) as tabs by country, region',")
+    expect(dashboards).toContain("table('Visits by town or city (fewer than 5 = other)', [")
+    expect(dashboards).toContain("'fields if(n >= 5, concat(city, \", \", country), \"other\") as place',")
+    expect(dashboards).toContain("'stats sum(n) as visits by place',")
+    expect(dashboards).toContain("table('Visits by source and campaign', [")
+    expect(dashboards).toContain("'stats count(*) as visits by source, utm_source, utm_medium, utm_campaign',")
+  })
+
+  // The track beacon (POST /att/api/track) has no behaviour of its own, so it
+  // takes the default one: the server, with the managed policy that adds
+  // CloudFront's location headers, and caching off, so no header is in a cache
+  // key. Only visitor-location.ts reads them (visitor-location.test.ts).
+  it('the server behaviour (which the track beacon takes) gets the location headers, and its cache key is unchanged', () => {
+    const def = stack.slice(stack.indexOf('defaultBehavior: {'), stack.indexOf('additionalBehaviors: {'))
+    expect(def).toContain('origin: serverOrigin,')
+    expect(def).toContain('cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,')
+    expect(def).toContain('originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,')
+    const extra = stack.slice(stack.indexOf('additionalBehaviors: {'), stack.indexOf('// OpenNext v4 assets go under _assets/'))
+    expect(extra).not.toMatch(/'\/att[^']*':/)
+    // No cache policy keys on a location header.
+    expect(stack).not.toMatch(/cloudfront-viewer-/i)
+  })
+})
+
 describe('zero-tolerance alarms fire on the first one in 15 minutes', () => {
   it.each([
     ['ApiErrorsAlarm', 'paddlesnitch-api-errors', "count15('Paddlesnitch/Api', 'ServerErrors')"],

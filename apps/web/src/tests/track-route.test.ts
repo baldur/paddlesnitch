@@ -203,3 +203,89 @@ describe('game events', () => {
     expect(pv).not.toHaveProperty('ts')
   })
 })
+
+// Where visitors come from (#906): country and region on every page view from
+// CloudFront's headers; the city and the source once a visit, on a record
+// without the tab id or the path, so the city can't be joined to pages viewed.
+describe('where visitors come from', () => {
+  const GEO = { 'cloudfront-viewer-country': 'GB', 'cloudfront-viewer-country-region': 'WBK', 'cloudfront-viewer-city': 'Reading' }
+  const send = async (body: unknown, headers: Record<string, string> = GEO) => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await track(new NextRequest('http://x/att/api/track', {
+      method: 'POST', body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', origin: 'https://paddlesnitch.com', ...headers },
+    }))
+    const out = spy.mock.calls.map(c => JSON.parse(c[0] as string))
+    spy.mockRestore()
+    return out
+  }
+  const FIRST = { visit: '1', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring-2027' }
+
+  it('adds country and region to every page view, never the city', async () => {
+    const [a, b] = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att' }, { event: 'pageview', path: '/paddles' }] })
+    for (const pv of [a, b]) {
+      expect(pv).toMatchObject({ Event: 'pageview', sid: 'tab1', country: 'GB', region: 'WBK' })
+      expect(pv).not.toHaveProperty('city')
+    }
+  })
+
+  it("writes one visit record on a tab's first page view: city, country, region and source, with no sid or path", async () => {
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: FIRST }] })
+    const visit = out.find(e => e.Event === 'visit')
+    expect(visit).toMatchObject({ city: 'Reading', country: 'GB', region: 'WBK', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring-2027', platform: 'web' })
+    expect(visit).not.toHaveProperty('sid')
+    expect(visit).not.toHaveProperty('path')
+  })
+
+  it("keeps the visit's city and source off the page view itself", async () => {
+    const [pv] = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: { ...FIRST, campaign: 'betatesters' } }] })
+    expect(pv).toMatchObject({ Event: 'pageview', sid: 'tab1', country: 'GB', campaign: 'betatesters' })
+    for (const k of ['city', 'visit', 'ref', 'utm_source', 'utm_medium', 'utm_campaign']) expect(pv).not.toHaveProperty(k)
+  })
+
+  it('writes no visit record for later page views', async () => {
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att' }, { event: 'pageview', path: '/att', props: { ref: 'google.com' } }] })
+    expect(out.map(e => e.Event)).toEqual(['pageview', 'pageview'])
+  })
+
+  it('writes at most one visit record a request, however many page views say they were first', async () => {
+    const out = await send({ sid: 'tab1', events: Array.from({ length: 5 }, () => ({ event: 'pageview', path: '/att', props: FIRST })) })
+    expect(out.filter(e => e.Event === 'visit')).toHaveLength(1)
+  })
+
+  it("ignores location a client sends: only CloudFront's headers count", async () => {
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: { ...FIRST, country: 'FR', region: 'IDF', city: 'Paris', postal: '75001', lat: '48.85' } }] }, {})
+    expect(out.map(e => e.Event)).toEqual(['pageview', 'visit'])
+    for (const e of out) {
+      for (const k of ['country', 'region', 'city', 'postal', 'lat']) expect(e, `${e.Event}.${k}`).not.toHaveProperty(k)
+    }
+  })
+
+  it('drops a visit record a client sends itself (it would carry the tab id)', async () => {
+    expect(await send({ sid: 'tab1', events: [{ event: 'visit', props: { city: 'Reading' } }] })).toEqual([])
+    expect(await send({ event: 'visit', sid: 'tab1' })).toEqual([])
+  })
+
+  it('takes the source only as a host name and short plain tags: a full URL or free text is dropped', async () => {
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: {
+      visit: '1', ref: 'https://www.google.com/search?q=pat+rowe', utm_source: 'Pat Rowe <pat@example.com>', utm_medium: 'x'.repeat(41), utm_campaign: 'ok',
+    } }] })
+    const visit = out.find(e => e.Event === 'visit')
+    expect(visit).toMatchObject({ city: 'Reading', utm_campaign: 'ok' })
+    for (const k of ['ref', 'utm_source', 'utm_medium']) expect(visit).not.toHaveProperty(k)
+  })
+
+  it('stores nothing finer than a city, even when CloudFront sends it', async () => {
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: FIRST }] }, {
+      ...GEO, 'cloudfront-viewer-postal-code': 'RG1 8AA', 'cloudfront-viewer-latitude': '51.45', 'cloudfront-viewer-longitude': '-0.97',
+      'cloudfront-viewer-metro-code': '1', 'cloudfront-viewer-time-zone': 'Europe/London', 'cloudfront-viewer-address': '203.0.113.5:443',
+    })
+    const text = JSON.stringify(out)
+    for (const v of ['RG1', '51.45', '-0.97', 'Europe/London', '203.0.113.5']) expect(text).not.toContain(v)
+  })
+
+  it('keeps location as plain properties: Event stays the only metric dimension', async () => {
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: FIRST }] })
+    for (const e of out) expect(e._aws.CloudWatchMetrics[0].Dimensions).toEqual([['Event']])
+  })
+})

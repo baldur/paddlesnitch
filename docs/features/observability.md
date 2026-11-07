@@ -99,7 +99,7 @@ It answers two questions: is anything broken right now, and are people using it?
 | Use | Active sessions per day by platform · sign-ups and uploads per day |
 | Apps | Crash count by platform · share of users on the latest app version (once the apps report) |
 | Trackers | Devices active today · crashes today (summary; detail stays on the firmware dashboard) |
-| Web | The widgets that are on `paddlesnitch-app` today: pageviews by path, events by type, campaigns |
+| Web | The widgets that are on `paddlesnitch-app` today: pageviews by path, events by type, campaigns; where visitors come from (country/region, town or city, source and campaign; #906) |
 
 ## What gets recorded
 
@@ -239,12 +239,24 @@ scripts** are sent: an error whose source is another origin (browser
 extensions, third-party scripts), or the browser's opaque `Script error.`, is
 dropped at capture, so the zero-tolerance alarm only hears about our code.
 
+### Where visitors come from (2026-11-07, #906)
+
+Owner's choice, to see where visitors come from when choosing what to build next.
+
+- **Country and region on every page view**, from CloudFront's `CloudFront-Viewer-Country` and `-Country-Region` headers (`apps/web/src/lib/visitor-location.ts`), read on the server, never from what a client sends.
+- **A `visit` record once a tab**, on its first page view: `city`, `country`, `region`, `ref` (the referring site's host name only; nothing for our own site) and `utm_source` / `utm_medium` / `utm_campaign`, with **no `sid` and no `path`**, so the city can't be joined to the pages viewed. The browser marks the first page view (`visit: '1'`, `tt_landed` in sessionStorage); the server writes at most one a request and drops a `visit` sent by a client.
+- **Nothing finer than a city**: no postcode, latitude/longitude, metro code, time zone or IP address is read (the managed origin request policy sends them all; see `infra/CLAUDE.md` for why a custom policy can't narrow it, and `visitor-location.test.ts` for the guard).
+- **Archive**: the transform keeps `country` (2 letters), `region` (≤3), `city` (letters, ≤60, only on a `visit`, whose `sid` and `path` it removes), `ref` (a host name, never a URL) and the utm tags (plain words, ≤40). A city on any other event is stripped.
+- **Known limit**: in the server's own logs (90 days) a visit line and the page view that caused it share the Lambda request id, so someone with log access could join them there. The archive keeps neither the request id nor more than the hour.
+- **Dashboard** (`paddlesnitch-health`): page views by country and region; visits by town or city, where cities with fewer than 5 visits in the range fold into "other" (two `stats` and an `if()` in Logs Insights); visits by source and campaign (`(direct)` when there's no referrer).
+- **Privacy page**: "Usage records" says so; the policy promises an email before new kinds of data, so the PR waits for the owner's call on that.
+
 ### Archive: every analytics event, kept indefinitely (2026-10-31)
 
 Logs go after three months and CloudWatch keeps only counts, so the detail behind every analytics event would otherwise be lost. The owner decided to keep it all, indefinitely, for analysis later. The privacy page says so ("Usage records" and "Error reports"). It can't be erased, so nothing in it may identify anyone: that's enforced twice.
 
 - **Path:** the server Lambda's log group → subscription filter `analytics-archive` (a cheap pre-filter on the word `Event`) → Firehose `paddlesnitch-analytics-archive` → transform Lambda `paddlesnitch-analytics-archive` (`infra/lambdas/analytics-archive`) → bucket `paddlesnitch-analytics-archive`, gzipped, one JSON object per line, under `events/year=YYYY/month=MM/day=DD/`. A file every 15 minutes at most.
-- **What's kept:** everything with an `Event`: pageviews, sign-ins, sign-ups and uploads (no props), campaign events, game events, app opens, crash reports and page errors.
+- **What's kept:** everything with an `Event`: pageviews, visits (#906), sign-ins, sign-ups and uploads (no props), campaign events, game events, app opens, crash reports and page errors.
 - **First line of defence, the track route:** every client event keeps only its own props (`clientEventProps`: the game rules, `campaign` on pageview and campaign_cta, nothing on the rest), its path goes through `publicPath` (every dynamic page is checked by `public-path.test.ts`, which walks `src/app`; only trial and course ids stay) or must be an `app:<screen>`, and `sid` must look like a random id.
 - **Second, the transform:** only known fields (`KEEP`) whose values look like a word, number or code (`looksSafe`: no `@`, no sentences), paths cleaned again (`cleanPath`, the same as `publicPath`; this covers the 90 days of older lines the backfill reads), no error message text, the time rounded down to the hour (`ts`), and no tab id on a game result (`game_play`): a result on a public leaderboard could otherwise be matched to a name, and the tab id would then name the whole visit.
 - **Failures:** a batch the transform can't read, or that would take its answer past Lambda's 6 MB (it gets 0.25 MB at a time), goes to `errors/`: raw, uncleaned lines, so it expires after 30 days. Two alarms email on any failure (`paddlesnitch-analytics-archive-transform`, `-delivery`); Firehose logs to `/aws/kinesisfirehose/paddlesnitch-analytics-archive`.

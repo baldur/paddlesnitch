@@ -218,6 +218,35 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution, alarms
     ], 24),
   )
 
+  // Where visitors come from (#906). Page views carry country and region (from
+  // CloudFront's headers); a tab's first page view also writes a `visit` record
+  // with the city and the source (`ref` = the referring site's host name, and
+  // the utm tags), and no tab id. Cities with fewer than 5 visits in the range
+  // fold into "other": the second stats re-groups the first one's rows.
+  dashboard.addWidgets(
+    table('Page views by country and region', [
+      'filter Event = "pageview" and ispresent(country)',
+      'stats count(*) as views, count_distinct(sid) as tabs by country, region',
+      'sort views desc',
+      'limit 30',
+    ], 8, 8),
+    table('Visits by town or city (fewer than 5 = other)', [
+      'filter Event = "visit" and ispresent(city)',
+      'stats count(*) as n by country, city',
+      'fields if(n >= 5, concat(city, ", ", country), "other") as place',
+      'stats sum(n) as visits by place',
+      'sort visits desc',
+      'limit 30',
+    ], 8, 8),
+    table('Visits by source and campaign', [
+      'filter Event = "visit"',
+      'fields coalesce(ref, "(direct)") as source',
+      'stats count(*) as visits by source, utm_source, utm_medium, utm_campaign',
+      'sort visits desc',
+      'limit 30',
+    ], 8, 8),
+  )
+
   // The games (games/shared/analytics.js): what's played, for how long, how it
   // ends, and which paddlers people make. Never who: sid is a random tab id.
   // Props arrive as strings; secs, knocked and the rest are whole numbers or

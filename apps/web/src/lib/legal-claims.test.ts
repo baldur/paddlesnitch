@@ -138,6 +138,18 @@ describe('analytics claims match the code', () => {
     expect(cookieNotice).not.toMatch(/no analytics/i)
     expect(privacy).not.toMatch(/no analytics/i)
   })
+
+  // #906: the track route records country and region on page views, and the
+  // city and source once a visit, without the tab id.
+  it('says we record roughly where a visit comes from and where it came from, and no IP address for it', () => {
+    const route = read('apps/web/src/app/att/api/track/route.ts')
+    expect(route).toContain('visitorLocation(req.headers)')
+    expect(privacy).toContain('the country, region, and town or city, worked out from your connection')
+    expect(privacy).toContain('We don&apos;t store your IP address for this.')
+    expect(privacy).toContain('The town or city is kept once a visit, without the random ID')
+    expect(privacy).toContain('the site&apos;s name only, and any campaign tags in the link')
+    expect(read('apps/web/src/lib/visitor-location.ts')).not.toMatch(/viewer-address|x-forwarded-for/i)
+  })
 })
 
 // Privacy audit 2026-09: the page said "We set two cookies" while the code set

@@ -51,7 +51,36 @@ describe('eventFromLine', () => {
     const { GAME_EVENT_PROPS } = await import('@paddlesnitch/ui/metrics-events')
     const { KEEP } = await import('../../../../infra/lambdas/analytics-archive/index.mjs')
     for (const rules of Object.values(GAME_EVENT_PROPS)) for (const k of Object.keys(rules)) expect(KEEP.has(k), k).toBe(true)
-    for (const k of ['campaign', 'repeat', 'sid', 'path', 'platform', 'appVersion', 'build', 'type', 'signature', 'frames', 'crashedVersion', 'crashedBuild', 'os']) expect(KEEP.has(k), k).toBe(true)
+    for (const k of ['campaign', 'repeat', 'sid', 'path', 'platform', 'appVersion', 'build', 'type', 'signature', 'frames', 'crashedVersion', 'crashedBuild', 'os', 'country', 'region', 'city']) expect(KEEP.has(k), k).toBe(true)
+    const { VISIT_SOURCE_PROPS } = await import('@paddlesnitch/ui/metrics-events')
+    for (const k of VISIT_SOURCE_PROPS) expect(KEEP.has(k), k).toBe(true)
+  })
+
+  // Where visitors come from (#906), second line of defence.
+  it('keeps a visit record: city, country, region and source, and never a sid or path on it', () => {
+    const e = eventFromLine(line(buildEmf('visit', { sid: 'tab1', path: '/att', city: 'São Paulo', country: 'BR', region: 'SP', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring', platform: 'web' }, 1793469600000)))
+    expect(e).toEqual({ Event: 'visit', city: 'São Paulo', country: 'BR', region: 'SP', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring', platform: 'web', ts: 1793469600000 })
+  })
+
+  it('strips a city from anything but a visit record, so it is never kept with a sid', () => {
+    const e = eventFromLine(line(buildEmf('pageview', { sid: 'tab1', path: '/att', city: 'Reading', country: 'GB', region: 'WBK' }, 1)))
+    expect(e).toEqual({ Event: 'pageview', sid: 'tab1', path: '/att', country: 'GB', region: 'WBK', ts: 0 })
+  })
+
+  it('keeps nothing finer than a city: no postcode, latitude, longitude, metro code, time zone or address', () => {
+    const e = eventFromLine(line(buildEmf('visit', {
+      city: 'Reading', country: 'GB', postal: 'RG1 8AA', postcode: 'RG18AA', zip: '12345', latitude: '51.45', longitude: '-0.97', lat: '51.45', lng: '-0.97',
+      metro: '1', timezone: 'Europe/London', ip: '203.0.113.5',
+    }, 1)))
+    expect(e).toEqual({ Event: 'visit', city: 'Reading', country: 'GB', ts: 0 })
+  })
+
+  it('refuses a full URL as the referrer, and location fields that are not codes or place names', () => {
+    const e = eventFromLine(line(buildEmf('visit', {
+      ref: 'https://www.google.com/search?q=pat', country: 'GBR', region: '51.45', city: 'RG1 8AA', utm_source: 'Pat <pat@example.com>',
+    }, 1)))
+    expect(e).toEqual({ Event: 'visit', ts: 0 })
+    expect(eventFromLine(line(buildEmf('visit', { ref: 'google.com/search' }, 1)))).toEqual({ Event: 'visit', ts: 0 })
   })
 
   it('reads a bare JSON line too (no Lambda prefix)', () => {
