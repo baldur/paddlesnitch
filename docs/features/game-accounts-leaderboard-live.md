@@ -4,7 +4,7 @@
 
 Owner's decisions, 2026-10-24:
 
-- **Sign in for races.** Anyone can paddle practice; the Time Trial Loop, Hasler Div 7-9, Hasler Div 1-6, the leaderboard and live races need a paddlesnitch account. (Since 2026-10-30 every course is on the real river at Reading; the made-up Division 9 river and the point-to-point Reading Thames left the menu, and their leaderboards are no longer shown. `GAME_COURSES` keeps their ids.)
+- **Sign in to play.** Signed out, you can take the river cruise; everything else (the clubs, practice, races, boat hire, the leaderboards and live races) needs a paddlesnitch account (owner, 2026-11-07). (Since 2026-10-30 every course is on the real river at Reading; the made-up Division 9 river and the point-to-point Reading Thames left the menu, and their leaderboards are no longer shown. `GAME_COURSES` keeps their ids.)
 - **Join by link.** One player creates a race and shares a link (or its four-letter code); friends open it and join.
 - **Every race goes through our own relay** (API Gateway WebSocket + one Lambda, state in S3, no database). Not direct phone-to-phone.
 
@@ -30,7 +30,7 @@ API Gateway charges per message, about $1 per million; a phone sends 10 a second
 
 ### Accounts
 
-`games/reading-thames/account.js` asks `GET /api/trpc/me` once (only when served under `/games/`; served on its own there's no API and nothing is gated). Signed out, the race buttons go to `/signin?next=/games/reading-thames/`; practice still works.
+`games/reading-thames/account.js` asks `GET /api/trpc/me` once (only when served under `/games/`; served on its own there's no API and nothing is gated). Signed out, everything but the river cruise goes to `/signin?next=/games/reading-thames/`.
 
 ### Leaderboard
 

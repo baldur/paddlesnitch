@@ -865,8 +865,11 @@ function enterClub() {
   menu.classList.add('sheet');
   document.body.classList.add('walking');
   clubEl.hidden = false;
-  // Its labels and cards wait for the first frame of the scene behind them.
+  // Its labels and cards wait for the first frame of the scene behind them, and
+  // for the site's answer to who's signed in (a guest's bridge is different:
+  // never show the open one first).
   if (!renderer) clubEl.classList.add('waiting');
+  if (!accountKnown) clubEl.classList.add('asking');
   arrive(place);
 }
 function leaveClub() {
@@ -938,20 +941,21 @@ function arrive(place) {
       { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
       { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
-      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true },
+      { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true, mode: 'cruise' },
       { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => { club.hiring = true; arrive('path'); }, hire: true },
       { pin: 'canoe', at: shots.doors.path.club },
       { pin: 'rowing', at: shots.doors.path.rclub },
     ]
     : PLACES[place].doors.map((to) => ({ label: PLACES[place].inside ? 'Back outside' : DOOR_LABELS[to], at: shots.doors[place][to], act: () => go(to), door: true }));
-  // A guest on the bridge: the river cruise first, as it is; the others say
-  // they need an account and go to sign in (the row above the cards says why,
-  // even on a phone on its side, where the cards show only their names).
+  // A guest on the bridge: a card for an open mode (the river cruise) first,
+  // as it is; every other card (a new one too) says it needs an account and
+  // goes to sign in (the row above the cards says why, even on a phone on its
+  // side, where the cards show only their names).
   if (place === 'path' && !hiring && guest()) {
-    const closed = { 'Canoe Club': 'Sign in to paddle here', 'Rowing Club': 'Sign in to row here', [OUTINGS.hire.label]: 'Sign in to hire one' };
     for (const spot of spots) {
-      const why = spot.card && Object.entries(closed).find(([name]) => spot.card.name.endsWith(name))?.[1];
-      if (why) Object.assign(spot, { card: { ...spot.card, line: why }, act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
+      if (!spot.card || !spot.act || OPEN.has(spot.mode)) continue;
+      const why = spot.card.pin === 'canoe' ? 'Sign in to paddle here' : spot.card.pin === 'rowing' ? 'Sign in to row here' : spot.hire ? 'Sign in to hire one' : 'Sign in to play here';
+      Object.assign(spot, { card: { ...spot.card, line: why }, act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
     }
     spots.sort((a, b) => !!b.play - !!a.play);
   }
@@ -966,7 +970,7 @@ function arrive(place) {
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
-  if ((place === 'path' || place === 'club') && !hiring && !account.offline && (place === 'club' || label(club.plan))) {
+  if ((place === 'path' || place === 'club') && !hiring && !account.offline && !guest() && (place === 'club' || label(club.plan))) {
     spots.unshift(
       { friend: { name: 'Invite friends', line: 'Make a live race and send the link' }, act: () => openLive('', 'make') },
       { friend: { name: 'Join a race', line: 'Type the code from the link you were sent' }, act: () => openLive('', 'join') },
@@ -1030,6 +1034,8 @@ function arrive(place) {
       const { picture = '', name, line, pin } = spot.card;
       b.innerHTML = `${picture}<span class="name">${pin ? `<i class="pin ${pin}"></i>` : ''}${name}</span><small>${line}</small>`;
       b.classList.add('closed');
+      // (On a phone on its side the line is hidden: the name alone would hide where it goes.)
+      b.setAttribute('aria-label', `${b.querySelector('.name').textContent}: ${line}`);
       b.addEventListener('click', spot.act);
       clubCards.append(b);
       return { ...spot, el: b };
@@ -1060,15 +1066,20 @@ function arrive(place) {
   if (place === 'club' && !kitChosen) note('New here? Make your paddler in the changing room, then pick a race in the clubhouse');
   // Phones held upright: races are sideways.
   if (place === 'pontoon' && matchMedia('(orientation: portrait) and (pointer: coarse)').matches) note('Turn your phone sideways to race');
-  // Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
-  // (In an erg room, the piece first: Enter or A on arrival starts it rather than leaving.)
-  if (!menu.open) (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  focusFirst();
   club.backToHire = false;
   // On an upright phone the row sits above Back, not on it.
   clubEl.classList.toggle('backable', !clubBack.hidden);
   if (place === 'rchanging') note("You row in an all-in-one, in your top's colour");
   if (place === 'kerg') note(kergBest() ? `Your best 500 m: ${formatTime(kergBest())}` : 'Press left, then right, in turn, to start: arrows, thumbs or triggers');
   if (place === 'erg') note(ergBest() ? `Your best 500 m: ${formatTime(ergBest())}` : 'Press both arrows, thumbs or triggers together for each stroke');
+}
+// Keyboard focus to the first thing to tap here (the door you used is gone), unless a sheet opened.
+// (In an erg room, the piece first: Enter or A on arrival starts it rather than leaving.)
+// Again when the labels and cards first show: a browser drops focus on a hidden button.
+function focusFirst() {
+  if (menu.open || clubEl.classList.contains('waiting') || clubEl.classList.contains('asking')) return;
+  (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
 }
 // The erg room: a 500 m on your erg, the rower on the next one keeping a
 // steady 2:08. Both sides together for a stroke; the monitor shows how it's going.
@@ -1595,7 +1606,8 @@ function clubGamepad(pressed) {
 // --- account and leaderboards ---------------------------------------------------
 
 let account = { user: null, offline: true }; // until the site answers
-const whoami = whoAmI().then((a) => { account = a; }); // (asked at once: a race picked before it answers waits for it)
+let accountKnown = false;
+const whoami = whoAmI().then((a) => { account = a; accountKnown = true; }); // (asked at once: a race picked before it answers waits for it)
 
 function link(text, href) {
   const a = document.createElement('a');
@@ -2511,7 +2523,10 @@ function render(time) {
   list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle, meshes.swimmer);
   if (shot) list.push(...placeClub());
   renderer.draw(frameData, list);
-  if (shot) clubEl.classList.remove('waiting');
+  if (shot && clubEl.classList.contains('waiting')) {
+    clubEl.classList.remove('waiting');
+    focusFirst();
+  }
   if (shot) placeDoors();
   placeCoach();
 }
@@ -3009,8 +3024,16 @@ toMenu();
 whoami.then(() => {
   showAccount();
   // The walk's buttons that need the site (racing friends, the leaderboards) once we know it's there.
-  // A guest back from last time inside a club starts on the bridge: the clubs need an account.
-  if (club && !club.to) arrive(guest() ? 'path' : club.place);
+  // A guest starts on the bridge: the clubs need an account. (Back from last
+  // time inside one, or walked in before the site answered: even mid-walk.)
+  if (club && guest()) {
+    club.to = null;
+    club.hiring = false;
+    if (menu.open) menu.close('');
+    arrive('path');
+  } else if (club && !club.to) arrive(club.place);
+  clubEl.classList.remove('asking');
+  if (club) focusFirst();
   if (account.user) loadKit();
   // Opened from a live race's link.
   if (HASH.get('race') && state === 'menu') {
