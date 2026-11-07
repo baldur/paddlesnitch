@@ -29,15 +29,12 @@ export async function readConfirmationCode(email: string): Promise<string | null
   if (!dbDir || !poolId) return null
 
   const dbPath = join(dbDir, '.cognito', 'db', `${poolId}.json`)
-  // cognito-local returns the API response BEFORE it finishes writing the
-  // ConfirmationCode to its db file, so we poll. Two distinct "not ready yet"
-  // cases both retry (this was the flake — the old loop returned null on the
-  // second one without retrying):
-  //   1. read/parse failure — file truncated mid-rewrite.
-  //   2. user present but ConfirmationCode not written yet.
-  // Only after exhausting all attempts do we conclude there's genuinely no code.
-  // ~1s budget (20 × 50ms) so a slow async write under parallel test load
-  // doesn't surface as a spurious null.
+  // The test cognito-local writes this file whole and in order
+  // (cognito-serial-writes.mjs, #901), and answers only after its write is
+  // done, so the first read normally finds the code; the retries are only a
+  // margin. Without the preload, overlapping writes left the file half-written
+  // for seconds at a time and these reads found no code. Don't paper over a
+  // missing code by waiting longer: find out why the file was wrong.
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
       const raw = await readFile(dbPath, 'utf8')

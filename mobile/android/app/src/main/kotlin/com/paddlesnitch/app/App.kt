@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.ui.graphics.toArgb
 import com.paddlesnitch.app.account.AccountScreen
 import com.paddlesnitch.app.account.TermsScreen
 import com.paddlesnitch.app.account.clearExport
@@ -44,6 +45,7 @@ import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SameOutingList
 import com.paddlesnitch.app.api.SignedOut
+import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.PrefsGoogleVerifierStore
@@ -221,7 +223,7 @@ fun screenFor(signingIn: Boolean, signedIn: Boolean, needsTerms: Boolean, settin
 }
 
 @Composable
-private fun MyPaddles(
+internal fun MyPaddles(
     api: Api, openPaddle: String?, onOpened: () -> Unit, added: Int, pick: () -> Unit, adding: Boolean,
     onSignedOut: () -> Unit, onAccount: () -> Unit, onTrackers: () -> Unit, modifier: Modifier,
     /** The way to Record (WithRecording). */
@@ -231,15 +233,22 @@ private fun MyPaddles(
     val context = LocalContext.current
     val sameOuting = remember(api) { sameOutingCalls(api) { url, private -> openInBrowser(context, url, private) } }
     var list by remember { mutableStateOf<PaddleList?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    // Our words, never the exception's (#892): it can name codes and vendors. [failed]: the first load
+    // failed, with the words to show under ours ("" for none). [refreshFailed]: a later one failed, so the list stays (as iOS).
+    var failed by remember { mutableStateOf<String?>(null) }
+    var refreshFailed by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     // A phone recording that reached the server is a paddle now: load the list again.
     val uploaded by com.paddlesnitch.app.record.Uploads.sent.collectAsState()
     LaunchedEffect(attempt, added, uploaded) {
-        error = null
+        failed = null
         runCatching { api.paddles() }
-            .onSuccess { list = it }
-            .onFailure { if (it is SignedOut) onSignedOut() else error = it.message }
+            .onSuccess { list = it; refreshFailed = null }
+            .onFailure {
+                if (it is SignedOut) onSignedOut()
+                else if (list == null) failed = it.shown("")
+                else refreshFailed = it.shown("")
+            }
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
@@ -247,6 +256,7 @@ private fun MyPaddles(
     // Record, then each recording that isn't a paddle yet (README § After Stop).
     val notice: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            refreshFailed?.let { Text("Couldn’t refresh your paddles. $it".trimEnd(), color = PsColor.red, fontSize = 14.sp) }
             recordEntry?.invoke()
             if (accountId != null) com.paddlesnitch.app.record.UploadLines(accountId, onReport)
         }
@@ -263,8 +273,9 @@ private fun MyPaddles(
                 account()
             }
         })
-        error != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(error!!, color = PsColor.red)
+        failed != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Couldn’t load your paddles", color = PsColor.red)
+            failed?.takeIf { it.isNotEmpty() }?.let { Text(it, color = PsColor.muted) }
             Button(onClick = { attempt++ }) { Text("Try again") }
             account()
         }
@@ -317,7 +328,16 @@ internal fun sameOutingCalls(api: Api, open: (url: String, private: Boolean) -> 
 
 /** A Custom Tab in [browser], private when [ephemeral] (only where the browser supports it). */
 internal fun customTab(browser: String, ephemeral: Boolean): CustomTabsIntent =
-    CustomTabsIntent.Builder().setEphemeralBrowsingEnabled(ephemeral).build().apply { intent.setPackage(browser) }
+    tabBuilder().setEphemeralBrowsingEnabled(ephemeral).build().apply { intent.setPackage(browser) }
+
+/**
+ * Every Custom Tab starts here: the app's dark bar (PsColor.bg) whatever the phone's theme, as iOS tints
+ * Safari (#889). Custom Tabs can't tint the controls; the browser picks icons that read on the bar.
+ */
+internal fun tabBuilder(): CustomTabsIntent.Builder = CustomTabsIntent.Builder()
+    .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+    .setDefaultColorSchemeParams(androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+        .setToolbarColor(PsColor.bg.toArgb()).setNavigationBarColor(PsColor.bg.toArgb()).build())
 
 /**
  * A paddlesnitch.com page the app has no screen for. The browser is named, since

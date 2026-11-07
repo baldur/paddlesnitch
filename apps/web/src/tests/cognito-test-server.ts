@@ -3,6 +3,7 @@ import { mkdtemp, rm, mkdir, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createRequire } from 'module'
+import { pathToFileURL } from 'url'
 import {
   CognitoIdentityProviderClient,
   CreateUserPoolCommand,
@@ -51,7 +52,8 @@ export async function startCognito(port: number): Promise<TestPoolHandle> {
 
   const proc = spawn(
     'node',
-    [require.resolve('cognito-local/lib/bin/start.js')],
+    // Whole, in-order writes of its database file (#901): see the preload.
+    ['--import', pathToFileURL(require.resolve('./cognito-serial-writes.mjs')).href, require.resolve('cognito-local/lib/bin/start.js')],
     {
       env: { ...process.env, COGNITO_LOCAL_DEVMODE: '1', PORT: String(port) },
       cwd: dataDir,

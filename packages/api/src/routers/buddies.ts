@@ -75,7 +75,7 @@ export const buddiesRouter = router({
   // Not a buddy, or sharing off: NOT_FOUND, never a hint either way.
   paddles: protectedProcedure.input(userId).query(async ({ ctx, input }) => {
     if (input.userId === ctx.user.id || !(await canViewPaddle(ctx.user.id, input.userId, {}))) throw new TRPCError({ code: 'NOT_FOUND' })
-    const summaries = await listSessionSummaries(input.userId)
+    const summaries = await listSessionSummaries(input.userId, { writeBack: false })   // never write a buddy's files
     return {
       name: await nameOf(input.userId),
       paddles: summaries.filter(s => !s.hiddenFromBuddies).map(s => ({
