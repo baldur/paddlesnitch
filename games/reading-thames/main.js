@@ -1585,8 +1585,10 @@ function showAccount() {
 }
 
 // A finished race's time goes on the course's leaderboard (signed in only).
-async function submitResult(time) {
-  els.ranked.textContent = '';
+// If it doesn't get there, Try again sends the same time again (Go again
+// would race again, and still not save it); the answer then takes focus.
+async function submitResult(time, retry = false) {
+  if (!retry) els.ranked.textContent = '';
   if (!account.user) {
     if (!account.offline && !mode.row) els.ranked.replaceChildren(link('Sign in', SIGN_IN), ' to put your time on the leaderboard.');
     return;
@@ -1596,8 +1598,13 @@ async function submitResult(time) {
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
       : rank ? `Your best on the ${mode.label} leaderboard is ${ordinal(rank)}.` : '';
   } catch {
-    els.ranked.textContent = "Couldn't reach the leaderboard. Please try again.";
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.textContent = 'Try again';
+    again.addEventListener('click', () => { again.disabled = true; submitResult(time, true); });
+    els.ranked.replaceChildren("Couldn't save your time to the leaderboard. ", again);
   }
+  if (retry) (els.ranked.querySelector('button') ?? els.ranked).focus();
 }
 
 // The leaderboards page: the top ten on each course, with the boat each time
@@ -1606,7 +1613,11 @@ const SHOW = 10;
 const boatName = (hull) => (isScullHull(hull) ? scullHullName(hull) : boatById(hull)?.name ?? HULLS[hull]?.name ?? hull);
 // Which boards the leaderboards page shows: the canoe club's courses, or the rowing club's.
 let boardModes = null;
-async function showBoards() {
+// Try again reloads them, then puts focus on the first board (its button
+// went with the reload); while loading, another tap does nothing.
+async function showBoards(retry = false) {
+  if (els.boardlist.getAttribute('aria-busy') === 'true') return;
+  els.boardlist.setAttribute('aria-busy', 'true');
   els.boardlist.replaceChildren(make('<p>Loading…</p>'));
   const rowing = !!boardModes;
   const boards = await Promise.all((boardModes ?? Object.values(MODES)).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
@@ -1621,27 +1632,35 @@ async function showBoards() {
       top.push(p);
     }
   }
-  const again = () => {
+  const again = (m) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = 'Try again';
-    b.addEventListener('click', showBoards);
+    if (m) b.setAttribute('aria-label', `Try again: ${m.label}`);
+    b.addEventListener('click', () => { b.disabled = true; showBoards(true); });
     return b;
+  };
+  const done = (focus) => {
+    els.boardlist.setAttribute('aria-busy', 'false');
+    if (retry) focus?.focus();
   };
   // None of them loaded: one message, and a way to try again.
   if (boards.every(([, b]) => !b)) {
     const p = make(`<p>Couldn't load the ${rowing ? 'honours board' : 'leaderboards'}. </p>`);
-    p.append(again());
-    return els.boardlist.replaceChildren(...top, p);
+    const b = again();
+    p.append(b);
+    els.boardlist.replaceChildren(...top, p);
+    return done(b);
   }
   els.boardlist.replaceChildren(...top, ...boards.map(([m, b]) => {
     const div = document.createElement('div');
     const title = document.createElement('h4');
     title.textContent = m.label;
+    title.tabIndex = -1; // focus lands here after Try again
     div.append(title);
     if (!b?.top.length) {
       // One that didn't load: say so, and a way to try again (the same as when none did).
-      if (!b) div.append("Couldn't load this course's times. ", again());
+      if (!b) div.append("Couldn't load this course's times. ", again(m));
       else div.append(rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
       return div;
     }
@@ -1661,6 +1680,7 @@ async function showBoards() {
     div.append(table);
     return div;
   }));
+  done(els.boardlist.querySelector('h4'));
 }
 
 // --- live races -------------------------------------------------------------------

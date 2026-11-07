@@ -308,7 +308,7 @@
 
     <section id="stepBoards" class="step" hidden>
       <h3>Leaderboards</h3>
-      <div id="boardlist"><p>Loading…</p></div>
+      <div id="boardlist" aria-live="polite"><p>Loading…</p></div>
       <p class="step-buttons"><button type="button" class="back" data-step="home">&larr; Back</button></p>
     </section>
 
@@ -367,8 +367,8 @@
     <h2 id="result"></h2>
     <p id="details"></p>
     <ol id="standings"></ol>
-    <p id="ranked"></p>
     <form method="dialog">
+      <p id="ranked" aria-live="polite" tabindex="-1"></p>
       <button value="again" autofocus>Go again</button>
       <button value="boards" hidden>Leaderboards</button>
       <button value="menu">&larr; Back</button>
