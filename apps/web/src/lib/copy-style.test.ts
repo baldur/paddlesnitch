@@ -15,9 +15,10 @@ const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib'
 // Lists of words to keep OUT of what users read: the AI summary's banned
 // phrases (voice-lists.ts) name "journey" and the like so the check can reject them.
 const NOT_COPY = ['packages/analysis/src/voice-lists.ts']
-// The site is TypeScript; the games (#851) are plain .html and .js, with their
-// browser and Node checks in games/tests, which no player reads.
-const COPY_FILE = /\.(ts|tsx|js|html)$/
+// The site is TypeScript; the games (#851) are plain .html, .js, .mjs and
+// .css (its content: text), with their browser and Node checks in games/tests,
+// which no player reads.
+const COPY_FILE = /\.(ts|tsx|js|mjs|html|css)$/
 const NOT_COPY_DIRS = ['games/tests']
 
 function files(dir: string): string[] {
@@ -33,18 +34,29 @@ function files(dir: string): string[] {
 // Code and visible text only: drop // and /* */ comments, JSX {/* */} and
 // HTML <!-- -->, in one pass so whichever opens first wins: a `/*` inside a
 // `//` comment ("courses/*.json") once blanked 2,950 lines of the game's
-// main.js, up to the next `*/`. Newlines are kept, so line numbers stay right.
-// A `//` counts only at a line's start or after a space, not in "https://".
+// main.js, up to the next `*/`. A quoted string is text and kept whole, so a
+// '/*' or '//' inside one hides nothing. Newlines are kept, so line numbers
+// stay right. A `//` counts only at a line's start or after a space, not in
+// "https://".
+const STRING = /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/.source
+const COMMENT = /(^|\s)\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/.source
 export function withoutComments(src: string): string {
-  return src.replace(/(^|\s)\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/gm, (m, before = '') => before + m.slice(before.length).replace(/[^\n]/g, ''))
+  return src.replace(new RegExp(`(${STRING})|${COMMENT}`, 'gm'), (m, str, before = '') =>
+    str ? m : before + m.slice(before.length).replace(/[^\n]/g, ''))
 }
 
-// Lines that match a phrase but aren't words anyone reads, each named: file,
-// then the line's code. Never a whole file or folder.
-const NOT_WORDS: [string, RegExp][] = [
+// Lines that match a phrase but aren't words anyone reads, each named: the
+// file, the phrase it excuses, and the whole line (trimmed, anchored). It
+// excuses only that phrase on that line: anything added to the line, or any
+// other banned phrase on it, still fails. Never a whole file or folder.
+const NOT_WORDS: [string, RegExp, RegExp][] = [
   // The Screen Orientation API's own name, when the game leaves full screen.
-  ['games/reading-thames/main.js', /screen\.orientation\?\.unlock\?\.\(\)/],
+  ['games/reading-thames/main.js', /unlock/g, /^else screen\.orientation\?\.unlock\?\.\(\);$/],
 ]
+// The line as the check sees it: an excused phrase taken out of an excused line.
+function excused(f: string, line: string): string {
+  return NOT_WORDS.reduce((l, [nf, phrase, whole]) => (nf === f && whole.test(line.trim()) ? l.replace(phrase, '') : l), line)
+}
 
 // [phrase, why it's banned]
 const BANNED: [RegExp, string][] = [
@@ -74,7 +86,7 @@ describe('site copy follows the style guide', () => {
 
   it.each(BANNED)('nothing says %s', (re, why) => {
     const hits = sources.flatMap(({ f, text }) =>
-      text.split('\n').flatMap((line, i) => (re.test(line) && !NOT_WORDS.some(([nf, ok]) => nf === f && ok.test(line)) ? [`${f}:${i + 1}: ${line.trim().slice(0, 100)}`] : [])))
+      text.split('\n').flatMap((line, i) => (re.test(excused(f, line)) ? [`${f}:${i + 1}: ${line.trim().slice(0, 100)}`] : [])))
     expect(hits, why).toEqual([])
   })
 
@@ -96,8 +108,20 @@ describe('site copy follows the style guide', () => {
     expect(withoutComments(src).split('\n')).toEqual(['', "const a = 'https://x.com/a'", "show('Could not join')", '', ' go()'])
   })
 
-  it('a named exception covers its line in its file only', () => {
-    expect(NOT_WORDS.every(([f]) => sources.some(s => s.f === f))).toBe(true)
+  it('a /* inside a string is text, and hides nothing after it', () => {
+    const src = ["show('a /* b')", "show('Could not join')", 'const c = "x // y"', "go() // see */"].join('\n')
+    expect(withoutComments(src).split('\n')).toEqual(["show('a /* b')", "show('Could not join')", 'const c = "x // y"', 'go() '])
+  })
+
+  it('each exception matches exactly one line of its file (a stale one fails), and excuses only its phrase there', () => {
+    for (const [f, , whole] of NOT_WORDS) {
+      const text = sources.find(s => s.f === f)?.text ?? ''
+      expect(text.split('\n').filter(l => whole.test(l.trim())).length, `${f} ${whole}`).toBe(1)
+    }
+    const [f] = NOT_WORDS[0]
+    expect(excused(f, '  else screen.orientation?.unlock?.();')).not.toMatch(/unlock/)
+    expect(excused(f, "  else screen.orientation?.unlock?.(); show('Unlock your journey')")).toMatch(/journey/)
+    expect(excused('games/shared/audio.js', 'else screen.orientation?.unlock?.();')).toMatch(/unlock/)
   })
 })
 
