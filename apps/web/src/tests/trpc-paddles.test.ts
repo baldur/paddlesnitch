@@ -11,10 +11,19 @@ import { createCaller } from '@paddlesnitch/api'
 
 const USER = { id: 'user-1', email: 'p@example.com', displayName: 'Pat' }
 
-async function writeSession(dir: string, id: string, s: object) {
+// A saved paddle; the result fields these tests don't care about filled in.
+async function writeSession(dir: string, id: string, s: Record<string, unknown> & { result?: object }) {
   const p = path.join(dir, 'analysis', USER.id, id)
   await fs.mkdir(p, { recursive: true })
-  await fs.writeFile(path.join(p, 'session.json'), JSON.stringify(s))
+  const full = s.result ? { ...s, result: { surges: [], avgDps: null, ...s.result } } : s
+  await fs.writeFile(path.join(p, 'session.json'), JSON.stringify(full))
+}
+
+// One boat heading north from 09:00 on 6 Oct at 2.2 m/s, recorded from `at`
+// for `seconds`, one point a second: where it is depends on the clock.
+function boatTrack(at: string, seconds: number, lng = -0.93, sr: number | null = null) {
+  const since = (Date.parse(at) - Date.parse('2026-10-06T09:00:00Z')) / 1000
+  return Array.from({ length: seconds }, (_, t) => ({ t, lat: 51.46 + (since + t) * 2.2 / 111_000, lng, speed: 2.2, sr, dps: null }))
 }
 
 let dir: string
@@ -65,7 +74,7 @@ describe('paddles.list', () => {
   it('shows one outing recorded by the tracker and Strava once, the tracker\'s card leading', async () => {
     const outing = (id: string, type: string, at: string) => writeSession(dir, id, {
       id, paddledAt: at, source: { type },
-      result: { distanceKm: 4, durationS: 1200, cruiseSpeed: 3.1, avgSR: 60, points: [{ lat: 51.1, lng: -0.9 }, { lat: 51.2, lng: -0.8 }] },
+      result: { distanceKm: 4, durationS: 1199, cruiseSpeed: 3.1, avgSR: 60, points: boatTrack(at, 1200) },
     })
     await outing('watch', 'strava', '2026-09-01T10:00:30.000Z')
     await outing('tracker', 'device', '2026-09-01T10:00:00.000Z')
@@ -81,7 +90,7 @@ describe('paddles.list', () => {
   it('marks a phone paddle and a phone in the same outing, so the apps can say Phone (#789)', async () => {
     const outing = (id: string, source: object, at: string) => writeSession(dir, id, {
       id, paddledAt: at, source,
-      result: { distanceKm: 4, durationS: 1200, cruiseSpeed: 3.1, avgSR: 60, points: [{ lat: 51.1, lng: -0.9 }, { lat: 51.2, lng: -0.8 }] },
+      result: { distanceKm: 4, durationS: 1199, cruiseSpeed: 3.1, avgSR: 60, points: boatTrack(at, 1200) },
     })
     await outing('phone', { type: 'device', deviceId: 'P0123456789ABCDEF', deviceSessionId: 's1' }, '2026-09-01T10:00:00.000Z')
     await outing('watch', { type: 'strava' }, '2026-09-01T10:00:30.000Z')
@@ -228,17 +237,15 @@ describe('paddles.byRecording', () => {
 
 describe('the same outing from two sources (paddles.sameOuting, paddles.compareOuting)', () => {
   // One boat heading north from 09:00 at 2.2 m/s, recorded from `at`.
-  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number; deviceId?: string } = {}) => {
-    const since = (Date.parse(at) - Date.parse('2026-10-06T09:00:00Z')) / 1000
-    return writeSession(dir, id, {
+  const outing = (id: string, at: string, seconds: number, type: string, opts: { lng?: number; sr?: number; deviceId?: string } = {}) =>
+    writeSession(dir, id, {
       id, userId: USER.id, paddledAt: at, source: { type, ...(opts.deviceId ? { deviceId: opts.deviceId } : {}) },
       result: {
         durationS: seconds - 1, distanceKm: seconds * 2.2 / 1000, cruiseSpeed: 2.2, avgSR: opts.sr ?? null,
         surges: [], stops: [], sets: [],
-        points: Array.from({ length: seconds }, (_, t) => ({ t, lat: 51.46 + (since + t) * 2.2 / 111_000, lng: opts.lng ?? -0.93, speed: 2.2, sr: opts.sr ?? null, dps: null })),
+        points: boatTrack(at, seconds, opts.lng, opts.sr ?? null),
       },
     })
-  }
 
   it('finds the watch recording of a tracker paddle, and not other paddles', async () => {
     await outing('t-rec1', '2026-10-06T09:00:00Z', 1200, 'device', { sr: 56 })
@@ -264,6 +271,34 @@ describe('the same outing from two sources (paddles.sameOuting, paddles.compareO
 
   it("can't look at someone else's paddle", async () => {
     await expect(createCaller({ user: USER }).paddles.sameOuting({ id: 'not-mine' })).rejects.toThrow()
+  })
+
+  // #852: the list grouped by time alone, so a card said "Also recorded by the
+  // phone" while the paddle page had no link. One rule now: time AND place.
+  it('the list and the paddle page agree: at the same time on another river is not the same outing', async () => {
+    await outing('t-rec1', '2026-10-06T09:00:00Z', 1200, 'device', { deviceId: 'A1B2C3D4' })
+    await outing('p-rec1', '2026-10-06T09:00:30Z', 1100, 'device', { deviceId: 'P0123456789ABCDEF', lng: -0.9 })   // ~2 km east
+    const caller = createCaller({ user: USER })
+    const { cards } = await caller.paddles.list()
+    expect(cards.map(c => [c.id, c.sameOuting])).toEqual([['p-rec1', undefined], ['t-rec1', undefined]])
+    expect((await caller.paddles.sessions()).map(s => s.sameOuting)).toEqual([undefined, undefined])
+    expect(await caller.paddles.sameOuting({ id: 't-rec1' })).toEqual([])
+    expect(await caller.paddles.sameOuting({ id: 'p-rec1' })).toEqual([])
+    expect((await caller.paddles.compareOuting({ a: 't-rec1', b: 'p-rec1' })).same).toBe(false)
+  })
+
+  it('the list and the paddle page agree: two recordings of one boat are one outing', async () => {
+    await outing('t-rec1', '2026-10-06T09:00:00Z', 1200, 'device', { deviceId: 'A1B2C3D4' })
+    await outing('p-rec1', '2026-10-06T09:00:30Z', 1100, 'device', { deviceId: 'P0123456789ABCDEF' })
+    const caller = createCaller({ user: USER })
+    const { cards } = await caller.paddles.list()
+    expect(cards.map(c => [c.id, c.sameOuting])).toEqual([['t-rec1', [{ id: 'p-rec1', sourceType: 'device', phone: true }]]])
+    const sessions = await caller.paddles.sessions()
+    expect(sessions.find(s => s.id === 't-rec1')?.sameOuting).toEqual([{ id: 'p-rec1', sourceType: 'device', phone: true }])
+    expect(sessions.some(s => 'places' in s)).toBe(false)                // the minute-by-minute places stay on the server
+    expect((await caller.paddles.sameOuting({ id: 't-rec1' })).map(o => o.id)).toEqual(['p-rec1'])
+    expect((await caller.paddles.sameOuting({ id: 'p-rec1' })).map(o => o.id)).toEqual(['t-rec1'])
+    expect((await caller.paddles.compareOuting({ a: 't-rec1', b: 'p-rec1' })).same).toBe(true)
   })
 })
 

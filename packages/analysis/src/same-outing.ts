@@ -3,32 +3,23 @@
 // with a comparison: for QA ("does the tracker agree with my watch?") and for
 // anyone who carries both.
 //
-// Pure. Works from the saved paddles' own points (`t` = seconds from the
-// paddle's start, so paddledAt + t is the clock time), so no stored link and
-// no backfill: it's worked out when a paddle is opened.
+// Pure. Whether two paddles are one outing is `sameOuting` in
+// @paddlesnitch/core/paddles (one rule for the list, the paddle page and
+// Compare), read from `outingPlaces`: where the paddle was at each whole minute
+// of clock time, kept in its summary. `t` = seconds from the paddle's start,
+// so paddledAt + t is the clock time.
 import { haversine } from '@paddlesnitch/timing/geo'
 import type { AnalysisPoint } from './analysis'
-import { isMotionOnly } from '@paddlesnitch/core/paddles'
+import {
+  isMotionOnly, sameOuting, timeOverlapShare, MIN_TIME_OVERLAP, MIN_AGREEMENT, CORRIDOR_M, PLACES_EVERY_S,
+  type OutingPlaces,
+} from '@paddlesnitch/core/paddles'
+
+export { timeOverlapShare, MIN_TIME_OVERLAP, MIN_AGREEMENT, CORRIDOR_M }
 
 type Paddle = { paddledAt: string; result: { durationS: number; points: AnalysisPoint[]; noGps?: unknown } }
-type Window = { paddledAt: string; durationS: number }
-
-// The shorter paddle must lie at least this much inside the other in time...
-export const MIN_TIME_OVERLAP = 0.5
-// ...and at least this share of the moments both recorded must put the two
-// within CORRIDOR_M of each other (the corridor `similar.ts` uses for sections).
-export const MIN_AGREEMENT = 0.7
-export const CORRIDOR_M = 40
 
 const startMs = (p: { paddledAt: string }) => Date.parse(p.paddledAt)
-
-/** Seconds both paddles were recording, over the shorter one's duration. */
-export function timeOverlapShare(a: Window, b: Window): number {
-  const from = Math.max(startMs(a), startMs(b))
-  const to = Math.min(startMs(a) + a.durationS * 1000, startMs(b) + b.durationS * 1000)
-  const shorter = Math.min(a.durationS, b.durationS)
-  return shorter > 0 ? Math.max(0, to - from) / 1000 / shorter : 0
-}
 
 /** Where a paddle was at clock time `ms`, between its two nearest points. */
 function positionAt(p: Paddle, ms: number): { lat: number; lng: number } | null {
@@ -67,13 +58,28 @@ export function trackGap(a: Paddle, b: Paddle, everyS = 10): OutingGap | null {
   }
 }
 
-/** Two paddles are the same outing: they overlap in time and in place. */
+const round5 = (x: number) => Math.round(x * 1e5) / 1e5
+
+/** Where the paddle was at each whole minute of clock time it recorded
+ *  (`OutingPlaces`): ~2 KB for two hours, small enough for its summary. */
+export function outingPlaces(p: Paddle): OutingPlaces {
+  const pts = p.result.points
+  if (pts.length < 2) return { from: 0, pts: [] }
+  const step = PLACES_EVERY_S
+  const from = Math.ceil((startMs(p) / 1000 + pts[0].t) / step) * step
+  const to = Math.floor((startMs(p) / 1000 + pts[pts.length - 1].t) / step) * step
+  const out: [number, number][] = []
+  for (let s = from; s <= to; s += step) {
+    const at = positionAt(p, s * 1000) ?? pts[s === from ? 0 : pts.length - 1]
+    out.push([round5(at.lat), round5(at.lng)])
+  }
+  return { from, pts: out }
+}
+
+/** The one same-outing rule (`sameOuting`), for two full paddles. */
 export function isSameOuting(a: Paddle, b: Paddle): boolean {
-  // A paddle without a map (#414) is never offered to compare with another.
-  if (isMotionOnly(a.result) || isMotionOnly(b.result)) return false
-  if (timeOverlapShare({ paddledAt: a.paddledAt, durationS: a.result.durationS }, { paddledAt: b.paddledAt, durationS: b.result.durationS }) < MIN_TIME_OVERLAP) return false
-  const g = trackGap(a, b)
-  return !!g && g.agreement >= MIN_AGREEMENT
+  const outing = (p: Paddle) => ({ paddledAt: p.paddledAt, durationS: p.result.durationS, noGps: p.result.noGps, places: isMotionOnly(p.result) ? undefined : outingPlaces(p) })
+  return sameOuting(outing(a), outing(b))
 }
 
 /** Stroke rate from each, per minute of clock time where both have it. */

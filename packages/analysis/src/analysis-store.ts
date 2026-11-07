@@ -4,8 +4,9 @@
 import { nanoid } from 'nanoid'
 import { getJson, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { thumbRoute, isMotionOnly } from '@paddlesnitch/core/paddles'
+import { thumbRoute, isMotionOnly, timeOverlapShare, MIN_TIME_OVERLAP, type OutingPlaces } from '@paddlesnitch/core/paddles'
 import { routeCells } from './route-match'
+import { outingPlaces } from './same-outing'
 import type { AnalysisResult } from './analysis'
 import { rescaleDoubling } from './analysis'
 
@@ -79,6 +80,12 @@ export type SessionSummary = {
   route?: [number, number][]
   // A paddle without a map: the tracker's GPS failed (#414). Test with isMotionOnly().
   noGps?: true
+  // Where the paddle was at each whole minute (outingPlaces, ~2 KB for two
+  // hours), so lists can tell one outing recorded twice without reading a
+  // track (#852). Absent on a paddle without a map, and on summaries written
+  // before it existed (listSessionSummaries fills those in when it matters).
+  // Server only: paddles.sessions leaves it out.
+  places?: OutingPlaces
 }
 
 const key =(userId: string, id: string) => `analysis/${userId}/${id}/session.json`
@@ -278,7 +285,7 @@ function toSummary(s: AnalysisSession): SessionSummary {
     ...(s.hiddenFromBuddies ? { hiddenFromBuddies: true as const } : {}),
     startLat: s.result.points[0]?.lat, startLng: s.result.points[0]?.lng,
     route: thumbRoute(s.result.points),
-    ...(isMotionOnly(s.result) ? { noGps: true as const } : {}),
+    ...(isMotionOnly(s.result) ? { noGps: true as const } : { places: outingPlaces(s) }),
   }
 }
 
@@ -300,7 +307,18 @@ export async function listSessionSummaries(userId: string): Promise<SessionSumma
     await putJson(summaryKey(userId, id), sum).catch(() => {})
     return sum
   }))
-  return out.filter((s): s is SessionSummary => !!s).sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
+  const sums = out.filter((s): s is SessionSummary => !!s)
+  // A summary from before `places` (#852) is rebuilt from its paddle, once, and
+  // only when another paddle overlaps it in time: the one case places decide.
+  const placed = (s: SessionSummary) => !!s.places || isMotionOnly(s)
+  await Promise.all(sums.map(async (s, i) => {
+    if (placed(s) || !sums.some(o => o !== s && !isMotionOnly(o) && timeOverlapShare(s, o) >= MIN_TIME_OVERLAP)) return
+    const full = await getJson<AnalysisSession>(key(userId, s.id)).catch(() => null)
+    if (!full) return
+    sums[i] = toSummary(full)
+    await putJson(summaryKey(userId, s.id), sums[i]).catch(() => {})
+  }))
+  return sums.sort((a, b) => (b.paddledAt > a.paddledAt ? 1 : -1))
 }
 
 // All of a user's sessions in full (incl. `result.points`), unordered. Heavier

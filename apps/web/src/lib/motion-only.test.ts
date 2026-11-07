@@ -63,8 +63,10 @@ describe('totals and the logbook', () => {
   })
 
   it('stands alone in the list: not grouped with the same outing from Strava, so it is never offered to compare', () => {
-    const strava = { ...p('2026-10-06T08:00:00Z', 8), source: { type: 'strava' } }
-    const tracker = { ...noMap('2026-10-06T08:00:30Z'), source: { type: 'device' } }
+    // Both in one place the whole hour: only the missing map keeps them apart.
+    const here = { from: Date.parse('2026-10-06T08:01:00Z') / 1000, pts: Array.from({ length: 59 }, () => [51.46, -0.93] as [number, number]) }
+    const strava = { ...p('2026-10-06T08:00:00Z', 8), source: { type: 'strava' }, places: here }
+    const tracker = { ...noMap('2026-10-06T08:00:30Z'), source: { type: 'device' }, places: here }
     expect(groupSameOuting([strava, tracker]).map(g => [g.lead.source.type, g.others.length])).toEqual([['strava', 0], ['device', 0]])
   })
 })

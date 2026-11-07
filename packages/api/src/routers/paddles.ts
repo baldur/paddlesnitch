@@ -6,8 +6,8 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, protectedProcedure, publicProcedure } from '../trpc'
-import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
-import { paddleTotals, paddleLogbook, groupSameOuting, isPhonePaddle, markPhone } from '@paddlesnitch/core/paddles'
+import { summaryToCard } from '@paddlesnitch/core/paddle-store'
+import { paddleTotals, paddleLogbook, groupSameOuting, sameOuting, isPhonePaddle, markPhone } from '@paddlesnitch/core/paddles'
 import { plainInsight } from '@paddlesnitch/analysis/analysis'
 import { paddleIdsByRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { timeOverlapShare, isSameOuting, trackGap, strokeRateSideBySide, MIN_TIME_OVERLAP } from '@paddlesnitch/analysis/same-outing'
@@ -19,10 +19,14 @@ import {
   listSessionSummaries, getSession, deleteSession,
   updateSessionNote, updateSessionBoat, updateSessionDoubling, updateSessionHidden,
   shareSession, unshareSession, getSharedSession,
-  type AnalysisSession,
+  type AnalysisSession, type SessionSummary,
 } from '@paddlesnitch/analysis/analysis-store'
 
 const byId = z.object({ id: z.string() })
+
+// Another recording of the same outing, as the list and the paddle page name it.
+type OutingRef = { id: string; sourceType: string; phone?: true }
+const outingRef = (s: SessionSummary): OutingRef => ({ id: s.id, sourceType: s.source.type, ...(isPhonePaddle(s.source) ? { phone: true as const } : {}) })
 
 /**
  * A paddle as someone other than its owner sees it (a share link, a buddy):
@@ -48,15 +52,22 @@ export const paddlesRouter = router({
   // totals and logbook worked out here so no app re-implements them. Totals
   // and logbook count every recording, as the website's list does.
   list: protectedProcedure.query(async ({ ctx }) => {
-    const cards = await listPaddleCards(ctx.user.id)
-    const grouped = groupSameOuting(cards.map(c => ({ ...c, source: { type: c.sourceType, phone: c.phone } })))
-      .map(({ lead: { source: _, ...lead }, others }) =>
-        others.length ? { ...lead, sameOuting: others.map(o => ({ id: o.id, sourceType: o.sourceType, ...(o.phone ? { phone: true as const } : {}) })) } : lead)
+    const all = await listSessionSummaries(ctx.user.id)
+    const cards = all.map(summaryToCard)
+    const grouped = groupSameOuting(all).map(({ lead, others }) =>
+      others.length ? { ...summaryToCard(lead), sameOuting: others.map(outingRef) } : summaryToCard(lead))
     return { cards: grouped, totals: paddleTotals(cards), logbook: paddleLogbook(cards, new Date()) }
   }),
 
-  // Library list: richer per-paddle summaries (note, effort count, …), newest first.
-  sessions: protectedProcedure.query(({ ctx }) => listSessionSummaries(ctx.user.id)),
+  // Library list for the website: richer per-paddle summaries (note, effort
+  // count, …), newest first. Every recording is here (totals count them all);
+  // the lead of an outing recorded twice names the others in `sameOuting`, as
+  // paddles.list does. `places` stays on the server.
+  sessions: protectedProcedure.query(async ({ ctx }) => {
+    const all = await listSessionSummaries(ctx.user.id)
+    const others = new Map(groupSameOuting(all).filter(g => g.others.length).map(g => [g.lead.id, g.others.map(outingRef)]))
+    return all.map(({ places: _, ...s }): Omit<SessionSummary, 'places'> & { sameOuting?: OutingRef[] } => (others.has(s.id) ? { ...s, sameOuting: others.get(s.id)! } : s))
+  }),
 
   // Which paddle each tracker recording became: { recordingId: paddleId }.
   // The tracker's page links its recordings to their paddles with it.
@@ -77,21 +88,13 @@ export const paddlesRouter = router({
   }),
 
   // The same outing recorded by another source (one-paddle.md, phase 4): the
-  // user's other paddles that overlap this one in time AND in place. Only the
-  // few that overlap in time are loaded to compare tracks.
+  // user's other paddles that overlap this one in time AND in place, by the
+  // rule the list groups with (`sameOuting`), from the summaries alone.
   sameOuting: protectedProcedure.input(byId).query(async ({ ctx, input }) => {
     const all = await listSessionSummaries(ctx.user.id)
     const me = all.find(s => s.id === input.id)
     if (!me) throw new TRPCError({ code: 'NOT_FOUND' })
-    const near = all.filter(s => s.id !== me.id && timeOverlapShare(me, s) >= MIN_TIME_OVERLAP)
-    if (near.length === 0) return []
-    const self = await getSession(ctx.user.id, me.id)
-    const out: { id: string; sourceType: string; paddledAt: string; phone?: true }[] = []
-    for (const s of near) {
-      const other = await getSession(ctx.user.id, s.id)
-      if (self && other && isSameOuting(self, other)) out.push({ id: s.id, sourceType: s.source.type, paddledAt: s.paddledAt, ...(isPhonePaddle(s.source) ? { phone: true as const } : {}) })
-    }
-    return out
+    return all.filter(s => s.id !== me.id && sameOuting(me, s)).map(s => ({ ...outingRef(s), paddledAt: s.paddledAt }))
   }),
 
   // The two recordings of one outing side by side: how far apart they put you

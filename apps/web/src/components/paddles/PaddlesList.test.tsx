@@ -48,13 +48,27 @@ describe('Paddles list, where a paddle came from', () => {
     expect(row('t')).toContain('· Tracker')
   })
 
-  it('says the phone recorded the same outing too', async () => {
+  it('says the phone recorded the same outing too, as the server grouped it', async () => {
+    const at = '2026-10-11T07:00:00Z'
+    await mount([
+      summary('t', at, { source: { type: 'device', deviceId: 'A1B2C3D4' }, sameOuting: [{ id: 'p', sourceType: 'device', phone: true }] }),
+      summary('p', at, { source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }),
+    ])
+    expect(container.textContent).toContain('Also recorded by the phone')
+    expect(container.querySelector('a[href="/paddles/p"]')).toBeNull()
+    expect(container.querySelector('a[href="/paddles/compare?a=t&b=p"]')).not.toBeNull()
+  })
+
+  // #852: the list no longer groups by time alone; the paddle page wouldn't link them.
+  it('shows two recordings at the same time as two paddles when the server did not group them', async () => {
     const at = '2026-10-11T07:00:00Z'
     await mount([
       summary('t', at, { source: { type: 'device', deviceId: 'A1B2C3D4' } }),
       summary('p', at, { source: { type: 'device', deviceId: 'P0123456789ABCDEF' } }),
     ])
-    expect(container.textContent).toContain('Also recorded by the phone')
+    expect(container.textContent).not.toContain('Also recorded by')
+    expect(container.querySelector('a[href="/paddles/t"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/paddles/p"]')).not.toBeNull()
   })
 })
 

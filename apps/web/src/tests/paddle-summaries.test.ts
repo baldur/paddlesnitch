@@ -8,7 +8,6 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs/promises'
 import { saveSession, deleteSession, listSessionSummaries, updateSessionNote } from '@paddlesnitch/analysis/analysis-store'
-import { listPaddleCards } from '@paddlesnitch/core/paddle-store'
 import { analyseTrack } from '@paddlesnitch/analysis/analysis'
 
 const U = 'user-sum'
@@ -37,7 +36,6 @@ describe('paddle summaries', () => {
     // Spoil the full paddle: the lists must not need it.
     await fs.writeFile(file('p1', 'session.json'), '{ not json')
     expect((await listSessionSummaries(U)).map(s => s.id)).toEqual(['p1'])
-    expect((await listPaddleCards(U)).map(c => c.id)).toEqual(['p1'])
   })
 
   it('are made for a paddle saved before they existed, the first time it is listed', async () => {
@@ -45,6 +43,32 @@ describe('paddle summaries', () => {
     await fs.writeFile(file('old', 'session.json'), JSON.stringify(paddle('old')))
     expect((await listSessionSummaries(U)).map(s => s.id)).toEqual(['old'])
     expect(JSON.parse(await fs.readFile(file('old', 'summary.json'), 'utf8')).id).toBe('old')
+  })
+
+  // #852: lists tell one outing recorded twice from these, not from the tracks.
+  it('carry where the paddle was each minute, small enough for a list', async () => {
+    await saveSession(paddle('p1') as never)
+    const sum = JSON.parse(await fs.readFile(file('p1', 'summary.json'), 'utf8'))
+    expect(sum.places.from).toBe(t0 / 1000)
+    expect(sum.places.pts).toHaveLength(5)                            // 10:00 to 10:04, a 300 s paddle
+    expect(sum.places.pts[1][0]).toBeCloseTo(51.5 + 60 * 0.00003, 5)
+  })
+
+  it('from before places existed get them, once, only when another paddle overlaps in time', async () => {
+    const old = async (id: string, paddledAt: string) => {
+      await saveSession({ ...paddle(id), paddledAt } as never)
+      const sum = JSON.parse(await fs.readFile(file(id, 'summary.json'), 'utf8'))
+      delete sum.places
+      await fs.writeFile(file(id, 'summary.json'), JSON.stringify(sum))
+    }
+    await old('a', '2026-09-01T10:00:00Z')
+    await old('b', '2026-09-01T10:00:30Z')                            // the same outing, from another source
+    await old('alone', '2026-09-05T10:00:00Z')
+    const byId = Object.fromEntries((await listSessionSummaries(U)).map(s => [s.id, s]))
+    expect(byId.a.places?.pts.length).toBeGreaterThan(0)
+    expect(byId.b.places?.pts.length).toBeGreaterThan(0)
+    expect(byId.alone.places).toBeUndefined()                         // nothing to tell apart: not read in full
+    expect(JSON.parse(await fs.readFile(file('a', 'summary.json'), 'utf8')).places).toBeDefined()   // written back
   })
 
   it('follow an edit and go with a delete', async () => {

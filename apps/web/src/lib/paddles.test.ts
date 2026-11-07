@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { isPhonePaddle, alsoRecordedBy, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, paddlingSummary } from '@paddlesnitch/core/paddles'
+import { isPhonePaddle, alsoRecordedBy, weekStart, weeklyKm, weekStreak, monthKm, groupSameOuting, sameOuting, paddlingSummary, type OutingPlaces } from '@paddlesnitch/core/paddles'
+
+// Where a boat heading north at 2.2 m/s from 09:00 on 6 Oct was at each whole
+// minute from `at` for `durationS` (a summary's `places`), on longitude `lng`.
+function placesOf(at: string, durationS: number, lng = -0.93): OutingPlaces {
+  const start = Date.parse(at) / 1000, base = Date.parse('2026-10-06T09:00:00Z') / 1000
+  const from = Math.ceil(start / 60) * 60
+  const n = Math.floor((start + durationS - from) / 60) + 1
+  return { from, pts: Array.from({ length: n }, (_, i) => [51.46 + (from + i * 60 - base) * 2.2 / 111_000, lng] as [number, number]) }
+}
 
 // A phone's paddle (C3) has the tracker's source shape; only the device ID differs (#789).
 describe('isPhonePaddle', () => {
@@ -14,7 +23,7 @@ describe('isPhonePaddle', () => {
 
   it('a tracker leads a same outing over a phone, whichever is newer', () => {
     const at = '2026-10-01T07:00:00Z'
-    const p = (id: string, deviceId: string) => ({ id, paddledAt: at, distanceKm: 5, durationS: 3600, source: { type: 'device', deviceId } })
+    const p = (id: string, deviceId: string) => ({ id, paddledAt: at, distanceKm: 5, durationS: 3600, source: { type: 'device', deviceId }, places: placesOf(at, 3600) })
     const [g] = groupSameOuting([p('phone', 'P0123456789ABCDEF'), p('tracker', 'A1B2C3D4')])
     expect(g.lead.id).toBe('tracker')
     expect(g.others.map(o => o.id)).toEqual(['phone'])
@@ -63,11 +72,45 @@ describe('logbook', () => {
   })
 
   it('shows one outing recorded twice once, led by the tracker', () => {
-    const strava = { ...p('2026-10-06T09:01:00Z', 8.1, 3500, 'strava'), id: 's' }
-    const tracker = { ...p('2026-10-06T09:00:00Z', 8, 3600, 'device'), id: 't' }
-    const other = { ...p('2026-10-01T09:00:00Z', 5, 3600, 'file'), id: 'o' }
+    const strava = { ...p('2026-10-06T09:01:00Z', 8.1, 3500, 'strava'), id: 's', places: placesOf('2026-10-06T09:01:00Z', 3500) }
+    const tracker = { ...p('2026-10-06T09:00:00Z', 8, 3600, 'device'), id: 't', places: placesOf('2026-10-06T09:00:00Z', 3600) }
+    const other = { ...p('2026-10-01T09:00:00Z', 5, 3600, 'file'), id: 'o', places: placesOf('2026-10-01T09:00:00Z', 3600) }
     const g = groupSameOuting([strava, tracker, other])
     expect(g.map(x => [x.lead.id, x.others.map(o => o.id)])).toEqual([['t', ['s']], ['o', []]])
+  })
+})
+
+// #852: the list grouped by time alone while the paddle page also needed the
+// tracks to agree in place. One rule now, for both.
+describe('sameOuting (the list, the paddle page and Compare)', () => {
+  const at = '2026-10-06T09:00:00Z', later = '2026-10-06T09:00:30Z'
+  const rec = (id: string, start: string, durationS: number, extra: object = {}) =>
+    ({ id, paddledAt: start, distanceKm: 4, durationS, source: { type: 'device' }, places: placesOf(start, durationS), ...extra })
+
+  it('is not the same outing at the same time on another river (~2 km away)', () => {
+    const tracker = rec('t', at, 1200), elsewhere = rec('e', later, 1100, { places: placesOf(later, 1100, -0.9) })
+    expect(sameOuting(tracker, elsewhere)).toBe(false)
+    expect(groupSameOuting([tracker, elsewhere]).map(g => g.others.length)).toEqual([0, 0])
+  })
+
+  it('is not the same outing for a phone left on the bank while the boat went on', () => {
+    const tracker = rec('t', at, 1200)
+    const bank = rec('b', at, 1200, { places: { ...placesOf(at, 1200), pts: placesOf(at, 1200).pts.map(() => [51.46, -0.93] as [number, number]) } })
+    expect(sameOuting(tracker, bank)).toBe(false)
+  })
+
+  it('is the same outing when both overlap in time and in place', () => {
+    const tracker = rec('t', at, 1200), phone = rec('p', later, 1100)
+    expect(sameOuting(tracker, phone)).toBe(true)
+    expect(groupSameOuting([phone, tracker]).map(g => [g.lead.id, g.others.map(o => o.id)])).toEqual([['p', ['t']]])
+  })
+
+  it('is not the same outing in the same place at another time', () => {
+    expect(sameOuting(rec('a', at, 1200), rec('b', '2026-10-07T09:00:00Z', 1200))).toBe(false)
+  })
+
+  it('needs places on both: a summary without them is never grouped', () => {
+    expect(sameOuting(rec('t', at, 1200), rec('p', later, 1100, { places: undefined }))).toBe(false)
   })
 })
 

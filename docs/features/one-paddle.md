@@ -145,13 +145,20 @@ outside moving stretches; a tracker paddle's efforts get a stroke rate.
 **Built** (`@paddlesnitch/analysis/same-outing`, tRPC `paddles.sameOuting` and
 `paddles.compareOuting`, `components/analysis/SameOuting.tsx`).
 
-- **Detecting it, when a paddle is opened** (not stored, so no backfill): the
-  user's other paddles that overlap it in time by at least half the shorter one
-  (from the summaries already listed), then, for those few only, a track check:
-  **at the same clock moments** (every 10 s), at least 70% of positions within
-  40 m of each other. Comparing by clock rather than "near the other route"
-  measures what QA wants (how far apart two devices put you at once) and doesn't
-  match an out-and-back to itself.
+- **Detecting it** (one rule, `sameOuting` in `@paddlesnitch/core/paddles`,
+  for the Paddles list, the paddle page and Compare, #852): two of the user's
+  paddles overlap in time by at least half the shorter one, AND **at the same
+  clock moments** (each whole minute both recorded, at least three) at least
+  70% of positions are within 40 m of each other. Comparing by clock rather
+  than "near the other route" measures what QA wants (how far apart two devices
+  put you at once) and doesn't match an out-and-back to itself, two people on
+  another river at the same time, or a phone left on the bank. The positions
+  are each paddle's `places` (`outingPlaces`: one rounded [lat, lng] per whole
+  UTC minute, ~2.4 KB for two hours), kept in its `summary.json`, so the list
+  never reads a track. A summary from before `places` is rebuilt from its
+  paddle once, and only when another paddle overlaps it in time.
+  (Until #852 the list grouped by time alone and the page sampled the full
+  tracks every 10 s, so the two could disagree.)
 - **On the paddle:** "ALSO RECORDED BY STRAVA →" (or BY THE TRACKER), linking to
   the comparison.
 - **The comparison** (`/paddles/compare?a=&b=`) gains a SAME OUTING section when
