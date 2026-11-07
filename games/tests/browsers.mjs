@@ -154,7 +154,8 @@ async function play(c, page, errors) {
     // (The site's other calls, a saved kit say, answer with nothing; the routes after this win.)
     await page.route('**/api/trpc/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: null } }) }));
     await page.route(/\/api\/trpc\/me\b/, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { user: { id: 'test', displayName: 'Pat R.' } } } }) }));
-    await page.route(/\/api\/trpc\/games\.submit/, (route) => (submitFails ? route.fulfill({ status: 500, body: '{}' })
+    // (A failed save takes a moment, so the case sees Try again while it waits.)
+    await page.route(/\/api\/trpc\/games\.submit/, async (route) => (submitFails ? setTimeout(() => route.fulfill({ status: 500, body: '{}' }), 500)
       : route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: { data: { best: true, rank: 3 } } }) })));
   }
   if (c.boards) await page.route(/\/api\/trpc\/games\.leaderboard/, (route) => {
@@ -200,7 +201,6 @@ async function play(c, page, errors) {
     const box = await again.boundingBox().catch(() => null);
     if (!box) errors.push(`no "Try again: ${course}" button`);
     else if (box.height < 44) errors.push(`the board's Try again is ${box.height.toFixed(0)} px tall, under 44`);
-    if ((await page.locator('#boardlist').getAttribute('aria-live')) !== 'polite') errors.push('the boards are not a polite live region');
     boardFails = false;
     await again.click();
     await page.waitForFunction(() => !/Couldn't load/.test(document.getElementById('boardlist').textContent) && document.querySelectorAll('#boardlist div').length > 2, null, { timeout: 15_000 })
@@ -216,8 +216,11 @@ async function play(c, page, errors) {
     if (!rbox) errors.push(`a finish that didn't save said "${await page.locator('#ranked').textContent()}", with no Try again`);
     else {
       if (rbox.height < 44) errors.push(`the finish's Try again is ${rbox.height.toFixed(0)} px tall, under 44`);
-      // Failing again: a new Try again, and focus on it (the one pressed went).
+      // Failing again: while it waits the button says so (rule 2: the verb and …), then
+      // a new Try again, and focus on it (the one pressed went).
       await retry.click();
+      const waiting = await page.evaluate(() => { const b = document.querySelector('#ranked button'); return `${b?.textContent} ${b?.disabled}`; });
+      if (waiting !== 'Trying again… true') errors.push(`while the finish's Try again waits, its button is "${waiting}"`);
       await page.waitForFunction(() => document.querySelector('#ranked button:not([disabled])'), null, { timeout: 15_000 });
       if (!(await page.evaluate(() => document.activeElement === document.querySelector('#ranked button')))) errors.push("after a Try again that failed too, focus isn't on the new Try again");
       submitFails = false;
@@ -721,10 +724,14 @@ async function play(c, page, errors) {
     });
     await page.waitForFunction(() => document.getElementById('finished').open, null, { timeout: 15_000 });
     const cut = await page.evaluate(() => {
-      document.getElementById('ranked').innerHTML = 'Couldn&#39;t save your time to the leaderboard. <button type="button">Try again</button>';
+      document.getElementById('ranked').innerHTML = 'Couldn&#39;t save your time to the Hasler Div 7-9 leaderboard. <button type="button">Try again</button>';
       const dialog = document.getElementById('finished');
       for (const b of dialog.querySelectorAll('button')) b.hidden = false;
-      return [...dialog.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().bottom > Math.min(innerHeight, dialog.getBoundingClientRect().bottom)).map((b) => b.textContent);
+      const cut = [...dialog.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().bottom > Math.min(innerHeight, dialog.getBoundingClientRect().bottom)).map((b) => b.textContent);
+      // …and the sticky buttons don't cover the race's details.
+      const over = document.getElementById('details').getBoundingClientRect().bottom - dialog.querySelector('form').getBoundingClientRect().top;
+      if (over > 0) cut.push(`the end of the details (${Math.round(over)} px)`);
+      return cut;
     });
     if (cut.length) errors.push(`the finish on a phone hides ${cut.join(', ')} below the fold`);
   }

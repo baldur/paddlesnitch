@@ -308,7 +308,7 @@
 
     <section id="stepBoards" class="step" hidden>
       <h3>Leaderboards</h3>
-      <div id="boardlist" aria-live="polite"><p>Loading…</p></div>
+      <div id="boardlist"><p>Loading…</p></div>
       <p class="step-buttons"><button type="button" class="back" data-step="home">&larr; Back</button></p>
     </section>
 
@@ -363,7 +363,7 @@
     <form method="dialog" class="dialog-links"><button value="back">&larr; Back</button></form>
   </dialog>
 
-  <dialog id="finished">
+  <dialog id="finished" aria-labelledby="result" aria-describedby="details ranked">
     <h2 id="result"></h2>
     <p id="details"></p>
     <ol id="standings"></ol>

@@ -1601,8 +1601,8 @@ async function submitResult(time, retry = false) {
     const again = document.createElement('button');
     again.type = 'button';
     again.textContent = 'Try again';
-    again.addEventListener('click', () => { again.disabled = true; submitResult(time, true); });
-    els.ranked.replaceChildren("Couldn't save your time to the leaderboard. ", again);
+    again.addEventListener('click', () => { again.disabled = true; again.textContent = 'Trying again…'; submitResult(time, true); });
+    els.ranked.replaceChildren(`Couldn't save your time to the ${mode.label} leaderboard. `, again);
   }
   if (retry) (els.ranked.querySelector('button') ?? els.ranked).focus();
 }
@@ -1614,10 +1614,20 @@ const boatName = (hull) => (isScullHull(hull) ? scullHullName(hull) : boatById(h
 // Which boards the leaderboards page shows: the canoe club's courses, or the rowing club's.
 let boardModes = null;
 // Try again reloads them, then puts focus on the first board (its button
-// went with the reload); while loading, another tap does nothing.
+// went with the reload); while loading, another tap does nothing. Busy is
+// cleared whatever happens, or every later Try again would do nothing.
 async function showBoards(retry = false) {
   if (els.boardlist.getAttribute('aria-busy') === 'true') return;
   els.boardlist.setAttribute('aria-busy', 'true');
+  try {
+    const focus = await loadBoards();
+    if (retry) focus?.focus();
+  } finally {
+    els.boardlist.setAttribute('aria-busy', 'false');
+  }
+}
+// Draws the boards; returns where focus goes after Try again.
+async function loadBoards() {
   els.boardlist.replaceChildren(make('<p>Loading…</p>'));
   const rowing = !!boardModes;
   const boards = await Promise.all((boardModes ?? Object.values(MODES)).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
@@ -1640,17 +1650,13 @@ async function showBoards(retry = false) {
     b.addEventListener('click', () => { b.disabled = true; showBoards(true); });
     return b;
   };
-  const done = (focus) => {
-    els.boardlist.setAttribute('aria-busy', 'false');
-    if (retry) focus?.focus();
-  };
   // None of them loaded: one message, and a way to try again.
   if (boards.every(([, b]) => !b)) {
     const p = make(`<p>Couldn't load the ${rowing ? 'honours board' : 'leaderboards'}. </p>`);
     const b = again();
     p.append(b);
     els.boardlist.replaceChildren(...top, p);
-    return done(b);
+    return b;
   }
   els.boardlist.replaceChildren(...top, ...boards.map(([m, b]) => {
     const div = document.createElement('div');
@@ -1680,7 +1686,7 @@ async function showBoards(retry = false) {
     div.append(table);
     return div;
   }));
-  done(els.boardlist.querySelector('h4'));
+  return els.boardlist.querySelector('h4');
 }
 
 // --- live races -------------------------------------------------------------------
