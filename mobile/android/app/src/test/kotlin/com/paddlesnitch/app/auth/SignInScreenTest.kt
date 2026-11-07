@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.api.Api
@@ -116,6 +117,25 @@ class SignInScreenTest {
         compose.onNodeWithText(MADE_WITH_STRAVA).assertExists()
         compose.onNodeWithText("Create account").performClick()
         compose.onNodeWithText(MADE_WITH_STRAVA).assertDoesNotExist()
+    }
+
+    // A sign-in answer the app can't read shows our words, never the parser's (#896 review).
+    @Test fun anUnreadableSignInAnswerSaysCouldntSignIn() {
+        val server = mockwebserver3.MockWebServer().apply { start() }
+        try {
+            server.enqueue(mockwebserver3.MockResponse.Builder().code(200).body("""<html>Field 'idToken' is required</html>""").build())
+            val api = Api(server.url("/").toString(), MemoryTokenStore(), "0.1.0")
+            compose.setContent { PaddlesnitchTheme {
+                SignInScreen(api, google = GoogleSignIn(api, googleVerifiers), googleReturn = null, onGoogleReturnHandled = {},
+                    onSignedIn = {}, onCancel = {}, loadOptions = { SignInOptions(google = false, strava = false) })
+            } }
+            compose.onNode(hasSetTextAction() and hasText("Email")).performTextInput("a@example.com")
+            compose.onNode(hasSetTextAction() and hasText("Password")).performTextInput("Secret123")
+            compose.onAllNodes(hasText("Sign in") and androidx.compose.ui.test.hasClickAction()).onLast().performScrollTo().performClick()
+            waitFor("Couldn’t sign in. Please try again.")
+            compose.onNodeWithText("Field", substring = true).assertDoesNotExist()
+            compose.onNodeWithText("html", substring = true).assertDoesNotExist()
+        } finally { server.close() }
     }
 
     @Test fun whenOptionsFailItSaysSoAndCanAskAgain() {

@@ -44,6 +44,7 @@ import com.paddlesnitch.app.api.ApiJson
 import com.paddlesnitch.app.api.PaddleList
 import com.paddlesnitch.app.api.SameOutingList
 import com.paddlesnitch.app.api.SignedOut
+import com.paddlesnitch.app.api.shown
 import com.paddlesnitch.app.auth.GoogleSignIn
 import com.paddlesnitch.app.auth.KeystoreTokenStore
 import com.paddlesnitch.app.auth.PrefsGoogleVerifierStore
@@ -231,16 +232,22 @@ internal fun MyPaddles(
     val context = LocalContext.current
     val sameOuting = remember(api) { sameOutingCalls(api) { url, private -> openInBrowser(context, url, private) } }
     var list by remember { mutableStateOf<PaddleList?>(null) }
-    // Our words, never the exception's (#892): it can name codes and vendors.
-    var failed by remember { mutableStateOf(false) }
+    // Our words, never the exception's (#892): it can name codes and vendors. [failed]: the first load
+    // failed, with the words to show under ours ("" for none). [refreshFailed]: a later one failed, so the list stays (as iOS).
+    var failed by remember { mutableStateOf<String?>(null) }
+    var refreshFailed by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     // A phone recording that reached the server is a paddle now: load the list again.
     val uploaded by com.paddlesnitch.app.record.Uploads.sent.collectAsState()
     LaunchedEffect(attempt, added, uploaded) {
-        failed = false
+        failed = null
         runCatching { api.paddles() }
-            .onSuccess { list = it }
-            .onFailure { if (it is SignedOut) onSignedOut() else failed = true }
+            .onSuccess { list = it; refreshFailed = null }
+            .onFailure {
+                if (it is SignedOut) onSignedOut()
+                else if (list == null) failed = it.shown("")
+                else refreshFailed = it.shown("")
+            }
     }
     val account: @Composable () -> Unit = { TextButton(onClick = onAccount, colors = textColors()) { Text("Account") } }
     val current = list
@@ -248,6 +255,7 @@ internal fun MyPaddles(
     // Record, then each recording that isn't a paddle yet (README § After Stop).
     val notice: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            refreshFailed?.let { Text("Couldn’t refresh your paddles. $it".trimEnd(), color = PsColor.red, fontSize = 14.sp) }
             recordEntry?.invoke()
             if (accountId != null) com.paddlesnitch.app.record.UploadLines(accountId, onReport)
         }
@@ -264,8 +272,9 @@ internal fun MyPaddles(
                 account()
             }
         })
-        failed -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        failed != null -> Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Couldn’t load your paddles", color = PsColor.red)
+            failed?.takeIf { it.isNotEmpty() }?.let { Text(it, color = PsColor.muted) }
             Button(onClick = { attempt++ }) { Text("Try again") }
             account()
         }
