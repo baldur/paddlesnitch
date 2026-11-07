@@ -17,6 +17,7 @@ import { createConnection } from 'net'
 import { createRequire } from 'module'
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
 
 const require = createRequire(import.meta.url)
 const COGNITO_PORT = 9229
@@ -139,7 +140,8 @@ async function main() {
     log('info', `starting cognito-local on :${COGNITO_PORT}`)
     cognito = spawn(
       'node',
-      [require.resolve('cognito-local/lib/bin/start.js')],
+      // Whole, in-order writes of its database file (#901; E2E reads codes from it).
+      ['--import', pathToFileURL(require.resolve('../src/tests/cognito-serial-writes.mjs')).href, require.resolve('cognito-local/lib/bin/start.js')],
       { stdio: ['ignore', 'pipe', 'pipe'] }
     )
     pipeWithTag(cognito.stdout!, 'cognito', process.stdout)
