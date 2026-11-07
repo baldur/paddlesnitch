@@ -1,4 +1,5 @@
-// Preloaded into the test cognito-local (`node --require`, cognito-test-server.ts).
+// Loaded into cognito-local with `node --import` (cognito-test-server.ts, and
+// scripts/dev.ts for local dev and E2E).
 //
 // cognito-local keeps the pool in memory and, after every change, rewrites the
 // whole pool to one JSON file with fs.writeFile (stormdb's async engine). Writes
@@ -9,9 +10,13 @@
 // (#901). Here every write goes to a temp file and is renamed into place, one
 // after another in the order they were made: a reader only ever sees a whole
 // file, and the file always ends on the newest snapshot.
-const fs = require('fs')
-const path = require('path')
+// cognito-serial-writes.test.ts checks this, and that cognito-local's engine
+// is the async one this replaces.
+import { createRequire } from 'module'
+import { promises as fs } from 'fs'
+import path from 'path'
 
+const require = createRequire(import.meta.url)
 const cognitoDir = path.dirname(require.resolve('cognito-local/package.json'))
 const StormDB = require(require.resolve('stormdb', { paths: [cognitoDir] }))
 const Engine = StormDB.localFileEngine
@@ -19,14 +24,18 @@ const original = Engine.prototype.write
 const queues = new Map()
 let seq = 0
 
-Engine.prototype.write = function (data) {
-  if (!this.async) return original.call(this, data)
-  const text = this.serialize(data)   // the snapshot as of this call, as before
-  const tmp = `${this.path}.${process.pid}.${++seq}.tmp`
-  const done = (queues.get(this.path) ?? Promise.resolve())
-    .catch(() => {})
-    .then(() => fs.promises.writeFile(tmp, text))
-    .then(() => fs.promises.rename(tmp, this.path))
-  queues.set(this.path, done)
-  return done
+if (!original.serialWrites) {
+  const write = function (data) {
+    if (!this.async) return original.call(this, data)
+    const text = this.serialize(data)   // the snapshot as of this call, as before
+    const tmp = `${this.path}.${process.pid}.${++seq}.tmp`
+    const done = (queues.get(this.path) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => fs.writeFile(tmp, text))
+      .then(() => fs.rename(tmp, this.path))
+    queues.set(this.path, done)
+    return done
+  }
+  write.serialWrites = true
+  Engine.prototype.write = write
 }
