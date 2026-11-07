@@ -9,6 +9,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 const store = new Map<string, string>()
 let failGet: Error | null = null
+// The next put fails with this HTTP status (409: a racing conditional write; 500: S3 broke).
+let failPut: number | null = null
+const puts: Record<string, unknown>[] = []
+const httpError = (status: number) => Object.assign(new Error(`HTTP ${status}`), { $metadata: { httpStatusCode: status } })
 
 class NoSuchKey extends Error { name = 'NoSuchKey' }
 
@@ -30,6 +34,14 @@ vi.mock('@aws-sdk/client-s3', () => {
         const more = start + 2 < keys.length
         return { Contents: page.map(Key => ({ Key })), IsTruncated: more, NextContinuationToken: more ? String(start + 2) : undefined }
       }
+      if (cmd.kind === 'put') {
+        puts.push(i)
+        if (failPut) { const status = failPut; failPut = null; throw httpError(status) }
+        // A conditional put (If-None-Match: *) refuses a key that exists, as S3 does.
+        if (i.IfNoneMatch === '*' && store.has(i.Key as string)) throw httpError(412)
+        store.set(i.Key as string, String(i.Body))
+        return {}
+      }
       return {}
     }
   }
@@ -43,11 +55,12 @@ vi.mock('@aws-sdk/client-s3', () => {
   }
 })
 
-import { getObject, getJson, listKeys } from '@paddlesnitch/core/storage'
+import { getObject, getJson, listKeys, putObjectIfAbsent } from '@paddlesnitch/core/storage'
+import { markLinkSession } from '@/lib/app-signin'
 
 const env = { ...process.env }
 beforeEach(() => {
-  store.clear(); failGet = null
+  store.clear(); failGet = null; failPut = null; puts.length = 0
   ;(process.env as Record<string, string>).NODE_ENV = 'production'
   process.env.USE_LOCAL_STORAGE = 'false'
   process.env.DATA_BUCKET = 'test-bucket'
@@ -77,5 +90,33 @@ describe('S3 storage', () => {
   it('reads an object that exists', async () => {
     store.set('a.json', '{"ok":true}')
     expect(await getJson('a.json')).toEqual({ ok: true })
+  })
+})
+
+describe('S3 one-use claims (#853)', () => {
+  it('putObjectIfAbsent creates a key once, as a conditional put', async () => {
+    expect(await putObjectIfAbsent('auth/web-codes/redeemed/a.json', '{}')).toBe(true)
+    expect(await putObjectIfAbsent('auth/web-codes/redeemed/a.json', '{}')).toBe(false)
+    expect(puts.map(p => p.IfNoneMatch)).toEqual(['*', '*'])
+  })
+
+  it('a racing write (409) loses, so the claim fails closed', async () => {
+    failPut = 409
+    expect(await putObjectIfAbsent('auth/web-codes/redeemed/b.json', '{}')).toBe(false)
+  })
+
+  it('any other S3 failure throws instead of passing as a claim', async () => {
+    failPut = 500
+    await expect(putObjectIfAbsent('auth/web-codes/redeemed/c.json', '{}')).rejects.toThrow('HTTP 500')
+  })
+})
+
+describe('S3 link-session records (#853)', () => {
+  it('markLinkSession writes its record with the lifecycle tag the bucket expires', async () => {
+    await markLinkSession('user-pat', 'sess-1', Date.UTC(2026, 10, 7))
+    expect(puts).toHaveLength(1)
+    expect(puts[0].Key).toMatch(/^users\/user-pat\/link-sessions\/[0-9a-f]{64}\.json$/)
+    expect(puts[0].Tagging).toBe('lifecycle=link-session')
+    expect(JSON.parse(String(puts[0].Body))).toEqual({ at: '2026-11-07T00:00:00.000Z' })
   })
 })

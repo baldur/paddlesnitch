@@ -130,7 +130,57 @@ describe('boat motion charts', () => {
     await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
     const swatches = [...container.querySelectorAll('svg rect[data-legend]')]
     expect(swatches.length).toBe(3)
-    for (const s of swatches) expect(Number(s.getAttribute('opacity') ?? 1)).toBeGreaterThanOrEqual(0.8)
+    for (const s of swatches) {
+      const fill = Number(s.getAttribute('fill-opacity') ?? 1) * Number(s.getAttribute('opacity') ?? 1)
+      expect(fill).toBeGreaterThanOrEqual(0.8)
+    }
+  })
+
+  // #855: roll and pitch told apart by colour alone. Each chart's legend names
+  // them, each key is drawn as its series' line or edge is (stroke, width, dash,
+  // opacity), the two differ by dash as well as colour, and everything plotted
+  // stays under the legend band.
+  const ys = (d: string) => d.split(/[MLZ\s]+/).filter(Boolean).map(Number).filter((_, i) => i % 2 === 1)
+  const style = (el: Element) => ['stroke', 'stroke-width', 'stroke-dasharray', 'opacity'].map(a => el.getAttribute(a))
+  function expectRollPitchLegend(svg: SVGSVGElement, keyTag: 'line' | 'rect') {
+    const keys = [...svg.querySelectorAll(`${keyTag}[data-legend][data-series]`)]
+    expect(keys.map(k => [k.getAttribute('data-series'), k.nextElementSibling?.textContent]))
+      .toEqual([['roll', 'roll'], ['pitch', 'pitch']])
+    for (const key of keys) {
+      const series = key.getAttribute('data-series')!
+      const drawn = [...svg.querySelectorAll(`path[data-series="${series}"][stroke]`)]
+      expect(drawn).toHaveLength(1)
+      expect(style(key), series).toEqual(style(drawn[0]))
+      const bottom = keyTag === 'rect'
+        ? Number(key.getAttribute('y')) + Number(key.getAttribute('height'))
+        : Number(key.getAttribute('y1'))
+      expect(bottom).toBeLessThanOrEqual(CHART_MARGIN.TL)
+    }
+    const [roll, pitch] = keys
+    expect(roll.getAttribute('stroke-dasharray')).toBeNull()
+    expect(pitch.getAttribute('stroke-dasharray')).toBe('4 3')
+    const paths = [...svg.querySelectorAll('path[data-series]')]
+    expect(paths.length).toBeGreaterThanOrEqual(2)
+    for (const p of paths) for (const y of ys(p.getAttribute('d')!)) expect(y).toBeGreaterThanOrEqual(CHART_MARGIN.TL)
+  }
+
+  it('names roll and pitch on the Stroke shape chart, by dash as well as colour (#855: colour alone)', async () => {
+    atWidth(PHONE_CHART_PX)
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    expectRollPitchLegend(svgs()[1], 'line')
+  })
+
+  it("edges the session chart's roll and pitch bands, pitch dashed, and keys them the same (#855: colour alone)", async () => {
+    atWidth(PHONE_CHART_PX)
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    expectRollPitchLegend(svgs()[0], 'rect')
+  })
+
+  it('lines up the legend words on the session and Stroke shape charts (they sat 4 px apart)', async () => {
+    await render(<BoatMotion attitude={fixture('').attitude} strokeRate={null} />)
+    const words = (svg: SVGSVGElement) => [...svg.querySelectorAll('[data-legend] + text')].map(t => t.getAttribute('x'))
+    expect(words(svgs()[1])).toHaveLength(2)
+    expect(words(svgs()[1])).toEqual(words(svgs()[0]))
   })
 
   it('keeps each legend in a band above the plot, clear of the tallest bars', async () => {
