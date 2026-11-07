@@ -29,10 +29,10 @@ describe('dashboards', () => {
 
 // Where visitors come from (#906).
 describe('visitor location', () => {
-  it('the health dashboard shows page views by country and region, visits by city (fewer than 5 = other), and by source and campaign', () => {
-    expect(dashboards).toContain("table('Page views by country and region', [")
-    expect(dashboards).toContain("'stats count(*) as views, count_distinct(sid) as tabs by country, region',")
-    expect(dashboards).toContain("table('Visits by town or city (fewer than 5 = other)', [")
+  it('the health dashboard shows page views by country (UK by nation), visits by city (under 5 grouped as other), and by source and campaign', () => {
+    expect(dashboards).toContain("table('Page views by country (UK by nation)', [")
+    expect(dashboards).toContain("'stats count(*) as views, count_distinct(sid) as tabs by country, nation',")
+    expect(dashboards).toContain("table('Visits by town or city (under 5 grouped as other)', [")
     expect(dashboards).toContain("'fields if(n >= 5, concat(city, \", \", country), \"other\") as place',")
     expect(dashboards).toContain("'stats sum(n) as visits by place',")
     expect(dashboards).toContain("table('Visits by source and campaign', [")
@@ -52,6 +52,27 @@ describe('visitor location', () => {
     expect(extra).not.toMatch(/'\/att[^']*':/)
     // No cache policy keys on a location header.
     expect(stack).not.toMatch(/cloudfront-viewer-/i)
+  })
+})
+
+// #906: visits are archived by their own stream into visits/, apart from the
+// page views logged in the same request.
+describe('visits archive', () => {
+  const from = stack.indexOf("new lambda.Function(this, 'AnalyticsVisitsTransformFn'")
+  const block = stack.slice(from, stack.indexOf("alarm('AnalyticsVisitsDeliveryAlarm'", from))
+  it('has its own transform handler, stream and folder, in the same retained bucket', () => {
+    expect(from).toBeGreaterThan(0)
+    expect(block).toContain("handler: 'index.visitsHandler',")
+    expect(block).toContain("deliveryStreamName: 'paddlesnitch-analytics-visits',")
+    expect(block).toContain("prefix: 'visits/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',")
+    expect(block).toContain('bucketArn: analyticsBucket.bucketArn,')
+    expect(block).toContain("filterName: 'analytics-visits',")
+    expect(block).not.toMatch(/lifecycleRules|expiration/)
+  })
+  it('lets the logs role write to both streams, and emails on failures', () => {
+    expect(stack).toContain("resources: ['paddlesnitch-analytics-archive', 'paddlesnitch-analytics-visits']")
+    expect(stack).toContain("alarm('AnalyticsVisitsTransformAlarm'")
+    expect(stack).toContain("alarm('AnalyticsVisitsDeliveryAlarm'")
   })
 })
 

@@ -218,19 +218,19 @@ export function addDashboards(stack: cdk.Stack, { serverFn, distribution, alarms
     ], 24),
   )
 
-  // Where visitors come from (#906). Page views carry country and region (from
-  // CloudFront's headers); a tab's first page view also writes a `visit` record
-  // with the city and the source (`ref` = the referring site's host name, and
-  // the utm tags), and no tab id. Cities with fewer than 5 visits in the range
+  // Where visitors come from (#906). Page views carry the country (and for the
+  // UK, the nation), from CloudFront's headers; a tab's first page view also
+  // writes a `visit` record with the country, city and source (`ref` = the
+  // referring site's host name, and the utm tags), and no tab id. Cities with fewer than 5 visits in the range
   // fold into "other": the second stats re-groups the first one's rows.
   dashboard.addWidgets(
-    table('Page views by country and region', [
+    table('Page views by country (UK by nation)', [
       'filter Event = "pageview" and ispresent(country)',
-      'stats count(*) as views, count_distinct(sid) as tabs by country, region',
+      'stats count(*) as views, count_distinct(sid) as tabs by country, nation',
       'sort views desc',
       'limit 30',
     ], 8, 8),
-    table('Visits by town or city (fewer than 5 = other)', [
+    table('Visits by town or city (under 5 grouped as other)', [
       'filter Event = "visit" and ispresent(city)',
       'stats count(*) as n by country, city',
       'fields if(n >= 5, concat(city, ", ", country), "other") as place',

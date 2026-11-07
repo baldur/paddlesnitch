@@ -204,11 +204,12 @@ describe('game events', () => {
   })
 })
 
-// Where visitors come from (#906): country and region on every page view from
-// CloudFront's headers; the city and the source once a visit, on a record
-// without the tab id or the path, so the city can't be joined to pages viewed.
+// Where visitors come from (#906): country (and UK nation) on every page view
+// from CloudFront's headers; the city and the source once a visit, on a record
+// with no tab id, path, nation or platform, so the city can't be joined to
+// the pages viewed.
 describe('where visitors come from', () => {
-  const GEO = { 'cloudfront-viewer-country': 'GB', 'cloudfront-viewer-country-region': 'WBK', 'cloudfront-viewer-city': 'Reading' }
+  const GEO = { 'cloudfront-viewer-country': 'GB', 'cloudfront-viewer-country-region': 'ENG', 'cloudfront-viewer-city': 'Reading' }
   const send = async (body: unknown, headers: Record<string, string> = GEO) => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
     await track(new NextRequest('http://x/att/api/track', {
@@ -221,20 +222,27 @@ describe('where visitors come from', () => {
   }
   const FIRST = { visit: '1', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring-2027' }
 
-  it('adds country and region to every page view, never the city', async () => {
+  it('adds the country and UK nation to every page view, never the city', async () => {
     const [a, b] = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att' }, { event: 'pageview', path: '/paddles' }] })
     for (const pv of [a, b]) {
-      expect(pv).toMatchObject({ Event: 'pageview', sid: 'tab1', country: 'GB', region: 'WBK' })
+      expect(pv).toMatchObject({ Event: 'pageview', sid: 'tab1', country: 'GB', nation: 'ENG' })
       expect(pv).not.toHaveProperty('city')
     }
   })
 
-  it("writes one visit record on a tab's first page view: city, country, region and source, with no sid or path", async () => {
+  it('keeps no finer region on a page view: a council area or a region outside the UK is dropped', async () => {
+    const [council] = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att' }] }, { ...GEO, 'cloudfront-viewer-country-region': 'WBK' })
+    const [abroad] = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att' }] }, { 'cloudfront-viewer-country': 'FR', 'cloudfront-viewer-country-region': 'IDF' })
+    expect(council).toMatchObject({ country: 'GB' })
+    expect(abroad).toMatchObject({ country: 'FR' })
+    for (const pv of [council, abroad]) for (const k of ['nation', 'region']) expect(pv).not.toHaveProperty(k)
+    expect(JSON.stringify([council, abroad])).not.toMatch(/WBK|IDF/)
+  })
+
+  it("writes one visit record on a tab's first page view: country, city and source, with no sid, path, nation or platform", async () => {
     const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: FIRST }] })
-    const visit = out.find(e => e.Event === 'visit')
-    expect(visit).toMatchObject({ city: 'Reading', country: 'GB', region: 'WBK', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring-2027', platform: 'web' })
-    expect(visit).not.toHaveProperty('sid')
-    expect(visit).not.toHaveProperty('path')
+    const { _aws: _a, Count: _c, ...visit } = out.find(e => e.Event === 'visit')
+    expect(visit).toEqual({ Event: 'visit', country: 'GB', city: 'Reading', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring-2027' })
   })
 
   it("keeps the visit's city and source off the page view itself", async () => {
@@ -254,10 +262,10 @@ describe('where visitors come from', () => {
   })
 
   it("ignores location a client sends: only CloudFront's headers count", async () => {
-    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: { ...FIRST, country: 'FR', region: 'IDF', city: 'Paris', postal: '75001', lat: '48.85' } }] }, {})
+    const out = await send({ sid: 'tab1', events: [{ event: 'pageview', path: '/att', props: { ...FIRST, country: 'FR', region: 'IDF', nation: 'SCT', city: 'Paris', postal: '75001', lat: '48.85' } }] }, {})
     expect(out.map(e => e.Event)).toEqual(['pageview', 'visit'])
     for (const e of out) {
-      for (const k of ['country', 'region', 'city', 'postal', 'lat']) expect(e, `${e.Event}.${k}`).not.toHaveProperty(k)
+      for (const k of ['country', 'region', 'nation', 'city', 'postal', 'lat']) expect(e, `${e.Event}.${k}`).not.toHaveProperty(k)
     }
   })
 

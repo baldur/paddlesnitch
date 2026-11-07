@@ -139,16 +139,32 @@ describe('analytics claims match the code', () => {
     expect(privacy).not.toMatch(/no analytics/i)
   })
 
-  // #906: the track route records country and region on page views, and the
-  // city and source once a visit, without the tab id.
-  it('says we record roughly where a visit comes from and where it came from, and no IP address for it', () => {
+  // #906: the track route records the country (and UK nation) on page views,
+  // and the town or city and source once a visit, filed apart in the archive.
+  it('says what we record about where a visit comes from, and what we never keep', () => {
     const route = read('apps/web/src/app/att/api/track/route.ts')
+    const location = read('apps/web/src/lib/visitor-location.ts')
+    const archive = read('infra/lambdas/analytics-archive/index.mjs')
     expect(route).toContain('visitorLocation(req.headers)')
-    expect(privacy).toContain('the country, region, and town or city, worked out from your connection')
-    expect(privacy).toContain('We don&apos;t store your IP address for this.')
-    expect(privacy).toContain('The town or city is kept once a visit, without the random ID')
-    expect(privacy).toContain('the site&apos;s name only, and any campaign tags in the link')
-    expect(read('apps/web/src/lib/visitor-location.ts')).not.toMatch(/viewer-address|x-forwarded-for/i)
+    expect(privacy).toContain('Each page you open also records your country, and in the UK your nation (England, Scotland, Wales or Northern Ireland).')
+    expect(location).toContain("new Set(['ENG', 'SCT', 'WLS', 'NIR'])")
+    expect(privacy).toContain('Once a visit (until you close the tab), we record your town or city, the site that sent you (its address only, such as google.com) and any campaign tags in the link.')
+    expect(privacy).toContain('In our long-term records these are kept apart from the pages you open.')
+    expect(archive).toContain('export async function visitsHandler')
+    expect(privacy).toContain('Our server logs, kept for 90 days, could still connect them.')
+    expect(privacy).toContain('Our host, Amazon Web Services, works out your location from your connection.')
+    expect(privacy).toContain('We keep only the country, nation and town or city, and never store your IP address for this.')
+    expect(location).not.toMatch(/viewer-address|x-forwarded-for/i)
+  })
+
+  it('names tt_landed among what the browser stores', () => {
+    expect(read('packages/ui/src/analytics.ts')).toContain("'tt_landed'")
+    expect(privacy).toContain('<code>tt_landed</code>')
+  })
+
+  it('uses "visit" for one thing: the games count each time you play', () => {
+    expect(privacy).toContain('For each time you play we record the playing time')
+    expect(privacy).not.toContain('For each visit')
   })
 })
 

@@ -25,11 +25,13 @@ import { crashReportProps, clientErrorProps } from '@/lib/client-errors'
 // event gets `platform` (and the app's version) from the request, never from
 // the client's props (docs/features/observability.md).
 //
-// Where visitors come from (#906): every page view gets `country` and `region`
-// from CloudFront's headers (lib/visitor-location.ts), never from the body. A
-// tab's first page view (`visit: '1'`) also writes one `visit` record with the
-// city, country, region and where the visit came from (`ref`, utm tags), and
-// WITHOUT the tab id or path, so the city can't be joined to the pages viewed.
+// Where visitors come from (#906): every page view gets `country` (and for the
+// UK, `nation`) from CloudFront's headers (lib/visitor-location.ts), never from
+// the body. A tab's first page view (`visit: '1'`) also writes one `visit`
+// record with only the country, city and where the visit came from (`ref`, utm
+// tags): no tab id, path, nation or platform. The archive files visits apart
+// from page views (infra/lambdas/analytics-archive), so the city can't be
+// joined to the pages viewed there.
 // The page view itself keeps none of the visit's props. Plain properties only:
 // `Event` stays the one metric dimension.
 
@@ -56,7 +58,7 @@ const sidOf = (v: unknown): string | undefined =>
   typeof v === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(v) ? v : undefined
 
 // Set by the server, never taken from a client's props.
-const RESERVED = new Set(['sid', 'path', 'platform', 'appVersion', 'build', 'country', 'region', 'city'])
+const RESERVED = new Set(['sid', 'path', 'platform', 'appVersion', 'build', 'country', 'nation', 'city'])
 
 function clientProps(c: Client): Record<string, string> {
   return { platform: c.platform, ...(c.version ? { appVersion: c.version } : {}), ...(c.build ? { build: c.build } : {}) }
@@ -94,21 +96,22 @@ function propsFor(event: MetricEvent, sid: string | undefined, path: unknown, pr
   if (event === 'pageview') {
     delete own.visit
     for (const k of VISIT_SOURCE_PROPS) delete own[k]
-    return { ...buildProps(sid, eventPath(event, path), own, client), ...place(where.country, where.region) }
+    return { ...buildProps(sid, eventPath(event, path), own, client), ...place(where.country, where.nation) }
   }
   return buildProps(sid, eventPath(event, path), own, client)
 }
 
-const place = (country?: string, region?: string): Record<string, string> =>
-  ({ ...(country ? { country } : {}), ...(region ? { region } : {}) })
+const place = (country?: string, nation?: string): Record<string, string> =>
+  ({ ...(country ? { country } : {}), ...(nation ? { nation } : {}) })
 
-/** The visit record for a tab's first page view, or null. No sid, no path. */
-function visitProps(event: MetricEvent, props: unknown, client: Client, where: VisitorLocation): Record<string, string> | null {
+/** The visit record for a tab's first page view, or null: country, city and
+ *  source only. No sid, path, nation or platform. */
+function visitProps(event: MetricEvent, props: unknown, where: VisitorLocation): Record<string, string> | null {
   if (event !== 'pageview') return null
   const own = clientEventProps(event, props)
   if (own.visit !== '1') return null
   const source = Object.fromEntries(VISIT_SOURCE_PROPS.flatMap(k => own[k] ? [[k, own[k]]] : []))
-  return { ...place(where.country, where.region), ...(where.city ? { city: where.city } : {}), ...source, platform: client.platform }
+  return { ...place(where.country), ...(where.city ? { city: where.city } : {}), ...source }
 }
 
 export async function POST(req: NextRequest) {
@@ -125,7 +128,7 @@ export async function POST(req: NextRequest) {
   let visited = false
   const emitVisit = (event: MetricEvent, props: unknown) => {
     if (visited) return
-    const v = visitProps(event, props, client, where)
+    const v = visitProps(event, props, where)
     if (v) { visited = true; emitMetric('visit', v) }
   }
 

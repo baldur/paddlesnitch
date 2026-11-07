@@ -9,16 +9,23 @@ import { visitorLocation } from './visitor-location'
 const h = (o: Record<string, string>) => new Headers(o)
 
 describe('visitorLocation', () => {
-  it('reads the country, region and city CloudFront adds', () => {
+  it('reads the country, UK nation and city CloudFront adds', () => {
     expect(visitorLocation(h({
-      'CloudFront-Viewer-Country': 'GB', 'CloudFront-Viewer-Country-Region': 'WBK', 'CloudFront-Viewer-City': 'Reading',
-    }))).toEqual({ country: 'GB', region: 'WBK', city: 'Reading' })
+      'CloudFront-Viewer-Country': 'GB', 'CloudFront-Viewer-Country-Region': 'ENG', 'CloudFront-Viewer-City': 'Reading',
+    }))).toEqual({ country: 'GB', nation: 'ENG', city: 'Reading' })
   })
 
   it('trims each value and upper-cases the codes', () => {
     expect(visitorLocation(h({
-      'cloudfront-viewer-country': ' gb ', 'cloudfront-viewer-country-region': ' wbk', 'cloudfront-viewer-city': '  Henley-on-Thames  ',
-    }))).toEqual({ country: 'GB', region: 'WBK', city: 'Henley-on-Thames' })
+      'cloudfront-viewer-country': ' gb ', 'cloudfront-viewer-country-region': ' sct', 'cloudfront-viewer-city': '  Henley-on-Thames  ',
+    }))).toEqual({ country: 'GB', nation: 'SCT', city: 'Henley-on-Thames' })
+  })
+
+  it('keeps a region only as one of the four UK nations: a council area, or any region abroad, is dropped', () => {
+    for (const n of ['ENG', 'SCT', 'WLS', 'NIR']) expect(visitorLocation(h({ 'cloudfront-viewer-country': 'GB', 'cloudfront-viewer-country-region': n })).nation).toBe(n)
+    expect(visitorLocation(h({ 'cloudfront-viewer-country': 'GB', 'cloudfront-viewer-country-region': 'WBK' }))).toEqual({ country: 'GB' })
+    expect(visitorLocation(h({ 'cloudfront-viewer-country': 'FR', 'cloudfront-viewer-country-region': 'IDF' }))).toEqual({ country: 'FR' })
+    expect(visitorLocation(h({ 'cloudfront-viewer-country': 'US', 'cloudfront-viewer-country-region': 'ENG' }))).toEqual({ country: 'US' })
   })
 
   it('reads a city CloudFront percent-encoded (non-ASCII letters)', () => {
@@ -39,8 +46,8 @@ describe('visitorLocation', () => {
     }
   })
 
-  it('records no region or city without a country', () => {
-    expect(visitorLocation(h({ 'cloudfront-viewer-country-region': 'WBK', 'cloudfront-viewer-city': 'Reading' }))).toEqual({})
+  it('records no nation or city without a country', () => {
+    expect(visitorLocation(h({ 'cloudfront-viewer-country-region': 'ENG', 'cloudfront-viewer-city': 'Reading' }))).toEqual({})
   })
 
   it('never reads the postcode, latitude, longitude, metro code, time zone or address', () => {

@@ -38,9 +38,9 @@ for ((d = DAYS; d >= 0; d--)); do
     --start-time "$start" --end-time "$end" \
     --profile "$PROFILE" --region "$REGION" --query 'events[].message' --output json > "$tmp/day.json"
   node --input-type=module -e "
-    import { eventFromLine } from '$parser';
+    import { pageEventFromLine } from '$parser';
     import { readFileSync, writeFileSync } from 'node:fs';
-    const lines = JSON.parse(readFileSync('$tmp/day.json', 'utf8')).map(eventFromLine).filter(Boolean);
+    const lines = JSON.parse(readFileSync('$tmp/day.json', 'utf8')).map(pageEventFromLine).filter(Boolean);
     writeFileSync('$tmp/day.ndjson', lines.map((e) => JSON.stringify(e) + '\n').join(''));
     console.log('${day}', lines.length, 'events');"
   if [ -s "$tmp/day.ndjson" ]; then

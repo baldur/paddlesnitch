@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { refFrom, utmFrom } from '@paddlesnitch/ui/metrics-events'
+import { fromOwnSite, refFrom, utmFrom } from '@paddlesnitch/ui/metrics-events'
 import { _config, _resetForTest, flush } from '@paddlesnitch/ui/analytics'
 
 let pathname = '/'
@@ -23,6 +23,17 @@ describe('refFrom (the referring site, as a host name only)', () => {
     expect(refFrom('http://localhost:3000/x', 'localhost')).toBeUndefined()
     expect(refFrom('', 'paddlesnitch.com')).toBeUndefined()
     expect(refFrom('not a url', 'paddlesnitch.com')).toBeUndefined()
+  })
+})
+
+describe('fromOwnSite (a tab opened from one of our pages)', () => {
+  it('is true for our own site, with or without www., and false otherwise', () => {
+    expect(fromOwnSite('https://paddlesnitch.com/att', 'paddlesnitch.com')).toBe(true)
+    expect(fromOwnSite('https://www.paddlesnitch.com/paddles', 'paddlesnitch.com')).toBe(true)
+    expect(fromOwnSite('http://localhost:3000/x', 'localhost')).toBe(true)
+    expect(fromOwnSite('https://www.google.com/', 'paddlesnitch.com')).toBe(false)
+    expect(fromOwnSite('', 'paddlesnitch.com')).toBe(false)
+    expect(fromOwnSite('not a url', 'paddlesnitch.com')).toBe(false)
   })
 })
 
@@ -77,11 +88,29 @@ describe('the Analytics component', () => {
     for (const s of ['rowe', 'example', 'search', 'email']) expect(JSON.stringify(sent())).not.toContain(s)
   })
 
-  it('sends no referrer when the visit came from our own site', async () => {
+  it('does not count a new tab opened from one of our own pages as a visit', async () => {
     Object.defineProperty(document, 'referrer', { value: 'https://paddlesnitch.com/att', configurable: true })
+    await show('/paddles?utm_source=newsletter')
+    await show('/att')
+    flush()
+    expect(sent().map((e: { props: Record<string, string> }) => e.props)).toEqual([{ path: '/paddles' }, { path: '/att' }])
+  })
+
+  it('sends a visit with no referrer when there is none (typed address, bookmark)', async () => {
+    Object.defineProperty(document, 'referrer', { value: '', configurable: true })
     await show('/paddles')
     flush()
     expect(sent()[0].props).toEqual({ path: '/paddles', visit: '1' })
+  })
+
+  it('sends no visit on any page view when sessionStorage is blocked', async () => {
+    const blocked = () => { throw new Error('SecurityError') }
+    vi.stubGlobal('sessionStorage', { getItem: blocked, setItem: blocked, removeItem: blocked, clear: blocked })
+    await show('/')
+    await show('/att')
+    flush()
+    expect(sent()).toHaveLength(2)
+    for (const e of sent()) expect(e.props).not.toHaveProperty('visit')
   })
 
   it('counts a tab as one visit: a remount in the same tab is not a first page view', async () => {

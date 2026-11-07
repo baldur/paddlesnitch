@@ -101,13 +101,24 @@ const CLIENT_EVENT_PROPS: Partial<Record<MetricEvent, Readonly<Record<string, Ru
 
 const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, '')
 
+const hostOf = (url: string): string | undefined => {
+  try { return bareHost(new URL(url).hostname) || undefined } catch { return undefined }
+}
+const isOwn = (host: string, ownHost: string) =>
+  host === bareHost(ownHost) || host === 'paddlesnitch.com' || host.endsWith('.paddlesnitch.com')
+
+/** True when the referrer is our own site (`ownHost`, or paddlesnitch.com):
+ *  a new tab opened from one of our pages, not a new visit. */
+export function fromOwnSite(referrer: string, ownHost: string): boolean {
+  const host = referrer ? hostOf(referrer) : undefined
+  return !!host && isOwn(host, ownHost)
+}
+
 /** The referring site's host name, or undefined: never the path or query, and
  *  nothing when it's empty or our own site (`ownHost`, or paddlesnitch.com). */
 export function refFrom(referrer: string, ownHost: string): string | undefined {
-  if (!referrer) return undefined
-  let host: string
-  try { host = bareHost(new URL(referrer).hostname) } catch { return undefined }
-  if (!host || host === bareHost(ownHost) || host === 'paddlesnitch.com' || host.endsWith('.paddlesnitch.com')) return undefined
+  const host = referrer ? hostOf(referrer) : undefined
+  if (!host || isOwn(host, ownHost)) return undefined
   return REF.test(host) ? host : undefined
 }
 
