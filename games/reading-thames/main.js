@@ -1629,7 +1629,7 @@ function showAccount() {
 async function submitResult(time) {
   els.ranked.textContent = '';
   if (!account.user) {
-    if (!account.offline && !mode.row) els.ranked.replaceChildren(link('Sign in', SIGN_IN), ' to put your time on the leaderboard.');
+    // (Signed out there's nothing to say: a guest can't race on the site, owner 2026-11-07.)
     return;
   }
   try {
