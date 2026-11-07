@@ -10,6 +10,7 @@
 //   pnpm dev            # the site, on :3000
 //   pnpm games:site     # then http://localhost:8001/games/reading-thames/
 import http from 'http';
+import net from 'net';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -69,9 +70,24 @@ const relay = createRelay({
   },
 });
 const wss = new WebSocketServer({ noServer: true });
+// Every other WebSocket goes through to the site, byte for byte: Next's dev
+// page-reload socket (/_next/hmr) among them. Dropping it once left the site's
+// pages here unhydrated, so Sign in fell back to a plain form GET.
+function toSite(req, socket, head) {
+  const up = net.connect(SITE, 'localhost', () => {
+    const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
+    for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+    up.write(`${lines.join('\r\n')}\r\n\r\n`);
+    if (head.length) up.write(head);
+    up.pipe(socket);
+    socket.pipe(up);
+  });
+  up.on('error', () => socket.destroy());
+  socket.on('error', () => up.destroy());
+}
 server.on('upgrade', async (req, socket, head) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname !== '/live') return void socket.destroy();
+  if (url.pathname !== '/live') return toSite(req, socket, head);
   const conn = randomUUID();
   const status = await relay.connect(conn, Object.fromEntries(url.searchParams));
   if (status !== 200) return void socket.end(`HTTP/1.1 ${status} No\r\n\r\n`);
