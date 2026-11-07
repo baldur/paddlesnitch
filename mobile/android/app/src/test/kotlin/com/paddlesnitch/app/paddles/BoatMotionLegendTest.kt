@@ -44,4 +44,18 @@ class BoatMotionLegendTest {
         assertEquals(1.2f, PITCH_LINE_DP)
         assertEquals(1.2f, OUTLINE_DP)
     }
+
+    // Pinned here: a 3/2 dash could slip past the goldens' tolerance.
+    @Test fun pitchIsDashed4On3OffInDp() = org.junit.Assert.assertArrayEquals(floatArrayOf(4f, 3f), pitchDashDp(), 0f)
+
+    @Test fun aLegendKeepsA34dpBandAboveThePlot() {
+        val dp = 2.625f
+        assertEquals(34 * dp, plotTop(legend = true, dp, lineHeight = 15 * dp), 0.01f)
+        assertEquals(6 * dp, plotTop(legend = false, dp, lineHeight = 15 * dp), 0.01f)
+    }
+
+    @Test fun atLargeTextTheBandGrowsToFitTheLegend() {
+        val dp = 2.625f
+        assertEquals(40 * dp + 8 * dp, plotTop(legend = true, dp, lineHeight = 40 * dp), 0.01f)
+    }
 }

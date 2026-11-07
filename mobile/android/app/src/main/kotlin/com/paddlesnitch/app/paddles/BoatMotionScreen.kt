@@ -304,6 +304,9 @@ private fun ChartPanel(title: String, caption: String, label: String, height: Dp
 
 /* ---------------------------------------------------------------- charts --- */
 
+/** Where the plot starts: a legend has its own 34 dp band above it (more if large text needs it), so it never covers a band, line or bar. [dp] = one dp in px. */
+internal fun plotTop(legend: Boolean, dp: Float, lineHeight: Float) = if (legend) max(34 * dp, lineHeight + 8 * dp) else 6 * dp
+
 private val axisText = TextStyle(fontFamily = PlexMono, fontSize = 11.sp, color = PsColor.muted)
 
 /** The plot area inside a chart: room on the left for the degree labels, below for the time, above for a legend, sized to the text. */
@@ -311,8 +314,7 @@ private class Frame(scope: DrawScope, m: TextMeasurer, legend: Boolean) {
     private val line = m.measure("-12°", axisText).size
     val l = line.width + with(scope) { 10.dp.toPx() }
     val r = scope.size.width - with(scope) { 6.dp.toPx() }
-    /** A legend has its own 34 dp band above the plot (more if large text needs it), so it never covers a band or bar. */
-    val t = if (legend) max(with(scope) { 34.dp.toPx() }, line.height + with(scope) { 8.dp.toPx() }) else with(scope) { 6.dp.toPx() }
+    val t = plotTop(legend, with(scope) { 1.dp.toPx() }, line.height.toFloat())
     val b = scope.size.height - line.height - with(scope) { 8.dp.toPx() }
     /** The middle of the legend band above the plot. */
     val legendMiddle = t / 2f
@@ -351,20 +353,20 @@ private class Key(m: TextMeasurer) {
 /** Legend swatches, whatever the opacity of what they stand for, so each stays visible. */
 private const val SWATCH_ALPHA = 0.8f
 
-/** A 10 sp swatch at [x] and its word 4 sp after it, centred on [mid], outlined in [outline] when given; returns where the next one starts. */
-private fun DrawScope.swatch(m: TextMeasurer, colour: Color, text: String, x: Float, mid: Float, outline: Stroke? = null): Float {
-    val k = Key(m)
-    val side = SWATCH_SP.sp.toPx()
+/** A swatch [side] wide at [x] and its word at [wordX], centred on [mid], outlined in [outline] when given; returns where the next one starts. */
+private fun DrawScope.swatch(m: TextMeasurer, colour: Color, text: String, x: Float, side: Float, wordX: Float, mid: Float, outline: Stroke? = null): Float {
     drawRect(colour, Offset(x, mid - side / 2), Size(side, side), alpha = SWATCH_ALPHA)
     outline?.let { drawRect(colour, Offset(x, mid - side / 2), Size(side, side), style = it) }
     val layout = m.measure(text, axisText)
-    val wordX = x + side + SWATCH_GAP_SP.sp.toPx()
     drawText(layout, topLeft = Offset(wordX, mid - layout.size.height / 2f))
-    return wordX + layout.size.width + k.space
+    return wordX + layout.size.width + Key(m).space
 }
 
+/** Pitch's dash in dp, 4 on and 3 off: the same in the line, the band outline and the keys. */
+internal fun pitchDashDp() = floatArrayOf(4f, 3f)
+
 /* Roll and pitch never differ by colour alone: pitch is dashed (4 on, 3 off), roll solid, in the chart and in its key. */
-private fun DrawScope.pitchDash() = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
+private fun DrawScope.pitchDash() = PathEffect.dashPathEffect(pitchDashDp().map { it.dp.toPx() }.toFloatArray())
 private fun DrawScope.rollLine() = Stroke(ROLL_LINE_DP.dp.toPx())
 private fun DrawScope.pitchLine() = Stroke(PITCH_LINE_DP.dp.toPx(), pathEffect = pitchDash())
 private fun DrawScope.rollOutline() = Stroke(OUTLINE_DP.dp.toPx())
@@ -424,8 +426,8 @@ private fun DrawScope.envelope(a: BoatMotion, m: TextMeasurer) {
     label(m, from, f.l, bottom)
     label(m, to, f.r, bottom, align = 1f)
     val (roll, pitch) = legendKeys(rollPitchWords(m, f), lines = false, 1.sp.toPx())
-    swatch(m, PsColor.split, "roll", roll.keyX, f.legendMiddle, rollOutline())
-    swatch(m, PsColor.green, "pitch", pitch.keyX, f.legendMiddle, pitchOutline())
+    swatch(m, PsColor.split, "roll", roll.keyX, roll.keyWidth, roll.wordX, f.legendMiddle, rollOutline())
+    swatch(m, PsColor.green, "pitch", pitch.keyX, pitch.keyWidth, pitch.wordX, f.legendMiddle, pitchOutline())
 }
 
 private fun DrawScope.excerpt(a: BoatMotion, m: TextMeasurer) {
@@ -475,7 +477,9 @@ private fun DrawScope.histogram(h: RollHistogram, m: TextMeasurer) {
     label(m, "+$n°", f.r, bottom, align = 1f)
     val mid = f.legendMiddle
     val k = Key(m)
-    val lx = swatch(m, PsColor.split, "actual", f.l + 6.dp.toPx(), mid)
+    val sp = 1.sp.toPx()
+    val ax = f.l + 6.dp.toPx()
+    val lx = swatch(m, PsColor.split, "actual", ax, SWATCH_SP * sp, ax + (SWATCH_SP + SWATCH_GAP_SP) * sp, mid)
     drawLine(PsColor.red, Offset(lx, mid), Offset(lx + k.line * 1.2f, mid), 1.6.dp.toPx(), pathEffect = dashes, alpha = SWATCH_ALPHA)
     label(m, "mirrored", lx + k.line * 1.2f + k.gap, mid)
 }
