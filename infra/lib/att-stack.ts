@@ -555,12 +555,12 @@ export class AttStack extends cdk.Stack {
         ADMIN_USER_IDS: process.env.ADMIN_USER_IDS ?? '',
         // The accepted x-origin-verify values (above, #908).
         ORIGIN_VERIFY_SECRETS: originVerify,
-        // 'report' only warns about requests that didn't come through
-        // CloudFront; 'enforce' refuses them (403). The server Lambda updates
-        // before the distribution in a deploy, so the first deploy must not
-        // enforce: CloudFront isn't sending the header yet. Switch to
-        // 'enforce' once the logs show no origin_verify warnings.
-        ORIGIN_VERIFY_MODE: 'report',
+        // 'enforce' refuses requests that didn't come through CloudFront
+        // (403); 'report' only warns about them. Never switch to 'enforce' in
+        // the same deploy as a header change: the server Lambda updates
+        // before the distribution. Enforcing since 2026-11-07, after a
+        // 'report' deploy logged no origin_verify warnings from real traffic.
+        ORIGIN_VERIFY_MODE: 'enforce',
       },
     })
 

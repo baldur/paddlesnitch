@@ -23,9 +23,9 @@ describe('only CloudFront may call the server (#908): the stack', () => {
     expect(origin).toContain("customHeaders: { 'x-origin-verify': cdk.Fn.select(0, cdk.Fn.split(',', originVerify)) }")
   })
 
-  it('the server Lambda gets every accepted value and a mode', () => {
+  it('the server Lambda gets every accepted value and refuses requests without one', () => {
     expect(serverFn).toContain('ORIGIN_VERIFY_SECRETS: originVerify,')
-    expect(serverFn).toMatch(/ORIGIN_VERIFY_MODE: '(report|enforce)',/)
+    expect(serverFn).toContain("ORIGIN_VERIFY_MODE: 'enforce',")
   })
 
   it('every behaviour names one of the known origins; only serverOrigin reaches the server (so carries the header)', () => {
