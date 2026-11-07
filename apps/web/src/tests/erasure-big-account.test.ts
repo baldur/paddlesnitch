@@ -4,23 +4,30 @@
 // Erasure used to make one storage call at a time (each paddle's files, each
 // recording's, every trial's listing), so its time grew with the account.
 //
-// Here every storage call costs 10 ms (S3 from the Lambda is ~20-40 ms) while
-// the account is deleted, and the test measures the wall time.
+// The rule (CLAUDE.md): deletes go through deleteObjects/deletePrefix, never a
+// loop of single deletes. So the test counts delete calls, which a busy CI
+// runner can't change: erasing 150 paddles and 60 recordings must make exactly
+// as many delete calls as erasing 2 and 2. It used to time the erasure with a
+// 2 s limit instead, and failed on a slow runner (#903).
+//
+// Every storage call still costs 10 ms (S3 from the Lambda is ~20-40 ms), and
+// a generous time limit stays as a backstop for work that went serial, but the
+// test doesn't rely on it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser } from './helpers'
 import { claimProof } from './device-proof'
 
 vi.mock('next/headers', () => ({ cookies: vi.fn() }))
-const slow = vi.hoisted(() => ({ ms: 0, calls: 0 }))
+const slow = vi.hoisted(() => ({ ms: 0, calls: [] as string[] }))
 vi.mock('@paddlesnitch/core/storage', async (orig) => {
   const real = await orig<typeof import('@paddlesnitch/core/storage')>()
-  const wrap = <A extends unknown[], R>(f: (...a: A) => Promise<R>) => async (...a: A): Promise<R> => {
-    if (slow.ms) { slow.calls++; await new Promise(r => setTimeout(r, slow.ms)) }
+  const wrap = <A extends unknown[], R>(name: string, f: (...a: A) => Promise<R>) => async (...a: A): Promise<R> => {
+    if (slow.ms) { slow.calls.push(name); await new Promise(r => setTimeout(r, slow.ms)) }
     return f(...a)
   }
   const out: Record<string, unknown> = { ...real }
-  for (const name of ['getObject', 'putObject', 'listKeys', 'deleteObject', 'deleteObjects', 'getJson', 'putJson'] as const) {
-    if (typeof (real as Record<string, unknown>)[name] === 'function') out[name] = wrap((real as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[name])
+  for (const name of ['getObject', 'putObject', 'listKeys', 'listPrefixes', 'deleteObject', 'deleteObjects', 'deletePrefix', 'getJson', 'putJson'] as const) {
+    if (typeof (real as Record<string, unknown>)[name] === 'function') out[name] = wrap(name, (real as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[name])
   }
   return out
 })
@@ -43,46 +50,74 @@ const paddle = (userId: string, id: string) => ({
 }) as unknown as AnalysisSession
 
 let dataDir: string
-beforeEach(async () => { dataDir = await makeDataDir(); slow.ms = 0; slow.calls = 0 })
+beforeEach(async () => { dataDir = await makeDataDir(); slow.ms = 0; slow.calls = [] })
 afterEach(async () => { slow.ms = 0; await cleanDataDir(dataDir) })
 
-describe('deleting a well-used account', () => {
-  it('takes about the same time for 150 paddles and 60 recordings as for a few', async () => {
-    const me = await makeUser('Busy')
-    for (let i = 0; i < 150; i++) await saveSession(paddle(me.id, `p${i}`))
-    const claim = await createClaim('ABCD1234', 'T-Beam', '0.18.0')
-    await linkClaim(claim.claimCode, me.id, 'Boat')
-    await redeemToken('ABCD1234', claim.claimSecret, await claimProof('ABCD1234', claim.claimSecret))
-    for (let i = 0; i < 60; i++) {
-      await storeDeviceSession({ deviceId: 'ABCD1234', userId: me.id, filename: `track_${String(i).padStart(4, '0')}.csv`, startedAt: '2026-09-01T09:00:00Z', endedAt: '2026-09-01T10:00:00Z', distanceMetres: 1000, points: 10 }, 'lat,lon,timestamp\n')
-    }
-    signInAs(me.idToken)
+/** Runs `fn` with slow storage; returns its delete calls by kind and the wall time. */
+async function measure(fn: () => Promise<void>) {
+  slow.ms = 10
+  slow.calls = []
+  const t0 = Date.now()
+  try { await fn() } finally { slow.ms = 0 }
+  const count = (name: string) => slow.calls.filter(c => c === name).length
+  return {
+    deletes: { deleteObject: count('deleteObject'), deleteObjects: count('deleteObjects'), deletePrefix: count('deletePrefix') },
+    calls: slow.calls.length,
+    ms: Date.now() - t0,
+  }
+}
 
-    slow.ms = 10
-    const t0 = Date.now()
+async function addPaddles(userId: string, n: number, tag: string) {
+  for (let i = 0; i < n; i++) await saveSession(paddle(userId, `${tag}${i}`))
+}
+async function addRecordings(deviceId: string, userId: string, n: number, tag: string) {
+  for (let i = 0; i < n; i++) {
+    await storeDeviceSession({ deviceId, userId, filename: `${tag}_${String(i).padStart(4, '0')}.csv`, startedAt: '2026-09-01T09:00:00Z', endedAt: '2026-09-01T10:00:00Z', distanceMetres: 1000, points: 10 }, 'lat,lon,timestamp\n')
+  }
+}
+async function accountWith(name: string, deviceId: string, paddles: number, recordings: number) {
+  const me = await makeUser(name)
+  await addPaddles(me.id, paddles, 'p')
+  const claim = await createClaim(deviceId, 'T-Beam', '0.18.0')
+  await linkClaim(claim.claimCode, me.id, 'Boat')
+  await redeemToken(deviceId, claim.claimSecret, await claimProof(deviceId, claim.claimSecret))
+  await addRecordings(deviceId, me.id, recordings, 'track')
+  return me
+}
+
+/** Erases the account, then (#814) writes late data as the old token might and runs the second pass. */
+async function eraseTwice(me: { id: string; idToken: string }, deviceId: string, paddles: number, recordings: number) {
+  signInAs(me.idToken)
+  const first = await measure(async () => {
     expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
-    const took = Date.now() - t0
-    slow.ms = 0
+  })
+  expect(await listKeys(`analysis/${me.id}/`)).toEqual([])
+  expect(await listKeys(`devices/${deviceId}/sessions/`)).toEqual([])
 
-    expect(await listKeys(`analysis/${me.id}/`)).toEqual([])
-    expect((await listKeys('devices/ABCD1234/sessions/'))).toEqual([])
-    // One call at a time this was ~800 calls: 8+ s here, 30 s+ against S3.
-    expect(took, `${slow.calls} storage calls in ${took} ms`).toBeLessThan(2000)
-
-    // The second pass (#814) meets the same account again: the old token kept
-    // writing while the delete ran. It must be as flat in time.
-    for (let i = 0; i < 150; i++) await saveSession(paddle(me.id, `late${i}`))
-    for (let i = 0; i < 60; i++) {
-      await storeDeviceSession({ deviceId: 'ABCD1234', userId: me.id, filename: `late_${String(i).padStart(4, '0')}.csv`, startedAt: '2026-09-01T09:00:00Z', endedAt: '2026-09-01T10:00:00Z', distanceMetres: 1000, points: 10 }, 'lat,lon,timestamp\n')
-    }
-    slow.ms = 10
-    slow.calls = 0
-    const t1 = Date.now()
+  await addPaddles(me.id, paddles, 'late')
+  await addRecordings(deviceId, me.id, recordings, 'late')
+  const second = await measure(async () => {
     expect((await sweepJobs(Date.now() + ERASE_AGAIN_AFTER_MS + 1_000)).done).toBe(1)
-    const again = Date.now() - t1
-    slow.ms = 0
-    expect(await listKeys(`analysis/${me.id}/`)).toEqual([])
-    expect((await listKeys('devices/ABCD1234/sessions/'))).toEqual([])
-    expect(again, `${slow.calls} storage calls in ${again} ms`).toBeLessThan(2000)
+  })
+  expect(await listKeys(`analysis/${me.id}/`)).toEqual([])
+  expect(await listKeys(`devices/${deviceId}/sessions/`)).toEqual([])
+  return { first, second }
+}
+
+describe('deleting a well-used account', () => {
+  it('makes as many delete calls for 150 paddles and 60 recordings as for a few', async () => {
+    const few = await eraseTwice(await accountWith('Light', 'FEW00001', 2, 2), 'FEW00001', 2, 2)
+    const many = await eraseTwice(await accountWith('Busy', 'ABCD1234', 150, 60), 'ABCD1234', 150, 60)
+
+    // One delete per object was ~210 more calls here: 8+ s locally, 30 s+ against S3.
+    expect(many.first.deletes, `first pass, ${many.first.calls} storage calls`).toEqual(few.first.deletes)
+    expect(many.second.deletes, `second pass, ${many.second.calls} storage calls`).toEqual(few.second.deletes)
+    // Any delete per object gets far past this: a few fixed single deletes only.
+    expect(many.first.deletes.deleteObject).toBeLessThan(10)
+
+    // Backstop, not the check: 30 s on S3 is ~7.5 s at 10 ms a call. A normal
+    // run takes 1-2 s, so a busy runner has room.
+    expect(many.first.ms, `${many.first.calls} storage calls`).toBeLessThan(7_500)
+    expect(many.second.ms, `${many.second.calls} storage calls`).toBeLessThan(7_500)
   }, 60_000)
 })
