@@ -1,7 +1,7 @@
 // The site's words follow a short style guide (docs: CLAUDE.md "Writing for
 // the site"): one name per thing, plain words, errors that say what to do.
-// This scans every page, component and route for phrases we removed, so they
-// don't creep back. Comments are skipped; only code and text are checked.
+// This scans every page, component and route, and the games (#851), for
+// phrases we removed, so they don't creep back. Comments are skipped; only code and text are checked.
 // The Android and iPhone apps' words get the same list (#794): their string
 // resources and the quoted text in their main sources, without comments, log
 // lines, keys or tests.
@@ -10,26 +10,41 @@ import { readFileSync, readdirSync, statSync } from 'fs'
 import path from 'path'
 
 const repo = path.resolve(__dirname, '../../../..')
-const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src']
+const ROOTS = ['apps/web/src/app', 'apps/web/src/components', 'apps/web/src/lib', 'packages/ui/src', 'packages/analysis/src', 'games']
 
 // Lists of words to keep OUT of what users read: the AI summary's banned
 // phrases (voice-lists.ts) name "journey" and the like so the check can reject them.
 const NOT_COPY = ['packages/analysis/src/voice-lists.ts']
+// The site is TypeScript; the games (#851) are plain .html and .js, with their
+// browser and Node checks in games/tests, which no player reads.
+const COPY_FILE = /\.(ts|tsx|js|html)$/
+const NOT_COPY_DIRS = ['games/tests']
 
 function files(dir: string): string[] {
   const out: string[] = []
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name)
-    if (statSync(full).isDirectory()) out.push(...files(full))
-    else if (/\.(ts|tsx)$/.test(name) && !/\.test\./.test(name) && !NOT_COPY.includes(path.relative(repo, full))) out.push(full)
+    if (statSync(full).isDirectory()) { if (!NOT_COPY_DIRS.includes(path.relative(repo, full))) out.push(...files(full)) }
+    else if (COPY_FILE.test(name) && !/\.test\./.test(name) && !NOT_COPY.includes(path.relative(repo, full))) out.push(full)
   }
   return out
 }
 
-// Code and visible text only: drop // and /* */ comments and JSX {/* */}.
-function withoutComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/(^|\s)\/\/.*$/, '')).join('\n')
+// Code and visible text only: drop // and /* */ comments, JSX {/* */} and
+// HTML <!-- -->, in one pass so whichever opens first wins: a `/*` inside a
+// `//` comment ("courses/*.json") once blanked 2,950 lines of the game's
+// main.js, up to the next `*/`. Newlines are kept, so line numbers stay right.
+// A `//` counts only at a line's start or after a space, not in "https://".
+export function withoutComments(src: string): string {
+  return src.replace(/(^|\s)\/\/[^\n]*|\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/gm, (m, before = '') => before + m.slice(before.length).replace(/[^\n]/g, ''))
 }
+
+// Lines that match a phrase but aren't words anyone reads, each named: file,
+// then the line's code. Never a whole file or folder.
+const NOT_WORDS: [string, RegExp][] = [
+  // The Screen Orientation API's own name, when the game leaves full screen.
+  ['games/reading-thames/main.js', /screen\.orientation\?\.unlock\?\.\(\)/],
+]
 
 // [phrase, why it's banned]
 const BANNED: [RegExp, string][] = [
@@ -59,8 +74,30 @@ describe('site copy follows the style guide', () => {
 
   it.each(BANNED)('nothing says %s', (re, why) => {
     const hits = sources.flatMap(({ f, text }) =>
-      text.split('\n').flatMap((line, i) => (re.test(line) ? [`${f}:${i + 1}: ${line.trim().slice(0, 100)}`] : [])))
+      text.split('\n').flatMap((line, i) => (re.test(line) && !NOT_WORDS.some(([nf, ok]) => nf === f && ok.test(line)) ? [`${f}:${i + 1}: ${line.trim().slice(0, 100)}`] : [])))
     expect(hits, why).toEqual([])
+  })
+
+  it("reads the games' pages and scripts, not their tests (#851)", () => {
+    const names = sources.map(s => s.f)
+    expect(names).toContain('games/reading-thames/index.html')
+    expect(names).toContain('games/reading-thames/main.js')
+    expect(names).toContain('games/shared/audio.js')
+    expect(names.filter(f => f.startsWith('games/tests/'))).toEqual([])
+    // Read, and not blanked by a stray comment opener: most of each file is left.
+    for (const f of ['games/reading-thames/main.js', 'games/reading-thames/index.html']) {
+      const lines = sources.find(s => s.f === f)!.text.split('\n')
+      expect(lines.filter(l => l.trim()).length, f).toBeGreaterThan(lines.length / 2)
+    }
+  })
+
+  it('a /* inside a // comment, or // inside a string, hides nothing after it', () => {
+    const src = ["// courses/*.json, made by the script", "const a = 'https://x.com/a'", "show('Could not join')", '/* a real', 'block */ go()'].join('\n')
+    expect(withoutComments(src).split('\n')).toEqual(['', "const a = 'https://x.com/a'", "show('Could not join')", '', ' go()'])
+  })
+
+  it('a named exception covers its line in its file only', () => {
+    expect(NOT_WORDS.every(([f]) => sources.some(s => s.f === f))).toBe(true)
   })
 })
 
