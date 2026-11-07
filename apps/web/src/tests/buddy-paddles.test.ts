@@ -6,6 +6,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { makeDataDir, cleanDataDir, makeUser, type TestUser } from './helpers'
 import { createCaller } from '@paddlesnitch/api'
 import { saveSession, shareSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
+import fs from 'fs/promises'
+import path from 'path'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const NOTE = 'private diary: knee hurt, told no one'
@@ -33,9 +35,30 @@ beforeEach(async () => {
 })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
+// #852 review: summaries from before places, which only the owner's own calls may rebuild.
+async function stripPlaces(dataDir: string, userId: string, ids: string[]): Promise<() => Promise<string[]>> {
+  const f = (id: string) => path.join(dataDir, 'analysis', userId, id, 'summary.json')
+  for (const id of ids) {
+    const sum = JSON.parse(await fs.readFile(f(id), 'utf8'))
+    delete sum.places
+    await fs.writeFile(f(id), JSON.stringify(sum))
+  }
+  return () => Promise.all(ids.map(id => fs.readFile(f(id), 'utf8')))
+}
+
 const code = (p: Promise<unknown>) => p.then(() => 'ok', (e: { code?: string }) => e.code)
 
 describe("a buddy's paddles", () => {
+  it("never rewrites the owner's summaries, even ones the owner's own list would rebuild", async () => {
+    await saveSession(paddle(ann.id, 'p1-watch', '2026-10-01T07:00:20Z'))                // the same outing as p1
+    const files = await stripPlaces(dataDir, ann.id, ['p1', 'p1-watch'])
+    const before = await files()
+    expect((await as(bob).buddies.paddles({ userId: ann.id })).paddles.map(p => p.id)).toContain('p1-watch')
+    expect(await files()).toEqual(before)                                                  // byte for byte
+    await as(ann).paddles.list()
+    expect(await files()).not.toEqual(before)                                              // the owner's list does rebuild them
+  })
+
   it('a buddy sees the list, newest first, and nothing private in it', async () => {
     const r = await as(bob).buddies.paddles({ userId: ann.id })
     expect(r.name).toBe('Ann')
