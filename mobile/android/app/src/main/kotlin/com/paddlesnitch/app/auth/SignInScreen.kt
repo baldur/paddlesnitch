@@ -3,7 +3,6 @@ package com.paddlesnitch.app.auth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -154,7 +153,7 @@ fun SignInScreen(
 
     fun openGoogle() {
         error = null
-        runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(google.start())) }
+        runCatching { com.paddlesnitch.app.tabBuilder().build().launchUrl(context, Uri.parse(google.start())) }
             .onFailure { google.cancel(); error = "Couldn’t open Google sign-in. Turn on or install a web browser, then try again." }
     }
 

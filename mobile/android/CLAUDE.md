@@ -243,3 +243,4 @@ time and isn't obvious from the code.
   holding to stop.". Tests pass a fake `LocalHapticFeedback` and step `mainClock` with the finger down. One remembered
   `stopped` flag, set by the hold or the Stop recording action, makes it stop once: the button stays on
   screen until the service posts Stopped, and a tap or a second hold then does nothing (tester, #882).
+- **Every Custom Tab comes from `tabBuilder()`** (App.kt, #889): the app's dark bar (toolbar and navigation bar `PsColor.bg`, dark scheme) whatever the phone's theme, as iOS tints Safari. Custom Tabs has no control tint, so the browser picks the icon colour. `CustomTabColoursTest` reads it back with `CustomTabsIntent.getColorSchemeParams` and fails on a second `CustomTabsIntent.Builder(` under src/main. To test a launch, use an Activity: `launchUrl` from the application context fails without NEW_TASK, and `openTab`'s `runCatching` hides that.
