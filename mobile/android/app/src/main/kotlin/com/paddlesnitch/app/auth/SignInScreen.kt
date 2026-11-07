@@ -32,7 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -72,6 +71,8 @@ import com.paddlesnitch.app.ui.textColors
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import com.paddlesnitch.app.ui.OutlinedButton
@@ -128,7 +129,6 @@ fun SignInScreen(
     val passwordFocus = remember { FocusRequester() }
     var focusField by remember { mutableStateOf<FocusRequester?>(null) }
     val scope = rememberCoroutineScope()
-    val uri = LocalUriHandler.current
     val context = LocalContext.current
 
     // Asked each time the screen opens: Google can be switched on and off on the server.
@@ -243,10 +243,16 @@ fun SignInScreen(
             visualTransformation = PasswordVisualTransformation(),
             supportingText = if (creating) ({ Text("At least 8 characters, with an uppercase letter, a lowercase letter and a number.") }) else null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done))
-        if (creating) Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(agreed, { agreed = it }, colors = checkboxColors())
-            Text("I agree to the ", fontSize = MaterialTheme.typography.bodyMedium.fontSize)
-            TextButton(onClick = { uri.openUri("${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) { Text("Terms of Service") }
+        // One toggleable row, so TalkBack reads the sentence with the checkbox; the link is its own control beside it (#885, as iOS).
+        if (creating) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).heightIn(min = 48.dp).toggleable(agreed, role = Role.Checkbox) { agreed = it },
+                verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(agreed, onCheckedChange = null, colors = checkboxColors())
+                Spacer(Modifier.width(12.dp))
+                Text("I agree to the Terms of Service", fontSize = MaterialTheme.typography.bodyMedium.fontSize)
+            }
+            TextButton(onClick = { com.paddlesnitch.app.account.openTab(context, "${BuildConfig.API_BASE_URL}/terms") }, colors = textColors(),
+                modifier = Modifier.heightIn(min = 48.dp)) { Text("Read them") }
         }
         // Always in the layout, so TalkBack reads each new error.
         Box(Modifier.fillMaxWidth().testTag("signin-error").semantics { liveRegion = LiveRegionMode.Polite }) {

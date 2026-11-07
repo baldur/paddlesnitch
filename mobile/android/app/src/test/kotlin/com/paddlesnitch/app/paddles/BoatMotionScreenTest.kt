@@ -93,6 +93,9 @@ class BoatMotionScreenTest {
         golden("measured.large-text")
         compose.onNodeWithText("The shaded band shows", substring = true).performScrollTo()
         golden("measured.large-text.chart")
+        // Stroke shape's legend at large text (#893 review).
+        compose.onNodeWithText("30 seconds of typical paddling", substring = true).performScrollTo()
+        golden("measured.large-text.stroke-shape")
     }
 
     @Test fun eachTileAndChartIsOneThingToAScreenReader() {
