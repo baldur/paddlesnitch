@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { proxy } from './proxy'
+import { resetOriginVerifyWarnings } from './lib/origin-verify'
 
 // Build a request with the given method + path and (optionally) an auth cookie.
 function req(method: string, path: string, authed = false): NextRequest {
@@ -162,13 +163,58 @@ describe('only CloudFront may call the server (#908)', () => {
   })
 
   it('accepts the previous value too while the secret is rotated', () => {
-    vi.stubEnv('ORIGIN_VERIFY_SECRETS', 'new-secret, old-secret')
+    vi.stubEnv('ORIGIN_VERIFY_SECRETS', 'new-secret,old-secret')
     vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const upload = (v: string) => proxy(viewer('POST', '/api/devices/sessions?part=1&parts=2', {}, v))
     expect(refused(upload('new-secret'))).toBe(false)
     expect(refused(upload('old-secret'))).toBe(false)
-    expect(refused(upload('new-secret, old-secret'))).toBe(true)
+    expect(refused(upload('new-secret,old-secret'))).toBe(true)
+  })
+
+  it('splits the values exactly as CloudFront does (on ",", no trimming), so both sides agree', () => {
+    // CloudFront sends Fn::Select[0, Fn::Split[",", value]] verbatim.
+    vi.stubEnv('ORIGIN_VERIFY_SECRETS', 'new-secret, old-secret')
+    vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const page = (v: string) => proxy(viewer('GET', '/paddles', {}, v))
+    expect(refused(page('new-secret'))).toBe(false)
+    // The stored second value is " old-secret"; no header can carry a leading
+    // space (HTTP trims it), so a spaced list only half works: infra/CLAUDE.md
+    // says no spaces.
+    expect(refused(page('old-secret'))).toBe(true)
+  })
+
+  it('never logs a method the caller made up (the server-errors alarm matches ERROR)', () => {
+    vi.stubEnv('ORIGIN_VERIFY_SECRETS', 'right-secret')
+    vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(refused(proxy(new NextRequest('https://abc.lambda-url.eu-west-1.on.aws/', { method: 'ERROR' })))).toBe(true)
+    expect(refused(proxy(new NextRequest('https://abc.lambda-url.eu-west-1.on.aws/', { method: 'POST' })))).toBe(true)
+    const lines = warn.mock.calls.map((c) => String(c[0]))
+    expect(lines[0]).toContain('"method":"other"')
+    expect(lines[0]).not.toMatch(/error/i)
+    expect(lines[1]).toContain('"method":"POST"')
+  })
+
+  it.each([['unset', undefined], ['unknown', 'refuse'], ['empty', '']])('a secret with the mode %s means report: nothing is refused, a warning is logged', (_name, mode) => {
+    vi.stubEnv('ORIGIN_VERIFY_SECRETS', 'right-secret')
+    vi.stubEnv('ORIGIN_VERIFY_MODE', mode)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(refused(proxy(viewer('POST', '/api/devices/health')))).toBe(false)
+    expect(String(warn.mock.calls[0][0])).toContain('"refused":false')
+  })
+
+  it('enforce without any secret warns once instead of going quietly open', () => {
+    resetOriginVerifyWarnings()
+    vi.stubEnv('ORIGIN_VERIFY_SECRETS', undefined)
+    vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(refused(proxy(viewer('GET', '/paddles')))).toBe(false)
+    expect(refused(proxy(viewer('GET', '/paddles')))).toBe(false)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0][0])).toContain('origin_verify_off')
+    resetOriginVerifyWarnings()
   })
 
   it('report mode refuses nothing but warns (without the value), so a first deploy proves CloudFront sends it', () => {
@@ -185,11 +231,15 @@ describe('only CloudFront may call the server (#908)', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
-  it.each(families)('off when ORIGIN_VERIFY_SECRETS is unset (local dev, tests): %s %s passes without the header', (method, path, headers) => {
-    vi.stubEnv('ORIGIN_VERIFY_SECRETS', '')
-    vi.stubEnv('ORIGIN_VERIFY_MODE', 'enforce')
+  it.each(families)('off when ORIGIN_VERIFY_SECRETS is unset or empty (local dev, tests): %s %s passes without the header', (method, path, headers) => {
     const warn = vi.spyOn(console, 'warn')
-    expect(refused(proxy(viewer(method, path, headers)))).toBe(false)
+    for (const secrets of [undefined, '', ',']) {
+      vi.stubEnv('ORIGIN_VERIFY_SECRETS', secrets)
+      vi.stubEnv('ORIGIN_VERIFY_MODE', undefined)
+      expect(process.env.ORIGIN_VERIFY_SECRETS).toBe(secrets)
+      expect(refused(proxy(viewer(method, path, headers)))).toBe(false)
+      expect(refused(proxy(viewer(method, path, headers, 'anything')))).toBe(false)
+    }
     expect(warn).not.toHaveBeenCalled()
   })
 

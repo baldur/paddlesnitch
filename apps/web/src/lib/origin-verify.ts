@@ -25,7 +25,9 @@ function sameString(a: string, b: string): boolean {
 }
 
 export function originVerdict(value: string | null, secretsEnv = process.env.ORIGIN_VERIFY_SECRETS): OriginVerdict {
-  const secrets = (secretsEnv ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  // Split exactly as CloudFront does (Fn::Split on ","), no trimming, so the
+  // value CloudFront sends and the values accepted here always agree.
+  const secrets = (secretsEnv ?? '').split(',').filter(Boolean)
   if (secrets.length === 0) return 'off'
   if (!value) return 'missing'
   let ok = false
@@ -33,13 +35,31 @@ export function originVerdict(value: string | null, secretsEnv = process.env.ORI
   return ok ? 'ok' : 'wrong'
 }
 
+// The caller chooses the method, and the zero-tolerance server-errors alarm
+// matches the word ERROR in the log: log only methods we know.
+const KNOWN_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])
+
+let warnedOff = false
+/** Tests only: forget that the "enforce without secrets" warning was given. */
+export function resetOriginVerifyWarnings() { warnedOff = false }
+
 /** True when the request must be refused. Logs (never the value) when it didn't come through CloudFront. */
 export function refuseDirectRequest(req: { headers: Headers; method: string }, env: NodeJS.ProcessEnv = process.env): boolean {
   const verdict = originVerdict(req.headers.get(ORIGIN_VERIFY_HEADER), env.ORIGIN_VERIFY_SECRETS)
-  if (verdict === 'off' || verdict === 'ok') return false
   const enforce = env.ORIGIN_VERIFY_MODE === 'enforce'
+  if (verdict === 'off') {
+    // Asked to enforce with nothing to check against: say so (once per
+    // instance) rather than go quietly open.
+    if (enforce && !warnedOff) {
+      warnedOff = true
+      console.warn(JSON.stringify({ msg: 'origin_verify_off', reason: 'enforce without ORIGIN_VERIFY_SECRETS' }))
+    }
+    return false
+  }
+  if (verdict === 'ok') return false
+  const method = KNOWN_METHODS.has(req.method) ? req.method : 'other'
   // A warning, not an error: a stranger calling the function URL is expected,
   // not something we broke (root CLAUDE.md, console.error rule).
-  console.warn(JSON.stringify({ msg: 'origin_verify', verdict, method: req.method, refused: enforce }))
+  console.warn(JSON.stringify({ msg: 'origin_verify', verdict, method, refused: enforce }))
   return enforce
 }

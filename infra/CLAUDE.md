@@ -27,7 +27,7 @@ aws ssm put-parameter --name /att/origin-verify --type String --value "file://$F
 ```
 
 - **Turning it on:** never deploy `enforce` together with a header change: the server Lambda updates before the distribution, so for the minutes CloudFront takes to deploy every request would be refused. Deploy `report` first, check the server log has no `origin_verify` warnings from real traffic, then switch to `enforce`.
-- **Rotating:** put `NEW,OLD` and deploy (the server accepts both while edges switch), then put `NEW` and deploy again.
+- **Rotating:** put `NEW,OLD` (no spaces: both sides split on the comma and nothing is trimmed) and deploy (the server accepts both while edges switch), then put `NEW` and deploy again.
 - **Rolling back fast:** set `ORIGIN_VERIFY_MODE` back to `report` (a one-line PR), or in an emergency edit that variable on the server Lambda in the console; the next deploy restores the stack's value.
 - The value is readable by anyone who can read the distribution, the Lambda configuration or SSM in this account; it is never in git, the template or the deploy log.
 

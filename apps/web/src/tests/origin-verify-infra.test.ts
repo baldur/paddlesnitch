@@ -28,13 +28,24 @@ describe('only CloudFront may call the server (#908): the stack', () => {
     expect(serverFn).toMatch(/ORIGIN_VERIFY_MODE: '(report|enforce)',/)
   })
 
-  it('every behaviour that reaches the server Lambda uses serverOrigin (so carries the header)', () => {
-    const dist = stack.slice(stack.indexOf("new cloudfront.Distribution(this, 'Distribution'"))
-    const origins = [...dist.slice(0, dist.indexOf('\n    })\n')).matchAll(/origin: (\w+),/g)].map((m) => m[1])
-    expect(origins).toContain('serverOrigin')
+  it('every behaviour names one of the known origins; only serverOrigin reaches the server (so carries the header)', () => {
+    const start = stack.indexOf("new cloudfront.Distribution(this, 'Distribution'")
+    expect(start).toBeGreaterThan(0)
+    const dist = stack.slice(start, stack.indexOf('\n    })\n', start))
+    // Every `origin:` line, whatever its value: an inline origin
+    // (`origin: new origins.FunctionUrlOrigin(serverUrl)`) fails here.
+    const values = [...dist.matchAll(/\borigin:\s*([^\n]*)/g)].map((m) => m[1].trim())
+    expect(values.length).toBeGreaterThan(5)
+    expect(values).toContain('serverOrigin,')
     // The others are S3 (OAC) or the image function, never the server URL.
-    for (const o of origins) expect(['serverOrigin', 'imageOptOrigin', 'assetsOrigin', 'gamesOrigin']).toContain(o)
+    for (const v of values) expect(['serverOrigin,', 'imageOptOrigin,', 'assetsOrigin,', 'gamesOrigin,']).toContain(v)
+    // Nothing else builds an origin onto the server function: its URL is
+    // read once, in serverOrigin, and no origin is made from the URL object.
+    expect(stack.match(/serverUrl/g)).toHaveLength(2) // the declaration and serverOrigin
     expect(stack.match(/serverUrl\.url/g)).toHaveLength(1)
+    expect(stack).not.toMatch(/FunctionUrlOrigin/)
+    expect(stack.match(/new origins\.HttpOrigin\(/g)).toHaveLength(2) // serverOrigin, imageOptOrigin
+    expect(stack.match(/serverFn\.addFunctionUrl\(/g)).toHaveLength(1)
   })
 
   it('the header name matches what the proxy checks', async () => {
