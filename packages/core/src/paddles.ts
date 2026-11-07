@@ -154,33 +154,174 @@ export function paddleLogbook(paddles: Dated[], now: Date): Logbook {
   return { weeks: weeklyKm(paddles, now), streakWeeks: weekStreak(paddles, now), thisMonthKm: month.thisMonth, lastMonthKm: month.lastMonth }
 }
 
+// ---- One outing recorded twice (#852) ----
+// The one rule for "same outing", on the Paddles list, the paddle page and
+// Compare: the two overlap in time by at least half the shorter one, AND at
+// the clock instants both recorded (every PLACES_EVERY_S, at least three) they
+// put the paddler within CORRIDOR_M of each other at least MIN_AGREEMENT of the
+// time. Two people out at the same time on another river, or a phone left on
+// the bank, are not the same outing.
+// The place part reads `places`, worked out from the track when the paddle is
+// saved and kept in its small summary, so a list never reads a track.
+
+/** The shorter paddle must lie at least this much inside the other in time... */
+export const MIN_TIME_OVERLAP = 0.5
+/** ...and at least this share of the instants both recorded must put the two within CORRIDOR_M. */
+export const MIN_AGREEMENT = 0.7
+export const CORRIDOR_M = 40
+/** At least this many shared instants, or there is nothing to judge by. */
+export const MIN_SAMPLES = 3
+/** `places` holds one position per this many seconds of clock time (UTC). */
+export const PLACES_EVERY_S = 20
+/** No position at an instant whose two nearest points are further apart than
+ *  this: a straight line across a gap can cut a bend. */
+export const MAX_GAP_S = 30
+
+/**
+ * Where a paddle was at each instant of clock time that is a multiple of
+ * `every` seconds (epoch), from `from`. Compact: `d` is [lat, lng] pairs in
+ * 1e-5 degrees (~1 m), the first absolute and each later one the change since
+ * the last position; null, null where there is none (a gap).
+ */
+export type OutingPlaces = { from: number; every: number; d: (number | null)[] }
+
+/** Positions ([lat, lng] in degrees, or null for none) as OutingPlaces. */
+export function encodePlaces(from: number, every: number, pts: ([number, number] | null)[]): OutingPlaces {
+  const d: (number | null)[] = []
+  let last: [number, number] = [0, 0]
+  for (const p of pts) {
+    if (!p) { d.push(null, null); continue }
+    const q: [number, number] = [Math.round(p[0] * 1e5), Math.round(p[1] * 1e5)]
+    d.push(q[0] - last[0], q[1] - last[1])
+    last = q
+  }
+  return { from, every, d }
+}
+
+/** Places in the shape this code writes (anything else, such as an older
+ *  draft's `{ from, pts }`, counts as none and is rebuilt). */
+export function hasPlaces(p: unknown): p is OutingPlaces {
+  const q = p as Partial<OutingPlaces> | null | undefined
+  return typeof q?.from === 'number' && typeof q.every === 'number' && q.every > 0 && Array.isArray(q.d)
+}
+
+/** OutingPlaces back to positions in degrees (null where there is none). */
+export function decodePlaces(p: OutingPlaces): ([number, number] | null)[] {
+  if (!hasPlaces(p)) return []
+  const out: ([number, number] | null)[] = []
+  let lat = 0, lng = 0
+  for (let i = 0; i + 1 < p.d.length; i += 2) {
+    const a = p.d[i], b = p.d[i + 1]
+    if (a == null || b == null) { out.push(null); continue }
+    lat += a; lng += b
+    out.push([lat / 1e5, lng / 1e5])
+  }
+  return out
+}
+
+type Window = { paddledAt: string; durationS: number }
+const startMs = (p: { paddledAt: string }) => Date.parse(p.paddledAt)
+
+/** Seconds both paddles were recording, over the shorter one's duration. */
+export function timeOverlapShare(a: Window, b: Window): number {
+  const from = Math.max(startMs(a), startMs(b))
+  const to = Math.min(startMs(a) + a.durationS * 1000, startMs(b) + b.durationS * 1000)
+  const shorter = Math.min(a.durationS, b.durationS)
+  return shorter > 0 ? Math.max(0, to - from) / 1000 / shorter : 0
+}
+
+/** For each paddle (by index), the others it overlaps in time by at least
+ *  MIN_TIME_OVERLAP. Sorted by start, so each is checked only against those
+ *  that start before it ends: about linear for a real list. */
+export function overlapsInTime(items: Window[]): number[][] {
+  const span = items.map((p, i) => ({ i, s: startMs(p), e: startMs(p) + p.durationS * 1000 })).sort((a, b) => a.s - b.s)
+  const out = items.map(() => [] as number[])
+  for (let x = 0; x < span.length; x++) {
+    for (let y = x + 1; y < span.length && span[y].s < span[x].e; y++) {
+      const i = span[x].i, j = span[y].i
+      if (timeOverlapShare(items[i], items[j]) >= MIN_TIME_OVERLAP) { out[i].push(j); out[j].push(i) }
+    }
+  }
+  return out
+}
+
+// Metres between two nearby points (flat-earth: exact enough at 40 m).
+const metresApart = ([la, na]: [number, number], [lb, nb]: [number, number]) =>
+  Math.hypot((lb - la) * 110_540, (nb - na) * 111_320 * Math.cos(((la + lb) / 2) * Math.PI / 180))
+
+export type OutingGap = { samples: number; medianM: number; worstM: number; agreement: number }
+
+/**
+ * How far apart the two put the paddler at the instants both recorded.
+ * `worstM` is the 95th percentile (one wild fix shouldn't define it);
+ * `agreement` the share within CORRIDOR_M. Null under MIN_SAMPLES instants.
+ */
+export function placesGap(a: OutingPlaces, b: OutingPlaces): OutingGap | null {
+  const pa = decodePlaces(a), pb = decodePlaces(b)
+  const gaps: number[] = []
+  for (let i = 0; i < pa.length; i++) {
+    const j = (a.from + i * a.every - b.from) / b.every
+    const x = pa[i], y = Number.isInteger(j) ? pb[j] : undefined
+    if (x && y) gaps.push(metresApart(x, y))
+  }
+  if (gaps.length < MIN_SAMPLES) return null
+  const s = [...gaps].sort((x, y) => x - y)
+  return {
+    samples: gaps.length,
+    medianM: Math.round(s[Math.floor(s.length / 2)]),
+    worstM: Math.round(s[Math.min(s.length - 1, Math.floor(s.length * 0.95))]),
+    agreement: gaps.filter(g => g <= CORRIDOR_M).length / gaps.length,
+  }
+}
+
+/** What the rule needs of a paddle: a summary, or a full paddle's parts. */
+export type Outing = Window & { noGps?: unknown; places?: OutingPlaces }
+
+/** Two recordings are one outing: they overlap in time and in place. */
+export function sameOuting(a: Outing, b: Outing): boolean {
+  // A paddle without a map (#414) is never offered to compare with another.
+  if (isMotionOnly(a) || isMotionOnly(b)) return false
+  if (timeOverlapShare(a, b) < MIN_TIME_OVERLAP) return false
+  if (!hasPlaces(a.places) || !hasPlaces(b.places)) return false
+  const gap = placesGap(a.places, b.places)
+  return !!gap && gap.agreement >= MIN_AGREEMENT
+}
+
 /**
  * Recordings of one outing from two sources (the tracker and a watch on
- * Strava) as one group, so the list shows the outing once. Overlapping by at
- * least half the shorter one in time is enough here: two of YOUR paddles at
- * the same time are the same outing. The tracker's copy leads (it has the
- * boat motion), then Strava, then the rest; the list stays newest first.
+ * Strava) as one group, so the list shows the outing once. The tracker's copy
+ * leads (it has the boat motion), then Strava, then the rest. A recording
+ * joins a group only if it is the same outing as that group's LEAD, so a card's
+ * "Also recorded by" always matches a link on the lead's page, and the answer
+ * doesn't depend on the order of the list. Groups keep the list's order.
  */
-export function groupSameOuting<T extends Dated & { source: { type: string; deviceId?: string; phone?: boolean } }>(paddles: T[]): { lead: T; others: T[] }[] {
+export function groupSameOuting<T extends Dated & Outing & { id?: string; source: { type: string; deviceId?: string; phone?: boolean } }>(paddles: T[]): { lead: T; others: T[] }[] {
   // A tracker, fixed in the boat, leads over a phone (#789).
   const rank = (s: T['source']) => ['device', 'strava', 'trial', 'file'].indexOf(s.type) * 2 + (isPhonePaddle(s) ? 1 : 0)
-  const start = (p: T) => Date.parse(p.paddledAt)
-  const overlaps = (a: T, b: T) => {
-    // A paddle without a map stands alone: grouping offers the two to compare.
-    if (isMotionOnly(a) || isMotionOnly(b)) return false
-    const from = Math.max(start(a), start(b)), to = Math.min(start(a) + a.durationS * 1000, start(b) + b.durationS * 1000)
-    const shorter = Math.min(a.durationS, b.durationS)
-    return shorter > 0 && (to - from) / 1000 >= shorter * 0.5
-  }
-  const groups: T[][] = []
-  for (const p of paddles) {
-    const g = groups.find(g => g.some(q => overlaps(p, q)))
-    if (g) g.push(p); else groups.push([p])
-  }
-  return groups.map(g => {
-    const sorted = [...g].sort((a, b) => rank(a.source) - rank(b.source))
-    return { lead: sorted[0], others: sorted.slice(1) }
+  const order = paddles.map((_, i) => i).sort((x, y) => {
+    const a = paddles[x], b = paddles[y]
+    return rank(a.source) - rank(b.source) || startMs(a) - startMs(b) || (a.id ?? '').localeCompare(b.id ?? '') || x - y
   })
+  const pos = new Map(order.map((i, k) => [i, k]))
+  const near = overlapsInTime(paddles)
+  const groups = new Map<number, number[]>()      // lead's index -> members, lead first
+  for (const i of order) {
+    const lead = near[i].filter(j => groups.has(j)).sort((x, y) => pos.get(x)! - pos.get(y)!).find(j => sameOuting(paddles[j], paddles[i]))
+    if (lead === undefined) groups.set(i, [i]); else groups.get(lead)!.push(i)
+  }
+  return [...groups.values()]
+    .sort((g, h) => Math.min(...g) - Math.min(...h))
+    .map(([lead, ...others]) => ({ lead: paddles[lead], others: others.map(i => paddles[i]) }))
+}
+
+/** The other recordings a paddle's page links to, by the list's grouping: a
+ *  lead's others, or a member's lead. */
+export function sameOutingLinks<T extends { id: string }>(groups: { lead: T; others: T[] }[], id: string): T[] {
+  for (const g of groups) {
+    if (g.lead.id === id) return g.others
+    if (g.others.some(o => o.id === id)) return [g.lead]
+  }
+  return []
 }
 
 /**

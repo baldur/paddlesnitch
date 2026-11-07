@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
 import { fmtClock, split500 } from '@paddlesnitch/analysis/analysis'
-import { paddleLogbook, groupSameOuting, paddleTotals, isMotionOnly, paddleKm, isPhonePaddle, alsoRecordedBy } from '@paddlesnitch/core/paddles'
+import { paddleLogbook, paddleTotals, isMotionOnly, paddleKm, isPhonePaddle, alsoRecordedBy } from '@paddlesnitch/core/paddles'
 import { fmtWeekday, fmtMonth } from '@paddlesnitch/core/format'
 import { Page, PageHeader, Section, Eyebrow } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
@@ -50,7 +50,16 @@ function WeeksChart({ weeks }: { weeks: { week: string; km: number }[] }) {
   )
 }
 
-type Summary = SessionSummary
+// paddles.sessions: every recording, `places` left on the server, and the
+// lead of an outing recorded twice naming the others in `sameOuting`.
+type Summary = Omit<SessionSummary, 'places'> & { sameOuting?: { id: string; sourceType: string; phone?: true }[] }
+
+// One row per outing: the server decided which recordings are one (sameOuting
+// in core/paddles, the rule the paddle page uses too).
+function outings(sessions: Summary[]) {
+  const inAnother = new Set(sessions.flatMap(s => s.sameOuting?.map(o => o.id) ?? []))
+  return sessions.filter(s => !inAnother.has(s.id)).map(s => ({ lead: s, others: s.sameOuting ?? [] }))
+}
 
 // What a row shows, whether it opens the paddle or is being picked to compare.
 function RowBody({ s, end }: { s: Summary; end?: ReactNode }) {
@@ -139,7 +148,11 @@ export default function PaddlesList() {
           )
         })()}
 
-        {sessions === undefined && <LoadingState label="Loading" className="py-10" />}
+        {sessions === undefined && !q.isError && <LoadingState label="Loading" className="py-10" />}
+        {sessions === undefined && q.isError && (
+          <EmptyState title="Couldn't load your paddles"
+            action={<button type="button" onClick={() => q.refetch()} disabled={q.isFetching} className={buttonClass('primary')}>{q.isFetching ? 'Try again…' : 'Try again'}</button>} />
+        )}
         {empty && (
           <EmptyState title="No paddles yet" body="Add one from a GPS file or a time trial. A tracker adds its own."
             action={<Link href="/paddles/new" className={buttonClass('primary')}>Add paddle</Link>} />
@@ -168,7 +181,7 @@ export default function PaddlesList() {
             )}
 
             <ul className="flex flex-col gap-2">
-              {groupSameOuting(sessions).map(({ lead: s, others }) => (
+              {outings(sessions).map(({ lead: s, others }) => (
                 <li key={s.id} className={cardClass}>
                   {comparing ? (
                     // A paddle without a map (#414) isn't offered to compare.
@@ -193,7 +206,7 @@ export default function PaddlesList() {
                   {!comparing && others.map(o => (
                     <Link key={o.id} href={`/paddles/compare?a=${s.id}&b=${o.id}`}
                       className="flex items-center justify-between gap-3 border-t border-border px-3 min-h-11 text-sm text-muted hover:text-fg">
-                      <span>Also recorded by {alsoRecordedBy(o.source)}</span>
+                      <span>Also recorded by {alsoRecordedBy({ type: o.sourceType, phone: o.phone })}</span>
                       <span className="text-primary-text">Compare →</span>
                     </Link>
                   ))}

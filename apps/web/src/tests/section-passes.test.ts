@@ -10,6 +10,8 @@ import { allPasses, crossingSignNear, processTrace } from '@paddlesnitch/timing/
 import { getSavedSection } from '@paddlesnitch/analysis/saved-sections'
 import { pointsToTrack } from '@paddlesnitch/analysis/similar'
 import { buildAccountExport } from '@/lib/account-export'
+import fs from 'fs/promises'
+import path from 'path'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const LAT0 = 51.46, LNG0 = -0.93
@@ -49,9 +51,30 @@ beforeEach(async () => {
 })
 afterEach(async () => { await cleanDataDir(dataDir) })
 
+// #852 review: summaries from before places, which only the owner's own calls may rebuild.
+async function stripPlaces(dataDir: string, userId: string, ids: string[]): Promise<() => Promise<string[]>> {
+  const f = (id: string) => path.join(dataDir, 'analysis', userId, id, 'summary.json')
+  for (const id of ids) {
+    const sum = JSON.parse(await fs.readFile(f(id), 'utf8'))
+    delete sum.places
+    await fs.writeFile(f(id), JSON.stringify(sum))
+  }
+  return () => Promise.all(ids.map(id => fs.readFile(f(id), 'utf8')))
+}
+
 const code = (p: Promise<unknown>) => p.then(() => 'ok', (e: { code?: string }) => e.code)
 
 describe('every pass of a section', () => {
+  it("never rewrites a buddy's summaries", async () => {
+    await saveSession(paddle(ann.id, 'hers-watch', '2026-10-10T07:01:20Z', club(5100), { speed: 3.5 }))   // the same outing as hers
+    const files = await stripPlaces(dataDir, ann.id, ['hers', 'hers-watch'])
+    const before = await files()
+    await as(me).sections.passes(SECTION)
+    expect(await files()).toEqual(before)
+    await as(ann).sections.passes({ sourceId: 'hers', owner: ann.id, aIdx: 286, bIdx: 571 })
+    expect(await files()).not.toEqual(before)                                              // her own call does rebuild them
+  })
+
   it('lists each pass the same way round, fastest first: laps twice, one outing once, a buddy by name', async () => {
     const r = await as(me).sections.passes(SECTION)
     expect(r.sectionM).toBeGreaterThan(950); expect(r.sectionM).toBeLessThan(1050)
