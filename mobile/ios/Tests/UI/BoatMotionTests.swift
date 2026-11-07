@@ -161,6 +161,71 @@ final class BoatMotionTests: AppTestCase {
         XCTAssertFalse(element("open-motion").exists, "not from a tracker")
     }
 
+    /// Roll and pitch never differ by colour alone (#855): the legend sits
+    /// in its 34 pt band above the lines, roll's key is a solid line and
+    /// pitch's a dashed one, as in the chart.
+    func testStrokeShapeKeepsItsLegendAboveTheLinesAndDashesPitch() {
+        openMotion("pdl-river")
+        XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+        let chart = scrollTo("motion-excerpt")
+        let shot = chart.screenshot().image
+        guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
+        let width = shot.size.width
+        func isLine(_ c: Pixels.RGB) -> Bool { c.near(Self.roll) || c.near(Self.pitch) }
+        // The keys, on the legend's centre line (y 17) in the right half.
+        let row = stride(from: width / 2, to: width, by: 0.5).map { ($0, pixels.at(x: $0, y: 17)) }
+        let rollKey = row.filter { $0.1.near(Self.roll) }.map(\.0)
+        let pitchKey = row.filter { $0.1.near(Self.pitch) }.map(\.0)
+        guard let rollStart = rollKey.min(), let rollEnd = rollKey.max(), let pitchStart = pitchKey.min(),
+            let pitchEnd = pitchKey.max()
+        else { return XCTFail("no keys on the legend's centre line") }
+        XCTAssertEqual(rollKey.count, Int((rollEnd - rollStart) / 0.5) + 1, "roll's key is solid")
+        XCTAssertGreaterThan(rollEnd - rollStart, 15, "roll's key is 18 pt of its line")
+        let gaps = row.filter { $0.0 > pitchStart && $0.0 < pitchEnd && !$0.1.near(Self.pitch) }
+        XCTAssertFalse(gaps.isEmpty, "pitch's key is dashed")
+        XCTAssertGreaterThan(pitchStart, rollEnd, "roll, then pitch")
+        var inBand = 0, belowBand = 0
+        for x in stride(from: CGFloat(44), to: rollStart - 4, by: 1) {
+            for y in stride(from: CGFloat(0), to: 34, by: 1) where isLine(pixels.at(x: x, y: y)) { inBand += 1 }
+            for y in stride(from: CGFloat(34), to: 60, by: 1) where isLine(pixels.at(x: x, y: y)) { belowBand += 1 }
+        }
+        XCTAssertEqual(inBand, 0, "the lines stay below the legend band")
+        XCTAssertGreaterThan(belowBand, 0, "the tallest roll reaches the top of the plot")
+        keep(chart, "Stroke shape")
+    }
+
+    /// Each band of "Through the session" is outlined at full colour, over
+    /// both fills (which alone are under 3:1 on the surface).
+    func testThroughTheSessionOutlinesEachBandAtFullColour() {
+        openMotion("pdl-river")
+        XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
+        let chart = scrollTo("motion-envelope")
+        let shot = chart.screenshot().image
+        guard let pixels = Pixels(shot) else { return XCTFail("no pixels") }
+        let width = shot.size.width
+        var rollColumns = 0, pitchSeen = false
+        let columns = stride(from: CGFloat(60), to: width - 30, by: 9).map { $0 }
+        for x in columns {
+            let column = stride(from: CGFloat(34), to: shot.size.height - 26, by: 0.5).map { pixels.at(x: x, y: $0) }
+            if column.contains(where: { $0.near(Self.roll, within: 40) }) { rollColumns += 1 }
+            if column.contains(where: { $0.near(Self.pitch, within: 40) }) { pitchSeen = true }
+        }
+        XCTAssertEqual(rollColumns, columns.count, "roll's outline crosses every column")
+        XCTAssertTrue(pitchSeen, "pitch's outline shows at full colour")
+        keep(chart, "Through the session")
+    }
+
+    private func keep(_ chart: XCUIElement, _ name: String) {
+        let shot = XCTAttachment(screenshot: chart.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// `split` and `green`, the roll and pitch colours.
+    private static let roll = Pixels.RGB(r: 0xa7, g: 0x8b, b: 0xfa)
+    private static let pitch = Pixels.RGB(r: 0x22, g: 0xc5, b: 0x5e)
+
     private func openMotion(_ paddle: String) {
         signInAndWait()
         open(paddle)
