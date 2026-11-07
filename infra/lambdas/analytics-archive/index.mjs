@@ -11,11 +11,10 @@
 // The server logs in Lambda's text format (`time\trequestId\tINFO\t{json}`); a
 // switch to JSON logging would need eventFromLine changed. Plain JS.
 //
-// Two streams use this code (#906): `handler` writes every event but visits to
-// events/, `visitsHandler` writes only `visit` records to visits/. A visit is
-// logged in the same request as the page view that caused it; in one file they
-// would sit side by side and its city would join to that page view's sid. In
-// their own files, with the time to the day, they can't.
+// Visit records (#906) are dropped here: a visit is logged in the same request
+// as the page view that caused it, so any per-visit copy kept for good could
+// be joined back to that page view's sid. The archive keeps only daily counts
+// of visits, written by infra/lambdas/visit-counts to visits/.
 import { gunzipSync } from 'node:zlib'
 
 /** Every field an archived event may keep (the track route's rules, plus what
@@ -27,13 +26,8 @@ export const KEEP = new Set([
   'mode', 'course', 'end', 'secs', 'place', 'swims', 'knocked', 'bumps', 'km', 'from',
   'body', 'hair', 'hat', 'beard', 'aid', 'glasses', 'sleeves', 'boat', 'paddle', 'shape',
   'plays', 'places', 'input', 'gpu',          // game events
-  'country', 'nation',                        // where page views come from (#906)
-  'city', 'ref', 'utm_source', 'utm_medium', 'utm_campaign', // visits only (VISIT_KEEP)
+  'country', 'nation',                        // where page views come from (#906); never city or source
 ])
-
-/** All a visit record may keep: no sid, path, nation or platform (#906). */
-export const VISIT_KEEP = new Set(['Event', 'country', 'city', 'ref', 'utm_source', 'utm_medium', 'utm_campaign'])
-const VISIT_ONLY = ['city', 'ref', 'utm_source', 'utm_medium', 'utm_campaign']
 
 const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
 const PLAN_STATIC = new Set(['data', 'gaps', 'print', 'shared', 'sources'])
@@ -63,21 +57,14 @@ export function cleanPath(path) {
 // older lines the backfill reads, logged before it did.
 const SID = /^[A-Za-z0-9._-]{1,64}$/
 const VALUE = /^[A-Za-z0-9_.,:|$<>()\/[\]-]{1,200}$/
-// Where visits come from (#906): nothing finer than a city, a referrer only as
-// a host name (never a URL), a nation only as one of the UK's four, and the
-// city and source only on a `visit`, which has no sid.
-// Postcodes, latitude/longitude, metro codes, time zones and council-level
-// regions aren't in KEEP.
+// Where page views come from (#906): a country code, and a nation only as one
+// of the UK's four. City, source, postcodes, latitude/longitude, metro codes,
+// time zones and council-level regions aren't in KEEP.
 const RULES = {
   sid: (v) => SID.test(v),
   os: (v) => /^[A-Za-z0-9 ._-]{1,40}$/.test(v),
   country: (v) => /^[A-Z]{2}$/.test(v),
   nation: (v) => /^(ENG|SCT|WLS|NIR)$/.test(v),
-  city: (v) => /^[\p{L}\p{M}][\p{L}\p{M} .'’-]{0,59}$/u.test(v),
-  ref: (v) => /^(?=.{1,100}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v),
-  utm_source: (v) => /^[a-z0-9_.-]{1,40}$/.test(v),
-  utm_medium: (v) => /^[a-z0-9_.-]{1,40}$/.test(v),
-  utm_campaign: (v) => /^[a-z0-9_.-]{1,40}$/.test(v),
 }
 const looksSafe = (k, v) => (RULES[k] ?? ((x) => VALUE.test(x)))(v)
 
@@ -88,15 +75,10 @@ export function eventFromLine(message) {
   let o
   try { o = JSON.parse(message.slice(at)) } catch { return null }
   if (!o || typeof o !== 'object' || typeof o.Event !== 'string' || !o._aws || typeof o._aws.Timestamp !== 'number') return null
+  // Visits are counted daily, never kept one by one (#906).
+  if (o.Event === 'visit') return null
   const out = {}
   for (const [k, v] of Object.entries(o)) if (KEEP.has(k) && typeof v === 'string' && looksSafe(k, v)) out[k] = v
-  if (o.Event === 'visit') {
-    // Only its own fields, and the time to the day.
-    for (const k of Object.keys(out)) if (!VISIT_KEEP.has(k)) delete out[k]
-    out.ts = Math.floor(o._aws.Timestamp / 86400000) * 86400000
-    return out
-  }
-  for (const k of VISIT_ONLY) delete out[k]
   if ('path' in o) { const p = cleanPath(o.path); if (p) out.path = p; else delete out.path }
   // A result on a public leaderboard (name, course, time) could be matched to
   // this event; without the tab id that match names nothing else.
@@ -110,12 +92,7 @@ export function eventFromLine(message) {
 // A Lambda answer is at most 6 MB; leave room for the envelope.
 const BUDGET = 5.5 * 1024 * 1024
 
-/** An archived event for events/: everything but visits (they go to visits/). */
-export const pageEventFromLine = (message) => { const e = eventFromLine(message); return e && e.Event !== 'visit' ? e : null }
-/** An archived visit for visits/, or null. */
-export const visitFromLine = (message) => { const e = eventFromLine(message); return e && e.Event === 'visit' ? e : null }
-
-function transform(event, pick) {
+export async function handler(event) {
   let used = 0
   return {
     records: event.records.map(({ recordId, data }) => {
@@ -124,7 +101,7 @@ function transform(event, pick) {
         return { recordId, result: 'ProcessingFailed', data }
       }
       const lines = batch.messageType === 'DATA_MESSAGE'
-        ? (batch.logEvents ?? []).map((e) => pick(e.message)).filter(Boolean).map((e) => JSON.stringify(e) + '\n')
+        ? (batch.logEvents ?? []).map((e) => eventFromLine(e.message)).filter(Boolean).map((e) => JSON.stringify(e) + '\n')
         : []
       if (!lines.length) return { recordId, result: 'Dropped', data: '' }
       const out = Buffer.from(lines.join(''), 'utf8').toString('base64')
@@ -134,8 +111,3 @@ function transform(event, pick) {
     }),
   }
 }
-
-/** The events/ stream: every analytics event except visits. */
-export async function handler(event) { return transform(event, pageEventFromLine) }
-/** The visits/ stream: only visit records. */
-export async function visitsHandler(event) { return transform(event, visitFromLine) }

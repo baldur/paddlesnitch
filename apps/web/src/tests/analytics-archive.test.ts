@@ -8,7 +8,6 @@ import * as archive from '../../../../infra/lambdas/analytics-archive/index.mjs'
 // The transform is plain JS; give it the types the tests rely on.
 const eventFromLine = archive.eventFromLine as unknown as (line: string) => Record<string, unknown> | null
 const handler = archive.handler
-const visitsHandler = archive.visitsHandler
 import { buildEmf } from '@/lib/metrics'
 
 const line = (o: unknown) => `2026-10-31T18:00:00.000Z\tabc-123\tINFO\t${JSON.stringify(o)}\n`
@@ -52,18 +51,18 @@ describe('eventFromLine', () => {
     const { GAME_EVENT_PROPS } = await import('@paddlesnitch/ui/metrics-events')
     const { KEEP } = await import('../../../../infra/lambdas/analytics-archive/index.mjs')
     for (const rules of Object.values(GAME_EVENT_PROPS)) for (const k of Object.keys(rules)) expect(KEEP.has(k), k).toBe(true)
-    for (const k of ['campaign', 'repeat', 'sid', 'path', 'platform', 'appVersion', 'build', 'type', 'signature', 'frames', 'crashedVersion', 'crashedBuild', 'os', 'country', 'nation', 'city']) expect(KEEP.has(k), k).toBe(true)
+    for (const k of ['campaign', 'repeat', 'sid', 'path', 'platform', 'appVersion', 'build', 'type', 'signature', 'frames', 'crashedVersion', 'crashedBuild', 'os', 'country', 'nation']) expect(KEEP.has(k), k).toBe(true)
+    // Never a visit's city or source: visits are only counted (visit-counts.test.ts).
     const { VISIT_SOURCE_PROPS } = await import('@paddlesnitch/ui/metrics-events')
-    for (const k of VISIT_SOURCE_PROPS) expect(KEEP.has(k), k).toBe(true)
+    for (const k of ['city', ...VISIT_SOURCE_PROPS]) expect(KEEP.has(k), k).toBe(false)
   })
 
   // Where visitors come from (#906), second line of defence.
-  it('keeps a visit record with only country, city and source, and its time to the day', () => {
-    const e = eventFromLine(line(buildEmf('visit', { sid: 'tab1', path: '/att', city: 'São Paulo', country: 'BR', nation: 'ENG', region: 'SP', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring', platform: 'web', appVersion: '1.0' }, 1793469612345)))
-    expect(e).toEqual({ Event: 'visit', city: 'São Paulo', country: 'BR', ref: 'google.com', utm_source: 'newsletter', utm_medium: 'email', utm_campaign: 'spring', ts: 1793469612345 - (1793469612345 % 86400000) })
+  it('keeps no visit record at all: visits are only counted, once a day (visit-counts)', () => {
+    expect(eventFromLine(line(buildEmf('visit', { country: 'GB', city: 'Reading', ref: 'google.com', utm_source: 'newsletter' }, 1793469612345)))).toBeNull()
   })
 
-  it('strips a city and source from anything but a visit record, so they are never kept with a sid', () => {
+  it('strips a city and source from any other event, so they are never kept with a sid', () => {
     const e = eventFromLine(line(buildEmf('pageview', { sid: 'tab1', path: '/att', city: 'Reading', country: 'GB', nation: 'ENG', ref: 'google.com', utm_source: 'x' }, 1)))
     expect(e).toEqual({ Event: 'pageview', sid: 'tab1', path: '/att', country: 'GB', nation: 'ENG', ts: 0 })
   })
@@ -73,20 +72,13 @@ describe('eventFromLine', () => {
     expect(e).toEqual({ Event: 'pageview', country: 'GB', ts: 0 })
   })
 
-  it('keeps nothing finer than a city: no postcode, latitude, longitude, metro code, time zone or address', () => {
-    const e = eventFromLine(line(buildEmf('visit', {
-      city: 'Reading', country: 'GB', postal: 'RG1 8AA', postcode: 'RG18AA', zip: '12345', latitude: '51.45', longitude: '-0.97', lat: '51.45', lng: '-0.97',
-      metro: '1', timezone: 'Europe/London', ip: '203.0.113.5',
+  it('keeps nothing finer than a country on a page view: no postcode, latitude, longitude, metro code, time zone or address', () => {
+    const e = eventFromLine(line(buildEmf('pageview', {
+      country: 'GB', postal: 'RG1 8AA', postcode: 'RG18AA', zip: '12345', latitude: '51.45', longitude: '-0.97', lat: '51.45', lng: '-0.97',
+      metro: '1', timezone: 'Europe/London', ip: '203.0.113.5', region: 'WBK',
     }, 1)))
-    expect(e).toEqual({ Event: 'visit', city: 'Reading', country: 'GB', ts: 0 })
-  })
-
-  it('refuses a full URL as the referrer, and location fields that are not codes or place names', () => {
-    const e = eventFromLine(line(buildEmf('visit', {
-      ref: 'https://www.google.com/search?q=pat', country: 'GBR', city: 'RG1 8AA', utm_source: 'Pat <pat@example.com>',
-    }, 1)))
-    expect(e).toEqual({ Event: 'visit', ts: 0 })
-    expect(eventFromLine(line(buildEmf('visit', { ref: 'google.com/search' }, 1)))).toEqual({ Event: 'visit', ts: 0 })
+    expect(e).toEqual({ Event: 'pageview', country: 'GB', ts: 0 })
+    expect(eventFromLine(line(buildEmf('pageview', { country: 'GBR' }, 1)))).toEqual({ Event: 'pageview', ts: 0 })
   })
 
   it('reads a bare JSON line too (no Lambda prefix)', () => {
@@ -134,27 +126,17 @@ describe('the Firehose transform', () => {
     expect(out.records.map((r: { recordId: string }) => r.recordId)).toEqual(records.map(r => r.recordId))
   })
 
-  // #906: a visit is logged straight after the page view that caused it, in the
-  // same request and so in the same batch. Filed together, its city would join
-  // to that page view's sid; the two streams keep them in different files.
-  it('files a visit apart from the page view in its batch: its own stream, day-level time, no nation or platform', async () => {
-    const batch = [record('a', { messageType: 'DATA_MESSAGE', logEvents: [
-      { id: '1', timestamp: 1, message: line(buildEmf('pageview', { sid: 'tab1', path: '/att', country: 'GB', nation: 'ENG', platform: 'web' }, 1793469612345)) },
-      { id: '2', timestamp: 2, message: line(buildEmf('visit', { country: 'GB', city: 'Reading', ref: 'google.com', nation: 'ENG', region: 'WBK', platform: 'web' }, 1793469612345)) },
-    ] })]
-    const pages = (await handler({ records: batch })).records[0]
-    const visits = (await visitsHandler({ records: batch })).records[0]
-    const pageLines = decode(pages).split('\n').filter(Boolean).map(l => JSON.parse(l))
-    const visitLines = decode(visits).split('\n').filter(Boolean).map(l => JSON.parse(l))
-    expect(pageLines.map(l => l.Event)).toEqual(['pageview'])
-    expect(JSON.stringify(pageLines)).not.toContain('Reading')
-    expect(visitLines).toEqual([{ Event: 'visit', country: 'GB', city: 'Reading', ref: 'google.com', ts: 1793469612345 - (1793469612345 % 86400000) }])
-    expect(JSON.stringify(visitLines)).not.toMatch(/tab1|ENG|WBK|web/)
-  })
-
-  it('the visits stream drops batches with no visit in them', async () => {
-    const out = await visitsHandler({ records: [record('a', { messageType: 'DATA_MESSAGE', logEvents: [{ id: '1', timestamp: 1, message: line(emf) }] })] })
-    expect(out.records[0].result).toBe('Dropped')
+  // #906: a visit is logged straight after the page view that caused it, in
+  // the same request and so in the same batch. Filed together, its city would
+  // join to that page view's sid; so the archive drops it.
+  it('drops the visit from a batch of [pageview, visit], keeping the page view', async () => {
+    const out = await handler({ records: [record('a', { messageType: 'DATA_MESSAGE', logEvents: [
+      { id: '1', timestamp: 1, message: line(buildEmf('pageview', { sid: 'tab1', path: '/att', country: 'GB', nation: 'ENG' }, 1793469612345)) },
+      { id: '2', timestamp: 2, message: line(buildEmf('visit', { country: 'GB', city: 'Reading', ref: 'google.com' }, 1793469612345)) },
+    ] })] })
+    const lines = decode(out.records[0]).split('\n').filter(Boolean).map(l => JSON.parse(l))
+    expect(lines.map(l => l.Event)).toEqual(['pageview'])
+    expect(JSON.stringify(lines)).not.toMatch(/Reading|google/)
   })
 
   it('fails a record it cannot read, so Firehose keeps it in the errors folder rather than losing it', async () => {

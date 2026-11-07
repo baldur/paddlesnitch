@@ -29,9 +29,10 @@ import { crashReportProps, clientErrorProps } from '@/lib/client-errors'
 // UK, `nation`) from CloudFront's headers (lib/visitor-location.ts), never from
 // the body. A tab's first page view (`visit: '1'`) also writes one `visit`
 // record with only the country, city and where the visit came from (`ref`, utm
-// tags): no tab id, path, nation or platform. The archive files visits apart
-// from page views (infra/lambdas/analytics-archive), so the city can't be
-// joined to the pages viewed there.
+// tags): no tab id, path, nation or platform. In the server logs (90 days) it
+// sits next to the page view that caused it, so they can be joined there; the
+// long-term archive keeps no visit rows, only daily counts with anything seen
+// fewer than 5 times grouped as "other" (infra/lambdas/visit-counts).
 // The page view itself keeps none of the visit's props. Plain properties only:
 // `Event` stays the one metric dimension.
 

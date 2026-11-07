@@ -55,24 +55,30 @@ describe('visitor location', () => {
   })
 })
 
-// #906: visits are archived by their own stream into visits/, apart from the
-// page views logged in the same request.
-describe('visits archive', () => {
-  const from = stack.indexOf("new lambda.Function(this, 'AnalyticsVisitsTransformFn'")
-  const block = stack.slice(from, stack.indexOf("alarm('AnalyticsVisitsDeliveryAlarm'", from))
-  it('has its own transform handler, stream and folder, in the same retained bucket', () => {
+// #906: visits are archived as daily counts only, by a scheduled job.
+describe('daily visit counts', () => {
+  const from = stack.indexOf("new lambda.Function(this, 'VisitCountsFn'")
+  const block = stack.slice(from, stack.indexOf("alarm('VisitCountsFailedAlarm'", from) + 700)
+  it('runs once a day after midnight UTC, over the server log group, into visits/ in the archive', () => {
     expect(from).toBeGreaterThan(0)
-    expect(block).toContain("handler: 'index.visitsHandler',")
-    expect(block).toContain("deliveryStreamName: 'paddlesnitch-analytics-visits',")
-    expect(block).toContain("prefix: 'visits/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',")
-    expect(block).toContain('bucketArn: analyticsBucket.bucketArn,')
-    expect(block).toContain("filterName: 'analytics-visits',")
-    expect(block).not.toMatch(/lifecycleRules|expiration/)
+    expect(block).toContain("code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/visit-counts')),")
+    expect(block).toContain('environment: { LOG_GROUP: `/aws/lambda/${serverFn.functionName}`, BUCKET: analyticsBucket.bucketName },')
+    expect(block).toContain("schedule: events.Schedule.cron({ minute: '30', hour: '0' }),")
   })
-  it('lets the logs role write to both streams, and emails on failures', () => {
-    expect(stack).toContain("resources: ['paddlesnitch-analytics-archive', 'paddlesnitch-analytics-visits']")
-    expect(stack).toContain("alarm('AnalyticsVisitsTransformAlarm'")
-    expect(stack).toContain("alarm('AnalyticsVisitsDeliveryAlarm'")
+  it('may only query that log group and write visits/: no read, no delete', () => {
+    expect(block).toContain("actions: ['logs:StartQuery'],")
+    expect(block).toContain('resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${serverFn.functionName}:*`],')
+    expect(block).toContain("actions: ['s3:PutObject'],\n      resources: [analyticsBucket.arnForObjects('visits/*')],")
+    expect(block).not.toMatch(/grant(Read|Write|ReadWrite|Delete|Put)|s3:GetObject|s3:Delete/)
+  })
+  it('emails when it fails', () => {
+    expect(block).toContain("alarmName: 'paddlesnitch-visit-counts-failed',")
+    expect(block).toContain("metric: visitCountsFn.metricErrors(")
+  })
+  it('the archive keeps one stream and one subscription; Firehose writes only events/ and errors/', () => {
+    expect(stack.match(/new firehose\.CfnDeliveryStream\(/g)).toHaveLength(1)
+    expect(stack.match(/new logs\.CfnSubscriptionFilter\(/g)).toHaveLength(1)
+    expect(stack).toContain("resources: [analyticsBucket.arnForObjects('events/*'), analyticsBucket.arnForObjects('errors/*')],")
   })
 })
 

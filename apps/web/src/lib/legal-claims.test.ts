@@ -140,7 +140,7 @@ describe('analytics claims match the code', () => {
   })
 
   // #906: the track route records the country (and UK nation) on page views,
-  // and the town or city and source once a visit, filed apart in the archive.
+  // and the town or city and source once a visit; the archive keeps only daily counts of those.
   it('says what we record about where a visit comes from, and what we never keep', () => {
     const route = read('apps/web/src/app/att/api/track/route.ts')
     const location = read('apps/web/src/lib/visitor-location.ts')
@@ -149,8 +149,9 @@ describe('analytics claims match the code', () => {
     expect(privacy).toContain('Each page you open also records your country, and in the UK your nation (England, Scotland, Wales or Northern Ireland).')
     expect(location).toContain("new Set(['ENG', 'SCT', 'WLS', 'NIR'])")
     expect(privacy).toContain('Once a visit (until you close the tab), we record your town or city, the site that sent you (its address only, such as google.com) and any campaign tags in the link.')
-    expect(privacy).toContain('In our long-term records these are kept apart from the pages you open.')
-    expect(archive).toContain('export async function visitsHandler')
+    expect(privacy).toContain('In our long-term records we keep only daily counts of these, with places and sites seen fewer than five times grouped together.')
+    expect(archive).toContain("if (o.Event === 'visit') return null")
+    expect(read('infra/lambdas/visit-counts/counts.mjs')).toContain('export const MIN = 5')
     expect(privacy).toContain('Our server logs, kept for 90 days, could still connect them.')
     expect(privacy).toContain('Our host, Amazon Web Services, works out your location from your connection.')
     expect(privacy).toContain('We keep only the country, nation and town or city, and never store your IP address for this.')

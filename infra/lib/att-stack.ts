@@ -1193,10 +1193,11 @@ export class AttStack extends cdk.Stack {
         conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
       }),
     })
-    // What Firehose needs to write, and no more (no delete).
+    // What Firehose needs to write, and no more (no delete): its own two
+    // folders, not visits/ (the daily counts below).
     archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
       actions: ['s3:PutObject', 's3:AbortMultipartUpload'],
-      resources: [analyticsBucket.arnForObjects('*')],
+      resources: [analyticsBucket.arnForObjects('events/*'), analyticsBucket.arnForObjects('errors/*')],
     }))
     archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
       actions: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
@@ -1262,8 +1263,7 @@ export class AttStack extends cdk.Stack {
     // gives IAM time to take effect before the subscription's test delivery.
     archiveLogsRole.addToPolicy(new iam.PolicyStatement({
       actions: ['firehose:PutRecord', 'firehose:PutRecordBatch'],
-      resources: ['paddlesnitch-analytics-archive', 'paddlesnitch-analytics-visits']
-        .map((name) => `arn:aws:firehose:${this.region}:${this.account}:deliverystream/${name}`),
+      resources: [`arn:aws:firehose:${this.region}:${this.account}:deliverystream/paddlesnitch-analytics-archive`],
     }))
     archiveStream.node.addDependency(archiveLogsRole)
     new logs.CfnSubscriptionFilter(this, 'AnalyticsArchiveSubscription', {
@@ -1292,79 +1292,44 @@ export class AttStack extends cdk.Stack {
       threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, evaluationPeriods: 1,
     })
 
-    // Visits (#906) go to their own stream and folder, visits/: a visit is
-    // logged in the same request as the page view that caused it, so in one
-    // file its city would sit next to that page view's sid. Same bucket, same
-    // roles, same transform code with its own handler (visitsHandler), which
-    // keeps only visit records, their time to the day. The events/ stream's
-    // transform drops them. A cheap pre-filter on the word visit; the
-    // transform checks the event name.
-    const visitsTransformFn = new lambda.Function(this, 'AnalyticsVisitsTransformFn', {
+    // Visits (#906): daily counts, never visit rows. A visit is logged in the
+    // same request as its page view; any per-visit copy kept for good could be
+    // joined back to a page view's sid (a rare country, a file's time, line
+    // order). So the events/ stream drops visits, and once a day, after
+    // midnight UTC, this job counts yesterday's visits with Logs Insights
+    // (by country and city, by source, by campaign), groups anything seen
+    // fewer than 5 times as "other", and writes visits/<yyyy>/<mm>/<dd>.json.
+    // A rerun overwrites the same day. The logs keep the lines 90 days.
+    const visitCountsFn = new lambda.Function(this, 'VisitCountsFn', {
       logRetention: LOG_RETENTION,
-      functionName: 'paddlesnitch-analytics-visits',
+      functionName: 'paddlesnitch-visit-counts',
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'index.visitsHandler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/analytics-archive')),
-      timeout: cdk.Duration.minutes(1),
-      memorySize: 256,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/visit-counts')),
+      memorySize: 128,
+      timeout: cdk.Duration.minutes(5),
+      environment: { LOG_GROUP: `/aws/lambda/${serverFn.functionName}`, BUCKET: analyticsBucket.bucketName },
     })
-    visitsTransformFn.grantInvoke(archiveFirehoseRole)
-    archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['lambda:GetFunctionConfiguration'],
-      resources: [visitsTransformFn.functionArn],
+    visitCountsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['logs:StartQuery'],
+      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${serverFn.functionName}:*`],
     }))
-    const visitsFirehoseLogStream = archiveFirehoseLogs.addStream('VisitsDelivery', { logStreamName: 'VisitsDelivery' })
-    const visitsStream = new firehose.CfnDeliveryStream(this, 'AnalyticsVisitsStream', {
-      deliveryStreamName: 'paddlesnitch-analytics-visits',
-      deliveryStreamType: 'DirectPut',
-      extendedS3DestinationConfiguration: {
-        bucketArn: analyticsBucket.bucketArn,
-        roleArn: archiveFirehoseRole.roleArn,
-        prefix: 'visits/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-        errorOutputPrefix: 'errors/visits/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-        compressionFormat: 'GZIP',
-        cloudWatchLoggingOptions: {
-          enabled: true,
-          logGroupName: archiveFirehoseLogs.logGroupName,
-          logStreamName: visitsFirehoseLogStream.logStreamName,
-        },
-        bufferingHints: { intervalInSeconds: 900, sizeInMBs: 64 },
-        processingConfiguration: {
-          enabled: true,
-          processors: [{
-            type: 'Lambda',
-            parameters: [
-              { parameterName: 'LambdaArn', parameterValue: visitsTransformFn.functionArn },
-              { parameterName: 'BufferSizeInMBs', parameterValue: '0.25' },
-              { parameterName: 'BufferIntervalInSeconds', parameterValue: '60' },
-            ],
-          }],
-        },
-      },
+    // GetQueryResults takes a query id and has no resource-level permissions.
+    visitCountsFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['logs:GetQueryResults'], resources: ['*'] }))
+    visitCountsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [analyticsBucket.arnForObjects('visits/*')],
+    }))
+    new events.Rule(this, 'VisitCountsDaily', {
+      schedule: events.Schedule.cron({ minute: '30', hour: '0' }),
+      targets: [new eventsTargets.LambdaFunction(visitCountsFn, { retryAttempts: 1 })],
     })
-    visitsStream.node.addDependency(archiveFirehoseRole)
-    visitsStream.node.addDependency(archiveLogsRole)
-    new logs.CfnSubscriptionFilter(this, 'AnalyticsVisitsSubscription', {
-      logGroupName: serverLogs.logGroupName,
-      filterName: 'analytics-visits',
-      filterPattern: 'visit',
-      destinationArn: visitsStream.attrArn,
-      roleArn: archiveLogsRole.roleArn,
-    }).node.addDependency(archiveLogsRole)
-    alarm('AnalyticsVisitsTransformAlarm', {
-      alarmName: 'paddlesnitch-analytics-visits-transform',
-      alarmDescription: `The analytics archive's visits transform failed. ${archiveHelp}`,
-      metric: visitsTransformFn.metricErrors({ period: cdk.Duration.hours(1), statistic: 'Sum' }),
+    alarm('VisitCountsFailedAlarm', {
+      alarmName: 'paddlesnitch-visit-counts-failed',
+      alarmDescription: 'The daily visit counts failed, so yesterday is missing from visits/ in paddlesnitch-analytics-archive. Rerun paddlesnitch-visit-counts with {"day":"YYYY-MM-DD"} within 90 days: see docs/features/observability.md.',
+      metric: visitCountsFn.metricErrors({ period: cdk.Duration.hours(6), statistic: 'Sum' }),
       threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
-    })
-    alarm('AnalyticsVisitsDeliveryAlarm', {
-      alarmName: 'paddlesnitch-analytics-visits-delivery',
-      alarmDescription: `The analytics archive failed to process or write a batch of visits. ${archiveHelp}`,
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/Firehose', metricName: 'ExecuteProcessing.Success',
-        dimensionsMap: { DeliveryStreamName: 'paddlesnitch-analytics-visits' }, statistic: 'Minimum', period: cdk.Duration.hours(1),
-      }),
-      threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, evaluationPeriods: 1,
     })
 
     const logCount = (id: string, pattern: logs.IFilterPattern, metricName: string) => {
