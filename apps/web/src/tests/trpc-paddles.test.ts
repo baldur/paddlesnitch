@@ -302,23 +302,24 @@ describe('the same outing from two sources (paddles.sameOuting, paddles.compareO
     expect((await caller.paddles.compareOuting({ a: 't-rec1', b: 'p-rec1' })).same).toBe(true)
   })
 
-  // Review of #891: a phone 60 m off the tracker but 30 m off the watch chained
-  // all three into one card, and the order of the list decided which.
-  for (const [name, starts] of [['tracker first', ['09:00:00', '09:00:20', '09:00:40']], ['phone first', ['09:00:40', '09:00:00', '09:00:20']]] as const) {
+  // Review of #891: a file paddle 60 m off the tracker but 30 m off the watch
+  // chained all three into one card, and the order of the list decided which.
+  // The watch ranks before the file, so joining through any member would chain.
+  for (const [name, starts] of [['tracker first', ['09:00:00', '09:00:20', '09:00:40']], ['file first', ['09:00:40', '09:00:00', '09:00:20']]] as const) {
     it(`groups a recording with the lead only, never through another (${name})`, async () => {
       const [ta, tb, tc] = starts.map(t => `2026-10-06T${t}Z`)
       await outing('A', ta, 1200, 'device', { deviceId: 'A1B2C3D4' })                       // the tracker
-      await outing('B', tb, 1100, 'device', { deviceId: 'P0123456789ABCDEF', offsetM: 60 })  // the phone: 60 m off the tracker
+      await outing('D', tb, 1100, 'file', { offsetM: 60 })                                  // a file: 60 m off the tracker
       await outing('C', tc, 1100, 'strava', { offsetM: 30 })                                // the watch: 30 m off each
       const caller = createCaller({ user: USER })
       const { cards } = await caller.paddles.list()
-      expect(cards.map(c => [c.id, c.sameOuting?.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['B', undefined]])
+      expect(cards.map(c => [c.id, c.sameOuting?.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['D', undefined]])
       const sessions = await caller.paddles.sessions()
-      expect(sessions.map(s => [s.id, s.sameOuting?.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['B', undefined], ['C', undefined]])
+      expect(sessions.map(s => [s.id, s.sameOuting?.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['C', undefined], ['D', undefined]])
       const links = async (id: string) => (await caller.paddles.sameOuting({ id })).map(o => o.id)
-      expect([await links('A'), await links('B'), await links('C')]).toEqual([['C'], [], ['A']])
+      expect([await links('A'), await links('D'), await links('C')]).toEqual([['C'], [], ['A']])
       expect((await caller.paddles.compareOuting({ a: 'A', b: 'C' })).same).toBe(true)
-      expect((await caller.paddles.compareOuting({ a: 'A', b: 'B' })).same).toBe(false)
+      expect((await caller.paddles.compareOuting({ a: 'A', b: 'D' })).same).toBe(false)
     })
   }
 

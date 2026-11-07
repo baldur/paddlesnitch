@@ -163,9 +163,10 @@ outside moving stretches; a tracker paddle's efforts get a stroke rate.
   recording, so the list's order can't change the answer. The lead's page links
   its others; another recording's page links the lead.
 - **Older paddles:** a summary from before `places` is rebuilt from its paddle
-  only when another paddle overlaps it in time, at most 20 a list call and 4 at
-  a time, and written only if the summary didn't change meanwhile. A paddle
-  that can't be read gets empty places (never grouped, not retried). A buddy's
+  only when another paddle overlaps it in time, at most 20 a list call (newest
+  first) and 4 at a time, and written only if the summary didn't change
+  meanwhile. A paddle that was read but can't be parsed gets empty places
+  (never grouped, not retried); a failed read is tried again next call. A buddy's
   or section list never writes the owner's summaries.
 - **Clocks:** the tracker's points are GPS time. A phone's are the fix's own
   time (Android `Location.time`, iOS `CLLocation.timestamp`), which follow the

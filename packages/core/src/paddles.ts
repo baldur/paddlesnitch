@@ -198,8 +198,16 @@ export function encodePlaces(from: number, every: number, pts: ([number, number]
   return { from, every, d }
 }
 
+/** Places in the shape this code writes (anything else, such as an older
+ *  draft's `{ from, pts }`, counts as none and is rebuilt). */
+export function hasPlaces(p: unknown): p is OutingPlaces {
+  const q = p as Partial<OutingPlaces> | null | undefined
+  return typeof q?.from === 'number' && typeof q.every === 'number' && q.every > 0 && Array.isArray(q.d)
+}
+
 /** OutingPlaces back to positions in degrees (null where there is none). */
 export function decodePlaces(p: OutingPlaces): ([number, number] | null)[] {
+  if (!hasPlaces(p)) return []
   const out: ([number, number] | null)[] = []
   let lat = 0, lng = 0
   for (let i = 0; i + 1 < p.d.length; i += 2) {
@@ -274,7 +282,7 @@ export function sameOuting(a: Outing, b: Outing): boolean {
   // A paddle without a map (#414) is never offered to compare with another.
   if (isMotionOnly(a) || isMotionOnly(b)) return false
   if (timeOverlapShare(a, b) < MIN_TIME_OVERLAP) return false
-  if (!a.places || !b.places) return false
+  if (!hasPlaces(a.places) || !hasPlaces(b.places)) return false
   const gap = placesGap(a.places, b.places)
   return !!gap && gap.agreement >= MIN_AGREEMENT
 }

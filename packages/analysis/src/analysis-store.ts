@@ -2,9 +2,9 @@
 // analysis/{userId}/{id}/session.json (S3 in prod, .local-data in dev), private
 // to the user. Small scale → list = read each session.json, like att entries.
 import { nanoid } from 'nanoid'
-import { getJson, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
+import { getJson, getObject, putJson, listKeys, deleteObject, deleteObjects } from '@paddlesnitch/core/storage'
 import { isBoatClass, expectedSeats, BOAT_CLASS_INFO, type BoatClass, type Seat } from '@paddlesnitch/core/types'
-import { thumbRoute, isMotionOnly, overlapsInTime, encodePlaces, PLACES_EVERY_S, type OutingPlaces } from '@paddlesnitch/core/paddles'
+import { thumbRoute, isMotionOnly, overlapsInTime, encodePlaces, hasPlaces, PLACES_EVERY_S, type OutingPlaces } from '@paddlesnitch/core/paddles'
 import { routeCells } from './route-match'
 import { outingPlaces } from './same-outing'
 import type { AnalysisResult } from './analysis'
@@ -344,11 +344,18 @@ export async function listSessionSummaries(userId: string, opts: { writeBack?: b
 async function addMissingPlaces(userId: string, sums: SessionSummary[]): Promise<void> {
   const near = overlapsInTime(sums)
   const todo = sums.map((s, i) => i)
-    .filter(i => !sums[i].places && !isMotionOnly(sums[i]) && near[i].some(j => !isMotionOnly(sums[j])))
+    .filter(i => !hasPlaces(sums[i].places) && !isMotionOnly(sums[i]) && near[i].some(j => !isMotionOnly(sums[j])))
+    .sort((i, j) => (sums[j].paddledAt > sums[i].paddledAt ? 1 : sums[j].paddledAt < sums[i].paddledAt ? -1 : 0))   // newest first
     .slice(0, PLACES_REBUILD_MAX)
   await eachLimited(todo, PLACES_REBUILD_AT_ONCE, async i => {
     const was = sums[i]
-    const full = await getJson<AnalysisSession>(key(userId, was.id)).catch(() => null)
+    // A read that fails (storage down) is tried again next call; a paddle that
+    // was read but can't be parsed or summarised is marked with empty places.
+    let raw: Buffer | null
+    try { raw = await getObject(key(userId, was.id)) } catch { return }
+    if (!raw) return
+    let full: AnalysisSession | null = null
+    try { full = JSON.parse(raw.toString('utf8')) } catch { console.warn('[analysis-store] paddle unreadable for its places', was.id) }
     const fresh = safeSummary(full) ?? { ...was, places: encodePlaces(0, PLACES_EVERY_S, []) }
     // Written only if the summary is still the one we started from: a save
     // meanwhile (a hide, a note) or a delete wins. Read just before writing.

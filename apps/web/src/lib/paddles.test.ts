@@ -122,17 +122,30 @@ describe('sameOuting (the list, the paddle page and Compare)', () => {
   // Review of #891: grouping chained through a middle recording, so a card
   // named a recording the lead's page didn't, and the order of the list decided.
   it('joins a recording to a group only if it is the same outing as the lead, whatever the order', () => {
-    const tracker = rec('A', at, 1200)                                                  // the boat
-    const watch = rec('C', later, 1100, { places: placesOf(later, 1100, -0.93, 30) }, 'strava')   // 30 m off it
-    const phone = rec('B', at, 1200, { places: placesOf(at, 1200, -0.93, 60), source: { type: 'device', phone: true } })  // 60 m off it, 30 m off the watch
-    expect([sameOuting(tracker, watch), sameOuting(watch, phone), sameOuting(tracker, phone)]).toEqual([true, true, false])
-    for (const list of [[tracker, phone, watch], [phone, watch, tracker], [watch, tracker, phone], [phone, tracker, watch]]) {
+    // Rank order is tracker, Strava, file: the middle recording (the watch) is
+    // placed before the outlier, so joining through any member would chain.
+    const tracker = rec('A', at, 1200)                                                         // the boat
+    const watch = rec('C', later, 1100, { places: placesOf(later, 1100, -0.93, 30) }, 'strava') // 30 m off it
+    const file = rec('D', at, 1200, { places: placesOf(at, 1200, -0.93, 60) }, 'file')          // 60 m off it, 30 m off the watch
+    expect([sameOuting(tracker, watch), sameOuting(watch, file), sameOuting(tracker, file)]).toEqual([true, true, false])
+    for (const list of [[tracker, file, watch], [file, watch, tracker], [watch, tracker, file], [file, tracker, watch]]) {
       const groups = groupSameOuting(list)
-      expect(groups.map(g => [g.lead.id, g.others.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['B', []]])
+      expect(groups.map(g => [g.lead.id, g.others.map(o => o.id)]).sort()).toEqual([['A', ['C']], ['D', []]])
       expect(sameOutingLinks(groups, 'A').map(o => o.id)).toEqual(['C'])
       expect(sameOutingLinks(groups, 'C').map(o => o.id)).toEqual(['A'])
-      expect(sameOutingLinks(groups, 'B')).toEqual([])
+      expect(sameOutingLinks(groups, 'D')).toEqual([])
     }
+  })
+
+  it('links a group of three: the lead to both, each other recording to the lead only', () => {
+    const tracker = rec('A', at, 1200)
+    const watch = rec('C', later, 1100, { places: placesOf(later, 1100, -0.93, 30) }, 'strava')
+    const file = rec('E', at, 1200, { places: placesOf(at, 1200, -0.93, -30) }, 'file')         // 30 m the other way: 60 m off the watch
+    const groups = groupSameOuting([file, watch, tracker])
+    expect(groups.map(g => [g.lead.id, g.others.map(o => o.id)])).toEqual([['A', ['C', 'E']]])
+    expect(sameOutingLinks(groups, 'A').map(o => o.id)).toEqual(['C', 'E'])
+    expect(sameOutingLinks(groups, 'C').map(o => o.id)).toEqual(['A'])
+    expect(sameOutingLinks(groups, 'E').map(o => o.id)).toEqual(['A'])
   })
 })
 

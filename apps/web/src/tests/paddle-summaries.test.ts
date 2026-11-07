@@ -90,19 +90,34 @@ describe('paddle summaries', () => {
       expect(s.b.places?.d.length).toBeGreaterThan(0)
     })
 
-    it(`rebuild at most ${PLACES_REBUILD_MAX} a call; the rest wait for the next`, async () => {
-      for (let i = 0; i < PLACES_REBUILD_MAX + 5; i++) await old(`p${String(i).padStart(2, '0')}`, new Date(t0 + i * 1000).toISOString())
-      const first = Object.values(await byId())
+    it(`rebuild at most ${PLACES_REBUILD_MAX} a call, newest first; the rest wait for the next`, async () => {
+      // Ids that don't follow time (id order is the order storage lists them in).
+      const n = PLACES_REBUILD_MAX + 5
+      const at = (i: number) => new Date(t0 + i * 1000).toISOString()
+      for (let i = 0; i < n; i++) await old(`p${String((i * 7) % n).padStart(2, '0')}`, at(i))
+      const first = await listSessionSummaries(U)
       expect(first.filter(s => s.places).length).toBe(PLACES_REBUILD_MAX)
-      expect(first.filter(s => !s.places).length).toBe(5)              // not grouped yet
+      expect(first.filter(s => !s.places).map(s => s.paddledAt).sort()).toEqual([0, 1, 2, 3, 4].map(at))   // the five oldest wait
       expect(Object.values(await byId()).every(s => s.places)).toBe(true)
+    })
+
+    it('treat places in an unknown shape as none, and rebuild them', async () => {
+      await old('a', '2026-09-01T10:00:00Z')
+      await old('b', '2026-09-01T10:00:30Z')
+      const sum = await stored('a')
+      sum.places = { from: t0 / 1000, pts: [[51.5, -0.1], [51.5018, -0.1]] }               // an early draft: one a minute
+      await fs.writeFile(file('a', 'summary.json'), JSON.stringify(sum))
+      expect(decodePlaces(sum.places)).toEqual([])
+      const s = await byId()
+      expect(s.a.places?.every).toBe(20)
+      expect(decodePlaces(s.a.places!).length).toBeGreaterThan(0)
     })
 
     it('mark an unreadable paddle so it is not tried on every call, and never fail the list', async () => {
       await old('a', '2026-09-01T10:00:00Z')
       await old('b', '2026-09-01T10:00:30Z')
       await old('c', '2026-09-01T10:00:40Z')
-      await fs.writeFile(file('a', 'session.json'), '{ not json')                 // corrupt
+      await fs.writeFile(file('a', 'session.json'), '{ not json')                 // read, but corrupt
       await fs.writeFile(file('b', 'session.json'), JSON.stringify({ id: 'b' }))  // readable, but no result: toSummary throws
       const s = await byId()
       expect(s.a.places).toEqual({ from: 0, every: 20, d: [] })                   // marked: empty places, never grouped
