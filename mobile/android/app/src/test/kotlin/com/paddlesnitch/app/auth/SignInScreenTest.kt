@@ -3,6 +3,8 @@ package com.paddlesnitch.app.auth
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertCountEquals
@@ -123,7 +125,7 @@ class SignInScreenTest {
     @Test fun theTermsLinkOnCreateAccountOpensInACustomTab() {
         show(Reauth(), null)
         compose.onNodeWithText("Create account").performClick()
-        compose.onNodeWithText("Terms of Service").performScrollTo().performClick()
+        compose.onNodeWithText("Read them").performScrollTo().performClick()
         val opened = Shadows.shadowOf(compose.activity).nextStartedActivity
         assertEquals(com.paddlesnitch.app.BuildConfig.API_BASE_URL + "/terms", opened.data.toString())
         assertTrue("a Custom Tab, not a plain browser intent", opened.hasExtra(androidx.browser.customtabs.CustomTabsIntent.EXTRA_SESSION))
@@ -139,12 +141,33 @@ class SignInScreenTest {
         compose.onNodeWithText("Create account").performClick()
         compose.onNode(hasSetTextAction() and hasText("Email")).performTextInput("a@example.com")
         compose.onNode(hasSetTextAction() and hasText("Display name")).performTextInput("Pat")
+        // The password is kept too, deliberately: rememberSaveable, like the rest, so reading the Terms costs no retyping.
+        compose.onNode(hasSetTextAction() and hasText("Password")).performTextInput("Secret123")
         compose.onNode(androidx.compose.ui.test.isToggleable()).performScrollTo().performClick()
-        compose.onNodeWithText("Terms of Service").performScrollTo().performClick()
+        compose.onNodeWithText("Read them").performScrollTo().performClick()
         restore.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("a@example.com").assertExists()
         compose.onNodeWithText("Pat").assertExists()
+        val password = compose.onNode(hasSetTextAction() and hasText("Password")).fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text
+        assertEquals("the field shows it masked; a lost password would be empty", "•".repeat("Secret123".length), password)
         compose.onNode(androidx.compose.ui.test.isToggleable()).assertIsOn()
+    }
+
+    // TalkBack reads "I agree to the Terms of Service, checkbox", not a bare "Checkbox, not checked" (#885 review).
+    @Test fun theTermsCheckboxIsReadWithItsSentence() {
+        show(Reauth(), null)
+        compose.onNodeWithText("Create account").performClick()
+        val box = compose.onNode(androidx.compose.ui.test.isToggleable(), useUnmergedTree = false)
+        box.assert(hasText("I agree to the Terms of Service"))
+        box.assert(androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Checkbox))
+        box.assertIsOff()
+        box.performScrollTo().performClick()
+        box.assertIsOn()
+        assertNull("ticking it opens nothing", Shadows.shadowOf(compose.activity).nextStartedActivity)
+        // The link is its own control, not inside the checkbox.
+        compose.onNode(androidx.compose.ui.test.isToggleable() and hasText("Read them")).assertDoesNotExist()
+        compose.onNodeWithText("Read them").assert(androidx.compose.ui.test.hasClickAction())
     }
 
     @Test fun whenOptionsFailItSaysSoAndCanAskAgain() {
