@@ -546,8 +546,6 @@ summary { cursor: pointer; }
   #club.backable #clubCards { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
   #club.backable #clubNote { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 116px); } /* and the note above the cards */
 }
-/* Choosing a boat at the pier, the three cards are a wide row: above Back, never over it. */
-#club.backable #clubCards.choice { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
 @media (max-width: 860px) { #clubCards .friend small { display: none; } }
 .pin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .pin.canoe { background: #f2c230; }
@@ -645,9 +643,6 @@ body.walking #pause { display: none; }
 @media (max-height: 500px) {
   #hud.rowing #flash { top: 30%; } /* below the clock */
 }
-
-/* Choosing a boat to hire: each card keeps its line (how the boats differ), wrapping, whatever the screen. */
-#clubCards.choice .card small { display: block; white-space: normal; max-width: 11rem; }
 
 /* The finish on a phone: the standings in three short columns, and the buttons
    always on screen (a signed-out race adds a line that pushed them below). */

@@ -51,11 +51,13 @@ export function kitEvent(kit, last = null) {
 }
 
 // The walk's places as reported: the canoe club's each by name, the rowing
-// club's rooms as 'rowing' and both clubs' erg rooms as 'erg' (the plays say
-// which erg: course 'erg' or 'kayak-erg'), so every place visited fits the
-// endpoint's 60 characters.
+// club's rooms as 'rowing', both clubs' erg rooms as 'erg' (the plays say
+// which erg: course 'erg' or 'kayak-erg') and the hire bank and its boats as
+// 'path', the walk's outdoors by the bridge (the play says which boat hired;
+// a tag of their own would push the list past the endpoint's 60 characters),
+// so every place visited fits.
 const ROWING = new Set(['rclub', 'rchanging', 'rboathouse', 'rclubhouse', 'rpontoon']);
-export const placeTag = (place) => (ROWING.has(place) ? 'rowing' : place === 'kerg' ? 'erg' : place);
+export const placeTag = (place) => (ROWING.has(place) ? 'rowing' : place === 'kerg' ? 'erg' : place.startsWith('hire') ? 'path' : place);
 
 // A visit: time is counted only while the page is in view.
 export function createSession(now, from) {

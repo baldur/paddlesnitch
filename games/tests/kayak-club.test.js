@@ -7,7 +7,7 @@ import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
 import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
-import { WIDE, PLACES, START, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
+import { WIDE, PLACES, START, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -287,8 +287,9 @@ test("a glide blends a shot's wider view into the next, and adds none between tw
 });
 
 test('Back is one step back the way you came, on every stage of the walk', () => {
-  // Choosing a boat at the pier: back to the bridge's cards.
-  assert.deepEqual(backFrom('path', { hiring: true }), { unhire: true });
+  // By the hire boats: back to the bridge; by one of them (you're off by then), back to the bank.
+  assert.deepEqual(backFrom('hire'), { go: 'path' });
+  for (const id of HIRE_ORDER) assert.deepEqual(backFrom(`hire-${id}`), { go: 'hire' });
   // The bridge is the top: Back there is the header's link to the games.
   assert.equal(backFrom('path'), null);
   // Every other place goes up a level, and every place but the bridge has one.
@@ -300,4 +301,34 @@ test('Back is one step back the way you came, on every stage of the walk', () =>
   // A page further into either: back to the page it opened on.
   assert.deepEqual(backFrom('clubhouse', { sheet: { step: 'practice', base: 'home', auto: true } }), { step: 'home' });
   assert.deepEqual(backFrom('boathouse', { sheet: { step: 'paddler', base: 'boat', auto: false } }), { step: 'boat' });
+});
+
+test('hire a boat: on the Thames Path by Caversham Boat Services, the three boats moored nose to tail on the water, each with its label and a place to stand by it', async () => {
+  const course = await loop();
+  const shots = clubShots(course);
+  const water = waterMap((await data('reading')).water);
+  const { hire } = shots.places;
+  // You stand on the path (dry land), where the owner's Street View was taken.
+  assert.ok(!water.inside(hire.eye[0], hire.eye[2]), 'on the path');
+  assert.ok(Math.hypot(hire.eye[0] - HIRE_BANK.at[0], hire.eye[2] - HIRE_BANK.at[1]) < 10, 'at the hire moorings');
+  assert.equal(PLACES.hire.up, 'path');
+  // The three boats in order, nearest first, upstream along the bank, each on the water bow to stern, apart.
+  assert.deepEqual(shots.moorings.map((m) => m.id), ['speedboat', 'launch', 'narrowboat']);
+  const river = course.scenery.river ?? course;
+  const s = shots.moorings.map((m) => locate(river, m.x, m.z).s);
+  assert.ok(s[0] < s[1] && s[1] < s[2], `upstream in order: ${s.map((v) => v.toFixed(1))}`);
+  for (const m of shots.moorings) {
+    const f = [Math.sin(m.heading), -Math.cos(m.heading)];
+    const { bow, stern } = (await import('../reading-thames/outing.js')).HIRE_BOATS[m.id].shape;
+    for (const k of [bow, 0, -stern]) assert.ok(water.inside(m.x + f[0] * k, m.z + f[1] * k), `${m.id} afloat at ${k} m`);
+    // Its label near it, and the place to stand by it on the path, looking along it.
+    assert.ok(Math.hypot(m.label[0] - m.x, m.label[2] - m.z) < 10, `${m.id} label by it`);
+    const stand = shots.places[`hire-${m.id}`];
+    assert.ok(!water.inside(stand.eye[0], stand.eye[2]), `${m.id}: you stand on the path`);
+    assert.ok(Math.hypot(stand.eye[0] - m.x, stand.eye[2] - m.z) < 12, `${m.id}: beside it`);
+    assert.equal(PLACES[`hire-${m.id}`].boat, m.id);
+  }
+  // A reload starts you on the bank (or the bridge), never by one boat.
+  assert.equal(firstPlace({ last: 'hire-launch' }), 'path');
+  assert.equal(firstPlace({ last: 'hire' }), 'hire');
 });

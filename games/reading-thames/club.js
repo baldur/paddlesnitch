@@ -11,6 +11,7 @@
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt } from './course.js';
 import { groundAt, bridgeBay, BRIDGE } from './world.js';
+import { HIRE_BOATS } from './outing.js';
 
 // Where each place's doors lead. `up` is where Back goes: the rooms and the
 // pontoon are in their club, the clubs are off the bridge. `club` says whose.
@@ -28,19 +29,34 @@ export const PLACES = {
   rclubhouse: { label: 'The clubhouse', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
   erg: { label: 'The erg room', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
   rpontoon: { label: 'The landing stage', doors: ['rclub'], up: 'rclub', club: 'rowing' },
+  // Hire a boat (owner, 2026-11-07): on the Thames Path by the hire boats; tap
+  // one and you walk along to it, then Push off, or Back to pick another. `fade`:
+  // from the bridge it's a cut, not a glide over the town. Each boat's place is
+  // where you stand by it.
+  hire: { label: 'Hire a boat', doors: ['path'], up: 'path', fade: true },
 };
+// The hire boats moored along the bank, nearest first, nose to tail (outing.js HIRE_BOATS).
+export const HIRE_ORDER = ['speedboat', 'launch', 'narrowboat'];
+// (Their doors are where Back goes; main.js draws the boats' labels and Push off instead.)
+for (const id of HIRE_ORDER) PLACES[`hire-${id}`] = { label: HIRE_BOATS[id].label, doors: ['hire'], up: 'hire', boat: id };
+// Where the hire boats are: the Thames Path on the Reading bank by Caversham
+// Boat Services (51.46302, -0.97248, from the owner's Street View: the hire
+// cruisers moored along the path, Fry's Island and the boathouse across the
+// water), in the courses' metres (their projection's origin is 51.46175,
+// -0.96945). You stand `back` metres in from the edge, a little downstream of
+// the first boat; the boats lie `off` the edge with `gap` metres between them.
+export const HIRE_BANK = { at: [-209.7, -141], back: 1.2, eye: 1.7, first: 2, gap: 3, off: 0.4 };
 export const START = 'path';
 // Back (always the button at the bottom left), Esc, Backspace and a gamepad's B, on every
 // stage of the walk: one step back the way you came (owner, 2026-11-03: "an
-// obvious go back that is consistent"). Choosing a boat at the pier: back to
-// the bridge's cards. In a picker, a page past the one it opened on (Practice
+// obvious go back that is consistent"). By the hire boats: back to the bridge.
+// In a picker, a page past the one it opened on (Practice
 // from the plan, your paddler from the plan): back to that page. A picker you
 // opened with a tap (Paint your boat, Paddles): put away, still in the room.
 // Otherwise up a level, a room to its club and a club to the bridge, putting
 // away a picker that opened as you came in (the changing room's, the plan).
 // `sheet`: the open picker's { step, base (the page it opened on), auto (opened on arrival) }, or null.
-export function backFrom(place, { hiring = false, sheet = null } = {}) {
-  if (hiring) return { unhire: true };
+export function backFrom(place, { sheet = null } = {}) {
   if (sheet && sheet.step !== sheet.base) return { step: sheet.base };
   if (sheet && !sheet.auto) return { close: true };
   return PLACES[place]?.up ? { go: PLACES[place].up } : null;
@@ -49,12 +65,14 @@ export const DOOR_LABELS = {
   club: 'Reading Canoe Club', rowing: 'Reading Rowing Club', changing: 'Changing room', boathouse: 'Boathouse',
   clubhouse: 'Clubhouse', kerg: 'Erg room', pontoon: 'Go to the water', path: 'Back to the path',
   rclub: 'Reading Rowing Club', rchanging: 'Changing room', rboathouse: 'Boathouse', rclubhouse: 'Clubhouse', erg: 'Erg room', rpontoon: 'Go to the water',
+  hire: 'Hire a boat',
 };
 // Where the walk starts: a race link brings you to the club (the host made the
 // plan); otherwise the path, or wherever you were last.
 export function firstPlace({ invited = false, last = null } = {}) {
   if (invited) return 'club';
-  return PLACES[last] && !PLACES[last].inside ? last : 'path';
+  // (Not by a hire boat: start on the bank, the choice of three in view.)
+  return PLACES[last] && !PLACES[last].inside && !PLACES[last].boat ? last : 'path';
 }
 
 // The rooms are built under the club, out of sight of the river: each is a box
@@ -177,6 +195,7 @@ export function clubShots(course) {
   const stage = add(r.edge, r.toWater, -1.5);
   const canoeSide = add([c.x, 0, c.z], c.toWater, c.toEdge);
   const rStand = p('rchanging', -1.2, HIPS, 0.4);
+  const hire = hireShots(course, river, at);
   const [ex, ez] = ERGS[MY_ERG];
   const kd = ROOMS.kerg.depth;
   return {
@@ -199,6 +218,8 @@ export function clubShots(course) {
       rclubhouse: room('rclubhouse', 1.5),
       // Your erg side on in front of you, the mural on the far wall above the rest.
       erg: { eye: p('erg', ex + 0.6, 1.45, ez + 3.6), look: p('erg', ex - 0.2, 1.55, -ROOMS.erg.depth / 2) },
+      hire: hire.place,
+      ...Object.fromEntries(HIRE_ORDER.map((id, i) => [`hire-${id}`, hire.stands[i]])),
     },
     doors: {
       club: { changing: entranceDoor(-12), boathouse: entranceDoor(-4), clubhouse: entranceDoor(4), kerg: entranceDoor(12), pontoon: at(...add([c.x, 0, c.z], c.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back - 2)), c.along, -10).filter((_, i) => i !== 1), 1.4) },
@@ -241,6 +262,53 @@ export function clubShots(course) {
     honours: p('rclubhouse', 2.2, 1.75, -ROOMS.rclubhouse.depth / 2 + 0.1),
     ergs: ERGS.map(([x, z]) => p('erg', x, 0, z)),
     ergLabel: p('erg', ex - 0.2, 1.2, ez + 0.6),
+    // The hire boats at their moorings ({ id, x, z, heading }), and each one's label above it.
+    moorings: hire.moorings,
+    hireLabels: hire.labels,
+    hirePush: hire.pushes,
+  };
+}
+
+// The hire boats' bank: you on the Thames Path looking upstream along the boats
+// moored at its edge (the river on your right or left, whichever side the path
+// is), each boat's mooring, its label, and where you stand beside it to step aboard.
+function hireShots(course, river, at) {
+  const here = locate(river, ...HIRE_BANK.at);
+  const side = Math.sign(here.lateral) || -1; // the path's bank: -1 the left going upstream
+  const edge = (s) => { const w = widthAt(river, s); return side < 0 ? w.left : w.right; };
+  const point = (s, lateral) => { const c = pointAt(river, s); return [c.x - c.tz * lateral, c.z + c.tx * lateral]; };
+  let s = here.s + HIRE_BANK.first;
+  const moorings = HIRE_ORDER.map((id) => {
+    const { bow, stern, half } = HIRE_BOATS[id].shape;
+    const mid = s + stern;
+    s = mid + bow + HIRE_BANK.gap;
+    const c = pointAt(river, mid);
+    // Out from the bank until the mapped water takes it all, bow, middle and stern
+    // (the bank isn't straight: the river line's width is only its average here).
+    const afloat = (lateral) => [mid - stern, mid, mid + bow].every((k) => !course.shore?.dry(...point(k, lateral)));
+    let lateral = side * (edge(mid) - half - HIRE_BANK.off);
+    for (let i = 0; i < 20 && !afloat(lateral); i++) lateral -= side * 0.3;
+    const [x, z] = point(mid, lateral);
+    // Its label: over its stern half, the end nearest you on the bank, at deck
+    // height; Push off over its front half, ahead of you as you stand by it.
+    const [lx, lz] = point(mid - stern / 2, lateral);
+    const [fx, fz] = point(mid + bow / 2, lateral);
+    return { id, x, z, s: mid, heading: Math.atan2(c.tx, -c.tz), stern, label: [lx, 1.4, lz], push: [fx, 1.6, fz] };
+  });
+  const onPath = (s0, back) => point(s0, side * (edge(s0) + back));
+  const [px, pz] = onPath(here.s, HIRE_BANK.back);
+  const far = point(here.s + 30, side * (edge(here.s + 30) - 4));
+  return {
+    place: { eye: at(px, pz, HIRE_BANK.eye), look: [far[0], 0.2, far[1]] },
+    moorings,
+    labels: moorings.map((m) => m.label),
+    pushes: moorings.map((m) => m.push),
+    // Beside each boat's stern, where you'd step aboard, looking along it.
+    stands: moorings.map((m) => {
+      const [x, z] = onPath(m.s - m.stern + 1.2, 1.2);
+      const ahead = point(m.s + 6, side * (edge(m.s + 6) - 2));
+      return { eye: at(x, z, HIRE_BANK.eye), look: [ahead[0], 0.5, ahead[1]] };
+    }),
   };
 }
 

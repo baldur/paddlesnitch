@@ -145,15 +145,6 @@ export function clubSvg(which) {
       <path d="M6 60q12 -3 24 0q12 3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
     </svg>`;
   }
-  if (which === 'hire') {
-    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
-      <rect y="48" width="120" height="32" fill="#4f7f86"/>
-      <path d="M22 50h70l14 -7h-90z" fill="#efe6cf"/><rect x="18" y="43" width="86" height="2.5" fill="#7a4a24"/>
-      <rect x="54" y="26" width="40" height="3" fill="#1f2a55"/><rect x="56" y="29" width="1.5" height="14" fill="#c9c9c4"/><rect x="91" y="29" width="1.5" height="14" fill="#c9c9c4"/>
-      <circle cx="64" cy="38" r="3.5" fill="#d9a27c"/><rect x="61" y="40" width="7" height="4" fill="#2a6fd6"/>
-      <path d="M100 52q8 2 16 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/><path d="M4 58q10 -3 20 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
-    </svg>`;
-  }
   // Caversham Boat Services from the river: the white boathouse with its
   // black-and-white timbered gable and balcony, the sign, the two white lions
   // on the bank and the Union flag (drawn from a photo, owner 2026-11-07).
@@ -173,22 +164,6 @@ export function clubSvg(which) {
       <rect x="30" y="18" width="1" height="36" fill="#d8d8d2"/><rect x="31" y="18" width="7" height="5" fill="#2a4fa0"/>
       <rect x="95" y="20" width="1.2" height="34" fill="#d8d8d2"/><rect x="96.2" y="20" width="11" height="7" fill="#1c3880"/><path d="M96.2 20l11 7M107.2 20l-11 7" stroke="#ffffff" stroke-width="1.4"/><path d="M96.2 23.5h11M101.7 20v7" stroke="#ffffff" stroke-width="2"/><path d="M96.2 23.5h11M101.7 20v7" stroke="#c8332b" stroke-width="1"/>
       <path d="M6 66q12 -3 24 0q12 3 24 0M70 72q12 -3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
-    </svg>`;
-  }
-  if (which === 'speedboat') {
-    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
-      <rect y="48" width="120" height="32" fill="#4f7f86"/>
-      <path d="M8 56q40 6 92 -2l12 -6l-8 12q-46 8 -92 2z" fill="#f4f4f0"/><path d="M14 60q42 4 88 -2" stroke="#c8332b" stroke-width="2.2" fill="none"/>
-      <path d="M52 52l10 -9h14l-6 9z" fill="#5f8a99"/><circle cx="60" cy="47" r="3" fill="#d9a27c"/>
-      <path d="M0 62q10 -2 18 0M0 66q14 -3 26 0" stroke="#e8f2f4" stroke-width="1.2" fill="none"/>
-    </svg>`;
-  }
-  if (which === 'narrowboat') {
-    return `<svg viewBox="0 0 120 80" aria-hidden="true">${sky}
-      <rect y="50" width="120" height="30" fill="#4f7f86"/>
-      <path d="M4 54h104l8 4l-8 4h-104z" fill="#1a1a1c"/><rect x="4" y="56" width="104" height="1.6" fill="#c9a02a"/>
-      <rect x="14" y="40" width="84" height="14" fill="#1f5236"/><rect x="12" y="38.5" width="88" height="2.5" fill="#8a1e18"/>
-      ${[20, 34, 48, 62, 76].map((x) => `<rect x="${x}" y="44" width="7" height="5" fill="#9ab8c2"/>`).join('')}
     </svg>`;
   }
   if (which === 'rowing') {
