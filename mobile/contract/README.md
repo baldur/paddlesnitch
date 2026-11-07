@@ -318,9 +318,10 @@ Both roll/pitch legends put their words at the same x: "pitch" ends at the
 plot's right edge, and "roll" ends 8 pt before where pitch's 18 pt line key
 starts (so on "Through the session" there's more room before the pitch
 swatch). Word widths are measured (the website draws "pitch" end-anchored
-and takes Plex Mono as 0.6 em a character for the rest). Key sizes and gaps scale with the text
-size (Android in sp; iOS scaled with Dynamic Type); the website's chart text
-is a fixed 11 pt, so its keys are fixed too.
+and takes Plex Mono as 0.6 em a character for the rest). Key sizes and gaps
+follow each app's own chart text: Android's is 11 sp, so they grow with the
+font size; iOS and the website keep chart text at a fixed 11 pt, so their
+keys and gaps are fixed too.
 Y-axis ticks are `axisTicks`
 (format.json) of the chart's bound, labelled with the plain number and "°"
 (a hyphen for minus: "-6°"); only the histogram's left label uses U+2212.
