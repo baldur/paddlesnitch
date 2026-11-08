@@ -33,7 +33,7 @@ National build: download the Geofabrik extracts (`britain-and-ireland`, `netherl
 
 **Lessons from surveying the Kennet (2026-11-08):**
 - Racers run their carries: 2.0–2.6 m/s on the bank against 2.7–3.1 paddling, so speed alone can't see them. Look for the stops either side.
-- A boat against the bank can record within a metre of the mapped centre line, and `sideOf` is then a coin toss: a metre of GPS flipped Southcote's bank. `onBank` holds a surveyed landing at least 6 m to the side a person saw. Check banks against the footage (`waterways-portage-survey.test.ts`).
+- Banks can't be worked out from GPS for a survey. A boat against the bank can record within a metre of the mapped centre line, and a carry can cross to a channel the route doesn't follow (Blakes Lock: out of the south channel, over the strip of land, back into the north one). A survey stores the banks seen and the heading (`seen`), and the landings exactly as recorded. Moving a landing to suit the line put Blakes's put-in on the wrong side of the river. Check banks against the footage (`waterways-portage-survey.test.ts`).
 - Pick a gauge by distance along the route. In a straight line, Fobney and County are nearer the Thames gauge at Reading than the Kennet's.
 - EA stations can list a dead measure beside the live one (Calcot Bridge: `m` with no readings, `mASD` live). `eaGauges` prefers `mASD`. Theale has no `riverName`, so it isn't matched at all.
 - GoPro MAX frames vary by mode: 3008×960 here, 4096×1344 earlier. Each face is the frame's height and the rest is gaps. The camera on the back deck faces the stern (`--yaw 180`).
