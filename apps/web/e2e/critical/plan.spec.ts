@@ -16,7 +16,7 @@ test('two clicks on the water give a route and its stops', async ({ page }) => {
   await page.mouse.click(box.x + box.width / 2 + 250, box.y + box.height / 2 - 60)
 
   await expect(page.getByTestId('plan-summary')).toContainText('Distance')
-  await expect(page.getByTestId('stop-list')).toContainText('Portage side not known yet.')
+  await expect(page.getByTestId('stop-list')).toContainText('Added by paddlesnitch survey')   // Blakes Lock's surveyed carry
   await expect(page).toHaveURL(/from=.*&to=/)   // the plan is in the address bar
 
   // Satellite swaps the dark map for aerial imagery, to see where to land.
