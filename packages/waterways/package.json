@@ -39,6 +39,7 @@
     "./ingest/waterboards": "./src/ingest/waterboards.ts",
     "./waterway-coverage": "./src/waterway-coverage.ts",
     "./portage": "./src/portage.ts",
+    "./portage-moderation": "./src/portage-moderation.ts",
     "./portage-store": "./src/portage-store.ts",
     "./portage-survey": "./src/portage-survey.ts",
     "./portage-detect": "./src/portage-detect.ts",

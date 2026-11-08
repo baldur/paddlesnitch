@@ -24,6 +24,19 @@ export type PortageContribution = {
   updatedAt: string
   hidden?: boolean               // hidden by an admin, or by FLAGS_TO_HIDE flags
   observed?: PortageObserved     // first-hand survey: when, and how high the river was
+  status?: PortageStatus         // absent once public; never set on a public record
+  verdict?: PortageVerdict       // why a note is held
+}
+
+/** A contribution with a note waits here until its check is done: pending while
+ *  the check runs, held for the owner to decide, not_published when it's removed.
+ *  None of them ever reach the public copy. */
+export type PortageStatus = 'pending' | 'held' | 'not_published'
+
+export type PortageVerdict = {
+  category: 'racist' | 'sexist' | 'offensive' | 'rude' | 'flagged' | 'unchecked'  // flagged: hidden by paddlers' flags; unchecked: the check couldn't run
+  bleeped?: string               // the note with the bad words out
+  bleepedPassed?: boolean        // the bleeped text passed the check itself: only then may it be shown
 }
 
 /** When a carry was seen, and what the nearest gauge read then: a landing that
@@ -43,7 +56,7 @@ export type PortageObserved = {
 }
 
 /** What anyone may see of one: no user id. */
-export type PublicPortage = Omit<PortageContribution, 'userId'>
+export type PublicPortage = Omit<PortageContribution, 'userId' | 'status' | 'verdict'>
 
 export const MAX_NOTES = 500
 /** A contribution this far from a feature isn't about it. */
@@ -53,7 +66,7 @@ export const MAX_CARRY_M = 1500
 /** Distinct people flagging one hides it until an admin looks. */
 export const FLAGS_TO_HIDE = 3
 
-export const toPublic = ({ userId: _, ...rest }: PortageContribution): PublicPortage => rest
+export const toPublic = ({ userId: _, status: _s, verdict: _v, ...rest }: PortageContribution): PublicPortage => rest
 
 /** The visible contributions about a feature: by id, or (when ids change) by place. */
 export function portagesAt(feature: Feature, all: PublicPortage[]): PublicPortage[] {
