@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, backFrom, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
+import { PLACES, START, cutBetween, DOOR_LABELS, HIRE_ORDER, backFrom, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from './kayak-erg.js';
@@ -262,7 +262,8 @@ function start() {
   document.getElementById('outingBar').hidden = !mode.outing;
   if (mode.outing) {
     const bridge = race.course.scenery?.bridges?.find((b) => b.name === 'Caversham Bridge');
-    startOuting(race, mode.outing, (bridge?.s ?? 0) + 30, (Math.random() * 2 ** 31) | 0, { boat: hireBoat });
+    // A hired boat leaves from its mooring by the Thames Path (the hire bank), the cruise from below the bridge.
+    startOuting(race, mode.outing, (bridge?.s ?? 0) + 30, (Math.random() * 2 ** 31) | 0, { boat: hireBoat, from: mode.outing === 'hire' ? hireFrom : null });
     outingLever = 0;
     state = 'racing';
     showOutingBar();
@@ -728,14 +729,15 @@ canvas.addEventListener('pointerdown', (e) => {
   if (race?.outing) outingTouches.set(e.pointerId, e.clientX < canvas.clientWidth / 2 ? -1 : 1);
 });
 for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => outingTouches.delete(e.pointerId));
-// Out of the choice of boats, back to the bridge's cards, with Hire a boat to hand again.
-function unhire() {
-  club.hiring = false;
-  club.backToHire = true;
-  arrive('path');
-}
-// The boat picked at the pier for a hired-boat outing (outing.js HIRE_BOATS).
+// The boat picked by the hire bank for a hired-boat outing (outing.js HIRE_BOATS),
+// and its mooring, where the outing starts (club.js moorings).
 let hireBoat = 'launch';
+let hireFrom = null;
+function pushOffHire(id) {
+  hireBoat = id;
+  hireFrom = club.shots.moorings.find((m) => m.id === id);
+  choose('hire');
+}
 // Which of the outing's boats you're on: the trip boat, or the one you hired.
 const outingBoat = () => (race.outing.kind === 'hire' ? race.outing.boat : 'cruise');
 // How far a sinking boat has gone down (metres), and how far over.
@@ -798,7 +800,7 @@ function outingStep(dt) {
     }
     if (e === 'sunk') {
       endPlay('finished');
-      show('Sunk! Back to the pier', { hold: 2.5 });
+      show('Sunk! Back to the bridge', { hold: 2.5 });
       race.outing.leaveAt = race.time + 2.5;
     }
     if (e === 'swan') {
@@ -830,9 +832,8 @@ const clubNavEl = document.getElementById('clubNav');
 // straight back to the bridge. Esc and a gamepad's B go back too.
 const back = () => {
   if (!club) return;
-  const to = backFrom(club.place, { hiring: club.hiring, sheet: menu.open ? { step: shownStep, base: shownStep, ...club.sheet } : null });
-  if (to?.unhire) unhire();
-  else if (to?.step) showStep(to.step);
+  const to = backFrom(club.place, { sheet: menu.open ? { step: shownStep, base: shownStep, ...club.sheet } : null });
+  if (to?.step) showStep(to.step);
   else if (to?.close) closeSheet();
   else if (to?.go) go(to.go);
 };
@@ -885,11 +886,16 @@ function go(to) {
   closeSheet();
   endErg();
   endKerg();
-  const through = !!PLACES[to].inside !== !!PLACES[club.place].inside;
+  const through = !!PLACES[to].inside !== !!PLACES[club.place].inside || cutBetween(club.place, to);
+  // Back from the hire bank to the bridge: Hire a boat to hand again.
+  club.backToHire = club.place === 'hire' && to === 'path';
+  // Back from a boat to the bank: that boat's label to hand again.
+  club.backToBoat = to === 'hire' ? PLACES[club.place].boat : undefined;
   club.from = clubCamera();
   club.to = to;
   club.t = 0;
-  club.length = stillMotion.matches ? 0 : through ? 0.7 : 1.4;
+  // (Along the bank to a hire boat: a walk, at a walking pace.)
+  club.length = stillMotion.matches ? 0 : through ? 0.7 : PLACES[to].boat ? 2.2 : 1.4;
   club.through = through;
   clubDoors.replaceChildren();
   clubNote.hidden = true;
@@ -919,28 +925,27 @@ function arrive(place) {
   visit.places.add(place);
   clubDoors.replaceChildren();
   clubCards.replaceChildren();
-  clubBack.hidden = !PLACES[place].up && !(place === 'path' && club.hiring);
+  clubBack.hidden = !PLACES[place].up;
   clubStart.hidden = !PLACES[place].up || PLACES[place].up === START;
   if (!PLACES[place].inside) try { localStorage.setItem(PLACE_KEY, place); } catch {}
-  document.getElementById('clubPlace').textContent = place === 'path' && club.hiring ? 'Hire a boat' : PLACES[place].label;
-  clubCards.classList.toggle('choice', place === 'path' && !!club.hiring);
+  document.getElementById('clubPlace').textContent = PLACES[place].label;
   const { shots } = club;
   const label = (key) => (MODES[key] ?? DRILL_MODES[key] ?? ROW_MODES[key])?.label;
   // On the bridge the clubs are cards along the bottom, each with a picture,
   // and a pin over its building in the view: nothing covers the scene.
-  // Hiring at the pier: the three boats to choose from, and back to the bridge's cards.
-  const hiring = place === 'path' && club.hiring;
-  const spots = hiring
-    ? [
-      ...Object.entries(HIRE_BOATS).map(([id, b]) => ({ card: { picture: clubSvg(id === 'launch' ? 'hire' : id), name: b.label, line: b.line }, act: () => { hireBoat = id; club.hiring = false; choose('hire'); }, play: true })),
-    ]
+  // By the hire boats: each one's label over it; tap one and you walk along to it.
+  const spots = place === 'hire'
+    ? HIRE_ORDER.map((id, i) => ({ label: HIRE_BOATS[id].label, at: shots.hireLabels[i], act: () => go(`hire-${id}`), hireBoat: id }))
+    // Beside the boat you walked to: Push off from its mooring, or Back along the bank to pick another (owner, 2026-11-07).
+    : PLACES[place].boat
+    ? [{ label: 'Push off', at: shots.hirePush[HIRE_ORDER.indexOf(PLACES[place].boat)], act: () => pushOffHire(PLACES[place].boat), go: true }]
     : place === 'path'
     ? [
       // Left to right as the clubs stand from the bridge: the rowing club's pin is left of the canoe club's.
       { card: { picture: clubSvg('rowing'), name: '<span class="long">Reading </span>Rowing Club', line: 'Single sculls, the ergs and a head race', pin: 'rowing' }, act: () => go('rclub') },
       { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
-      { card: { picture: clubSvg('hire'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => { club.hiring = true; arrive('path'); }, hire: true },
+      { card: { picture: clubSvg('boathouse'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => go('hire'), hire: true },
       // The river cruise on the far right (owner, 2026-11-07): last for everyone, after a guest's sign-in box.
       { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true, mode: 'cruise' },
       { pin: 'canoe', at: shots.doors.path.club },
@@ -950,7 +955,7 @@ function arrive(place) {
   // A guest on the bridge (owner, 2026-11-07): a card for an open mode (the
   // river cruise) on its own, on the right; every other card (a new one too) in
   // a "Sign in to play" box, as it is, going to sign in. Signed in, there's no box.
-  if (place === 'path' && !hiring && guest()) {
+  if (place === 'path' && guest()) {
     for (const spot of spots) {
       if (!spot.card || !spot.act || OPEN.has(spot.mode)) continue;
       Object.assign(spot, { act: () => { location.href = SIGN_IN; }, signIn: true, hire: false });
@@ -958,12 +963,12 @@ function arrive(place) {
     for (const spot of spots) if (spot.card && OPEN.has(spot.mode)) spot.open = true;
   }
   // Race again first among the cards (it was last, alone on a row of its own on a phone).
-  else if (place === 'path' && !hiring && label(club.plan)) {
+  else if (place === 'path' && label(club.plan)) {
     spots.unshift({ card: { name: `Race again`, line: label(club.plan) }, act: () => choose(club.plan), go: true });
   }
   // Racing friends, live, up front: make a race and send the link, or join one
   // with its code. Not where there's no site to race through (offline).
-  if ((place === 'path' || place === 'club') && !hiring && !account.offline && !guest() && (place === 'club' || label(club.plan))) {
+  if ((place === 'path' || place === 'club') && !account.offline && !guest() && (place === 'club' || label(club.plan))) {
     spots.unshift(
       { friend: { name: 'Invite friends', line: 'Make a live race and send the link' }, act: () => openLive('', 'make') },
       { friend: { name: 'Join a race', line: 'Type the code from the link you were sent' }, act: () => openLive('', 'join') },
@@ -1061,6 +1066,7 @@ function arrive(place) {
   menu.classList.toggle('rowing', place === 'rchanging');
   if (place === 'changing' || place === 'rchanging') sheet('paddler', true);
   if (place === 'clubhouse') sheet('home', true);
+  if (PLACES[place].boat) note(HIRE_BOATS[PLACES[place].boat].line);
   // A first visit: where to make your paddler, and where the races are.
   if (place === 'club' && !kitChosen) note('New here? Make your paddler in the changing room, then pick a race in the clubhouse');
   // Phones held upright: races are sideways.
@@ -1079,7 +1085,7 @@ function arrive(place) {
 function focusFirst() {
   if (menu.open || clubEl.classList.contains('waiting') || clubEl.classList.contains('asking')) return;
   // (A guest's first focus is the one thing they can play, though it's on the right.)
-  (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg || x.open)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  (club.spots.find((x) => (club.backToBoat ? x.hireBoat === club.backToBoat : club.backToHire ? x.hire : x.erg || x.kerg || x.open)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
 }
 // The erg room: a 500 m on your erg, the rower on the next one keeping a
 // steady 2:08. Both sides together for a stroke; the monitor shows how it's going.
@@ -1381,6 +1387,12 @@ function placeClub() {
     out.push(meshes.bridgeSwan, meshes.swanLegs);
   }
   out.push(...placeRowingClub(l));
+  // The hire boats at their moorings by the Thames Path.
+  for (const m of club.shots.moorings) {
+    const f = [Math.sin(m.heading), 0, -Math.cos(m.heading)];
+    renderer.place(meshes.outing[m.id], [basis([Math.cos(m.heading), 0, Math.sin(m.heading)], [0, 1, 0], f.map((v) => -v), [m.x, 0, m.z])]);
+    out.push(meshes.outing[m.id]);
+  }
   if (club.place === 'kerg' || club.to === 'kerg') out.push(...placeKayakErg(l));
   // The nine boats on the boathouse's racks, side on, in your colours.
   BOATS.forEach((b, i) => {
@@ -3059,7 +3071,6 @@ whoami.then(() => {
   // time inside one, or walked in before the site answered: even mid-walk.)
   if (club && guest()) {
     club.to = null;
-    club.hiring = false;
     if (menu.open) menu.close('');
     arrive('path');
   } else if (club && !club.to) arrive(club.place);
