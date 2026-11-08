@@ -106,7 +106,8 @@ final class BoatMotionTests: AppTestCase {
         XCTAssertFalse(section.descendants(matching: .any)["Stroke rate, 64, strokes per minute"].exists)
         let link = section.buttons["motion-all-charts"]
         XCTAssertEqual(link.label, "All charts")
-        XCTAssertGreaterThanOrEqual(link.frame.height, 44)
+        // Exactly 44 can read 43.99999999999994 after a scroll (iOS 27).
+        XCTAssertGreaterThanOrEqual(link.frame.height, 44 - 0.01)
         keep("Boat motion on the paddle")
         link.tap()
         XCTAssertTrue(text(containing: "SIDE-TO-SIDE ROLL").appears(timeout: 10))
@@ -159,14 +160,6 @@ final class BoatMotionTests: AppTestCase {
         open("pdl-strava")
         XCTAssertTrue(text(containing: "PACE").appears(timeout: 10))
         XCTAssertFalse(element("open-motion").exists, "not from a tracker")
-    }
-
-    private func openMotion(_ paddle: String) {
-        signInAndWait()
-        open(paddle)
-        let button = element("open-motion")
-        XCTAssertTrue(button.appears(timeout: 10))
-        button.tap()
     }
 
     private func relaunch(with argument: String) {
