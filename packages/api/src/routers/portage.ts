@@ -1,6 +1,6 @@
 // OpenPortage contributions (docs/features/river-planner.md, "Contributions";
 // packages/waterways/src/portage.ts). Adding one needs an account and an
-// explicit CC0 release; it goes live at once. Anyone signed in can flag one,
+// explicit CC0 release; it goes live at once, or after the check if it has a note. Anyone signed in can flag one,
 // the author can withdraw it, a platform admin can hide or restore it.
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
@@ -8,7 +8,7 @@ import { haversine } from '@paddlesnitch/timing/geo'
 import { isPlatformAdmin } from '@paddlesnitch/core/admin'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
 import { MAX_CARRY_M, MAX_NOTES } from '@paddlesnitch/waterways/portage'
-import { addPortage, deletePortage, flagPortage, hidePortage, listMyPortages } from '@paddlesnitch/waterways/portage-store'
+import { addPendingPortage, addPortage, deletePortage, flagPortage, hidePortage, listMyPortages } from '@paddlesnitch/waterways/portage-store'
 import { portagesFromTrack } from '@paddlesnitch/waterways/portage-detect'
 import { loadNational } from '@paddlesnitch/waterways/national'
 import { getSession } from '@paddlesnitch/analysis/analysis-store'
@@ -34,7 +34,12 @@ export const portageRouter = router({
     const { cc0: _, notes, ...fields } = input
     // The account's name, as plan sharing shows it: the sign-in token's copy can lag behind.
     const name = (await findUserBySub(ctx.user.id))?.displayName || ctx.user.displayName || 'A paddler'
-    return addPortage({ id: ctx.user.id, name }, { ...fields, notes: notes?.trim() || undefined })
+    const text = notes?.trim()
+    if (!text) return addPortage({ id: ctx.user.id, name }, fields)
+    // A note waits for the check (lib/portage-check.ts) and shows only if it passes.
+    const pending = await addPendingPortage({ id: ctx.user.id, name }, { ...fields, notes: text })
+    await ctx.portageJobs?.check(pending.id)
+    return pending
   }),
 
   mine: protectedProcedure.query(({ ctx }) => listMyPortages(ctx.user.id)),
@@ -63,6 +68,7 @@ export const portageRouter = router({
   flag: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {
     const r = await flagPortage(ctx.user.id, input.id)
     if (!r) throw new TRPCError({ code: 'NOT_FOUND' })
+    if (r === 'hidden') await ctx.portageJobs?.flagged(input.id)
     return { result: r }
   }),
 

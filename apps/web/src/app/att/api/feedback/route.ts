@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
+import { getGitHubToken, forgetGitHubToken } from '@/lib/github-issue'
 import { publicPath } from '@paddlesnitch/ui/metrics-events'
 import { getAuthUser } from '@/lib/auth'
 import { looksLikeBot } from '@/lib/anti-bot'
@@ -39,30 +39,6 @@ function asString(value: unknown, max?: number): string {
   if (typeof value !== 'string') return ''
   const trimmed = value.trim()
   return max ? trimmed.slice(0, max) : trimmed
-}
-
-let cachedToken: string | undefined
-
-async function getGitHubToken(): Promise<string | undefined> {
-  // Env override exists for local dev and tests — they can set
-  // GITHUB_ISSUES_TOKEN directly without round-tripping through SSM.
-  const direct = process.env.GITHUB_ISSUES_TOKEN
-  if (direct) return direct
-  if (cachedToken) return cachedToken
-  const paramName = process.env.GITHUB_ISSUES_TOKEN_PARAM
-  if (!paramName) return undefined
-  try {
-    const ssm = new SSMClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
-    const res = await ssm.send(new GetParameterCommand({
-      Name: paramName,
-      WithDecryption: true,
-    }))
-    cachedToken = res.Parameter?.Value
-    return cachedToken
-  } catch (err) {
-    console.error('[feedback] could not fetch GitHub token from SSM:', err)
-    return undefined
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -149,7 +125,7 @@ export async function POST(req: NextRequest) {
     // A refused token (401/403: revoked or expired) is dropped from the cache,
     // so a replaced token in SSM is picked up without waiting for a deploy.
     console.error('[feedback] GitHub refused the issue:', ghRes.status)
-    if (ghRes.status === 401 || ghRes.status === 403) cachedToken = undefined
+    if (ghRes.status === 401 || ghRes.status === 403) forgetGitHubToken()
     // Don't leak GitHub error details to the customer — they can't act on it.
     return NextResponse.json(
       { error: 'Couldn’t send your report. Please try again later.' },

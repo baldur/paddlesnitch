@@ -13,7 +13,7 @@ import { GET as exportData } from '@/app/api/account/export/route'
 import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as mapData } from '@/app/plan/data/[version]/[name]/route'
 import { listKeys } from '@/lib/storage'
-import { clearPortageCache } from '@paddlesnitch/waterways/portage-store'
+import { clearPortageCache, publishPortage } from '@paddlesnitch/waterways/portage-store'
 import { surveyPortages } from '@paddlesnitch/waterways/portage-survey'
 import { clearDemandCache } from '@paddlesnitch/waterways/plan-store'
 import { saveSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
@@ -21,6 +21,12 @@ const AT_ISO = '2026-10-01T09:00:00.000Z'
 
 const as = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName } })
 const anon = createCaller({ user: null })
+// A note waits for the check (portage-check-job.test.ts); these stories are about one that passed.
+const addLive = async (u: TestUser, input: Parameters<ReturnType<typeof as>['portage']['add']>[0]) => {
+  const c = await as(u).portage.add(input)
+  if (c.status === 'pending') { await publishPortage(c.id); clearPortageCache() }
+  return c
+}
 const signInAs = (idToken: string) => vi.mocked(cookies).mockResolvedValue({
   get: (name: string) => (name === 'tt_id' ? { name, value: idToken } : undefined),
 } as never)
@@ -46,19 +52,19 @@ describe('adding portage details', () => {
   it('needs an account and an explicit CC0 release', async () => {
     await expect(anon.portage.add(PORTAGE)).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
     const ann = await makeUser('Ann')
-    await expect(as(ann).portage.add({ ...PORTAGE, cc0: false as never })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(addLive(ann, { ...PORTAGE, cc0: false as never })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
   it('refuses landings far apart, on one spot, or far from the lock', async () => {
     const ann = await makeUser('Ann')
-    await expect(as(ann).portage.add({ ...PORTAGE, landings: [MARSH, MARSH] })).rejects.toMatchObject({ message: 'landings_apart' })
-    await expect(as(ann).portage.add({ ...PORTAGE, landings: [MARSH, [51.55, -0.885]] })).rejects.toMatchObject({ message: 'landings_apart' })
-    await expect(as(ann).portage.add({ ...PORTAGE, landings: [[51.5345, -0.8855], [51.5349, -0.8855]] })).rejects.toMatchObject({ message: 'landings_far' })
+    await expect(addLive(ann, { ...PORTAGE, landings: [MARSH, MARSH] })).rejects.toMatchObject({ message: 'landings_apart' })
+    await expect(addLive(ann, { ...PORTAGE, landings: [MARSH, [51.55, -0.885]] })).rejects.toMatchObject({ message: 'landings_apart' })
+    await expect(addLive(ann, { ...PORTAGE, landings: [[51.5345, -0.8855], [51.5349, -0.8855]] })).rejects.toMatchObject({ message: 'landings_far' })
   })
 
   it("is live at once on everyone's route, with the contributor's name and no user id", async () => {
     const ann = await makeUser('Ann Paddler')
-    const saved = await as(ann).portage.add(PORTAGE)
+    const saved = await addLive(ann, PORTAGE)
     expect(saved).toMatchObject({ licence: 'CC0-1.0', name: 'Ann Paddler' })
     const stop = await marshStop()
     expect(stop.portages).toHaveLength(1)
@@ -68,7 +74,7 @@ describe('adding portage details', () => {
 
   it('is published in the OpenPortage file, CC0, without user ids', async () => {
     const ann = await makeUser('Ann')
-    await as(ann).portage.add(PORTAGE)
+    await addLive(ann, PORTAGE)
     const dump = await mapGet('openportage')
     expect(dump).toMatchObject({ licence: 'CC0-1.0', count: 1 + surveyPortages.length })
     expect(JSON.stringify(dump)).not.toContain(ann.id)
@@ -76,7 +82,7 @@ describe('adding portage details', () => {
 
   it('counts towards coverage: the lock now has its portage side', async () => {
     const before = (await mapGet('coverage')).reduce((n: number, r: { locksWithSide: number }) => n + r.locksWithSide, 0)
-    await as(await makeUser('Ann')).portage.add(PORTAGE)
+    await addLive(await makeUser('Ann'), PORTAGE)
     const after = (await mapGet('coverage')).reduce((n: number, r: { locksWithSide: number }) => n + r.locksWithSide, 0)
     expect(after).toBe(before + 1)
   })
@@ -85,7 +91,7 @@ describe('adding portage details', () => {
 describe('withdrawing, flagging and hiding', () => {
   it('only the author can delete one, and then it stops showing', async () => {
     const ann = await makeUser('Ann'), bob = await makeUser('Bob')
-    const { id } = await as(ann).portage.add(PORTAGE)
+    const { id } = await addLive(ann, PORTAGE)
     await expect(as(bob).portage.delete({ id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect((await as(ann).portage.mine()).map(c => c.id)).toEqual([id])
     await as(ann).portage.delete({ id })
@@ -94,7 +100,7 @@ describe('withdrawing, flagging and hiding', () => {
 
   it('three people flagging it hide it; flagging twice counts once', async () => {
     const ann = await makeUser('Ann')
-    const { id } = await as(ann).portage.add(PORTAGE)
+    const { id } = await addLive(ann, PORTAGE)
     const [b, c, d] = await Promise.all(['B', 'C', 'D'].map(n => makeUser(n)))
     expect((await as(b).portage.flag({ id })).result).toBe('flagged')
     expect((await as(b).portage.flag({ id })).result).toBe('flagged')
@@ -106,7 +112,7 @@ describe('withdrawing, flagging and hiding', () => {
 
   it('only a platform admin can hide or restore one', async () => {
     const ann = await makeUser('Ann'), admin = await makeUser('Admin')
-    const { id } = await as(ann).portage.add(PORTAGE)
+    const { id } = await addLive(ann, PORTAGE)
     await expect(as(ann).portage.hide({ id, hidden: true })).rejects.toMatchObject({ code: 'FORBIDDEN' })
     process.env.ADMIN_USER_IDS = admin.id
     await as(admin).portage.hide({ id, hidden: true })
@@ -162,15 +168,16 @@ describe('surveyed portages', () => {
 describe('portage details and your account', () => {
   it('are in Download my data', async () => {
     const me = await makeUser('Me')
-    const saved = await as(me).portage.add(PORTAGE)
+    const saved = await addLive(me, PORTAGE)
     signInAs(me.idToken)
     const body = JSON.parse(await (await exportData(new Request('http://x'))).text())
-    expect(body.account.portages).toEqual([saved])
+    expect(body.account.portages).toEqual(await as(me).portage.mine())
+    expect(body.account.portages.map((c: { id: string }) => c.id)).toEqual([saved.id])
   })
 
   it('are deleted with the account, public copies included', async () => {
     const me = await makeUser('Me')
-    await as(me).portage.add(PORTAGE)
+    await addLive(me, PORTAGE)
     signInAs(me.idToken)
     expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
     expect(await listKeys('portages/public/')).toEqual([])
@@ -212,7 +219,7 @@ describe('the most needed locks', () => {
     const ann = await makeUser('Ann')
     await as(ann).plan.save(PAST_MARSH)
     expect((await needed()).map(l => l.name)).toEqual(['Marsh Lock'])
-    await as(ann).portage.add(PORTAGE)
+    await addLive(ann, PORTAGE)
     expect(await needed()).toEqual([])
   })
 
@@ -251,7 +258,7 @@ describe('carries on your own paddles', () => {
     const [s] = await as(me).portage.fromPaddle({ sessionId: 'p1' })
     expect(s).toMatchObject({ featureId: 'ea-lock:marsh', name: 'Marsh Lock' })
     expect(s.carryM).toBeGreaterThan(100)
-    await as(me).portage.add({ featureId: s.featureId, at: s.at, landings: s.landings, cc0: true })
+    await addLive(me, { featureId: s.featureId, at: s.at, landings: s.landings, cc0: true })
     expect(await as(me).portage.fromPaddle({ sessionId: 'p1' })).toEqual([])
   })
 
@@ -260,5 +267,42 @@ describe('carries on your own paddles', () => {
     await saveSession(paddle(me.id, 'p1'))
     expect(await as(them).portage.fromPaddle({ sessionId: 'p1' })).toEqual([])
     await expect(anon.portage.fromPaddle({ sessionId: 'p1' })).rejects.toThrow()
+  })
+})
+
+describe('a note waits for the check', () => {
+  const checked: string[] = []
+  const flagged: string[] = []
+  const withJobs = (u: TestUser) => createCaller({ user: { id: u.id, email: u.email, displayName: u.displayName }, portageJobs: {
+    check: async id => { checked.push(id) }, flagged: async id => { flagged.push(id) },
+  } })
+
+  it('with a note: answered as pending, the check queued, not on the route', async () => {
+    const u = await makeUser('Noted')
+    const c = await withJobs(u).portage.add({ ...PORTAGE, notes: 'Steps on the left' })
+    expect(c.status).toBe('pending')
+    expect(checked).toContain(c.id)
+    expect((await marshStop()).portages?.map(p => p.id) ?? []).not.toContain(c.id)
+  })
+
+  it('with no note: live at once, and no check', async () => {
+    const u = await makeUser('Silent')
+    const before = checked.length
+    const { notes: _, ...bare } = PORTAGE as typeof PORTAGE & { notes?: string }
+    const c = await withJobs(u).portage.add(bare)
+    expect(c.status).toBeUndefined()
+    expect(checked).toHaveLength(before)
+    expect((await marshStop()).portages?.map(p => p.id)).toContain(c.id)
+  })
+
+  it('the third flag queues the issue', async () => {
+    const [a, b, d, e] = await Promise.all(['A1', 'B1', 'C1', 'D1'].map(n => makeUser(n)))
+    const { notes: _, ...bare } = PORTAGE as typeof PORTAGE & { notes?: string }
+    const c = await as(a).portage.add(bare)
+    await withJobs(b).portage.flag({ id: c.id })
+    await withJobs(d).portage.flag({ id: c.id })
+    expect(flagged).not.toContain(c.id)
+    await withJobs(e).portage.flag({ id: c.id })
+    expect(flagged).toContain(c.id)
   })
 })

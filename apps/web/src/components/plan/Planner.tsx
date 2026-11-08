@@ -79,6 +79,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   const refreshPortages = () => { void utils.plan.route.invalidate(); void utils.portage.mine.invalidate() }
   const flag = trpc.portage.flag.useMutation({ onSuccess: (_, v) => { setFlagged(f => new Set(f).add(v.id)); refreshPortages() } })
   const withdraw = trpc.portage.delete.useMutation({ onSuccess: refreshPortages })
+  const [noteWaiting, setNoteWaiting] = useState(false)
   const startAdding = (stop: Stop) => {
     setAdding({ stop, landings: [] })
     setSatellite(true)
@@ -193,7 +194,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
         {adding && <AddPortage stop={adding.stop} landings={adding.landings} signedIn={signedIn} here={lock ? addPortageHref(lock) : `/plan?${draftParams(draft)}`} onCancel={() => setAdding(null)}
-          onSaved={() => { setAdding(null); refreshPortages() }} />}
+          onSaved={waiting => { setAdding(null); setNoteWaiting(waiting); refreshPortages() }} />}
+        {noteWaiting && <p className="text-sm text-fg" role="status">Saved. We&apos;ll check your note before it shows.</p>}
         <section>
           <h1 className="text-2xl font-semibold text-fg mb-1 text-balance">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
           {shared ? (
@@ -289,7 +291,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             </div>
             <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })}
               stopNotes={notes.stops} onSaveNote={saveStopNote} actions={{
-              signedIn, mine: new Set(mine.data?.map(c => c.id)), flagged,
+              signedIn, mine: new Set(mine.data?.map(c => c.id)), unpublished: mine.data?.filter(c => c.status) ?? [], flagged,
               here: saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`,
               onAdd: startAdding,
               onFlag: id => flag.mutate({ id }),
@@ -365,6 +367,7 @@ const canAddPortage = (s: Stop) => s.portage || (s.feature.kind === 'weir' && !s
 type PortageActions = {
   signedIn: boolean
   mine: Set<string>
+  unpublished: { id: string; featureId?: string; status?: 'pending' | 'held' | 'not_published' }[]
   here: string                       // this page, for the sign-in round trip
   onAdd?: (s: Stop) => void          // unset when adding isn't possible here (a shared plan)
   onFlag: (id: string) => void
@@ -437,6 +440,12 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
                       : actions.signedIn && (actions.flagged.has(p.id)
                         ? <span className="text-muted">flagged, thanks</span>
                         : <button type="button" className="underline text-muted hover:text-fg" onClick={() => actions.onFlag(p.id)}>flag as wrong</button>)}
+                  </div>
+                ))}
+                {actions.unpublished.filter(c => c.featureId === s.feature.id).map(c => (
+                  <div key={c.id} className="text-muted" data-testid="portage-unpublished">
+                    {c.status === 'not_published' ? 'Your note wasn’t published. ' : 'We’re checking your note. Only you can see this. '}
+                    <button type="button" className="underline hover:text-red" onClick={() => actions.onDelete(c.id)}>delete</button>
                   </div>
                 ))}
                 {actions.onAdd && (actions.signedIn
@@ -517,12 +526,12 @@ function PlanNotes({ text, saving, failed, onSave }: { text: string; saving: boo
 /** Adding portage details at a lock or weir: two clicks for the landings on
  *  the (satellite) map, notes, rollers, and an explicit CC0 release. */
 function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
-  stop: Stop; landings: LatLng[]; signedIn: boolean; here: string; onCancel: () => void; onSaved: () => void
+  stop: Stop; landings: LatLng[]; signedIn: boolean; here: string; onCancel: () => void; onSaved: (waiting: boolean) => void
 }) {
   const [notes, setNotes] = useState('')
   const [rollers, setRollers] = useState(false)
   const [cc0, setCc0] = useState(false)
-  const add = trpc.portage.add.useMutation({ onSuccess: onSaved })
+  const add = trpc.portage.add.useMutation({ onSuccess: c => onSaved(c.status === 'pending') })
   const ready = landings.length === 2 && cc0
   const name = stop.feature.name ?? KIND[stop.feature.kind]
   if (!signedIn) return (

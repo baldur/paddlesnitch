@@ -16,6 +16,7 @@ const pendingKey = (id: string) => `portages/pending/${id}.json`
 const validId = (id: string) => /^[\w-]{1,64}$/.test(id)
 
 /** The public copy, or a surveyed one (no userId: it has no owner's copy). */
+export { findPublic as getPublicPortage }
 async function findPublic(id: string): Promise<PortageContribution | null> {
   const c = await getJson<PortageContribution>(publicKey(id))
   if (c) return c
