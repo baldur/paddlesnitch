@@ -26,6 +26,7 @@ import { getJson, putJson, listKeys, deleteObject } from '@/lib/storage'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { recordingReport } from '@/lib/recording-report'
 import { eraseAccountAgain, type EraseAgainPayload } from '@/lib/account-erasure'
+import { portageCheckJob, portageFlaggedJob, strandedPortage } from '@/lib/portage-check'
 
 export const MAX_ATTEMPTS = 5
 /** A job announced by S3 is usually running already; the sweep leaves it this long. */
@@ -38,6 +39,8 @@ const SWEEP_BUDGET_MS = 20_000
 type Handlers = {
   'tracker-paddle': { userId: string; deviceId: string; deviceSessionId: string }
   'erase-account-again': EraseAgainPayload
+  'portage-check': { id: string }
+  'portage-flagged': { id: string }
 }
 export type JobKind = keyof Handlers
 type Job<K extends JobKind = JobKind> = { kind: K; payload: Handlers[K]; createdAt: string; notBefore?: string }
@@ -53,9 +56,12 @@ const HANDLERS: { [K in JobKind]: (p: Handlers[K]) => Promise<void> } = {
   },
   // A deleted account's second pass, ~90 s after DELETE /api/account (#814).
   'erase-account-again': eraseAccountAgain,
+  // A portage note, before it goes public; and one three flags have hidden.
+  'portage-check': p => portageCheckJob(p),
+  'portage-flagged': p => portageFlaggedJob(p),
 }
 
-const KEY = /^jobs\/(tracker-paddle|erase-account-again)\/[\w-]{1,40}\.json$/
+const KEY = /^jobs\/(tracker-paddle|erase-account-again|portage-check|portage-flagged)\/[\w-]{1,40}\.json$/
 const stateKey = (key: string) => key.replace(/^jobs\//, 'jobs-state/')
 const failedKey = (key: string) => key.replace(/^jobs\//, 'jobs-failed/')
 const kickHere = () => process.env.USE_LOCAL_STORAGE === 'true' && !process.env.VITEST
@@ -129,6 +135,11 @@ export async function sweepJobs(now = Date.now()): Promise<Record<RunOutcome, nu
     counts[outcome]++
     if (outcome !== 'not_due' && outcome !== 'busy' && outcome !== 'gone') ran++
     if (alone && ran > 0) break
+  }
+  // A portage note whose job was lost or gave up. One a sweep is plenty; a failure just waits for the next.
+  if (Date.now() - started < SWEEP_BUDGET_MS) {
+    const stranded = await strandedPortage(now).catch(() => null)
+    if (stranded) await portageCheckJob({ id: stranded }, undefined, undefined, now).catch(err => console.warn('[portage-check] sweep: still no result', err))
   }
   return counts
 }

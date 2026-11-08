@@ -20,9 +20,10 @@ import Conditions from '@/components/plan/Conditions'
 import EndSearch from '@/components/plan/EndSearch'
 import { TIDES, useOfficialTides } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
+import type { PortageMarkState } from '@paddlesnitch/waterways/portage-page'
 import { trpc } from '@/lib/trpc'
 import {
-  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, farEndLabel, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
+  addPortageHref, portagePageHref, asInput, COVERAGE_LEVELS, draftParams, farEndLabel, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
   type LockLink, type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -65,6 +66,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   const [draft, setDraft] = useState<PlanDraft>(initial)
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
   const [focus, setFocus] = useState<MapFocus | null>(null)
+  // Read once: the address bar loses view= before the map's code has loaded.
+  const [firstView] = useState(() => view ?? (initial.start || saved || shared ? undefined : FIRST_VIEW))
   const [satellite, setSatellite] = useState(!!lock)
   const [coverage, setCoverage] = useState(false)
   // Adding portage details at a stop: the landings clicked so far (OpenPortage).
@@ -79,6 +82,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   const refreshPortages = () => { void utils.plan.route.invalidate(); void utils.portage.mine.invalidate() }
   const flag = trpc.portage.flag.useMutation({ onSuccess: (_, v) => { setFlagged(f => new Set(f).add(v.id)); refreshPortages() } })
   const withdraw = trpc.portage.delete.useMutation({ onSuccess: refreshPortages })
+  const [noteWaiting, setNoteWaiting] = useState(false)
   const startAdding = (stop: Stop) => {
     setAdding({ stop, landings: [] })
     setSatellite(true)
@@ -122,7 +126,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
 
   return (
     <main className="flex flex-col lg:flex-row lg:h-[calc(100vh-57px)]">
-      <div className="h-[50vh] lg:h-auto lg:flex-1 relative" role="region" aria-label="Map. Every stop on it is also in the list of stops.">
+      <div className="h-[50vh] lg:h-auto lg:flex-1 relative" role="region" aria-label="Map. The stops on a planned route are also in the list of stops.">
         <PlanMapClient
             version={VERSION}
             route={plan?.line ?? []}
@@ -131,12 +135,16 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             stops={visible.filter(s => s.leg === 'out').map(s => ({
               id: s.feature.id, at: s.feature.at, name: s.feature.name ?? KIND[s.feature.kind],
               colour: STOP_GROUPS.find(g => g.id === groupOf(s.feature.kind))!.colour,
+              card: adding ? undefined : stopCard(s),
             }))}
             focus={focus}
-            view={view ?? (initial.start || saved || shared ? undefined : FIRST_VIEW)}
+            view={firstView}
             satellite={satellite}
             coverage={coverage}
             marks={adding?.landings}
+            showPortages={!adding}
+            back={saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`}
+            onEnd={shared ? undefined : (end, at) => { setChoosing(null); setDraft(d => ({ ...d, [end]: at })) }}
             choices={choosing?.choices.map(c => ({ at: c.at, label: c.waterway || 'Unnamed water' }))}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
@@ -193,7 +201,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
         {adding && <AddPortage stop={adding.stop} landings={adding.landings} signedIn={signedIn} here={lock ? addPortageHref(lock) : `/plan?${draftParams(draft)}`} onCancel={() => setAdding(null)}
-          onSaved={() => { setAdding(null); refreshPortages() }} />}
+          onSaved={waiting => { setAdding(null); setNoteWaiting(waiting); refreshPortages() }} />}
+        <div role="status">{noteWaiting && mine.data?.some(c => c.status === 'pending') && <p className="text-sm text-fg">Saved. Your portage details will show once we&apos;ve checked your note.</p>}</div>
         <section>
           <h1 className="text-2xl font-semibold text-fg mb-1 text-balance">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
           {shared ? (
@@ -289,7 +298,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             </div>
             <StopList plan={plan} stops={visible} startAt={draft.startAt} onFocus={at => setFocus({ at, zoom: 15 })}
               stopNotes={notes.stops} onSaveNote={saveStopNote} actions={{
-              signedIn, mine: new Set(mine.data?.map(c => c.id)), flagged,
+              signedIn, mine: new Set(mine.data?.map(c => c.id)), unpublished: mine.data?.filter(c => c.status) ?? [], flagged,
               here: saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`,
               onAdd: startAdding,
               onFlag: id => flag.mutate({ id }),
@@ -361,10 +370,14 @@ function dayOffset(from: string, to: string): number {
 /** Stops where portage details can be added: locks, portages and weirs
  *  across the way (not a canal's bywash beside it, #509). */
 const canAddPortage = (s: Stop) => s.portage || (s.feature.kind === 'weir' && !s.beside)
+/** A portage's dot on the plan opens the same card as its map marker. */
+const stopCard = (s: Stop): PortageMarkState | undefined =>
+  s.portages?.length ? 'landings' : s.feature.noCarry ? 'no_carry' : canAddPortage(s) ? 'unknown' : undefined
 
 type PortageActions = {
   signedIn: boolean
   mine: Set<string>
+  unpublished: UnpublishedNote[]
   here: string                       // this page, for the sign-in round trip
   onAdd?: (s: Stop) => void          // unset when adding isn't possible here (a shared plan)
   onFlag: (id: string) => void
@@ -439,7 +452,9 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
                         : <button type="button" className="underline text-muted hover:text-fg" onClick={() => actions.onFlag(p.id)}>flag as wrong</button>)}
                   </div>
                 ))}
-                {actions.onAdd && (actions.signedIn
+                {actions.unpublished.filter(c => c.featureId === s.feature.id).map(c => <UnpublishedPortage key={c.id} c={c} onDelete={actions.onDelete} />)}
+                <Link className="inline-flex items-center min-h-11 pr-4 text-primary-text hover:underline" href={portagePageHref(s.feature.id, actions.here)}>Portage details</Link>
+                {actions.onAdd && !actions.unpublished.some(c => c.featureId === s.feature.id) && (actions.signedIn
                   ? <button type="button" className="min-h-11 text-primary-text hover:underline" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ Add yours' : '+ Add portage details'}</button>
                   : <a className="text-muted underline hover:text-fg" href={`/signin?next=${encodeURIComponent(actions.here)}`}>Sign in to add portage details</a>)}
               </div>
@@ -514,15 +529,39 @@ function PlanNotes({ text, saving, failed, onSave }: { text: string; saving: boo
   )
 }
 
+type UnpublishedNote = { id: string; featureId?: string; notes?: string; status?: 'pending' | 'held' | 'not_published' }
+const UNPUBLISHED_TEXT = {
+  pending: 'We’re checking your note. Your portage details aren’t public yet.',
+  held: 'A person needs to read your note. Your portage details aren’t public yet.',
+  not_published: 'Your portage details aren’t public. You can add them again.',
+}
+
+/** Your own portage details that aren't public, seen only by you, at the lock they're for. */
+function UnpublishedPortage({ c, onDelete }: { c: UnpublishedNote; onDelete: (id: string) => void }) {
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className="text-muted" data-testid="portage-unpublished">
+      {c.notes && <span className="block text-fg">“{c.notes.length > 60 ? `${c.notes.slice(0, 60)}…` : c.notes}”</span>}
+      <span className="block">{UNPUBLISHED_TEXT[c.status ?? 'pending']}</span>
+      {confirming
+        ? <span className="flex gap-2 items-center">
+            <button type="button" className="min-h-11 underline hover:text-red" onClick={() => onDelete(c.id)}>Delete them</button>
+            <button type="button" className="min-h-11 underline hover:text-fg" onClick={() => setConfirming(false)}>Keep them</button>
+          </span>
+        : <button type="button" className="min-h-11 underline hover:text-red" onClick={() => setConfirming(true)}>Delete</button>}
+    </div>
+  )
+}
+
 /** Adding portage details at a lock or weir: two clicks for the landings on
  *  the (satellite) map, notes, rollers, and an explicit CC0 release. */
 function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
-  stop: Stop; landings: LatLng[]; signedIn: boolean; here: string; onCancel: () => void; onSaved: () => void
+  stop: Stop; landings: LatLng[]; signedIn: boolean; here: string; onCancel: () => void; onSaved: (waiting: boolean) => void
 }) {
   const [notes, setNotes] = useState('')
   const [rollers, setRollers] = useState(false)
   const [cc0, setCc0] = useState(false)
-  const add = trpc.portage.add.useMutation({ onSuccess: onSaved })
+  const add = trpc.portage.add.useMutation({ onSuccess: c => onSaved(c.status === 'pending') })
   const ready = landings.length === 2 && cc0
   const name = stop.feature.name ?? KIND[stop.feature.kind]
   if (!signedIn) return (
@@ -551,17 +590,18 @@ function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
       </label>
       <label className="flex gap-2 items-start text-sm text-muted">
         <input type="checkbox" className="mt-0.5" checked={cc0} onChange={e => setCc0(e.target.checked)} aria-label="Release under CC0" />
-        <span>I release this under <a className="underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer">CC0</a> (anyone may reuse it, including other open-data projects) and it&apos;s my own observation, not copied from a guidebook or map. It&apos;s public at once, with my display name.</span>
+        <span>I release this under <a className="underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer">CC0</a> (anyone may reuse it, including other open-data projects) and it&apos;s my own observation, not copied from a guidebook or map. {notes.trim() ? 'It’s public with my display name once the note has been checked.' : 'It’s public at once, with my display name.'}</span>
       </label>
       <div className="flex gap-2">
         <button type="button" className={buttonClass('primary', 'sm')} disabled={!ready || add.isPending}
           onClick={() => add.mutate({ featureId: stop.feature.id, at: stop.feature.at, landings: [landings[0], landings[1]], notes: notes || undefined, rollers: rollers || undefined, cc0: true })}>
-          {add.isPending ? 'Publishing…' : 'Publish'}
+          {notes.trim() ? (add.isPending ? 'Saving…' : 'Save') : (add.isPending ? 'Publishing…' : 'Publish')}
         </button>
         <button type="button" className={buttonClass('quiet', 'sm')} onClick={onCancel}>Cancel</button>
       </div>
       {add.error && <p className="text-sm text-red">{
-        add.error.message === 'landings_apart' ? 'Those two landings are too far apart (or the same spot). Click again.'
+        add.error.message === 'too_many_notes' ? 'You’ve added a lot of notes today. Please try again tomorrow.'
+          : add.error.message === 'landings_apart' ? 'Those two landings are too far apart (or the same spot). Click again.'
           : add.error.message === 'landings_far' ? `Both landings must be near ${name}.`
           : 'Couldn’t save. Please try again.'}</p>}
     </section>

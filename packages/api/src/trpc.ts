@@ -9,7 +9,9 @@ import { logApiCall, type Client } from '@paddlesnitch/core/observe'
 
 // `client` is set by the HTTP mount (web, apps). In-process callers (SSR,
 // tests) leave it out, and their calls aren't logged as API calls.
-export type Context = { user: AuthUser | null; client?: Client }
+// `portageJobs` is set by the HTTP mount too: the jobs live in the host app.
+export type PortageJobs = { check(id: string): Promise<void>; flagged(id: string): Promise<void> }
+export type Context = { user: AuthUser | null; client?: Client; portageJobs?: PortageJobs }
 
 const t = initTRPC.context<Context>().create()
 

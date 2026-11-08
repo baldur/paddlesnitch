@@ -6,7 +6,9 @@ import { signUpFlow } from '../helpers'
 
 test('two clicks on the water give a route and its stops', async ({ page }) => {
   // Centred on the Kennet where it meets the Thames at Reading.
+  const settled = page.waitForResponse(r => /\/area-/.test(r.url()))   // the map has moved to this view
   await page.goto('/plan?view=51.4566,-0.9581,15')
+  await settled
   const map = page.locator('.leaflet-container')
   await expect(map).toBeVisible()
   await expect(page.getByText('Click the water to set your start.')).toBeVisible({ timeout: 15_000 })
@@ -224,6 +226,109 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   await ownerCtx.close(); await guestCtx.close()
 })
 
+test('a portage has its own page: what we know, on the satellite map, and only the drawing in print', async ({ page }) => {
+  await page.goto('/plan/portage/crt%3Alocks%3AKA-013-009')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Tyle Mill')
+  const details = page.getByTestId('portage-landings')
+  await expect(details).toContainText('get out on your right')
+  await expect(details).toContainText('Seen 8 Nov 2026')
+  await expect(page.locator('img.leaflet-tile[src*="World_Imagery"]').first()).toBeAttached()
+  await expect(page.getByTestId('portage-drawing').first()).toBeVisible()
+
+  // Esri's imagery may not be printed; the drawing is ours.
+  await page.emulateMedia({ media: 'print' })
+  await expect(page.getByTestId('portage-satellite')).toBeHidden()
+  await expect(page.getByTestId('portage-drawing').first()).toBeVisible()
+  const printed = await page.getByTestId('portage-level').innerText().catch(() => '')
+  if (printed) { expect(printed).not.toContain('ago'); expect(printed).toMatch(/UTC/) }
+  expect(await page.getByTestId('portage-landings').innerText()).not.toContain('survey ·')   // innerText: what's actually printed
+})
+
+test('a portage marker opens a card on a tap, without placing a route end', async ({ page }) => {
+  const TYLE_MILL = '51.418526,-1.100565'
+  const markers = page.waitForResponse(r => /\/portages-/.test(r.url()))
+  await page.goto(`/plan?view=${TYLE_MILL},16`)
+  await markers
+  const box = (await page.locator('.leaflet-container').boundingBox())!
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.waitForTimeout(300)
+
+  // A near miss still counts: a fingertip isn't a pixel.
+  await page.mouse.click(centre.x + 14, centre.y)
+  const card = page.locator('.portage-card')
+  await expect(card).toContainText('Tyle Mill')
+  await expect(card).toContainText('Landings described')
+  await expect(card.getByRole('link', { name: 'Portage details' })).toHaveAttribute('href', /\/plan\/portage\/crt%3Alocks%3AKA-013-009/)
+  await expect(page).not.toHaveURL(/from=/)
+
+  // Tapping away closes the card and places nothing.
+  await page.mouse.click(centre.x + 200, centre.y + 120)
+  await expect(card).toHaveCount(0)
+  await expect(page).not.toHaveURL(/from=/)
+})
+
+test('a portage card can start or finish a plan at that lock', async ({ page }) => {
+  const markers = page.waitForResponse(r => /\/portages-/.test(r.url()))
+  await page.goto('/plan?view=51.418526,-1.100565,16')
+  await markers
+  const box = (await page.locator('.leaflet-container').boundingBox())!
+  await page.waitForTimeout(300)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await page.locator('.portage-card').getByRole('button', { name: 'Start here' }).click()
+  await expect(page).toHaveURL(/from=51\.4185/)
+  await expect(page.locator('.portage-card')).toHaveCount(0)
+})
+
+test('tapping a lock on a plan opens its card and leaves the route alone, even beside other dots', async ({ page }) => {
+  await page.goto('/plan?from=51.4135,-1.1135&to=51.4247,-1.0830')
+  await page.getByTestId('stop-list').getByRole('button', { name: /Tyle Mill/ }).first().click()
+  await page.waitForTimeout(800)
+  const before = page.url()
+  const box = (await page.locator('.leaflet-container').boundingBox())!
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(page.locator('.portage-card')).toContainText('Tyle Mill')
+  expect(page.url()).toBe(before)
+})
+
+test('portage markers wait until you are zoomed in', async ({ page }) => {
+  const asked: string[] = []
+  page.on('request', r => { if (/\/portages-/.test(r.url())) asked.push(r.url()) })
+  const settled = page.waitForResponse(r => /\/area-/.test(r.url()))
+  await page.goto('/plan?view=51.4185,-1.1005,10')
+  await settled
+  await page.waitForTimeout(500)
+  expect(asked).toEqual([])
+})
+
+test('portage markers are off while placing landings, so a tap lands on the water', async ({ page }) => {
+  const asked: string[] = []
+  page.on('request', r => { if (/\/portages-/.test(r.url())) asked.push(r.url()) })
+  await page.goto('/plan?lock=crt%3Alocks%3AKA-013-009&lockAt=51.418526,-1.100565&lockName=Tyle%20Mill&view=51.418526,-1.100565,18')
+  await expect(page.getByTestId('add-portage')).toBeVisible()
+  // The link's view holds even though the address loses it before the map loads.
+  await expect(page.locator('img.leaflet-tile[src*="/tile/18/"]').first()).toBeAttached()
+  await page.waitForTimeout(500)
+  expect(asked).toEqual([])
+})
+
+test('a plan links each portage to its page', async ({ page }) => {
+  await page.goto('/plan?from=51.4190,-1.1000&to=51.4247,-1.0830')
+  const link = page.getByTestId('portage-block').getByRole('link', { name: 'Portage details' }).first()
+  await link.click()
+  await expect(page).toHaveURL(/\/plan\/portage\//)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  // "← Plan" brings the route back.
+  await page.getByRole('link', { name: '← Plan' }).click()
+  await expect(page).toHaveURL(/\/plan\?from=/)
+})
+
+test('an unknown portage is a 404, not a broken page', async ({ page }) => {
+  expect((await page.goto('/plan/portage/no-such-lock'))?.status()).toBe(404)
+  // Bad encoding: this is the local server's behaviour (400 before the page). Production answers 400 too, before the app.
+  expect((await page.goto('/plan/portage/%E0%A4%A'))?.status()).toBeLessThan(500)
+  expect((await page.goto('/plan/portage/osm%3Alock%3Away%2F123'))?.status()).toBe(404)
+})
+
 test('OpenPortage: a paddler adds portage details at a lock and sees them on the route', async ({ page }) => {
   await signUpFlow(page, { displayName: 'Lock Keeper' })
   // Henley downstream to Hambleden, through Hambleden Lock.
@@ -239,13 +344,11 @@ test('OpenPortage: a paddler adds portage details at a lock and sees them on the
   await page.mouse.click(box.x + box.width / 2 - 40, box.y + box.height / 2)
   await expect(panel).toContainText('Now click where you get back in')
   await page.mouse.click(box.x + box.width / 2 + 40, box.y + box.height / 2)
-  await panel.getByLabel('Portage notes').fill('Steps by the lock cottage')
   await panel.getByLabel('Release under CC0').check()
   await panel.getByRole('button', { name: 'Publish' }).click()
 
   await expect(panel).toHaveCount(0)
   await expect(lock).toContainText('Added by Lock Keeper', { timeout: 15_000 })
-  await expect(lock).toContainText('Steps by the lock cottage')
   await expect(lock).not.toContainText('Portage side not known yet.')
 
   // The printed route sheet draws where to land.

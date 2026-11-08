@@ -1,14 +1,15 @@
 // OpenPortage contributions (docs/features/river-planner.md, "Contributions";
 // packages/waterways/src/portage.ts). Adding one needs an account and an
-// explicit CC0 release; it goes live at once. Anyone signed in can flag one,
+// explicit CC0 release; it goes live at once, or after the check if it has a note. Anyone signed in can flag one,
 // the author can withdraw it, a platform admin can hide or restore it.
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { haversine } from '@paddlesnitch/timing/geo'
 import { isPlatformAdmin } from '@paddlesnitch/core/admin'
 import { findUserBySub } from '@paddlesnitch/core/cognito'
+import { rateLimit } from '@paddlesnitch/core/rate-limit'
 import { MAX_CARRY_M, MAX_NOTES } from '@paddlesnitch/waterways/portage'
-import { addPortage, deletePortage, flagPortage, hidePortage, listMyPortages } from '@paddlesnitch/waterways/portage-store'
+import { addPendingPortage, addPortage, deletePortage, flagPortage, hidePortage, listMyPortages } from '@paddlesnitch/waterways/portage-store'
 import { portagesFromTrack } from '@paddlesnitch/waterways/portage-detect'
 import { loadNational } from '@paddlesnitch/waterways/national'
 import { getSession } from '@paddlesnitch/analysis/analysis-store'
@@ -18,10 +19,12 @@ const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 const latLng = z.tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)])
 /** Landings must be near the lock or weir they're about. */
 const LANDING_NEAR_M = 400
+/** Each note can cost an AI call and a public issue. */
+const NOTES_PER_DAY = 20
 
 export const portageRouter = router({
   add: protectedProcedure.input(z.object({
-    featureId: z.string().max(200).optional(),
+    featureId: z.string().regex(/^[\w:./-]{1,200}$/).optional(),   // an id, never free text: it's public
     at: latLng,
     landings: z.tuple([latLng, latLng]),
     notes: z.string().max(MAX_NOTES).optional(),
@@ -34,7 +37,14 @@ export const portageRouter = router({
     const { cc0: _, notes, ...fields } = input
     // The account's name, as plan sharing shows it: the sign-in token's copy can lag behind.
     const name = (await findUserBySub(ctx.user.id))?.displayName || ctx.user.displayName || 'A paddler'
-    return addPortage({ id: ctx.user.id, name }, { ...fields, notes: notes?.trim() || undefined })
+    const text = notes?.trim()
+    if (!text) return addPortage({ id: ctx.user.id, name }, fields)
+    const limit = await rateLimit(`portage-note-${ctx.user.id}`, NOTES_PER_DAY, 86_400)
+    if (!limit.allowed) throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'too_many_notes' })
+    // A note waits for the check (lib/portage-check.ts) and shows only if it passes.
+    const pending = await addPendingPortage({ id: ctx.user.id, name }, { ...fields, notes: text })
+    await ctx.portageJobs?.check(pending.id)
+    return pending
   }),
 
   mine: protectedProcedure.query(({ ctx }) => listMyPortages(ctx.user.id)),
@@ -63,6 +73,7 @@ export const portageRouter = router({
   flag: protectedProcedure.input(z.object({ id })).mutation(async ({ ctx, input }) => {
     const r = await flagPortage(ctx.user.id, input.id)
     if (!r) throw new TRPCError({ code: 'NOT_FOUND' })
+    if (r === 'hidden') await ctx.portageJobs?.flagged(input.id)
     return { result: r }
   }),
 
