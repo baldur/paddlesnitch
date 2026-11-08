@@ -87,7 +87,8 @@ What each source says about the 77 DW locks: which bank to land on, where to get
 | Go Paddling paddle trails (Paddle UK) | No open licence found; the site refuses scripted fetches | Trail PDFs for Reading–Henley, Henley–Marlow, Hurley–Maidenhead, Hampton Court–Richmond and Devizes–Honey Street give the portage side at some locks. | Find and check only. Ask 2 below. |
 | PaddlePoints (Paddle UK) | Membership terms, rights to Paddle UK | Access and launch points behind a membership wall; nothing on lock portages. | No. |
 
-**Our own evidence is the way to raise the score.** All three routes land in the same CC0 contribution layer, which the scorecard and `/plan/gaps` read:
+**Our own evidence is the way to raise the score.** These routes all land in the CC0 layer the scorecard and `/plan/gaps` read:
+- **Surveys:** a paddle filmed or recorded on the water, checked by a person and committed to `packages/waterways/data/portage-survey.json` (CC0, credited "paddlesnitch survey"). Each records the date and the Environment Agency gauge reading then, because a landing is only true at the level it was seen. The reading is OGL, so it's shown with its credit on a route and left out of the CC0 dump. Only facts are published: never the footage, and no person's name. How to add one: `packages/waterways/CLAUDE.md`, `portage-survey`.
 - **The owner's paddles:** a saved paddle past a lock shows "Carries on this paddle" (`portagesFromTrack`), published after the CC0 tick.
 - **On the water:** *Add portage details* on the lock's stop in Plan, with photos and notes kept by the owner.
 - **Imagery:** landings traced over Esri World Imagery are ours. Esri's "World Imagery Uses Permitted" allows tracing and publishing the lines, even to open data (`river-planner.md`, "SATELLITE"). A side read off imagery alone is a guess, though: confirm it on the water or against a paddle before publishing it.

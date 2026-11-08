@@ -7,6 +7,7 @@
 import { haversine } from '@paddlesnitch/timing/geo'
 import { cumulative, project } from './line'
 import { sideOf } from './along'
+import { levelNote } from './portage-survey'
 import type { Feature, LatLng, OsmElement } from './types'
 
 export type PortageContribution = {
@@ -22,6 +23,23 @@ export type PortageContribution = {
   createdAt: string
   updatedAt: string
   hidden?: boolean               // hidden by an admin, or by FLAGS_TO_HIDE flags
+  observed?: PortageObserved     // first-hand survey: when, and how high the river was
+}
+
+/** When a carry was seen, and what the nearest gauge read then: a landing that
+ *  works at one level may be under water, or out of reach, at another. */
+export type PortageObserved = {
+  at: string                     // ISO, the take-out
+  gauge?: {
+    source: 'ea'
+    id: string
+    name: string
+    river?: string
+    valueM: number               // stage on the gauge's own scale
+    flowM3s?: number
+    state?: 'low' | 'normal' | 'high'
+    readAt: string
+  }
 }
 
 /** What anyone may see of one: no user id. */
@@ -72,7 +90,7 @@ export function portageOnRoute(line: LatLng[], c: PublicPortage, cum = cumulativ
     takeOut: { at: first.at, bank: sideOf(line, cum, first.along, first.at) },
     putIn: { at: second.at, bank: sideOf(line, cum, second.along, second.at) },
     carryM: Math.round(haversine(first.at, second.at)),
-    notes: c.notes,
+    notes: [c.notes, levelNote(c.id)].filter(Boolean).join(' ') || undefined,
     rollers: c.rollers,
     ...(c.licence === 'ODbL-1.0' ? { osm: true as const } : {}),
   }

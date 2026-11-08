@@ -5,11 +5,20 @@
 import { nanoid } from 'nanoid'
 import { deleteObject, deletePrefix, getJson, listKeys, putJson } from '@paddlesnitch/core/storage'
 import { FLAGS_TO_HIDE, toPublic, type PortageContribution, type PublicPortage } from './portage'
+import { mergeSurvey, surveyPortages } from './portage-survey'
 
 const ownKey = (userId: string, id: string) => `users/${userId}/portages/${id}.json`
 const publicKey = (id: string) => `portages/public/${id}.json`
 const flagPrefix = (id: string) => `portages/flags/${id}/`
 const validId = (id: string) => /^[\w-]{1,64}$/.test(id)
+
+/** The public copy, or a surveyed one (no userId: it has no owner's copy). */
+async function findPublic(id: string): Promise<PortageContribution | null> {
+  const c = await getJson<PortageContribution>(publicKey(id))
+  if (c) return c
+  const surveyed = surveyPortages.find(s => s.id === id)
+  return surveyed ? { ...surveyed, userId: '' } : null
+}
 
 export type PortageFields = Pick<PortageContribution, 'featureId' | 'at' | 'landings' | 'notes' | 'rollers'>
 
@@ -40,7 +49,7 @@ export async function deletePortage(userId: string, id: string): Promise<boolean
 /** One flag per person; enough of them hide it until an admin looks. */
 export async function flagPortage(flaggerId: string, id: string): Promise<'flagged' | 'hidden' | null> {
   if (!validId(id)) return null
-  const c = await getJson<PortageContribution>(publicKey(id))
+  const c = await findPublic(id)
   if (!c) return null
   await putJson(`${flagPrefix(id)}${flaggerId}.json`, { at: new Date().toISOString() })
   if ((await listKeys(flagPrefix(id))).length < FLAGS_TO_HIDE || c.hidden) return 'flagged'
@@ -51,7 +60,7 @@ export async function flagPortage(flaggerId: string, id: string): Promise<'flagg
 /** An admin hides or restores one (and clears its flags when restoring). */
 export async function hidePortage(id: string, hidden: boolean): Promise<boolean> {
   if (!validId(id)) return false
-  const c = await getJson<PortageContribution>(publicKey(id))
+  const c = await findPublic(id)
   if (!c) return false
   await setHidden(c, hidden)
   if (!hidden) await deletePrefix(flagPrefix(id))
@@ -61,7 +70,7 @@ export async function hidePortage(id: string, hidden: boolean): Promise<boolean>
 async function setHidden(c: PortageContribution, hidden: boolean) {
   const next = { ...c, hidden: hidden || undefined }
   await putJson(publicKey(c.id), next)
-  await putJson(ownKey(c.userId, c.id), next)
+  if (c.userId) await putJson(ownKey(c.userId, c.id), next)
   cache = null
 }
 
@@ -77,7 +86,7 @@ export async function listPublicPortages(): Promise<PublicPortage[]> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.list
   const keys = await listKeys('portages/public/')
   const all = await Promise.all(keys.map(k => getJson<PortageContribution>(k)))
-  const list = all.filter((c): c is PortageContribution => !!c).map(toPublic)
+  const list = mergeSurvey(all.filter((c): c is PortageContribution => !!c).map(toPublic))
   cache = { at: Date.now(), list }
   return list
 }
