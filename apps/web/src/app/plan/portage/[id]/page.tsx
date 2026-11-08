@@ -8,6 +8,7 @@ import PortageFlag from '@/components/plan/PortageFlag'
 import PortageSatelliteClient from '@/components/map/PortageSatelliteClient'
 import { Page, PageHeader, Section } from '@paddlesnitch/ui/Layout'
 import { buttonClass } from '@paddlesnitch/ui/Button'
+import { fmtDay } from '@paddlesnitch/core/format'
 import { slice } from '@paddlesnitch/waterways/line'
 import { ageText, decodePortageId, KIND_NAME, portageCredits, realWaterways } from '@paddlesnitch/waterways/portage-page'
 import { loadGaugeNear, loadPortageFacts } from '@paddlesnitch/waterways/portage-page-store'
@@ -21,6 +22,9 @@ export const dynamic = 'force-dynamic'
 
 /** How much of the water to draw on the satellite map, each way from the lock. */
 const DRAWN_M = 800
+
+/** On paper "ago" means nothing. UTC, because the server doesn't know the reader's zone. */
+const gaugeReadAt = (iso: string) => { const t = new Date(iso).toISOString(); return `${fmtDay(t)}, ${t.slice(11, 16)} UTC` }
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }
 
@@ -113,7 +117,8 @@ export default async function PortagePage({ params, searchParams }: Props) {
                   <p className="text-fg">
                     {gauge.name}{near.awayM !== undefined && `, ${km(near.awayM)} along the water`}: <span className="tabular">{gaugeValueText(gauge)}</span>
                     {gauge.state && !near.stale && `, ${GAUGE_STATE_TEXT[gauge.state]}`}.
-                    {near.ageMin !== undefined && ` Read ${ageText(near.ageMin)} ago.`}{' '}
+                    {near.ageMin !== undefined && <span className="no-print"> Read {ageText(near.ageMin)} ago.</span>}
+                    {gauge.readAt && <span className="hidden print:inline"> Read {gaugeReadAt(gauge.readAt)}.</span>}{' '}
                     <a className="tt-link no-print" href={gauge.url} target="_blank" rel="noreferrer">Check this gauge</a>
                   </p>
                   {near.stale && <p className="text-fg">This reading is old, so it may not show the river now.</p>}

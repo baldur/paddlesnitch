@@ -239,6 +239,9 @@ test('a portage has its own page: what we know, on the satellite map, and only t
   await page.emulateMedia({ media: 'print' })
   await expect(page.getByTestId('portage-satellite')).toBeHidden()
   await expect(page.getByTestId('portage-drawing').first()).toBeVisible()
+  const printed = await page.getByTestId('portage-level').innerText().catch(() => '')
+  if (printed) { expect(printed).not.toContain('ago'); expect(printed).toMatch(/UTC/) }
+  await expect(page.getByTestId('portage-landings')).not.toContainText('survey ·')
 })
 
 test('a portage marker opens a card on a tap, without placing a route end', async ({ page }) => {
@@ -262,6 +265,29 @@ test('a portage marker opens a card on a tap, without placing a route end', asyn
   await page.mouse.click(centre.x + 200, centre.y + 120)
   await expect(card).toHaveCount(0)
   await expect(page).not.toHaveURL(/from=/)
+})
+
+test('a portage card can start or finish a plan at that lock', async ({ page }) => {
+  const markers = page.waitForResponse(r => /\/portages-/.test(r.url()))
+  await page.goto('/plan?view=51.418526,-1.100565,16')
+  await markers
+  const box = (await page.locator('.leaflet-container').boundingBox())!
+  await page.waitForTimeout(300)
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await page.locator('.portage-card').getByRole('button', { name: 'Start here' }).click()
+  await expect(page).toHaveURL(/from=51\.4185/)
+  await expect(page.locator('.portage-card')).toHaveCount(0)
+})
+
+test('tapping a lock on a plan opens its card and leaves the route alone, even beside other dots', async ({ page }) => {
+  await page.goto('/plan?from=51.4135,-1.1135&to=51.4247,-1.0830')
+  await page.getByTestId('stop-list').getByRole('button', { name: /Tyle Mill/ }).first().click()
+  await page.waitForTimeout(800)
+  const before = page.url()
+  const box = (await page.locator('.leaflet-container').boundingBox())!
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(page.locator('.portage-card')).toContainText('Tyle Mill')
+  expect(page.url()).toBe(before)
 })
 
 test('portage markers wait until you are zoomed in', async ({ page }) => {
@@ -298,7 +324,7 @@ test('a plan links each portage to its page', async ({ page }) => {
 
 test('an unknown portage is a 404, not a broken page', async ({ page }) => {
   expect((await page.goto('/plan/portage/no-such-lock'))?.status()).toBe(404)
-  // Bad encoding: the dev server answers 400 before the page; a production build reaches it (a 404, unit-tested).
+  // Bad encoding: this is the local server's behaviour (400 before the page). Production answers 400 too, before the app.
   expect((await page.goto('/plan/portage/%E0%A4%A'))?.status()).toBeLessThan(500)
   expect((await page.goto('/plan/portage/osm%3Alock%3Away%2F123'))?.status()).toBe(404)
 })

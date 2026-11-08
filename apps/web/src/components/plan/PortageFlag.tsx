@@ -8,9 +8,9 @@ export default function PortageFlag({ id, here }: { id: string; here: string }) 
   const me = trpc.me.useQuery(undefined, { retry: false })
   const [flagged, setFlagged] = useState(false)
   const flag = trpc.portage.flag.useMutation({ onSuccess: () => setFlagged(true) })
-  if (flagged) return <span className="text-muted no-print"> · flagged, thanks</span>
+  if (flagged) return <span className="no-print"> · flagged, thanks</span>
   if (!me.data?.user) {
-    return <> · <a className="underline hover:text-fg no-print" href={`/signin?next=${encodeURIComponent(here)}`}>Sign in to flag as wrong</a></>
+    return <span className="no-print"> · <a className="underline hover:text-fg" href={`/signin?next=${encodeURIComponent(here)}`}>Sign in to flag as wrong</a></span>
   }
-  return <> · <button type="button" className="underline hover:text-fg no-print" onClick={() => flag.mutate({ id })}>flag as wrong</button></>
+  return <span className="no-print"> · <button type="button" className="underline hover:text-fg" onClick={() => flag.mutate({ id })}>flag as wrong</button></span>
 }

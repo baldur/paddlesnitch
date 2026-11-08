@@ -135,7 +135,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             stops={visible.filter(s => s.leg === 'out').map(s => ({
               id: s.feature.id, at: s.feature.at, name: s.feature.name ?? KIND[s.feature.kind],
               colour: STOP_GROUPS.find(g => g.id === groupOf(s.feature.kind))!.colour,
-              card: stopCard(s),
+              card: adding ? undefined : stopCard(s),
             }))}
             focus={focus}
             view={firstView}
@@ -144,6 +144,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             marks={adding?.landings}
             showPortages={!adding}
             back={saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`}
+            onEnd={shared ? undefined : (end, at) => { setChoosing(null); setDraft(d => ({ ...d, [end]: at })) }}
             choices={choosing?.choices.map(c => ({ at: c.at, label: c.waterway || 'Unnamed water' }))}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }

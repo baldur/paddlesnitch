@@ -90,19 +90,31 @@ const TAP_TOLERANCE_PX = 17
 
 const CARD_WORDS: Record<PortageMarkState, string> = { landings: 'Landings described', no_carry: 'Usually no carry', unknown: 'No landing details yet' }
 
-function PortageCard({ id, name, state, back }: { id: string; name: string; state: PortageMarkState; back?: string }) {
+export type PlanEnd = 'start' | 'finish'
+type CardProps = { id: string; name: string; at: LatLng; state: PortageMarkState; back?: string; onEnd?: (end: PlanEnd, at: LatLng) => void }
+
+/** A lock is often where a paddle starts or finishes, so the card offers both. */
+function PortageCard({ id, name, at, state, back, onEnd }: CardProps) {
+  const map = useMap()
+  const end = (which: PlanEnd) => { onEnd!(which, at); map.closePopup() }
   return (
     <Popup className="portage-card">
       <strong className="block text-fg">{name}</strong>
       <span className="block text-muted">{CARD_WORDS[state]}</span>
-      <a className="inline-flex items-center min-h-11 text-primary-text underline" href={portagePageHref(id, back)}>Portage details</a>
+      <a className="flex items-center min-h-11" href={portagePageHref(id, back)}>Portage details</a>
+      {onEnd && (
+        <span className="flex gap-4">
+          <button type="button" className="min-h-11 underline" onClick={() => end('start')}>Start here</button>
+          <button type="button" className="min-h-11 underline" onClick={() => end('finish')}>Finish here</button>
+        </span>
+      )}
     </Popup>
   )
 }
 
 /** Every portage in view once zoomed in: filled where we know the landings. A
  *  tap opens a small card rather than placing a route end. */
-function Portages({ version, back }: { version: string; back?: string }) {
+function Portages({ version, back, onEnd }: { version: string; back?: string; onEnd?: CardProps['onEnd'] }) {
   const map = useMap()
   const [points, setPoints] = useState<PortagePoint[]>([])
   const latest = useRef(0)
@@ -121,7 +133,7 @@ function Portages({ version, back }: { version: string; back?: string }) {
       {points.map(p => (
         <CircleMarker key={p.id} center={p.at} radius={5} bubblingMouseEvents={false}
           pathOptions={{ color: PORTAGE_COLOUR, fillColor: PORTAGE_COLOUR, fillOpacity: p.state === 'unknown' ? 0 : 0.9, weight: 2 }}>
-          <PortageCard id={p.id} name={p.name} state={p.state} back={back} />
+          <PortageCard id={p.id} name={p.name} at={p.at} state={p.state} back={back} onEnd={onEnd} />
         </CircleMarker>
       ))}
     </>
@@ -175,7 +187,7 @@ function WatchCentre({ onChange }: { onChange: (c: LatLng) => void }) {
 }
 
 export default function PlanMap({
-  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], choices = [], showPortages = true, back, onPick,
+  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], choices = [], showPortages = true, back, onEnd, onPick,
 }: {
   version: string                          // the dataset's version, for the network's URLs
   route: LatLng[]
@@ -190,6 +202,7 @@ export default function PlanMap({
   choices?: { at: LatLng; label: string }[] // the waterways an unclear click could have meant
   showPortages?: boolean                   // off while placing landings: a marker would catch the click
   back?: string                            // this plan, for a portage page's way back
+  onEnd?: (end: PlanEnd, at: LatLng) => void // Start here / Finish here on a portage's card; unset on a shared plan
   onPick: (p: LatLng, zoom: number) => void
 }) {
   // Only whether the view is over the Netherlands, Flanders or France matters (which photos to use).
@@ -218,14 +231,15 @@ export default function PlanMap({
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
         <TileLayer key={tiles.labels} url={tiles.labels} maxNativeZoom={tiles.labelsNativeZoom} maxZoom={19} />
       </Pane>
-      {showPortages && <Portages version={version} back={back} />}
       {route.length > 0 && <Polyline positions={route} interactive={false} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }} />}
       {stops.map(st => (
-        <CircleMarker key={st.id} center={st.at} radius={5} bubblingMouseEvents={!st.card} pathOptions={{ color: st.colour, fillColor: st.colour, fillOpacity: 0.9, weight: 1 }}>
-          <Tooltip>{st.name}</Tooltip>
-          {st.card && <PortageCard id={st.id} name={st.name} state={st.card} back={back} />}
+        // Only a portage's dot takes taps: with the wide tap area, any other dot would catch one meant for the water or a lock.
+        <CircleMarker key={st.id} center={st.at} radius={5} interactive={!!st.card} bubblingMouseEvents={false} pathOptions={{ color: st.colour, fillColor: st.colour, fillOpacity: 0.9, weight: 1 }}>
+          {st.card && <Tooltip>{st.name}</Tooltip>}
+          {st.card && <PortageCard id={st.id} name={st.name} at={st.at} state={st.card} back={back} onEnd={onEnd} />}
         </CircleMarker>
       ))}
+      {showPortages && <Portages version={version} back={back} onEnd={onEnd} />}
       {start && <CircleMarker center={start} radius={8} pathOptions={{ color: '#fff', fillColor: '#22c55e', fillOpacity: 1, weight: 2 }}><Tooltip>Start</Tooltip></CircleMarker>}
       {finish && <CircleMarker center={finish} radius={8} pathOptions={{ color: '#fff', fillColor: '#f87171', fillOpacity: 1, weight: 2 }}><Tooltip>Finish</Tooltip></CircleMarker>}
       {marks.length === 2 && <Polyline positions={marks} interactive={false} pathOptions={{ color: '#facc15', weight: 3, dashArray: '6 6' }} />}

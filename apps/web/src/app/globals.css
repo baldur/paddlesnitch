@@ -50,11 +50,15 @@ html, body {
 
 /* The river planner's printed sheets (/plan/print): only the sheet prints,
    black on white, whatever the site's chrome and widgets are doing. */
-/* A portage's card on Plan's map: the site's surface, not Leaflet's white. */
+/* A portage's card on Plan's map: the site's surface, type and link colour, not Leaflet's. */
 .portage-card .leaflet-popup-content-wrapper,
-.portage-card .leaflet-popup-tip { background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-control, 6px); box-shadow: none; }
-.portage-card .leaflet-popup-content { margin: 10px 14px; font-size: 0.875rem; line-height: 1.4; }
-.portage-card a.leaflet-popup-close-button { color: var(--color-muted); }
+.portage-card .leaflet-popup-tip { background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-control); box-shadow: none; }
+.portage-card .leaflet-popup-content-wrapper { color: var(--color-fg); font-family: var(--font-sans); }
+.portage-card .leaflet-popup-content { margin: 10px 44px 6px 14px; font-size: 0.875rem; line-height: 1.4; }
+.portage-card .leaflet-popup-content a,
+.portage-card .leaflet-popup-content button { color: var(--color-primary-text); font: inherit; }
+.portage-card a.leaflet-popup-close-button { width: 44px; height: 44px; line-height: 44px; font-size: 20px; color: var(--color-muted); font-family: var(--font-sans); }
+.portage-card a.leaflet-popup-close-button:hover { color: var(--color-fg); }
 
 @media print {
   @page { size: A4; margin: 12mm; }

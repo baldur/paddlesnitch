@@ -10,7 +10,7 @@ import { listPublicPortages } from './portage-store'
 /** Far enough along the water to find a gauge. */
 const REACH_M = 15_000
 const LEVEL_WAIT_MS = 4000
-/** After an outage, say so at once for this long rather than wait on every view. */
+/** After a source fails, say so at once for this long rather than ask it on every view. */
 const OUTAGE_MS = 60_000
 
 const TOWN_KINDS = new Set(['city', 'town', 'village'])
@@ -37,16 +37,20 @@ export type GaugeNear = {
   unavailable: boolean         // a source that covers this place couldn't be read
 }
 
-let outageUntil = 0
-export const clearLevelOutage = () => { outageUntil = 0 }
+/** Sources that answered with a failure, and until when to believe it. Per source: one
+ *  country's outage says nothing about another's. A slow answer isn't an outage. */
+const failedUntil = new Map<string, number>()
+export const clearLevelOutage = () => failedUntil.clear()
 
 /** The nearest gauge's latest reading. A slow or failing source mustn't hold the page up. */
 export async function loadGaugeNear(facts: PortageFacts, waitMs = LEVEL_WAIT_MS): Promise<GaugeNear> {
   if (facts.line.length < 2) return { unavailable: false }
-  if (Date.now() < outageUntil) return { unavailable: true }
+  const at = facts.feature.at
+  if ([...failedUntil].some(([s, until]) => Date.now() < until && gaugeSourceCovers(s, at))) return { unavailable: true }
   const reading = conditionsAlong(facts.line, facts.waterways, []).then((c): GaugeNear => {
+    for (const s of c.unavailable) failedUntil.set(s, Date.now() + OUTAGE_MS)
     const gauge = nearestAlong(c.gauges.filter(g => g.valueM !== undefined || g.flowM3s !== undefined), facts.alongM)
-    if (!gauge) return { unavailable: c.unavailable.some(s => gaugeSourceCovers(s, facts.feature.at)) }
+    if (!gauge) return { unavailable: c.unavailable.some(s => gaugeSourceCovers(s, at)) }
     const ageMin = gauge.readAt ? (Date.now() - Date.parse(gauge.readAt)) / 60_000 : undefined
     return { gauge, awayM: Math.abs(gauge.chainageM - facts.alongM), ageMin, stale: ageMin !== undefined && ageMin > GAUGE_STALE_MIN, unavailable: false }
   }, (): GaugeNear => ({ unavailable: true }))
@@ -54,6 +58,5 @@ export async function loadGaugeNear(facts: PortageFacts, waitMs = LEVEL_WAIT_MS)
   const slow = new Promise<GaugeNear>(done => { timer = setTimeout(() => done({ unavailable: true }), waitMs) })
   const result = await Promise.race([reading, slow])
   clearTimeout(timer!)
-  if (result.unavailable) outageUntil = Date.now() + OUTAGE_MS
   return result
 }
