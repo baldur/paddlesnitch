@@ -241,7 +241,7 @@ test('a portage has its own page: what we know, on the satellite map, and only t
   await expect(page.getByTestId('portage-drawing').first()).toBeVisible()
   const printed = await page.getByTestId('portage-level').innerText().catch(() => '')
   if (printed) { expect(printed).not.toContain('ago'); expect(printed).toMatch(/UTC/) }
-  await expect(page.getByTestId('portage-landings')).not.toContainText('survey ·')
+  expect(await page.getByTestId('portage-landings').innerText()).not.toContain('survey ·')   // innerText: what's actually printed
 })
 
 test('a portage marker opens a card on a tap, without placing a route end', async ({ page }) => {
