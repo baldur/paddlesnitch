@@ -44,6 +44,11 @@
       "minimum": -9007199254740991,
       "maximum": 9007199254740991
     },
+    "gnssRows": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
     "bytes": {
       "type": "integer",
       "minimum": -9007199254740991,
