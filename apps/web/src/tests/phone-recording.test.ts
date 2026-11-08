@@ -27,11 +27,12 @@ import { markAccountErased, markAccountErasing, isAccountErased, erasureState } 
 import { publishFirmware, promoteFirmware } from '@/lib/firmware'
 import { deflateSync } from 'zlib'
 import { TEST_DEVICE_PUBKEY, linkProof } from './device-proof'
-import { isPhoneId, isTrackerId, isDeviceId, phoneDeviceId, listUserDevices, listUserDeviceSessions, MAX_PHONES, addPhone, exportUserDevices, eraseUserDevices, redeemToken, enrolDeviceKey, linkByTokenHash, revokeDevice, getUserDevice } from '@/lib/devices'
+import { summariseGnssCsv, storeDeviceGnss, type DeviceAuth, isPhoneId, isTrackerId, isDeviceId, phoneDeviceId, listUserDevices, listUserDeviceSessions, MAX_PHONES, addPhone, exportUserDevices, eraseUserDevices, redeemToken, enrolDeviceKey, linkByTokenHash, revokeDevice, getUserDevice } from '@/lib/devices'
 import { isPhoneDeviceId, trackerSummaries } from '@/lib/device-view'
 import { deviceList } from '@/lib/device-list'
 import { listKeys, putJson, getJson } from '@/lib/storage'
 import { runJob } from '@/lib/jobs'
+import { handleSessionUpload } from '@/lib/session-upload'
 import { trackerPaddleId } from '@paddlesnitch/analysis/tracker-paddle'
 import { getSession } from '@paddlesnitch/analysis/analysis-store'
 
@@ -64,6 +65,112 @@ const add = (token: string | null, body: object = { installId: INSTALL, model: '
 const send = (token: string, deviceId: string, filename: string, body: string) =>
   upload(req(`/api/account/devices/${deviceId}/sessions?filename=${filename}`, token, { body, type: 'text/csv' }), params(deviceId))
 const runJobs = async () => { for (const k of await listKeys('jobs/tracker-paddle/')) expect(await runJob(k)).toBe('done') }
+
+const GNSS = '# placement=dry_bag\n# full_tracking=1\nkind,utc_ms\ngps,1\nfused,1\nsky,\ngps,2\n'
+const GNSS_NAME = NAME.replace('.csv', '_gnss.csv')
+
+describe("a phone's location-detail file", () => {
+  it('is stored beside its track with its row count and placement, and makes no paddle of its own', async () => {
+    const u = await makeUser('Gnss Paddler')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    const res = await send(u.idToken, deviceId, GNSS_NAME, GNSS)
+    expect(res.status).toBe(201)
+    expect(await res.json()).toMatchObject({ gnssRows: 2, bytes: GNSS.length })
+    const all = await listUserDeviceSessions(u.id)
+    expect(all).toHaveLength(1)
+    expect(all[0].gnss).toMatchObject({ rows: 2, bytes: GNSS.length, placement: 'dry_bag' })
+    expect(await listKeys(`devices/${deviceId}/sessions/${all[0].sessionId}/`)).toContain(`devices/${deviceId}/sessions/${all[0].sessionId}/gnss.csv`)
+    expect((await exportUserDevices(u.id)).recordings[0].gnss?.placement).toBe('dry_bag')
+  })
+
+  it('leaves out a placement it does not know', () => {
+    expect(summariseGnssCsv('# placement=<b>\ngps,1\n')).toEqual({ rows: 1 })
+  })
+
+  it('a repeat replaces the file rather than refusing it', async () => {
+    const u = await makeUser('Gnss Retrier')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    await send(u.idToken, deviceId, GNSS_NAME, GNSS)
+    expect((await send(u.idToken, deviceId, GNSS_NAME, GNSS + 'gps,3\n')).status).toBe(201)
+    expect((await listUserDeviceSessions(u.id))[0].gnss?.rows).toBe(3)
+  })
+
+  it('needs its track first (409) and at least one gps row (422)', async () => {
+    const u = await makeUser('Gnss Early')
+    const { deviceId } = await (await add(u.idToken)).json()
+    const early = await send(u.idToken, deviceId, GNSS_NAME, GNSS)
+    expect(early.status).toBe(409)
+    expect(await early.json()).toMatchObject({ error: 'track_not_uploaded' })
+    await send(u.idToken, deviceId, NAME, TRACK)
+    const empty = await send(u.idToken, deviceId, GNSS_NAME, 'kind,utc_ms\nsky,\n')
+    expect(empty.status).toBe(422)
+    expect(await empty.json()).toEqual({ error: 'no_gnss_rows' })
+  })
+
+  it('leaves no pieces behind when the assembled file is refused', async () => {
+    const u = await makeUser('Gnss Pieces')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    const body = 'kind,utc_ms\nsky,\n'
+    const sha = createHash('sha256').update(body).digest('hex')
+    const piece = (n: number, chunk: string) => upload(req(`/api/account/devices/${deviceId}/sessions?filename=${GNSS_NAME}&part=${n}&parts=2&sha256=${sha}`, u.idToken, { body: chunk, type: 'text/csv' }), params(deviceId))
+    expect((await piece(1, body.slice(0, 5))).status).toBe(202)
+    expect((await piece(2, body.slice(5))).status).toBe(422)
+    expect(await listKeys(`devices/${deviceId}/parts/`)).toEqual([])
+  })
+
+  it('sent in pieces, as any real file is, it is put together and the pieces go', async () => {
+    const u = await makeUser('Gnss Whole')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    const sha = createHash('sha256').update(GNSS).digest('hex')
+    const piece = (n: number, chunk: string) => upload(req(`/api/account/devices/${deviceId}/sessions?filename=${GNSS_NAME}&part=${n}&parts=2&sha256=${sha}`, u.idToken, { body: chunk, type: 'text/csv' }), params(deviceId))
+    expect((await piece(1, GNSS.slice(0, 20))).status).toBe(202)
+    expect((await piece(2, GNSS.slice(20))).status).toBe(201)
+    expect((await listUserDeviceSessions(u.id))[0].gnss?.rows).toBe(2)
+    expect(await listKeys(`devices/${deviceId}/parts/`)).toEqual([])
+  })
+
+  it("can't be stored against someone else's recording", async () => {
+    const u = await makeUser('Gnss Owner')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    expect(await storeDeviceGnss(deviceId, 'someone-else', NAME, GNSS, { rows: 2 })).toBe('no_track')
+    expect((await listUserDeviceSessions(u.id))[0].gnss).toBeUndefined()
+  })
+
+  it('refuses a file over 8 MB', async () => {
+    const u = await makeUser('Gnss Big')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    const whole = 'gps,1\n'.repeat(1_500_000)   // 9 MB, in pieces each under the one-request limit
+    const sha = createHash('sha256').update(whole).digest('hex')
+    const third = whole.length / 3
+    const piece = (n: number) => upload(req(`/api/account/devices/${deviceId}/sessions?filename=${GNSS_NAME}&part=${n}&parts=3&sha256=${sha}`, u.idToken, { body: whole.slice((n - 1) * third, n * third), type: 'text/csv' }), params(deviceId))
+    expect((await piece(1)).status).toBe(202)
+    expect((await piece(2)).status).toBe(202)
+    const r = await piece(3)
+    expect(r.status).toBe(413)
+    expect(await r.json()).toEqual({ error: 'too_large' })
+    expect((await listUserDeviceSessions(u.id))[0].gnss).toBeUndefined()
+  })
+
+  it('goes when the account does', async () => {
+    const u = await makeUser('Gnss Eraser')
+    const { deviceId } = await (await add(u.idToken)).json()
+    await send(u.idToken, deviceId, NAME, TRACK)
+    await send(u.idToken, deviceId, GNSS_NAME, GNSS)
+    await eraseUserDevices(u.id)
+    expect(await listKeys(`devices/${deviceId}/sessions/`)).toEqual([])
+  })
+
+  it('is refused from a tracker', async () => {
+    const r = await handleSessionUpload(new Request(`http://x/api/devices/sessions?filename=${GNSS_NAME}`, { method: 'POST', body: GNSS }), { deviceId: 'AABBCCDD', userId: 'u' } as DeviceAuth)
+    expect(r.status).toBe(400)
+  })
+})
 
 describe('adding a phone to the account', () => {
   it('adds it once: the same install asked again is the same phone', async () => {
@@ -330,6 +437,8 @@ describe('the phone fixtures match the real answers', () => {
     expect(keys(track)).toEqual(keys(await fixture('account.phone-upload.json')))
     const motion = await (await send(u.idToken, phone.deviceId, NAME.replace('.csv', '_imu.csv'), MOTION)).json()
     expect(keys(motion)).toEqual(keys(await fixture('account.phone-upload.motion.json')))
+    const gnss = await (await send(u.idToken, phone.deviceId, GNSS_NAME, GNSS)).json()
+    expect(keys(gnss)).toEqual(keys(await fixture('account.phone-upload.gnss.json')))
     const again = await (await send(u.idToken, phone.deviceId, NAME, TRACK)).json()
     expect(again).toEqual({ ...await fixture('account.phone-upload.already-uploaded.json'), sessionId: track.sessionId })
     const early = await (await send(u.idToken, phone.deviceId, 'track_20261101_070211_imu.csv', MOTION)).json()

@@ -19,6 +19,9 @@ class RecordingFiles(val track: File, val motion: File) : AutoCloseable {
     /** track_<stamp>.log: what the recording dropped, written when it finishes (not uploaded). */
     val log = File(track.path.removeSuffix(".csv") + ".log")
 
+    /** track_<stamp>_gnss.csv: what Android knows about each fix (GnssLog), written by the recorder. */
+    val gnss = File(track.path.removeSuffix(".csv") + "_gnss.csv")
+
     private val trackOut = FileOutputStream(track, true)
     private val motionOut = FileOutputStream(motion, true)
 

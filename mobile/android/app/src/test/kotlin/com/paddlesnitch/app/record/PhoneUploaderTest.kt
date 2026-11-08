@@ -48,7 +48,7 @@ class PhoneUploaderTest {
     private val server = Server()
     private var running: File? = null
     private var sentTracks = 0
-    private fun uploader() = PhoneUploader(dir, server, installId = { "install-id-0123456789" }, recording = { running }, changed = { if (it) sentTracks++ })
+    private fun uploader() = PhoneUploader(dir, server, installId = { "install-id-0123456789" }, recording = { running }, changed = { if (it) sentTracks++ }, gnssExperiment = true)
     private fun run() = runBlocking { uploader().run() }
 
     private fun recording(base: String = "track_20261101_070211", track: String = "timestamp,lat\n1,2\n", motion: String? = "t_ms,ax\n1,0\n") {
@@ -431,5 +431,176 @@ class PhoneUploaderTest {
         run()
         assertEquals(listOf("track_20261101_070211.csv"), server.sent)
         assertEquals(null, server.sha)
+    }
+
+    /* ---- the location-detail file (README § The location-detail file) ---- */
+
+    private val b = "track_20261101_070211"
+    private val gnssName = "${b}_gnss.csv"
+    private fun gnss(base: String = b) = File(dir, "${base}_gnss.csv").writeText("# placement=deck\nkind,utc_ms\ngps,1\n")
+    private fun noFlags() = assertEquals("nothing marked failed", emptyList<String>(), dir.list()!!.filter { it.endsWith(".failed") })
+
+    @Test fun theLocationDetailGoesAfterTheTrackAndMotionFile() {
+        recording(); gnss()
+        assertTrue(run())
+        assertEquals(listOf("$b.csv", "${b}_imu.csv", gnssName), server.sent)
+        assertEquals(listOf("phone"), dir.list()!!.toList())
+    }
+
+    @Test fun aRecordingWithoutOneUploadsAsBefore() {
+        recording()
+        assertTrue(run())
+        assertEquals(listOf("$b.csv", "${b}_imu.csv"), server.sent)
+    }
+
+    // The name trap: NAME would read track_x_gnss.csv as a recording called track_x_gnss.
+    @Test fun aLocationDetailFileIsNeverARecordingOfItsOwn() {
+        gnss()
+        assertEquals(emptyList<String>(), PhoneUploader.waiting(dir, null))
+        assertEquals(emptyList<UploadLine>(), PhoneUploader.lines(dir, null))
+    }
+
+    @Test fun waitingToUploadCountsTheRecordingOnce() {
+        recording(); gnss()
+        assertEquals(listOf(b), PhoneUploader.waiting(dir, null))
+        assertEquals(1, PhoneUploader.lines(dir, null).size)
+    }
+
+    @Test fun anythingTheServerWontChangeItsMindAboutDeletesIt() {
+        listOf(
+            UploadReply(409, "track_not_uploaded"), UploadReply(422, "no_gnss_rows"), UploadReply(409, "already_uploaded"),
+            UploadReply(400, "bad_filename"), UploadReply(413), UploadReply(422, "sha256_mismatch"),
+        ).forEach { reply ->
+            recording(); gnss()
+            server.answer(gnssName, reply, reply)
+            assertTrue("$reply", run())
+            assertFalse("$reply", has(gnssName))
+            noFlags()
+            assertTrue("$reply: the recording still went", !has("$b.csv") && !has("${b}_i10.csv"))
+            server.answers.clear()
+        }
+    }
+
+    @Test fun aRetryKeepsItAloneAndComesBackWithoutTheTrack() {
+        listOf(UploadReply(503, retryAfter = 30), UploadReply(500), UploadReply(410)).forEach { reply ->
+            recording(); gnss()
+            server.answer(gnssName, reply)
+            assertTrue("$reply: never asks for a retry", run())
+            assertTrue("$reply", has(gnssName))
+            assertFalse("$reply: the track is gone", has("$b.csv"))
+            noFlags()
+            assertEquals("$reply: no line on Paddles", emptyList<UploadLine>(), PhoneUploader.lines(dir, null))
+            server.sent.clear()
+            assertTrue("$reply", run())
+            assertEquals("$reply", listOf(gnssName), server.sent)
+            assertFalse("$reply", has(gnssName))
+            server.sent.clear()
+        }
+    }
+
+    @Test fun noNetworkKeepsIt() {
+        recording(); gnss()
+        val offlineForGnss = object : PhoneAccount by server {
+            override suspend fun upload(deviceId: String, filename: String, bytes: ByteArray, part: Int?, parts: Int?, sha256: String?): UploadReply {
+                if (filename.endsWith("_gnss.csv")) throw ApiFailure("offline")
+                return server.upload(deviceId, filename, bytes, part, parts, sha256)
+            }
+        }
+        assertTrue(runBlocking { PhoneUploader(dir, offlineForGnss, { "install-id-0123456789" }, gnssExperiment = true).run() })
+        assertTrue(has(gnssName))
+        assertFalse(has("$b.csv"))
+    }
+
+    @Test fun aRetryNeverHoldsTheNextRecordingBack() {
+        recording(); gnss()
+        val next = "track_20261101_090000"
+        recording(next); gnss(next)
+        server.answer(gnssName, UploadReply(503))
+        assertTrue(run())
+        // No recording's location detail goes ahead of another's track.
+        assertEquals(listOf("$b.csv", "${b}_imu.csv", "$next.csv", "${next}_imu.csv", gnssName, "${next}_gnss.csv"), server.sent)
+        assertTrue(has(gnssName))
+        assertFalse(has("$next.csv"))
+    }
+
+    @Test fun aNoFixTrackTakesItsLocationDetailWithIt() {
+        recording(); gnss()
+        server.answer("$b.csv", UploadReply(422, "no_points"))
+        assertTrue(run())
+        assertEquals(listOf("$b.csv"), server.sent)
+        assertFalse(has(gnssName))
+        assertTrue(has("$b.nofix"))
+    }
+
+    @Test fun aRemovedPhoneKeepsItAndStops() {
+        recording(); gnss()
+        server.answer(gnssName, UploadReply(404))
+        assertTrue(run())
+        assertTrue(has(gnssName))
+        assertTrue(has("phone-off"))
+        noFlags()
+    }
+
+    @Test fun aDeletedAccountDeletesTheFolder() {
+        recording(); gnss()
+        server.answer(gnssName, UploadReply(410, "Your account was deleted.", accountDeleted = true))
+        assertTrue(run())
+        assertFalse(dir.exists())
+    }
+
+    @Test fun aRunningRecordingsLocationDetailStaysPut() {
+        recording(); gnss()
+        running = File(dir, "$b.csv")
+        assertTrue(run())
+        assertEquals(emptyList<String>(), server.sent)
+        assertTrue(has(gnssName))
+    }
+
+    @Test fun aBigOneGoesInPieces() {
+        recording()
+        File(dir, gnssName).writeText("gps,1\n".repeat(PhoneUploader.PIECE / 3))
+        assertTrue(run())
+        assertTrue(server.sent.last(), server.sent.last().startsWith("$gnssName#"))
+        assertFalse(has(gnssName))
+    }
+
+    @Test fun aRefusedRecordingIsntSentItsLocationDetail() {
+        recording(); gnss()
+        server.answer("$b.csv", UploadReply(400, "bad_filename"))
+        run()
+        assertEquals(listOf("$b.csv"), server.sent)
+    }
+
+    @Test fun aTrackThatWillRetryStopsTheRunBeforeAnyLocationDetail() {
+        recording(); gnss()
+        val next = "track_20261101_090000"
+        recording(next); gnss(next)
+        server.answer("$next.csv", UploadReply(500))
+        assertFalse(run())
+        assertEquals(listOf("$b.csv", "${b}_imu.csv", "$next.csv"), server.sent)
+        assertTrue(has(gnssName))
+    }
+
+    @Test fun anUnreadableLocationDetailFileDoesntThrowOutOfTheRun() {
+        recording()
+        File(dir, gnssName).mkdirs()   // readBytes throws on a directory
+        assertTrue(run())
+        assertEquals(listOf("$b.csv", "${b}_imu.csv"), server.sent)
+        assertFalse(has(gnssName))
+    }
+
+    // The default build: as if the experiment had never existed.
+    @Test fun withTheExperimentOffItIsNeverSent() {
+        recording(); gnss()
+        assertTrue(runBlocking { PhoneUploader(dir, server, { "install-id-0123456789" }).run() })
+        assertEquals(listOf("$b.csv", "${b}_imu.csv"), server.sent)
+        assertTrue(has(gnssName))
+    }
+
+    @Test fun withTheExperimentOffALeftoverFileAsksNothingOfTheServer() {
+        gnss()
+        assertTrue(runBlocking { PhoneUploader(dir, server, { "install-id-0123456789" }).run() })
+        assertEquals(emptyList<String>(), server.adds)
+        assertEquals(emptyList<String>(), server.sent)
     }
 }

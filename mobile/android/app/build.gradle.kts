@@ -28,6 +28,9 @@ android {
         // -Ppaddlesnitch.api=http://<your Mac's LAN address>:3000
         val api = (project.findProperty("paddlesnitch.api") as String?) ?: "https://paddlesnitch.com"
         buildConfigField("String", "API_BASE_URL", "\"$api\"")
+        // The phone-distance experiment (record/GnssLog.kt). Off unless asked for with
+        // -PgnssExperiment=true: the privacy page doesn't describe this data yet.
+        buildConfigField("boolean", "GNSS_EXPERIMENT", (project.findProperty("gnssExperiment") == "true").toString())
     }
 
     externalNativeBuild {

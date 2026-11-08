@@ -68,6 +68,13 @@ class ApiPhoneAccountTest {
         assertEquals("1", url.queryParameter("part")); assertEquals("4", url.queryParameter("parts")); assertEquals("ab".repeat(32), url.queryParameter("sha256"))
     }
 
+    @Test fun theLocationDetailFileGoesUnderItsOwnName() = runTest {
+        answer(201, "account.phone-upload.gnss.json")
+        val r = account.upload("P3F2A9C41B7E0D865", "track_20260115_100000_gnss.csv", "# placement=deck\n".toByteArray())
+        assertEquals(201, r.code)
+        assertEquals("track_20260115_100000_gnss.csv", server.takeRequest().url.queryParameter("filename"))
+    }
+
     @Test fun theAnswersWordsAreRead() = runTest {
         answer(409, "account.phone-upload.already-uploaded.json")
         assertEquals(UploadReply(409, "already_uploaded"), account.upload("P1", "track_x.csv", ByteArray(1)))

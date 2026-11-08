@@ -419,7 +419,47 @@ holds from a broken upload, so send only the rest. Fixtures:
 - Delete the phone's copy of a file once the server answered 201 or 409
   `already_uploaded` for it, and the recording's folder once both files are gone.
 - A track the server refuses with 422 `no_points` (no GPS fix at all) counts as
-  sent: the server keeps nothing, so delete it and its motion file.
+  sent: the server keeps nothing, so delete it and its motion and location-detail files.
+
+### The location-detail file (`_gnss.csv`, Android, an experiment)
+
+Phones over-read distance by 5–18% against a Garmin and a GoPro on the same
+outings. This file records what Android knows about each fix, so we can find out
+why. Nothing on screen reads it. Remove it when the experiment ends.
+
+Upload it after the track and motion file, as `track_<stamp>_gnss.csv`. The
+answers are 201 (`account.phone-upload.gnss.json`), 409 `track_not_uploaded`,
+422 `no_gnss_rows` when it has no `gps` row, and 413 `too_large` over 8 MB. It
+must never hold a recording back: on any of those but 201, delete it and carry
+on. Unlike the motion file, a 409 is final here.
+
+Only a build made with the experiment switched on writes this file. A build for
+anyone else must not: the privacy page doesn't describe this data yet.
+
+```
+# placement=deck
+# full_tracking=1
+# sdk=34
+kind,utc_ms,rt_ms,lat,lon,alt_m,h_acc_m,v_acc_m,speed_ms,speed_acc_ms,course_deg,course_acc_deg,sats_used,sats_view,cn0_mean,cn0_top4,dual_freq
+gps,1793955385000,211528415,51.5000000,-0.1200000,52.6,3.8,5.1,2.71,0.32,255.7,11.4,,,,,
+fused,1793955385100,211528515,51.5000009,-0.1200007,52.6,4.2,,2.65,,254.9,,,,,,
+sky,,211528600,,,,,,,,,,17,31,27.4,38.1,1
+```
+
+- `placement`: `deck`, `pocket`, `dry_bag`, `body` or `not_set`. It's the last choice
+  made, which may be from an earlier recording; `not_set` means none has ever been made.
+- `full_tracking`: `1` if Android accepted full GNSS tracking for this recording, `0` if
+  not. It's requested on alternate recordings, Android 12 and up.
+- `gps`: one row for every fix `GPS_PROVIDER` delivers, not one per second.
+- `fused`: one row for every fix `FUSED_PROVIDER` delivers (Android 12 and up), requested at high accuracy.
+- `sky`: at most about once a second, from `GnssStatus`. `cn0_mean` is the mean dB-Hz of the
+  satellites used, and `cn0_top4` the mean of the four strongest of them.
+  `dual_freq` is `1` if any used satellite is outside the L1 band (1559-1610 MHz),
+  and empty if none reports a carrier frequency.
+- `alt_m` here is Android's `getAltitude()`, above the ellipsoid, because `v_acc_m`
+  describes that. It differs from `track.csv`, which is above sea level.
+- `rt_ms` is `elapsedRealtime` in ms. Leave a cell empty when Android doesn't have
+  that value. Lat and lon have 7 decimals.
 
 ### The phone on the account
 
