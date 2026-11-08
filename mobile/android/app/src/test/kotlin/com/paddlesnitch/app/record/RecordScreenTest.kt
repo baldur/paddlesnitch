@@ -23,6 +23,9 @@ import com.paddlesnitch.app.ui.PsColor
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.hasText
 import org.junit.After
 import org.junit.Rule
 import androidx.compose.foundation.layout.Column
@@ -63,12 +66,12 @@ class RecordScreenTest {
 
     private fun show(state: RecordingService.State, fontScale: Float = 1f, onStart: () -> Unit = {}, onStop: () -> Unit = {},
                      onSettings: () -> Unit = {}, notificationsOn: Boolean = true, location: LocationReady = LocationReady.Ready,
-                     onLocationSettings: () -> Unit = {}) = compose.setContent {
+                     onLocationSettings: () -> Unit = {}, experiment: Boolean = false, placement: Placement? = null) = compose.setContent {
         val d = LocalDensity.current
         CompositionLocalProvider(LocalDensity provides Density(d.density, fontScale), LocalHapticFeedback provides haptics) {
             PaddlesnitchTheme { Surface(color = PsColor.bg) {
                 RecordScreen(state, onStart, onStop, location = location, onSettings = onSettings, onLocationSettings = onLocationSettings,
-                    notificationsOn = notificationsOn, now = now)
+                    notificationsOn = notificationsOn, now = now, gnssExperiment = experiment, placement = placement)
             } }
         }
     }
@@ -579,5 +582,79 @@ class RecordScreenTest {
         compose.waitForIdle()
         compose.onNodeWithText("Your paddles").assertExists()
         compose.onNodeWithText("Record a paddle").assertExists()
+    }
+
+    /* ---- Where's the phone? (the location-detail experiment) ---- */
+
+    @Test fun theChoiceShowsBeforeStartWithFourAnswers() {
+        show(RecordingService.State.Idle, experiment = true)
+        compose.onNodeWithText("Where will the phone be?").assertExists()
+        listOf("On deck", "In a pocket", "In a dry bag", "Strapped on").forEach { compose.onNodeWithText(it).assertExists() }
+    }
+
+    @Test fun withNoChoiceStartStillStarts() {
+        var started = 0
+        show(RecordingService.State.Idle, onStart = { started++ }, experiment = true)
+        compose.onNodeWithText("Start recording").performScrollTo().performClick()
+        assertEquals(1, started)
+    }
+
+    @Test fun withTheExperimentOffTheresNoChoice() {
+        show(RecordingService.State.Idle)
+        compose.onNodeWithText("Where will the phone be?").assertDoesNotExist()
+        compose.onNodeWithText("Strapped on").assertDoesNotExist()
+    }
+
+    @Test fun theDefaultRecordScreenHasNoChoice() {
+        compose.setContent { PaddlesnitchTheme { Surface(color = PsColor.bg) { RecordScreen(RecordingService.State.Idle, {}, {}) } } }
+        compose.onNodeWithText("Start recording").assertExists()
+        compose.onNodeWithText("Where will the phone be?").assertDoesNotExist()
+    }
+
+    @Test fun theSavedChoiceShowsSelected() {
+        show(RecordingService.State.Idle, experiment = true, placement = Placement.DRY_BAG)
+        compose.onRoot().captureRoboImage("src/test/screenshots/com.paddlesnitch.app.record.RecordScreenTest.idle.chosen.png")
+    }
+
+    @Test fun eachAnswerIsARadioButtonATapTargetOfItsOwn() {
+        show(RecordingService.State.Idle, experiment = true)
+        Placement.entries.forEach { p ->
+            val n = compose.onNode(hasText(p.label) and androidx.compose.ui.test.isSelectable()).fetchSemanticsNode()
+            assertEquals(androidx.compose.ui.semantics.Role.RadioButton, n.config[androidx.compose.ui.semantics.SemanticsProperties.Role])
+            assertTrue(n.size.height >= with(compose.density) { 48.dp.roundToPx() })
+        }
+    }
+
+    @Test fun recordingScreenDoesntAskAgain() {
+        show(recording, experiment = true)
+        compose.onNodeWithText("Where will the phone be?").assertDoesNotExist()
+    }
+
+    private fun record() = compose.setContent { PaddlesnitchTheme { Surface(color = PsColor.bg) { Record(accountId = { "a" }, gnssExperiment = true) } } }
+    private fun answer(p: Placement) = compose.onNode(androidx.compose.ui.test.hasText(p.label) and androidx.compose.ui.test.isSelectable())
+
+    @Test fun noChoiceYetIsNotSetAndNothingIsSelected() {
+        record()
+        assertEquals(null, Placement.load(compose.activity))
+        Placement.entries.forEach { answer(it).assertIsNotSelected() }
+    }
+
+    @Test fun aChoiceIsSavedAndShown() {
+        record()
+        answer(Placement.DRY_BAG).performScrollTo().performClick()
+        answer(Placement.DRY_BAG).assertIsSelected()
+        answer(Placement.POCKET).assertIsNotSelected()
+        assertEquals(Placement.DRY_BAG, Placement.load(compose.activity))
+    }
+
+    @Test fun theLastChoiceIsRemembered() {
+        Placement.save(compose.activity, Placement.BODY)
+        record()
+        answer(Placement.BODY).assertIsSelected()
+    }
+
+    @Test fun anUnknownSavedChoiceReadsAsNoChoice() {
+        compose.activity.getSharedPreferences("recording", android.content.Context.MODE_PRIVATE).edit().putString("placement", "roof_rack").commit()
+        assertEquals(null, Placement.load(compose.activity))
     }
 }

@@ -9,6 +9,7 @@ public struct Recording: Codable, Hashable, Sendable {
     public var distanceMetres: Double?
     public var endedAt: Date?
     public var filename: String
+    public var gnss: Gnss?
     public var motion: Motion?
     public var paddleId: String?
     public var points: Int
@@ -21,6 +22,7 @@ public struct Recording: Codable, Hashable, Sendable {
         distanceMetres: Double? = nil,
         endedAt: Date? = nil,
         filename: String,
+        gnss: Gnss? = nil,
         motion: Motion? = nil,
         paddleId: String? = nil,
         points: Int,
@@ -32,12 +34,71 @@ public struct Recording: Codable, Hashable, Sendable {
         self.distanceMetres = distanceMetres
         self.endedAt = endedAt
         self.filename = filename
+        self.gnss = gnss
         self.motion = motion
         self.paddleId = paddleId
         self.points = points
         self.sessionId = sessionId
         self.startedAt = startedAt
         self.uploadedAt = uploadedAt
+    }
+
+    public struct Gnss: Codable, Hashable, Sendable {
+        public var bytes: Int
+        public var placement: Placement?
+        public var rows: Int
+        public var uploadedAt: Date
+
+        public init(bytes: Int, placement: Placement? = nil, rows: Int, uploadedAt: Date) {
+            self.bytes = bytes
+            self.placement = placement
+            self.rows = rows
+            self.uploadedAt = uploadedAt
+        }
+
+        public enum Placement: Codable, Hashable, Sendable {
+            case deck
+            case pocket
+            case dryBag
+            case body
+            case notSet
+            /// A value this version of the app doesn't know yet.
+            case unknown(String)
+
+            /// Every value this version of the app knows.
+            public static let known: [Placement] = [.deck, .pocket, .dryBag, .body, .notSet]
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "deck": self = .deck
+                case "pocket": self = .pocket
+                case "dry_bag": self = .dryBag
+                case "body": self = .body
+                case "not_set": self = .notSet
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .deck: "deck"
+                case .pocket: "pocket"
+                case .dryBag: "dry_bag"
+                case .body: "body"
+                case .notSet: "not_set"
+                case .unknown(let rawValue): rawValue
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct Motion: Codable, Hashable, Sendable {

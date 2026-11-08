@@ -1,5 +1,6 @@
 package com.paddlesnitch.app.record
 
+import com.paddlesnitch.app.BuildConfig
 import com.paddlesnitch.app.api.ApiFailure
 import com.paddlesnitch.app.api.Phone
 import java.io.File
@@ -37,6 +38,10 @@ interface PhoneAccount {
  *   words). Nothing uploads until the owner starts a recording or taps Add phone again.
  * - `track_<stamp>.failed`: the server will never take this one; kept, never retried by itself.
  * - `track_<stamp>.nofix`: the track had no GPS fix, so it didn't become a paddle (until dismissed).
+ *
+ * `track_<stamp>_gnss.csv` (the location-detail experiment, GnssLog.kt) goes after every waiting
+ * recording and is best-effort: it never holds a recording back, marks one failed or asks for a
+ * retry. A file the server didn't answer for stays until the next run, whenever that is.
  */
 class PhoneUploader(
     private val dir: File,
@@ -50,6 +55,8 @@ class PhoneUploader(
     private val sending: (String?) -> Unit = {},
     /** 410 accountDeleted: the account is gone. Its folder is already deleted; sign out, saying [said] (README § Calls). */
     private val accountDeleted: (said: String?) -> Unit = {},
+    /** Off in every build but the experiment's: a location-detail file is never sent. */
+    private val gnssExperiment: Boolean = BuildConfig.GNSS_EXPERIMENT,
 ) {
     /** After a run that asks to try again: how long the server asked to wait (Retry-After), if it did. */
     var retryAfter: Long? = null
@@ -60,7 +67,7 @@ class PhoneUploader(
     suspend fun run(): Boolean {
         if (offFile(dir).exists()) return true
         val waiting = waiting(dir, recording())
-        if (waiting.isEmpty()) return true
+        if (waiting.isEmpty() && gnssToSend().isEmpty()) return true
         val deviceId = try { deviceId() } catch (e: AccountGone) { goneSaid = e.said; return gone() } ?: return offFile(dir).exists()
         for (base in waiting) {
             // No network (Api's failure with no status): what's sent so far stays sent; the rest waits.
@@ -68,17 +75,47 @@ class PhoneUploader(
             val sent = try { uploadOne(deviceId, base) } catch (e: ApiFailure) { Sent.Retry } finally { sending(null) }
             when (sent) {
                 Sent.Gone -> return gone()
-                Sent.Removed -> {
-                    offFile(dir).writeText("")
-                    phoneFile(dir).delete()
-                    changed(false)
-                    return true
-                }
+                Sent.Removed -> return removed()
                 Sent.Retry -> return false
                 else -> {}
             }
         }
+        // Only now, so no recording's location detail goes ahead of another's track.
+        for (base in gnssToSend()) when (sendGnss(deviceId, base)) {
+            Sent.Gone -> return gone()
+            Sent.Removed -> return removed()
+            else -> {}
+        }
+        // Never false for a location-detail file: the worker's backoff would hold up the next recording.
         return true
+    }
+
+    private fun gnssToSend() = if (gnssExperiment) gnssLeft(dir) else emptyList()
+
+    private fun removed(): Boolean {
+        offFile(dir).writeText("")
+        phoneFile(dir).delete()
+        changed(false)
+        return true
+    }
+
+    /**
+     * A location-detail file whose track and motion file have left. Deleted on every answer but
+     * those that leave the files on the phone: a Retry (it waits for the next run), and a removed
+     * phone or deleted account, which stop the run anyway.
+     */
+    private suspend fun sendGnss(deviceId: String, base: String): Sent {
+        val gnss = File(dir, "${base}_gnss.csv")
+        if (!gnss.exists()) return Sent.Ok
+        val r = try { send(deviceId, gnss, "${base}_gnss.csv") }
+            catch (e: ApiFailure) { Sent.Retry }
+            catch (e: java.io.IOException) { Sent.Refused }   // can't be read, so it never will be
+        when (r) {
+            Sent.Gone, Sent.Removed -> return r
+            Sent.Retry -> {}
+            else -> gnss.delete()
+        }
+        return Sent.Ok
     }
 
     /** The account was deleted: never upload its recordings, delete them, and sign out. */
@@ -118,7 +155,7 @@ class PhoneUploader(
                 Sent.Ok -> { track.delete(); changed(true) }
                 Sent.NoData -> {
                     // No GPS fix at all: the server keeps nothing, so neither does the phone.
-                    track.delete(); motion.delete()
+                    track.delete(); motion.delete(); File(dir, "${base}_gnss.csv").delete()
                     File(dir, "$base.nofix").writeText("")
                     changed(false)
                 }
@@ -197,6 +234,7 @@ class PhoneUploader(
         const val PIECE = 64 * 1024
 
         private val PHONE_ID = Regex("^P[0-9A-F]{16}$")
+        private const val GNSS_SUFFIX = "_gnss.csv"
         private val NAME = Regex("""^(track_[A-Za-z0-9_]+?)(_i10)?\.csv$""")
 
         fun phoneFile(dir: File) = File(dir, "phone")
@@ -206,9 +244,13 @@ class PhoneUploader(
         fun waiting(dir: File, running: File?): List<String> = recordings(dir)
             .filter { File(dir, "$it.csv") != running && !File(dir, "$it.failed").exists() }
 
-        // A raw `_imu.csv` (kept only while debugging) is never a recording of its own.
+        /** Location-detail files whose track and motion file have already left: only ever a retry. */
+        private fun gnssLeft(dir: File): List<String> = dir.list().orEmpty().filter { it.endsWith(GNSS_SUFFIX) }.map { it.removeSuffix(GNSS_SUFFIX) }
+            .filter { !File(dir, "$it.csv").exists() && !File(dir, "${it}_i10.csv").exists() }.sorted()
+
+        // A raw `_imu.csv` (kept only while debugging) and a `_gnss.csv` are never recordings of their own.
         private fun recordings(dir: File): List<String> =
-            dir.list().orEmpty().filterNot { it.endsWith("_imu.csv") }.mapNotNull { NAME.find(it)?.groupValues?.get(1) }.distinct().sorted()
+            dir.list().orEmpty().filterNot { it.endsWith("_imu.csv") || it.endsWith(GNSS_SUFFIX) }.mapNotNull { NAME.find(it)?.groupValues?.get(1) }.distinct().sorted()
 
         /** Signed in again: ask the server for this phone's id before the next upload (README § The phone on the account). */
         fun signedIn(dir: File) { phoneFile(dir).delete() }

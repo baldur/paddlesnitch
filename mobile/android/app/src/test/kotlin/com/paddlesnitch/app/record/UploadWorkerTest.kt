@@ -130,6 +130,40 @@ class UploadWorkerTest {
         assertEquals(ListenableWorker.Result.retry(), runBlocking { uploadAs("a", signedInAs("a"), dir, failing, { "install-id-0123456789" }) })
     }
 
+    // A Result.retry() here would back off the unique work and hold the next recording for hours.
+    @Test fun aLocationDetailRetryNeverBacksTheWorkerOff() {
+        listOf(UploadReply(503), UploadReply(503, retryAfter = 30), UploadReply(500)).forEach { reply ->
+            recording("track_20261101_070211")
+            val gnss = File(dir, "track_20261101_070211_gnss.csv").apply { writeText("gps,1\n") }
+            val later = mutableListOf<Long>()
+            val busy = { _: com.paddlesnitch.app.auth.TokenStore -> object : PhoneAccount {
+                override suspend fun addPhone(installId: String) = phone
+                override suspend fun upload(deviceId: String, filename: String, bytes: ByteArray, part: Int?, parts: Int?, sha256: String?) =
+                    if (filename.endsWith("_gnss.csv")) reply else UploadReply(201)
+                override suspend fun held(deviceId: String, filename: String) = emptyList<Int>()
+            } }
+            val result = runBlocking { uploadAs("a", signedInAs("a"), dir, busy, { "install-id-0123456789" }, retryLater = { later += it }, gnssExperiment = true) }
+            assertEquals("$reply", ListenableWorker.Result.success(), result)
+            assertEquals("$reply: no new run of its own", emptyList<Long>(), later)
+            assertTrue("$reply: kept for the next run", gnss.exists())
+            assertFalse("$reply: the track still left", File(dir, "track_20261101_070211.csv").exists())
+
+            sent.clear()
+            val next = runBlocking { uploadAs("a", signedInAs("a"), dir, ::server, { "install-id-0123456789" }, gnssExperiment = true) }
+            assertEquals("$reply", ListenableWorker.Result.success(), next)
+            assertEquals("$reply: only it, on the next run", listOf("track_20261101_070211_gnss.csv"), sent)
+            assertFalse("$reply", gnss.exists())
+            sent.clear()
+        }
+    }
+
+    @Test fun aDefaultBuildsUploadNeverSendsALocationDetailFile() {
+        recording("track_20261101_070211")
+        File(dir, "track_20261101_070211_gnss.csv").writeText("gps,1\n")
+        assertEquals(ListenableWorker.Result.success(), run(signedInAs("a")))
+        assertEquals(listOf("track_20261101_070211.csv", "track_20261101_070211_imu.csv"), sent)
+    }
+
     @Test fun uploadNowLetsARemovedPhoneBeAddedAgain() {
         WorkManagerTestInitHelper.initializeTestWorkManager(app)
         recording("track_20261101_070211")

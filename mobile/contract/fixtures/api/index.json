@@ -71,6 +71,10 @@
     "call": "GET /api/account/devices/{deviceId}/sessions",
     "schema": "HeldParts"
   },
+  "account.phone-upload.gnss.json": {
+    "call": "POST /api/account/devices/{deviceId}/sessions",
+    "schema": "Uploaded"
+  },
   "account.phone-upload.json": {
     "call": "POST /api/account/devices/{deviceId}/sessions",
     "schema": "Uploaded"

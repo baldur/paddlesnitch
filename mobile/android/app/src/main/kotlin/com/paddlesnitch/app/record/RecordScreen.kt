@@ -35,7 +35,15 @@ import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import com.paddlesnitch.app.BuildConfig
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -200,7 +208,7 @@ fun locationReady(granted: Boolean, asked: Boolean, enabled: Boolean): LocationR
  * Once someone has said no, the screen says so in place of Start, with the way to the setting.
  */
 @Composable
-fun Record(accountId: suspend () -> String, modifier: Modifier = Modifier) {
+fun Record(accountId: suspend () -> String, modifier: Modifier = Modifier, gnssExperiment: Boolean = BuildConfig.GNSS_EXPERIMENT) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by RecordingService.state.collectAsState()
@@ -211,6 +219,7 @@ fun Record(accountId: suspend () -> String, modifier: Modifier = Modifier) {
         enabled = context.getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled != false,
     )
     var location by remember { mutableStateOf(readiness()) }
+    var placement by remember { mutableStateOf(Placement.load(context)) }
     // Coming back from the settings: look again.
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycle) {
@@ -246,6 +255,9 @@ fun Record(accountId: suspend () -> String, modifier: Modifier = Modifier) {
         onLocationSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } },
         notificationsOn = context.getSystemService(NotificationManager::class.java).areNotificationsEnabled(),
         modifier = modifier,
+        placement = placement,
+        onPlacement = { placement = it; Placement.save(context, it) },
+        gnssExperiment = gnssExperiment,
     )
 }
 
@@ -260,6 +272,9 @@ fun RecordScreen(
     onLocationSettings: () -> Unit = {},
     notificationsOn: Boolean = true,
     now: () -> Long = SystemClock::elapsedRealtime,
+    placement: Placement? = null,
+    onPlacement: (Placement) -> Unit = {},
+    gnssExperiment: Boolean = BuildConfig.GNSS_EXPERIMENT,
 ) {
     if (state is RecordingService.State.Recording) { Recording(state, onStop, notificationsOn, now, modifier); return }
     Column(
@@ -284,9 +299,30 @@ fun RecordScreen(
         }
         val blocked = location != LocationReady.Ready || state is RecordingService.State.Failed && state.locationRefused
         if (!blocked) {
+            if (gnssExperiment) PlacementChoice(placement, onPlacement)
             val starting = state is RecordingService.State.Starting
             Button(onClick = onStart, enabled = !starting, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
                 Text(if (starting) "Start recording…" else "Start recording", fontSize = 18.sp)
+            }
+        }
+    }
+}
+
+/** Where the phone is: for the location-detail experiment. Optional, so it never holds Start back. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlacementChoice(chosen: Placement?, onChoose: (Placement) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Where will the phone be?", fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+        FlowRow(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Placement.entries.forEach { p ->
+                Row(
+                    Modifier.heightIn(min = 48.dp).selectable(selected = p == chosen, role = Role.RadioButton, onClick = { onChoose(p) }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = p == chosen, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = PsColor.primaryText, unselectedColor = PsColor.muted))
+                    Text(p.label, modifier = Modifier.padding(start = 8.dp))
+                }
             }
         }
     }

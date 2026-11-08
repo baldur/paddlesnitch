@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { inflateSync } from 'zlib'
 import type { DeviceAuth } from '@paddlesnitch/core/devices'
-import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeUploadPart, clearUploadParts, motionSidecarTrackName } from '@/lib/devices'
+import { findUploadedSession, storeDeviceSession, storeDeviceMotion, storeDeviceGnss, storeUploadPart, clearUploadParts, motionSidecarTrackName, gnssSidecarTrackName, summariseGnssCsv, isPhoneId } from '@/lib/devices'
 import { parseTrace } from '@paddlesnitch/timing/parse'
 import { movementDistanceM } from '@paddlesnitch/timing/device'
 import { parseMotionCsv } from '@paddlesnitch/timing/cadence'
@@ -21,6 +21,8 @@ import { makePaddleAfterResponse } from '@/lib/tracker-paddles'
 // not removed. 4 MB leaves room for a ~2.6-hour motion sidecar at the 10 Hz the
 // device decimates to (1.51 MB/hour) while staying clear of that ceiling.
 const MAX_BYTES = 4 * 1024 * 1024
+// A location-detail file is about 1 MB an hour; pieces can add up past MAX_BYTES.
+const MAX_GNSS_BYTES = 8 * 1024 * 1024
 
 export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promise<Response> {
   const url = new URL(req.url)
@@ -64,6 +66,10 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
   // position, so parseTrace would correctly reject it. It attaches to the track
   // of the same name, which must already be uploaded.
   const trackName = motionSidecarTrackName(filename)
+  // A phone's location-detail file (`track_<stamp>_gnss.csv`) attaches the same
+  // way. Phones only: a tracker has no such file.
+  const gnssTrackName = gnssSidecarTrackName(filename)
+  if (gnssTrackName && !isPhoneId(auth.deviceId)) return NextResponse.json({ error: 'bad_filename' }, { status: 400 })
 
   // Chunked upload of ANY file: ?part=N&parts=M, optionally &sha256=<hex> over
   // the assembled whole. Purely transport — once the last part lands, the
@@ -112,6 +118,17 @@ export async function handleSessionUpload(req: Request, auth: DeviceAuth): Promi
     // The motion data adds stroke rate to the recording's paddle.
     await makePaddleAfterResponse(auth.userId, auth.deviceId, stored.sessionId)
     return NextResponse.json({ sessionId: stored.sessionId, motionRows: rows, bytes: body.length }, { status: 201 })
+  }
+
+  if (gnssTrackName) {
+    // The phone deletes its copy on any of these answers, so the pieces go too.
+    if (assembledParts) await clearUploadParts(auth.deviceId, filename, assembledParts)
+    if (body.length > MAX_GNSS_BYTES) return NextResponse.json({ error: 'too_large' }, { status: 413 })
+    const summary = summariseGnssCsv(body.toString('utf8'))
+    if (summary.rows === 0) return NextResponse.json({ error: 'no_gnss_rows' }, { status: 422 })
+    const stored = await storeDeviceGnss(auth.deviceId, auth.userId, gnssTrackName, body, summary)
+    if (stored === 'no_track') return NextResponse.json({ error: 'track_not_uploaded', trackFilename: gnssTrackName }, { status: 409 })
+    return NextResponse.json({ sessionId: stored.sessionId, gnssRows: summary.rows, bytes: body.length }, { status: 201 })
   }
 
   // parseTrace takes an ArrayBuffer; `body` may be an assembled Buffer, so give

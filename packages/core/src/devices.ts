@@ -511,6 +511,9 @@ export type DeviceSessionMeta = {
   startedAt?: string; endedAt?: string; distanceMetres?: number; points: number
   // Set once the matching `_imu.csv` sidecar has been uploaded for this session.
   motion?: { uploadedAt: string; bytes: number; rows: number }
+  // Set once a phone's `_gnss.csv` has been uploaded: the raw location detail
+  // kept to work out why phones over-read distance. Nothing on screen uses it.
+  gnss?: { uploadedAt: string; bytes: number; rows: number; placement?: GnssPlacement }
 }
 
 /**
@@ -525,11 +528,38 @@ export function motionSidecarTrackName(filename: string): string | null {
   return m ? `${m[1]}.csv` : null
 }
 
+/**
+ * The track a phone's location-detail file belongs to: `track_x_gnss.csv` → `track_x.csv`.
+ * Same rule as the motion file: track first, then this.
+ */
+export function gnssSidecarTrackName(filename: string): string | null {
+  const m = /^(.+)_gnss\.csv$/i.exec(filename)
+  return m ? `${m[1]}.csv` : null
+}
+
+export const GNSS_PLACEMENTS = ['deck', 'pocket', 'dry_bag', 'body', 'not_set'] as const
+export type GnssPlacement = (typeof GNSS_PLACEMENTS)[number]
+
+/** What the server needs from a `_gnss.csv` (mobile/contract/README.md): its GPS rows and where the phone was. */
+export function summariseGnssCsv(csv: string): { rows: number; placement?: GnssPlacement } {
+  let rows = 0
+  let placement: GnssPlacement | undefined
+  for (const line of csv.split(/\r?\n/)) {
+    if (line.startsWith('gps,')) rows++
+    else if (line.startsWith('# placement=')) {
+      const v = line.slice('# placement='.length).trim()
+      if ((GNSS_PLACEMENTS as readonly string[]).includes(v)) placement = v as GnssPlacement
+    }
+  }
+  return placement ? { rows, placement } : { rows }
+}
+
 const sessionMetaKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/session.json`
 const sessionTraceKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/trace.csv`
 // The decimated motion sidecar, stored beside the track it belongs to rather than
 // as a session of its own — it is not a paddle, it is extra channels for one.
 const sessionMotionKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/motion.csv`
+const sessionGnssKey = (deviceId: string, sessionId: string) => `devices/${deviceId}/sessions/${sessionId}/gnss.csv`
 // Idempotency index: a device numbers files monotonically and never reuses a
 // name, so deviceId+filename is a stable identity — a retry after a dropped
 // response can't create a duplicate.
@@ -585,6 +615,27 @@ export async function storeDeviceMotion(
   const bytes = typeof csv === 'string' ? Buffer.byteLength(csv) : csv.length
   await putObject(sessionMotionKey(deviceId, sessionId), csv)
   const updated: DeviceSessionMeta = { ...meta, motion: { uploadedAt: nowIso(), bytes, rows } }
+  await putJson(sessionMetaKey(deviceId, sessionId), updated)
+  return updated
+}
+
+/** Stores a phone's location-detail file beside its track, so a retry just overwrites it. */
+export async function storeDeviceGnss(
+  deviceId: string,
+  userId: string,
+  trackFilename: string,
+  csv: Buffer | string,
+  summary: { rows: number; placement?: GnssPlacement },
+): Promise<DeviceSessionMeta | 'no_track'> {
+  if (!isDeviceId(deviceId) || !safeName(trackFilename)) return 'no_track'
+  const sessionId = await findUploadedSession(deviceId, trackFilename)
+  if (!sessionId) return 'no_track'
+  const meta = await getJson<DeviceSessionMeta>(sessionMetaKey(deviceId, sessionId))
+  if (!meta || meta.userId !== userId) return 'no_track'
+
+  const bytes = typeof csv === 'string' ? Buffer.byteLength(csv) : csv.length
+  await putObject(sessionGnssKey(deviceId, sessionId), csv)
+  const updated: DeviceSessionMeta = { ...meta, gnss: { uploadedAt: nowIso(), bytes, ...summary } }
   await putJson(sessionMetaKey(deviceId, sessionId), updated)
   return updated
 }
@@ -916,7 +967,7 @@ export async function eraseUserDevices(userId: string): Promise<void> {
   // Gathered in parallel and deleted in batches: one call at a time, a
   // well-used account ran past the server's time limit (erasure-big-account.test.ts).
   const keys: string[] = []
-  // 1. Recordings they uploaded (track, motion sidecar, staged motion parts)
+  // 1. Recordings they uploaded (track, motion and location-detail sidecars, staged motion parts)
   //    and the idempotency-index entry that points at each one.
   await Promise.all((await listUserDeviceSessions(userId)).map(async s => {
     keys.push(...await listKeys(`devices/${s.deviceId}/sessions/${s.sessionId}/`))

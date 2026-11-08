@@ -288,7 +288,7 @@ const TrackerId = named('TrackerId', z.object({ deviceId: z.string() }))
 const PhoneAdd = named('PhoneAdd', z.object({ installId: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
 /** The phone on the account. Upload its recordings to /api/account/devices/{deviceId}/sessions. */
 export const Phone = named('Phone', z.object({ deviceId: z.string(), name: z.string(), model: z.enum(['phone-android', 'phone-ios']) }))
-/** 201: a file the server has taken, a track (`points`…) or its motion file (`motionRows`). 202: one piece taken (`part`, `parts`, `have`: the pieces held), no `sessionId`. */
+/** 201: a file the server has taken, a track (`points`…), its motion file (`motionRows`) or its location-detail file (`gnssRows`). 202: one piece taken (`part`, `parts`, `have`: the pieces held), no `sessionId`. */
 /** The pieces of a file the server holds from an upload that broke off: send only the rest. Empty once the file is put together, or never started. */
 export const HeldParts = named('HeldParts', z.object({ parts: z.array(z.int()) }))
 const HeldPartsFor = named('HeldPartsFor', z.object({ filename: z.string() }))
@@ -302,6 +302,7 @@ export const Uploaded = named('Uploaded', z.object({
   endedAt: timestamp().optional(),
   distanceMetres: z.number().optional(),
   motionRows: z.int().optional(),
+  gnssRows: z.int().optional(),
   bytes: z.int().optional(),
 }))
 /** A recording a tracker uploaded (it also becomes a paddle in Paddles). `motion` once its motion file is in. */
@@ -315,6 +316,7 @@ export const Recording = named('Recording', z.object({
   distanceMetres: z.number().optional(),
   points: z.int(),
   motion: z.object({ uploadedAt: timestamp(), bytes: z.int(), rows: z.int() }).optional(),
+  gnss: z.object({ uploadedAt: timestamp(), bytes: z.int(), rows: z.int(), placement: z.enum(['deck', 'pocket', 'dry_bag', 'body', 'not_set']).optional() }).optional(),
   // The paddle it became, when it did (too short or no track: none).
   paddleId: z.string().optional(),
 }))

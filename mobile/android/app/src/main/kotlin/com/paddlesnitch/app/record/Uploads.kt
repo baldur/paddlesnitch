@@ -177,13 +177,14 @@ internal suspend fun uploadAs(
     accountDeleted: (said: String?) -> Unit = {},
     /** The server asked to come back in this many seconds (503 Retry-After). */
     retryLater: (Long) -> Unit = {},
+    gnssExperiment: Boolean = com.paddlesnitch.app.BuildConfig.GNSS_EXPERIMENT,
 ): androidx.work.ListenableWorker.Result {
     // Signed out, or someone else signed in: their recordings wait for their own sign-in.
     if (tokens.userId != account) return androidx.work.ListenableWorker.Result.success()
     val pinned = PinnedTokenStore(tokens, account)
     val uploader = PhoneUploader(dir, server(pinned), installId, recording = running, changed = Uploads::bump, sending = Uploads::sending,
         // Signed out here (only this account's tokens), then the app's screen follows (Uploads.deleted).
-        accountDeleted = { said -> pinned.clear(); accountDeleted(said) })
+        accountDeleted = { said -> pinned.clear(); accountDeleted(said) }, gnssExperiment = gnssExperiment)
     return try {
         when {
             uploader.run() -> androidx.work.ListenableWorker.Result.success()
