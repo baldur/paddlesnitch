@@ -23,9 +23,13 @@ describe('only CloudFront may call the server (#908): the stack', () => {
     expect(origin).toContain("customHeaders: { 'x-origin-verify': cdk.Fn.select(0, cdk.Fn.split(',', originVerify)) }")
   })
 
-  it('the server Lambda gets every accepted value and a mode', () => {
+  it('the server Lambda gets every accepted value and refuses requests without one', () => {
     expect(serverFn).toContain('ORIGIN_VERIFY_SECRETS: originVerify,')
-    expect(serverFn).toMatch(/ORIGIN_VERIFY_MODE: '(report|enforce)',/)
+    expect(serverFn).toContain("ORIGIN_VERIFY_MODE: 'enforce',")
+    // Set in exactly one place, not commented out, not overridden later
+    // (e.g. by addEnvironment).
+    expect(stack.match(/ORIGIN_VERIFY_MODE/g)).toHaveLength(1)
+    expect(stack).not.toMatch(/^\s*\/\/.*ORIGIN_VERIFY_MODE/m)
   })
 
   it('every behaviour names one of the known origins; only serverOrigin reaches the server (so carries the header)', () => {
@@ -51,5 +55,22 @@ describe('only CloudFront may call the server (#908): the stack', () => {
   it('the header name matches what the proxy checks', async () => {
     const { ORIGIN_VERIFY_HEADER } = await import('@/lib/origin-verify')
     expect(stack).toContain(`'${ORIGIN_VERIFY_HEADER}'`)
+  })
+})
+
+describe('only CloudFront may call the server (#908): every deploy checks it', () => {
+  const deploy = readFileSync(path.join(root, '.github/workflows/deploy.yml'), 'utf8')
+  const step = deploy.slice(deploy.indexOf('- name: Only CloudFront reaches the server'))
+
+  it('a direct call to the function URL must get 403, after the smoke test', () => {
+    expect(deploy.indexOf('- name: Only CloudFront reaches the server')).toBeGreaterThan(deploy.indexOf('- name: Smoke test'))
+    expect(step).toContain('get-function-url-config')
+    expect(step).toContain('[ "$code" = 403 ]')
+  })
+
+  it('masks the URL before anything could print it (the log is public)', () => {
+    expect(step.indexOf('::add-mask::$url')).toBeGreaterThan(0)
+    expect(step.indexOf('::add-mask::$url')).toBeLessThan(step.indexOf('curl'))
+    expect(step).not.toMatch(/set -x|echo "\$url"|echo \$url/)
   })
 })
