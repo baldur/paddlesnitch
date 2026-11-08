@@ -104,6 +104,7 @@ const CASES = [
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat', boat: 'Electric launch' },
   { name: 'iphone safari, hire a speedboat', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, outing: 'Hire a boat', boat: 'Speedboat' },
+  { name: 'iphone se, hire a narrowboat', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, outing: 'Hire a boat', boat: 'Narrowboat' },
   // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
   { name: 'webkit, desktop, a practice row', engine: webkit, ctx: desktop, club: true, row: true },
   { name: 'iphone safari, a practice row', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true },
@@ -117,6 +118,7 @@ const CASES = [
 // Plays one case in a fresh page. Returns a line describing what it saw;
 // anything wrong goes into `errors`.
 async function play(c, page, errors) {
+  let moorings = null; // the hire boats', read on the bank
   // A case with the site: under /games/, signed in as a stand-in player (the game only asks who's signed in).
   if (c.site) {
     // (slowMe: the answer to who's signed in held back, as a slow first request on the site.)
@@ -241,6 +243,8 @@ async function play(c, page, errors) {
         covered: [...document.querySelectorAll('#clubDoors .pin')].filter((p) => { const r = p.getBoundingClientRect(); return r.width && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('#clubCards'); }).map((p) => p.className),
         inside: names('#clubCards .signin-box .card'),
         friends: document.querySelectorAll('#clubCards .friend').length,
+        // Hire a boat's picture is the boathouse at Caversham.
+        hirePicture: [...box.querySelectorAll('.card')].find((b) => b.textContent.includes('Hire a boat'))?.querySelector('svg')?.dataset.picture,
       };
     });
     if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
@@ -250,6 +254,7 @@ async function play(c, page, errors) {
     if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
     if (got.last !== 'River cruise' || !got.rightmost) errors.push(`the river cruise isn't last on the right: last ${got.last}, right-most ${got.rightmost}`);
     if (got.covered.length) errors.push(`the guest's cards cover the scene's pins: ${got.covered.join(', ')}`);
+    if (got.hirePicture !== 'boathouse') errors.push(`Hire a boat's picture is ${got.hirePicture}, not the boathouse`);
     const [[rowPin, rowCard], [canoePin, canoeCard]] = got.sides;
     if (!(rowPin < canoePin && rowCard < canoeCard)) errors.push(`the clubs' cards aren't in the order their pins stand: ${JSON.stringify(got.sides)}`);
     // The box and its Sign in on screen, even on a phone on its side; Sign in a full tap target.
@@ -371,7 +376,12 @@ async function play(c, page, errors) {
     // Into the changing room, open the picker, and Back out past it (a modal
     // picker once blocked every button in the room).
     // (Choosing a boat: Back first returns to the bridge's cards, then in again and pick.)
-    const steps = c.outing ? (c.boat ? [[c.outing, null], ['@unhire', null], [c.outing, null], [c.boat, null]] : [[c.outing, null]])
+    // Hire a boat: the bank by the hire boats, Back to the bridge (Hire a boat to hand again),
+    // back again; walk to another boat, change your mind (Back to the bank), walk to yours and Push off.
+    const HIRE_IDS = { Speedboat: 'speedboat', 'Electric launch': 'launch', Narrowboat: 'narrowboat' };
+    const other = Object.keys(HIRE_IDS).find((b) => b !== c.boat);
+    const steps = c.outing ? (c.boat ? [[c.outing, 'hire'], ['@hirebank', null], ['#clubBack', 'path'], ['@backtohire', null], [c.outing, 'hire'],
+      [other, `hire-${HIRE_IDS[other]}`], ['@byboat', null], ['#clubBack', 'hire'], ['@backtoboat', other], [c.boat, `hire-${HIRE_IDS[c.boat]}`], ['Push off', null]] : [[c.outing, null]])
       : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
       : c.row ? [['Reading Rowing Club', 'rclub'], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null], ['@midpiece', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
       : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
@@ -427,12 +437,41 @@ async function play(c, page, errors) {
         if (!shown.open || !shown.home) errors.push(`Back from Practice showed ${JSON.stringify(shown)}, expected the plan`);
         continue;
       }
-      if (label === '@unhire') {
-        const hiring = await page.evaluate(() => ({ back: !!document.getElementById('clubBack').offsetParent, card: [...document.querySelectorAll('#clubCards .card')].some((b) => /Back/.test(b.textContent)) }));
-        if (!hiring.back || hiring.card) errors.push(`the choice of boats showed ${JSON.stringify(hiring)}, expected Back at the bottom left and no Back card`);
-        await page.keyboard.press('Escape');
-        const back = await page.evaluate(() => ({ canoe: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Canoe Club')), speedboat: [...document.querySelectorAll('#clubCards .card')].some((b) => b.textContent.includes('Speedboat')) }));
-        if (!back.canoe || back.speedboat) errors.push(`Back from the choice of boats showed ${JSON.stringify(back)}`);
+      // By the hire boats: a label on each, all on screen and apart, and Back at the bottom left.
+      if (label === '@hirebank') {
+        await page.waitForTimeout(500);
+        const bank = await page.evaluate(() => {
+          const labels = [...document.querySelectorAll('#clubDoors button')].filter((b) => b.offsetParent).map((b) => ({ text: b.textContent, r: b.getBoundingClientRect() }));
+          const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          return {
+            texts: labels.map((l) => l.text),
+            off: labels.filter(({ r }) => r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight).map((l) => l.text),
+            overlap: labels.flatMap((a, i) => labels.slice(i + 1).filter((b) => hit(a.r, b.r)).map((b) => `${a.text}/${b.text}`)),
+            back: !!document.getElementById('clubBack').offsetParent,
+            name: document.getElementById('clubPlace').textContent,
+          };
+        });
+        if (bank.texts.join() !== 'Speedboat,Electric launch,Narrowboat' || bank.off.length || bank.overlap.length || !bank.back || bank.name !== 'Hire a boat') errors.push(`the hire bank showed ${JSON.stringify(bank)}`);
+        continue;
+      }
+      // By a boat you walked to: nothing's started; Push off and Back, and what the boat is like.
+      if (label === '@byboat') {
+        const by = await page.evaluate(() => ({ state: window.kayak.state, outing: !!window.kayak.race?.outing, push: [...document.querySelectorAll('#clubDoors button')].filter((b) => b.offsetParent).map((b) => b.textContent), back: !!document.getElementById('clubBack').offsetParent, note: document.getElementById('clubNote').hidden ? '' : document.getElementById('clubNote').textContent, moorings: window.kayak.club.shots.moorings.map(({ id, x, z }) => ({ id, x, z })) }));
+        const { HIRE_BOATS } = await import('../reading-thames/outing.js');
+        if (by.outing || by.push.join() !== 'Push off' || !by.back || by.note !== HIRE_BOATS[HIRE_IDS[other]].line) errors.push(`by a hire boat: ${JSON.stringify(by)}, expected Push off, Back and its line, nothing started`);
+        moorings = by.moorings;
+        continue;
+      }
+      // Back on the bank from a boat: focus on that boat's label again.
+      if (label === '@backtoboat') {
+        const focused = await page.evaluate(() => document.activeElement?.textContent);
+        if (!c.touch && focused !== place) errors.push(`back from the ${place}, focus is on ${focused}`);
+        continue;
+      }
+      // Back on the bridge from the hire bank: focus on Hire a boat again (a keyboard's way back in).
+      if (label === '@backtohire') {
+        const focused = await page.evaluate(() => document.activeElement?.querySelector?.('.name')?.textContent);
+        if (!c.touch && focused !== 'Hire a boat') errors.push(`back from the hire bank, focus is on ${focused}, not Hire a boat`);
         continue;
       }
       if (label === '@escape') {
@@ -572,10 +611,17 @@ async function play(c, page, errors) {
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   if (!c.club) await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
-  // A hired boat on an empty river: these cases are about its controls and what it reports.
-  // A swan just ahead once stopped the speedboat within 5 m, so it reported 0.00 km on CI.
+  // A hired boat on an empty river: these cases are about the walk to it, its controls and what it reports.
+  // Random traffic (a pack or an eight rammed) once sank the slow narrowboat inside 8 s, and a
+  // swan just ahead once stopped the speedboat within 5 m, so it reported 0.00 km on CI.
   // (Swans and traffic have their own tests: kayak-birds, kayak-outing, kayak-traffic.)
   if (c.boat) await page.evaluate(() => { window.kayak.race.traffic.boats.length = 0; window.kayak.race.birds.length = 0; });
+  // Push off leaves from that boat's mooring.
+  if (c.boat) {
+    const id = { 'Electric launch': 'launch', Speedboat: 'speedboat', Narrowboat: 'narrowboat' }[c.boat];
+    const [m, b] = [moorings?.find((x) => x.id === id), await page.evaluate(() => ({ x: window.kayak.race.player.boat.x, z: window.kayak.race.player.boat.z }))];
+    if (!m || Math.hypot(b.x - m.x, b.z - m.z) > 3) errors.push(`the ${id} started at ${JSON.stringify(b)}, not its mooring ${JSON.stringify(m)}`);
+  }
   // On a phone the race is locked sideways once full screen comes, even when the tap that asked
   // for full screen also started the race.
   if (c.touch && !c.strip && !c.erg) {
@@ -788,6 +834,15 @@ async function play(c, page, errors) {
     const session = sent.find((e) => e.event === 'game_session');
     if (session && !(Number(session.props.secs) > 3 && session.props.places.includes('path') && session.props.from === 'walk' && session.props.plays === '1')) errors.push(`game_session says ${JSON.stringify(session.props)}`);
     if (kinds.filter((k) => k === 'game_kit').length !== 1) errors.push(`game_kit sent ${kinds.filter((k) => k === 'game_kit').length} times`);
+    // (A hired boat: full ahead until it has gone somewhere, however slow the frames: CI's
+    // software WebGL once closed the page with the speedboat still at its mooring.)
+    if (c.boat) {
+      const from = await page.evaluate(() => [window.kayak.race.player.boat.x, window.kayak.race.player.boat.z]);
+      await page.keyboard.down('ArrowUp');
+      await page.waitForFunction(([x, z]) => Math.hypot(window.kayak.race.player.boat.x - x, window.kayak.race.player.boat.z - z) > 15, from, { timeout: 60_000 })
+        .catch(() => errors.push('the hired boat never got going'));
+      await page.keyboard.up('ArrowUp');
+    }
     // Closing the page mid-outing still reports the play, ended 'closed', with how far it went.
     const closed = await page.evaluate(() => { dispatchEvent(new Event('pagehide')); return window.gameMetrics.sent.flatMap((b) => b.events).find((e) => e.event === 'game_play'); });
     if (!(closed?.props.end === 'closed' && closed.props.mode === 'outing' && Number(closed.props.km) > 0)) errors.push(`closing the page reported ${JSON.stringify(closed?.props)}`);

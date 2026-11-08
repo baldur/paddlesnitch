@@ -50,8 +50,10 @@ export const HIRE_MIX = { sculler: 0.45, kayaker: 0.3, pack: 0.35, eight: 0.3, c
 
 // Puts the race's one boat at the pier (`s` along the river line, upstream of
 // Caversham Bridge) on the right of the river going up, and starts the outing,
-// with its own, busier river traffic from `seed`.
-export function startOuting(race, kind, s, seed = 1, { boat = 'launch' } = {}) {
+// with its own, busier river traffic from `seed`. `from` ({ x, z, heading }):
+// start there instead (a hired boat, from its mooring by the Thames Path).
+export function startOuting(race, kind, s, seed = 1, { boat = 'launch', from = null } = {}) {
+  if (from) s = locate(race.course.scenery?.river ?? race.course, from.x, from.z).s;
   const river = race.course.scenery?.river ?? race.course;
   const k = race.course.speedup ?? 1;
   race.traffic = kind === 'cruise'
@@ -60,9 +62,9 @@ export function startOuting(race, kind, s, seed = 1, { boat = 'launch' } = {}) {
   const o = { kind, river, s, look: 0, done: false, lat: rightOf(river, s, race.course.shore), boat: HIRE_BOATS[boat] ? boat : 'launch', sinking: null };
   race.outing = o;
   const b = race.player.boat;
-  const at = keepRight(river, s, race.course.shore);
+  const at = from ? [from.x, from.z] : keepRight(river, s, race.course.shore);
   const ahead = keepRight(river, s + CRUISE.ahead, race.course.shore);
-  Object.assign(b, { x: at[0], z: at[1], heading: Math.atan2(ahead[0] - at[0], -(ahead[1] - at[1])), speed: kind === 'cruise' ? CRUISE.speed : 0, roll: 0, rollRate: 0, yawRate: 0, slip: 0, swim: 0 });
+  Object.assign(b, { x: at[0], z: at[1], heading: from ? from.heading : Math.atan2(ahead[0] - at[0], -(ahead[1] - at[1])), speed: kind === 'cruise' ? CRUISE.speed : 0, roll: 0, rollRate: 0, yawRate: 0, slip: 0, swim: 0 });
   if (kind === 'hire') b.shape = HIRE_BOATS[o.boat].shape;
   race.player.loc = locate(race.course, b.x, b.z);
   return o;

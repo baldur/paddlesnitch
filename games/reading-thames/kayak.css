@@ -497,6 +497,7 @@ summary { cursor: pointer; }
   background: rgba(10, 18, 18, 0.62); color: #fff; font: 600 0.95rem/1.1 system-ui, sans-serif; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); cursor: pointer; }
 #clubDoors .spot:hover, #clubDoors .spot:focus-visible { background: rgba(10, 18, 18, 0.85); border-color: #f2c230; outline: none; }
 #clubDoors .spot.go { background: #d6452b; border-color: #d6452b; font-size: 1.05rem; }
+#clubDoors .spot.go:focus-visible { outline: 3px solid #fff; outline-offset: 2px; } /* the red hides the amber border */
 #clubDoors .spot.small { min-width: 34px; min-height: 34px; padding: 0.25rem; font-size: 0.85rem; }
 #clubDoors .spot.small::after { content: ""; position: absolute; inset: -5px; } /* 44 px to tap, though it looks smaller */
 #clubDoors .spot.on { border: 2px solid #f2c230; color: #f2c230; }
@@ -551,8 +552,6 @@ summary { cursor: pointer; }
   #club.backable #clubCards { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
   #club.backable #clubNote { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 116px); } /* and the note above the cards */
 }
-/* Choosing a boat at the pier, the three cards are a wide row: above Back, never over it. */
-#club.backable #clubCards.choice { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); }
 @media (max-width: 860px) { #clubCards .friend small { display: none; } }
 .pin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .pin.canoe { background: #f2c230; }
@@ -561,7 +560,7 @@ summary { cursor: pointer; }
 @media (max-width: 860px) { #clubCards .card { padding: 0.35rem 0.6rem 0.35rem 0.35rem; column-gap: 0.45rem; } #clubCards .long { display: none; } #clubCards .card small { font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; } #clubCards .card svg { width: 50px; height: 34px; } }
 @media (max-width: 640px) { #clubCards .card svg { display: none; } #clubCards .card { grid-template-columns: 1fr; } }
 @media (max-width: 860px) { #clubCards .card.go small { white-space: normal; max-width: 10rem; } } /* Race again's line in full, on two lines */
-#clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
+#clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; width: max-content; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
 #clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
 /* In the club the editors and the plan are a sheet at the side, the room still in view. */
 /* Opened with show(), not showModal(), so the scene's buttons work beside it: placed by hand, over the walk's overlay. */
@@ -650,9 +649,6 @@ body.walking #pause { display: none; }
 @media (max-height: 500px) {
   #hud.rowing #flash { top: 30%; } /* below the clock */
 }
-
-/* Choosing a boat to hire: each card keeps its line (how the boats differ), wrapping, whatever the screen. */
-#clubCards.choice .card small { display: block; white-space: normal; max-width: 11rem; }
 
 /* The finish on a phone: the standings in three short columns, and the buttons
    always on screen, in a row, with the leaderboard line above them in the same
