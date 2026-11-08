@@ -148,6 +148,9 @@ test('the sender also goes once a minute while something waits, and when the pag
 test("the walk's places as reported: the canoe club's by name, the rowing club's rooms as one, the erg rooms on their own", () => {
   assert.equal(placeTag('boathouse'), 'boathouse');
   assert.equal(placeTag('rboathouse'), 'rowing');
+  // The hire bank and its boats: the walk's outdoors (the play says which boat).
+  assert.equal(placeTag('hire'), 'path');
+  assert.equal(placeTag('hire-narrowboat'), 'path');
   assert.equal(placeTag('erg'), 'erg');
   assert.equal(placeTag('kerg'), 'erg', "the canoe club's erg room counts as an erg room");
   const s = createSession(0, 'walk');

@@ -369,3 +369,21 @@ test('a bump off the bank stops a hired boat\'s slide', async () => {
   }
   assert.ok(bumped, 'it reached the bank');
 });
+
+test("Hire a boat's card shows the boathouse at Caversham", async () => {
+  const { clubSvg } = await import('../reading-thames/picture.js');
+  assert.match(clubSvg('boathouse'), /data-picture="boathouse"/);
+});
+
+test('a hired boat starts from its mooring by the Thames Path, pointing where it was moored, still', async () => {
+  const course = courseFromFile(await data('hasler16'));
+  const race = createRace(course, { rivals: [], seed: 4 });
+  const { clubShots } = await import('../reading-thames/club.js');
+  const m = clubShots(course).moorings.find((x) => x.id === 'narrowboat');
+  const o = startOuting(race, 'hire', 700, 1, { boat: 'narrowboat', from: m });
+  const b = race.player.boat;
+  assert.deepEqual([b.x, b.z, b.heading, b.speed], [m.x, m.z, m.heading, 0]);
+  assert.equal(o.boat, 'narrowboat');
+  assert.ok(Math.abs(o.s - locate(course.scenery.river ?? course, m.x, m.z).s) < 1e-9, 'its place along the river is the mooring, not the pier');
+  assert.ok(!course.shore.dry(b.x, b.z), 'afloat');
+});
