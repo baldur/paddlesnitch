@@ -45,8 +45,13 @@ for (const id of HIRE_ORDER) PLACES[`hire-${id}`] = { label: HIRE_BOATS[id].labe
 // water), in the courses' metres (their projection's origin is 51.46175,
 // -0.96945). You stand `back` metres in from the edge, a little downstream of
 // the first boat; the boats lie `off` the edge with `gap` metres between them.
-export const HIRE_BANK = { at: [-209.7, -141], back: 1.2, eye: 1.7, first: 2, gap: 3, off: 0.4 };
+export const HIRE_BANK = { at: [-209.7, -141], back: 4, eye: 1.7, first: 4, gap: 3, off: 0.4 };
 export const START = 'path';
+// Between the bridge and the hire bank (or a boat on it), a cut: not a glide over the town.
+export const cutBetween = (from, to) => {
+  const bank = (p) => PLACES[p].fade || !!PLACES[p].boat;
+  return (bank(to) && from === START) || (bank(from) && to === START);
+};
 // Back (always the button at the bottom left), Esc, Backspace and a gamepad's B, on every
 // stage of the walk: one step back the way you came (owner, 2026-11-03: "an
 // obvious go back that is consistent"). By the hire boats: back to the bridge.
@@ -71,7 +76,7 @@ export const DOOR_LABELS = {
 // plan); otherwise the path, or wherever you were last.
 export function firstPlace({ invited = false, last = null } = {}) {
   if (invited) return 'club';
-  // (Not by a hire boat: start on the bank, the choice of three in view.)
+  // (Not by a hire boat: start on the bridge.)
   return PLACES[last] && !PLACES[last].inside && !PLACES[last].boat ? last : 'path';
 }
 
@@ -289,25 +294,27 @@ function hireShots(course, river, at) {
     let lateral = side * (edge(mid) - half - HIRE_BANK.off);
     for (let i = 0; i < 20 && !afloat(lateral); i++) lateral -= side * 0.3;
     const [x, z] = point(mid, lateral);
-    // Its label: over its stern half, the end nearest you on the bank, at deck
-    // height; Push off over its front half, ahead of you as you stand by it.
+    // Its label: above its stern half, higher the further off it is, so it sits the
+    // same way clear of each boat on screen and you can see what you're choosing.
+    // Push off over its front half, ahead of you as you stand by it.
+    const labelY = 1.2 + 0.17 * (mid - stern / 2 - here.s);
     const [lx, lz] = point(mid - stern / 2, lateral);
     const [fx, fz] = point(mid + bow / 2, lateral);
-    return { id, x, z, s: mid, heading: Math.atan2(c.tx, -c.tz), stern, label: [lx, 1.4, lz], push: [fx, 1.6, fz] };
+    return { id, x, z, s: mid, heading: Math.atan2(c.tx, -c.tz), stern, bow, label: [lx, labelY, lz], push: [fx, 1.3, fz] };
   });
   const onPath = (s0, back) => point(s0, side * (edge(s0) + back));
   const [px, pz] = onPath(here.s, HIRE_BANK.back);
-  const far = point(here.s + 30, side * (edge(here.s + 30) - 4));
   return {
-    place: { eye: at(px, pz, HIRE_BANK.eye), look: [far[0], 0.2, far[1]] },
+    // Looking at the middle boat from back on the path, so the three spread across the view.
+    place: { eye: at(px, pz, HIRE_BANK.eye), look: [moorings[1].x, 0.6, moorings[1].z] },
     moorings,
     labels: moorings.map((m) => m.label),
     pushes: moorings.map((m) => m.push),
-    // Beside each boat's stern, where you'd step aboard, looking along it.
+    // Beside each boat's stern, where you'd step aboard, looking along it to its bow.
     stands: moorings.map((m) => {
       const [x, z] = onPath(m.s - m.stern + 1.2, 1.2);
-      const ahead = point(m.s + 6, side * (edge(m.s + 6) - 2));
-      return { eye: at(x, z, HIRE_BANK.eye), look: [ahead[0], 0.5, ahead[1]] };
+      const f = [Math.sin(m.heading), -Math.cos(m.heading)];
+      return { eye: at(x, z, HIRE_BANK.eye), look: [m.x + f[0] * m.bow, 0.5, m.z + f[1] * m.bow] };
     }),
   };
 }

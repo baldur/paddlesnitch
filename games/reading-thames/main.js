@@ -5,7 +5,7 @@ import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
 import { BOATS, boatById, hullOf, hullFor, describe } from './boats.js';
-import { PLACES, START, DOOR_LABELS, HIRE_ORDER, backFrom, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
+import { PLACES, START, cutBetween, DOOR_LABELS, HIRE_ORDER, backFrom, firstPlace, clubShots, clubMesh, legsMesh, glide, confusedSwan, swanLegsMesh, SWAN_LEGS, SWAN_SIZE, bridgeSwanMesh, ERGS, MY_ERG, MY_KERG, mirrorMatrix } from './club.js';
 import { SCULLS, SCULL_COLOURS, scullById, scullRate, scullPose, split, easeLook, LOOK_KEYS, lookFromKeys } from './scull.js';
 import { createErg, stepErg, monitor, ergPose, ergResult } from './erg.js';
 import { createKayakErg, stepKayakErg, kayakErgNumbers, ergPaddle, kayakErgResult } from './kayak-erg.js';
@@ -800,7 +800,7 @@ function outingStep(dt) {
     }
     if (e === 'sunk') {
       endPlay('finished');
-      show('Sunk! Back to the pier', { hold: 2.5 });
+      show('Sunk! Back to the bridge', { hold: 2.5 });
       race.outing.leaveAt = race.time + 2.5;
     }
     if (e === 'swan') {
@@ -886,11 +886,11 @@ function go(to) {
   closeSheet();
   endErg();
   endKerg();
-  // (Between the bridge and the hire bank, a cut: not a glide over the town.)
-  const cut = (PLACES[to].fade && club.place === START) || (PLACES[club.place].fade && to === START);
-  const through = !!PLACES[to].inside !== !!PLACES[club.place].inside || !!cut;
+  const through = !!PLACES[to].inside !== !!PLACES[club.place].inside || cutBetween(club.place, to);
   // Back from the hire bank to the bridge: Hire a boat to hand again.
   club.backToHire = club.place === 'hire' && to === 'path';
+  // Back from a boat to the bank: that boat's label to hand again.
+  club.backToBoat = to === 'hire' ? PLACES[club.place].boat : undefined;
   club.from = clubCamera();
   club.to = to;
   club.t = 0;
@@ -1085,7 +1085,7 @@ function arrive(place) {
 function focusFirst() {
   if (menu.open || clubEl.classList.contains('waiting') || clubEl.classList.contains('asking')) return;
   // (A guest's first focus is the one thing they can play, though it's on the right.)
-  (club.spots.find((x) => (club.backToHire ? x.hire : x.erg || x.kerg || x.open)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
+  (club.spots.find((x) => (club.backToBoat ? x.hireBoat === club.backToBoat : club.backToHire ? x.hire : x.erg || x.kerg || x.open)) ?? club.spots.find((x) => x.act && !x.friend) ?? club.spots.find((x) => x.act))?.el.focus({ preventScroll: true });
 }
 // The erg room: a 500 m on your erg, the rower on the next one keeping a
 // steady 2:08. Both sides together for a stroke; the monitor shows how it's going.

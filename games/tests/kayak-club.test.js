@@ -3,11 +3,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
 import { groundAt, bridgeBay, BRIDGE, bridgeTriangles } from '../reading-thames/world.js';
-import { WIDE, PLACES, START, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
+import { WIDE, PLACES, START, cutBetween, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
@@ -317,6 +318,15 @@ test('hire a boat: on the Thames Path by Caversham Boat Services, the three boat
   const river = course.scenery.river ?? course;
   const s = shots.moorings.map((m) => locate(river, m.x, m.z).s);
   assert.ok(s[0] < s[1] && s[1] < s[2], `upstream in order: ${s.map((v) => v.toFixed(1))}`);
+  const shapes = (await import('../reading-thames/outing.js')).HIRE_BOATS;
+  shots.moorings.forEach((m, i) => {
+    // Pointing upstream, along the line of boats.
+    const [a, b] = i < 2 ? [m, shots.moorings[i + 1]] : [shots.moorings[i - 1], m];
+    const along = [b.x - a.x, b.z - a.z].map((v) => v / Math.hypot(b.x - a.x, b.z - a.z));
+    assert.ok(Math.sin(m.heading) * along[0] - Math.cos(m.heading) * along[1] > 0.9, `${m.id} faces upstream`);
+    // Clear of the boat ahead, bow to stern.
+    if (i < 2) assert.ok(s[i] + shapes[m.id].shape.bow + 1 < s[i + 1] - shapes[shots.moorings[i + 1].id].shape.stern, `${m.id} clear of the next boat`);
+  });
   for (const m of shots.moorings) {
     const f = [Math.sin(m.heading), -Math.cos(m.heading)];
     const { bow, stern } = (await import('../reading-thames/outing.js')).HIRE_BOATS[m.id].shape;
@@ -331,4 +341,20 @@ test('hire a boat: on the Thames Path by Caversham Boat Services, the three boat
   // A reload starts you on the bank (or the bridge), never by one boat.
   assert.equal(firstPlace({ last: 'hire-launch' }), 'path');
   assert.equal(firstPlace({ last: 'hire' }), 'hire');
+});
+
+test('Between the bridge and the hire bank, or a boat on it, a cut: never a glide over the town', () => {
+  for (const place of ['hire', 'hire-speedboat', 'hire-launch', 'hire-narrowboat']) {
+    assert.equal(cutBetween('path', place), true, `to ${place}`);
+    assert.equal(cutBetween(place, 'path'), true, `from ${place}`);
+  }
+  // Along the bank is a walk, and the rest of the walk is as it was.
+  assert.equal(cutBetween('hire', 'hire-launch'), false);
+  assert.equal(cutBetween('hire-launch', 'hire'), false);
+  assert.equal(cutBetween('path', 'club'), false);
+});
+
+test('Push off, red, shows keyboard focus (its red hid the amber border)', () => {
+  const css = readFileSync(new URL('../reading-thames/kayak.css', import.meta.url), 'utf8');
+  assert.match(css, /\.spot\.go:focus-visible\s*\{[^}]*outline:\s*3px solid/);
 });
