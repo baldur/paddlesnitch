@@ -94,7 +94,8 @@ export const dayOnly = (iso: string) => `${iso.slice(0, 10)}T12:00:00.000Z`
 export function surveyEntry(d: SurveyDraft): PublicPortage {
   const at = dayOnly(d.observed.at)
   const observed: PortageObserved = { at, ...(d.observed.gauge ? { gauge: { ...d.observed.gauge, readAt: at } } : {}) }
-  const notes = `Get out: ${d.takeOut}. Back in: ${d.putIn}. Carry: ${d.carry}. ${seenNote(d.observed.at)}`
+  // The same words are read going either way, so they say what the landings are, not which comes first.
+  const notes = `Landings: ${d.takeOut}, and ${d.putIn}. Carry: ${d.carry}. ${seenNote(d.observed.at)}`
   const slug = d.featureId.split(':').pop()!.replace(/[^\w-]/g, '-')
   return {
     id: `survey-${d.observed.at.slice(0, 10)}-${slug}`, name: SURVEY_NAME, featureId: d.featureId, at: d.at, notes,

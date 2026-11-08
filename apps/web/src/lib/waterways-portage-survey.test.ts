@@ -4,8 +4,6 @@ import fs from 'fs'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import { haversine } from '@paddlesnitch/timing/geo'
-import { sideOf } from '@paddlesnitch/waterways/along'
-import { cumulative, project } from '@paddlesnitch/waterways/line'
 import { routePlan } from '@paddlesnitch/waterways/plan'
 import { portageOnRoute, type PublicPortage } from '@paddlesnitch/waterways/portage'
 import { withSurveyFeatures, gaugeNote, levelNote, mergeSurvey, readingAt, surveyEntry, surveyGauge, surveyPortages, SURVEY_NAME, uncheckedDrafts, withSurveyEntries, type SurveyDraft } from '@paddlesnitch/waterways/portage-survey'
@@ -43,7 +41,7 @@ describe('adding a checked carry', () => {
   it('builds the record Plan shows, under CC0 and with no person named', () => {
     const e = surveyEntry(draft)
     expect(e).toMatchObject({ id: 'survey-2026-11-08-KA-1', name: SURVEY_NAME, licence: 'CC0-1.0', featureId: 'crt:locks:KA-1' })
-    expect(e.notes).toBe('Get out: a low bank. Back in: a timber staging. Carry: grass. Seen 8 Nov 2026.')
+    expect(e.notes).toBe('Landings: a low bank, and a timber staging. Carry: grass. Seen 8 Nov 2026.')
   })
   it('writes only the day, whatever time the draft held', () => {
     const e = surveyEntry({ ...draft, observed: { at: '2026-01-02T07:41:03.250Z', gauge: { ...gauge, readAt: '2026-01-02T07:45:00Z' } } })
@@ -167,10 +165,39 @@ describe('the committed surveys', () => {
   })
 
   // What the video showed, 8 Nov 2026, looking downstream: a wrong bank sends someone to the wrong side.
-  it('Blakes Lock: the put-in is on the north channel, across the strip of land, about 20 m from the take-out', () => {
+  it('Blakes Lock: the carry crosses the strip of land, about 20 m', () => {
     const blakes = surveyPortages.find(p => p.featureId === 'ea-lock:blakes-river-kennet')!
     expect(blakes.landings[1][0]).toBeGreaterThan(blakes.landings[0][0])
-    expect(haversine(blakes.landings[0], blakes.landings[1])).toBeGreaterThan(15)
+    const carry = haversine(blakes.landings[0], blakes.landings[1])
+    expect(carry).toBeGreaterThan(15)
+    expect(carry).toBeLessThan(25)
+  })
+
+  it('every one stores the banks seen and the heading', () => {
+    for (const p of surveyPortages) expect(p.seen, p.id).toMatchObject({ banks: expect.any(Array), headingDeg: expect.any(Number) })
+  })
+
+  it('notes read the same going either way: no first or last landing, no compass', () => {
+    for (const p of surveyPortages) expect(p.notes, p.id).not.toMatch(/get out|back in|\b(north|south|east|west)(-?(east|west))?\b/i)
+  })
+
+  // As recorded on the water. Moving one to suit the mapped line has put a landing on the wrong side of a river.
+  it.each([
+    ['survey-2026-11-08-blakes-river-kennet', [[51.45587, -0.95558],  [51.45604, -0.95567]]],
+    ['survey-2026-11-08-KA-001-010', [[51.4508383, -0.9739347],  [51.4515526, -0.9731777]]],
+    ['survey-2026-11-08-KA-004-002', [[51.4345101, -0.986791],  [51.4343368, -0.9854984]]],
+    ['survey-2026-11-08-KA-005-004', [[51.435921, -1.004998],  [51.4360229, -1.0040957]]],
+    ['survey-2026-11-08-KA-007-003', [[51.4334319, -1.0329218],  [51.4331107, -1.0318027]]],
+    ['survey-2026-11-08-KA-009-002', [[51.4317139, -1.0586486],  [51.4319957, -1.0574749]]],
+    ['survey-2026-11-08-KA-010-001', [[51.430705, -1.0692665],  [51.4311459, -1.0676295]]],
+    ['survey-2026-11-08-KA-011-002', [[51.4244128, -1.0854921],  [51.4248384, -1.0841116]]],
+    ['survey-2026-11-08-KA-013-009', [[51.4182878, -1.100826],  [51.4187884, -1.0999315]]],
+    ['survey-2026-11-08-KA-015-002', [[51.4074257, -1.1245637],  [51.4088428, -1.1242511]]],
+    ['survey-2026-11-08-KA-016-001', [[51.4006859, -1.1310837],  [51.4007777, -1.129757]]],
+    ['survey-2026-11-08-low-bridge-padworth', [[51.40244, -1.12628],  [51.40281, -1.12595]]],
+    ['survey-2026-11-08-low-bridge-sulhamstead', [[51.42308, -1.08974],  [51.42327, -1.08915]]],
+  ] as [string, [LatLng, LatLng]][])('%s keeps its landings as recorded', (id, landings) => {
+    expect(surveyPortages.find(p => p.id === id)!.landings).toEqual(landings)
   })
 
   it.each([
