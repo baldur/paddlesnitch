@@ -195,7 +195,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
       <aside className="lg:w-[30rem] lg:overflow-y-auto border-t lg:border-t-0 lg:border-l border-border px-4 py-4 space-y-6">
         {adding && <AddPortage stop={adding.stop} landings={adding.landings} signedIn={signedIn} here={lock ? addPortageHref(lock) : `/plan?${draftParams(draft)}`} onCancel={() => setAdding(null)}
           onSaved={waiting => { setAdding(null); setNoteWaiting(waiting); refreshPortages() }} />}
-        {noteWaiting && <p className="text-sm text-fg" role="status">Saved. We&apos;ll check your note before it shows.</p>}
+        <div role="status">{noteWaiting && mine.data?.some(c => c.status === 'pending') && <p className="text-sm text-fg">Saved. Your portage details will show once we&apos;ve checked your note.</p>}</div>
         <section>
           <h1 className="text-2xl font-semibold text-fg mb-1 text-balance">{shared ? initialTitle(initial) : saved ? saved.title : 'Plan a paddle'}</h1>
           {shared ? (
@@ -367,7 +367,7 @@ const canAddPortage = (s: Stop) => s.portage || (s.feature.kind === 'weir' && !s
 type PortageActions = {
   signedIn: boolean
   mine: Set<string>
-  unpublished: { id: string; featureId?: string; status?: 'pending' | 'held' | 'not_published' }[]
+  unpublished: UnpublishedNote[]
   here: string                       // this page, for the sign-in round trip
   onAdd?: (s: Stop) => void          // unset when adding isn't possible here (a shared plan)
   onFlag: (id: string) => void
@@ -442,13 +442,8 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
                         : <button type="button" className="underline text-muted hover:text-fg" onClick={() => actions.onFlag(p.id)}>flag as wrong</button>)}
                   </div>
                 ))}
-                {actions.unpublished.filter(c => c.featureId === s.feature.id).map(c => (
-                  <div key={c.id} className="text-muted" data-testid="portage-unpublished">
-                    {c.status === 'not_published' ? 'Your note wasn’t published. ' : 'We’re checking your note. Only you can see this. '}
-                    <button type="button" className="underline hover:text-red" onClick={() => actions.onDelete(c.id)}>delete</button>
-                  </div>
-                ))}
-                {actions.onAdd && (actions.signedIn
+                {actions.unpublished.filter(c => c.featureId === s.feature.id).map(c => <UnpublishedPortage key={c.id} c={c} onDelete={actions.onDelete} />)}
+                {actions.onAdd && !actions.unpublished.some(c => c.featureId === s.feature.id) && (actions.signedIn
                   ? <button type="button" className="min-h-11 text-primary-text hover:underline" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ Add yours' : '+ Add portage details'}</button>
                   : <a className="text-muted underline hover:text-fg" href={`/signin?next=${encodeURIComponent(actions.here)}`}>Sign in to add portage details</a>)}
               </div>
@@ -523,6 +518,30 @@ function PlanNotes({ text, saving, failed, onSave }: { text: string; saving: boo
   )
 }
 
+type UnpublishedNote = { id: string; featureId?: string; notes?: string; status?: 'pending' | 'held' | 'not_published' }
+const UNPUBLISHED_TEXT = {
+  pending: 'We’re checking your note. Your portage details aren’t public yet.',
+  held: 'A person needs to read your note. Your portage details aren’t public yet.',
+  not_published: 'Your portage details aren’t public. You can add them again.',
+}
+
+/** Your own portage details that aren't public, seen only by you, at the lock they're for. */
+function UnpublishedPortage({ c, onDelete }: { c: UnpublishedNote; onDelete: (id: string) => void }) {
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className="text-muted" data-testid="portage-unpublished">
+      {c.notes && <span className="block text-fg">“{c.notes.length > 60 ? `${c.notes.slice(0, 60)}…` : c.notes}”</span>}
+      <span className="block">{UNPUBLISHED_TEXT[c.status ?? 'pending']}</span>
+      {confirming
+        ? <span className="flex gap-2 items-center">
+            <button type="button" className="min-h-11 underline hover:text-red" onClick={() => onDelete(c.id)}>Delete them</button>
+            <button type="button" className="min-h-11 underline hover:text-fg" onClick={() => setConfirming(false)}>Keep them</button>
+          </span>
+        : <button type="button" className="min-h-11 underline hover:text-red" onClick={() => setConfirming(true)}>Delete</button>}
+    </div>
+  )
+}
+
 /** Adding portage details at a lock or weir: two clicks for the landings on
  *  the (satellite) map, notes, rollers, and an explicit CC0 release. */
 function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
@@ -560,12 +579,12 @@ function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
       </label>
       <label className="flex gap-2 items-start text-sm text-muted">
         <input type="checkbox" className="mt-0.5" checked={cc0} onChange={e => setCc0(e.target.checked)} aria-label="Release under CC0" />
-        <span>I release this under <a className="underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer">CC0</a> (anyone may reuse it, including other open-data projects) and it&apos;s my own observation, not copied from a guidebook or map. It&apos;s public at once, with my display name.</span>
+        <span>I release this under <a className="underline" href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noreferrer">CC0</a> (anyone may reuse it, including other open-data projects) and it&apos;s my own observation, not copied from a guidebook or map. {notes.trim() ? 'It’s public with my display name once the note has been checked.' : 'It’s public at once, with my display name.'}</span>
       </label>
       <div className="flex gap-2">
         <button type="button" className={buttonClass('primary', 'sm')} disabled={!ready || add.isPending}
           onClick={() => add.mutate({ featureId: stop.feature.id, at: stop.feature.at, landings: [landings[0], landings[1]], notes: notes || undefined, rollers: rollers || undefined, cc0: true })}>
-          {add.isPending ? 'Publishing…' : 'Publish'}
+          {notes.trim() ? (add.isPending ? 'Saving…' : 'Save') : (add.isPending ? 'Publishing…' : 'Publish')}
         </button>
         <button type="button" className={buttonClass('quiet', 'sm')} onClick={onCancel}>Cancel</button>
       </div>
