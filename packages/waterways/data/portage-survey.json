@@ -7,17 +7,24 @@
    51.456114,
    -0.954551
   ],
-  "notes": "Get out: timber staging by the yellow buoys. Back in: beside the concrete wall on the far side. Carry: over the strip of land. Seen 8 Nov 2026.",
+  "notes": "Landings: timber staging by the yellow buoys, and beside the concrete wall on the far side. Carry: over the strip of land to the other channel. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.455879,
-    -0.955587
+    51.45587,
+    -0.95558
    ],
    [
-    51.455771,
-    -0.955479
+    51.45604,
+    -0.95567
    ]
   ],
+  "seen": {
+   "banks": [
+    "left",
+    "right"
+   ],
+   "headingDeg": 66
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -42,7 +49,7 @@
    51.45114,
    -0.973626
   ],
-  "notes": "Get out: steel grating landing with a handrail. Back in: timber staging. Carry: short grass. Seen 8 Nov 2026.",
+  "notes": "Landings: steel grating landing with a handrail, and timber staging. Carry: short grass. Seen 8 Nov 2026.",
   "landings": [
    [
     51.4508383,
@@ -53,6 +60,13 @@
     -0.9731777
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 53
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -77,17 +91,24 @@
    51.434444,
    -0.986242
   ],
-  "notes": "Get out: timber-capped piling with a rail. Back in: bank under willows below the brick arch. Carry: sandy gravel path, then steps. Tricky: bring someone to help. There is parking. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped piling with a rail, and bank under willows below the brick arch. Carry: sandy gravel path and steps. Tricky: bring someone to help. There is parking. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.434496,
-    -0.986798
+    51.4345101,
+    -0.986791
    ],
    [
-    51.434388,
-    -0.985504
+    51.4343368,
+    -0.9854984
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "left"
+   ],
+   "headingDeg": 107
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -112,17 +133,24 @@
    51.435986,
    -1.004522
   ],
-  "notes": "Get out: low steel edge below a stone wall. Back in: steel-capped piling with a bollard. Carry: grass and gravel. Seen 8 Nov 2026.",
+  "notes": "Landings: low steel edge below a stone wall, and steel-capped piling with a bollard. Carry: grass and gravel. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.43589,
-    -1.004992
+    51.435921,
+    -1.004998
    ],
    [
-    51.43596,
-    -1.004087
+    51.4360229,
+    -1.0040957
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 83
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -148,17 +176,24 @@
    51.433189,
    -1.032377
   ],
-  "notes": "Get out: timber-capped concrete piling. Back in: high concrete piling. Carry: grass and earth. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped concrete piling, and high concrete piling. Carry: grass and earth. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.433451,
-    -1.032902
+    51.4334319,
+    -1.0329218
    ],
    [
-    51.433132,
-    -1.031791
+    51.4331107,
+    -1.0318027
    ]
   ],
+  "seen": {
+   "banks": [
+    "left",
+    "left"
+   ],
+   "headingDeg": 128
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -184,17 +219,24 @@
    51.431931,
    -1.057995
   ],
-  "notes": "Get out: low gravel and mud bank. Back in: timber-capped wall. Carry: gravel path. Seen 8 Nov 2026.",
+  "notes": "Landings: low gravel and mud bank, and timber-capped wall. Carry: gravel path. Seen 8 Nov 2026.",
   "landings": [
    [
     51.4317139,
     -1.0586486
    ],
    [
-    51.431952,
-    -1.057457
+    51.4319957,
+    -1.0574749
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 78
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -220,17 +262,24 @@
    51.430893,
    -1.068733
   ],
-  "notes": "Get out: timber-capped concrete piling. Back in: low gravel beach. Carry: gravel path and grass. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped concrete piling, and low gravel beach. Carry: gravel path and grass. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.430686,
-    -1.069253
+    51.430705,
+    -1.0692665
    ],
    [
-    51.431107,
-    -1.067604
+    51.4311459,
+    -1.0676295
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 63
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -256,17 +305,24 @@
    51.424672,
    -1.084853
   ],
-  "notes": "Get out: timber-capped concrete piling. Back in: high concrete piling. Carry: grass and earth path. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped concrete piling, and high concrete piling. Carry: grass and earth path. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.4244,
-    -1.085482
+    51.4244128,
+    -1.0854921
    ],
    [
     51.4248384,
     -1.0841116
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 63
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -292,17 +348,24 @@
    51.418526,
    -1.100565
   ],
-  "notes": "Get out: timber-capped concrete piling. Back in: steel-capped piling near the swing bridge. Carry: grass. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped concrete piling, and steel-capped piling near the swing bridge. Carry: grass. Seen 8 Nov 2026.",
   "landings": [
    [
     51.4182878,
     -1.100826
    ],
    [
-    51.418776,
-    -1.099914
+    51.4187884,
+    -1.0999315
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 48
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -328,17 +391,24 @@
    51.40779,
    -1.124456
   ],
-  "notes": "Get out: timber-capped staging. Back in: timber staging on concrete piers. Carry: grass. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped staging, and timber staging on concrete piers. Carry: grass. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.407428,
-    -1.124604
+    51.4074257,
+    -1.1245637
    ],
    [
-    51.408847,
-    -1.124296
+    51.4088428,
+    -1.1242511
    ]
   ],
+  "seen": {
+   "banks": [
+    "left",
+    "left"
+   ],
+   "headingDeg": 5
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -364,17 +434,24 @@
    51.400685,
    -1.130313
   ],
-  "notes": "Get out: steel-capped piling with a bollard. Back in: high steel-capped piling. Carry: grass. Seen 8 Nov 2026.",
+  "notes": "Landings: steel-capped piling with a bollard, and high steel-capped piling. Carry: grass. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.400697,
-    -1.131086
+    51.4006859,
+    -1.1310837
    ],
    [
-    51.400792,
-    -1.12976
+    51.4007777,
+    -1.129757
    ]
   ],
+  "seen": {
+   "banks": [
+    "left",
+    "left"
+   ],
+   "headingDeg": 84
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -400,17 +477,24 @@
    51.40262,
    -1.12611
   ],
-  "notes": "Get out: timber-capped quay. Back in: timber-capped quay. Carry: round the low bridge, which is too low to paddle under. Seen 8 Nov 2026.",
+  "notes": "Landings: timber-capped quay, and another timber-capped quay. Carry: round the low bridge, which is too low to paddle under. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.402432,
-    -1.126259
+    51.40244,
+    -1.12628
    ],
    [
-    51.402792,
-    -1.125903
+    51.40281,
+    -1.12595
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 32
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
@@ -436,17 +520,24 @@
    51.42318,
    -1.08944
   ],
-  "notes": "Get out: low bank by the blue sign. Back in: high concrete quay. Carry: round the low bridge, which is too low to paddle under. Seen 8 Nov 2026.",
+  "notes": "Landings: low bank by the blue sign, and high concrete quay. Carry: round the low bridge, which is too low to paddle under. Seen 8 Nov 2026.",
   "landings": [
    [
-    51.42307,
-    -1.089732
+    51.42308,
+    -1.08974
    ],
    [
-    51.423255,
-    -1.089138
+    51.42327,
+    -1.08915
    ]
   ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 64
+  },
   "licence": "CC0-1.0",
   "observed": {
    "at": "2026-11-08T12:00:00.000Z",
