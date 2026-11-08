@@ -1,0 +1,36 @@
+{
+ "added": [
+  {
+   "id": "survey:low-bridge-padworth",
+   "kind": "portage",
+   "name": "Low bridge near Padworth",
+   "at": [
+    51.40263,
+    -1.12611
+   ],
+   "source": {
+    "source": "paddlesnitch",
+    "fetchedAt": "2026-11-08T12:00:00.000Z"
+   }
+  },
+  {
+   "id": "survey:low-bridge-sulhamstead",
+   "kind": "portage",
+   "name": "Low bridge near Sulhamstead",
+   "at": [
+    51.42318,
+    -1.08944
+   ],
+   "source": {
+    "source": "paddlesnitch",
+    "fetchedAt": "2026-11-08T12:00:00.000Z"
+   }
+  }
+ ],
+ "noCarry": [
+  {
+   "featureId": "crt:locks:KA-014-004",
+   "name": "Ufton Lock: no carry unless the river is very high"
+  }
+ ]
+}

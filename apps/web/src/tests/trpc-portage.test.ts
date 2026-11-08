@@ -14,6 +14,7 @@ import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as mapData } from '@/app/plan/data/[version]/[name]/route'
 import { listKeys } from '@/lib/storage'
 import { clearPortageCache } from '@paddlesnitch/waterways/portage-store'
+import { surveyPortages } from '@paddlesnitch/waterways/portage-survey'
 import { clearDemandCache } from '@paddlesnitch/waterways/plan-store'
 import { saveSession, type AnalysisSession } from '@paddlesnitch/analysis/analysis-store'
 const AT_ISO = '2026-10-01T09:00:00.000Z'
@@ -69,7 +70,7 @@ describe('adding portage details', () => {
     const ann = await makeUser('Ann')
     await as(ann).portage.add(PORTAGE)
     const dump = await mapGet('openportage')
-    expect(dump).toMatchObject({ licence: 'CC0-1.0', count: 1 })
+    expect(dump).toMatchObject({ licence: 'CC0-1.0', count: 1 + surveyPortages.length })
     expect(JSON.stringify(dump)).not.toContain(ann.id)
   })
 
@@ -112,6 +113,49 @@ describe('withdrawing, flagging and hiding', () => {
     expect((await marshStop()).portages).toBeUndefined()
     await as(admin).portage.hide({ id, hidden: false })
     expect((await marshStop()).portages).toHaveLength(1)
+  })
+})
+
+describe('surveyed portages', () => {
+  const tyleMill = surveyPortages.find(p => p.featureId === 'crt:locks:KA-013-009')!
+  const tyleStop = async () => {
+    const r = await anon.plan.route(DW)
+    if (!r.plan || typeof r.plan === 'string') throw new Error(String(r.plan))
+    return r.plan.stops.find(s => s.feature.name?.includes('Tyle Mill'))!
+  }
+
+  it('are on everyone\'s route, with the level they were seen at, credited', async () => {
+    const [p] = (await tyleStop()).portages!
+    expect(p).toMatchObject({ id: tyleMill.id, by: 'paddlesnitch survey' })
+    expect(p.notes).toContain('Seen 8 Nov 2026')
+    expect(p.notes).toContain('Environment Agency gauge at Reading Calcot Bridge read 1.89 m (below its usual range)')
+  })
+
+  it('are in the CC0 dump without the Environment Agency reading, which is OGL', async () => {
+    const dump = await mapGet('openportage')
+    const p = dump.portages.find((x: { id: string }) => x.id === tyleMill.id)
+    expect(p.observed).toEqual({ at: expect.any(String) })
+    expect(JSON.stringify(dump)).not.toContain('Environment Agency')
+    expect(JSON.stringify(dump)).not.toContain('Calcot')
+  })
+
+  it('can be flagged as wrong: three people hide one, and an admin brings it back', async () => {
+    for (const name of ['Ann', 'Bo', 'Cy']) await as(await makeUser(name)).portage.flag({ id: tyleMill.id })
+    clearPortageCache()
+    expect((await tyleStop()).portages ?? []).toEqual([])
+    const admin = await makeUser('Admin')
+    process.env.ADMIN_USER_IDS = admin.id
+    await as(admin).portage.hide({ id: tyleMill.id, hidden: false })
+    clearPortageCache()
+    expect((await tyleStop()).portages).toHaveLength(1)
+  })
+
+  it('have no owner: hiding writes nothing under users/, and nobody can delete one', async () => {
+    const admin = await makeUser('Admin')
+    process.env.ADMIN_USER_IDS = admin.id
+    await as(admin).portage.hide({ id: tyleMill.id, hidden: true })
+    expect((await listKeys('users/')).filter(k => k.includes('portages'))).toEqual([])
+    await expect(as(admin).portage.delete({ id: tyleMill.id })).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 })
 

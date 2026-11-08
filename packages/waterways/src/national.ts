@@ -11,6 +11,7 @@ import type { Place } from './places'
 import type { OfficialTides } from './tide'
 import { osmPortages, portagesAt, type PublicPortage } from './portage'
 import { listPublicPortages } from './portage-store'
+import { withSurveyFeatures } from './portage-survey'
 import { planDemand, planLines } from './plan-store'
 import { waterwayCoverage, type WaterwayCoverage } from './waterway-coverage'
 import type { Feature, LatLng, NetLink, OsmElement, RegionDataset } from './types'
@@ -60,7 +61,7 @@ export async function loadNeeded(limit = 50): Promise<NeededLock[]> {
   const out: NeededLock[] = []
   for (const f of ds.features) {
     const plans = demand.get(f.id) ?? 0
-    if (!plans || (f.kind !== 'lock' && f.kind !== 'portage') || f.portage?.side || portagesAt(f, visible).length) continue
+    if (!plans || (f.kind !== 'lock' && f.kind !== 'portage') || f.noCarry || f.portage?.side || portagesAt(f, visible).length) continue
     out.push({ id: f.id, name: f.name, kind: f.kind, at: f.at, plans })
   }
   return out.sort((a, b) => b.plans - a.plans || (a.name ?? '').localeCompare(b.name ?? '')).slice(0, limit)
@@ -184,11 +185,11 @@ export async function readDataset(get: (key: string) => Promise<Buffer | null>, 
   if (!links) return null
   const [features, osmFeatures, saFeatures, places, portages] = await rest
   // Routing sees one list; the files stay apart (licence layers: OSM is ODbL, sa-features CC BY-SA).
-  return { version: v, links, features: [...(features ?? []), ...(osmFeatures ?? []), ...(saFeatures ?? [])], places: places ?? [], portages: osmPortages(portages ?? []) }
+  return { version: v, links, features: withSurveyFeatures([...(features ?? []), ...(osmFeatures ?? []), ...(saFeatures ?? [])]), places: places ?? [], portages: osmPortages(portages ?? []) }
 }
 
 async function fixture(): Promise<NationalDataset> {
   const { buildPlaces } = await import('./places')
   const dw = (await import('../data/dw.json')).default as unknown as RegionDataset
-  return { version: 'dw-fixture', links: dw.links, features: dw.features, places: buildPlaces([], dw.features, dw.links), portages: [] }
+  return { version: 'dw-fixture', links: dw.links, features: withSurveyFeatures(dw.features), places: buildPlaces([], dw.features, dw.links), portages: [] }
 }

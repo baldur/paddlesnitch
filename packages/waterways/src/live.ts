@@ -84,7 +84,8 @@ export function eaGauges(items: unknown[]): Gauge[] {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || typeof s.stationReference !== 'string' || typeof s.riverName !== 'string') continue
     const measures = (Array.isArray(s.measures) ? s.measures : s.measures ? [s.measures] : []) as Record<string, unknown>[]
     const stages = measures.filter(m => m.qualifier === 'Stage' && typeof m['@id'] === 'string')
-    const own = stages.find(m => m.unitName === 'mASD' || m.unitName === 'm')
+    // Some stations list a dead "m" measure beside the live "mASD" one (Calcot Bridge).
+    const own = stages.find(m => m.unitName === 'mASD') ?? stages.find(m => m.unitName === 'm')
     const pick = own ?? stages.find(m => m.unitName === 'mAOD')
     if (!pick) continue
     out.push({

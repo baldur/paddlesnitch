@@ -132,7 +132,7 @@ export function routePlan(
       const theirs = (PORTAGE_KINDS.has(a.item.kind) || a.item.kind === 'weir') && contributions.length ? portagesAt(a.item, contributions) : []
       const beside = a.item.kind === 'weir' && onCanal(leg === 'out' ? a.chainageM : out.lengthM - a.chainageM)
       stops.push({
-        feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind),
+        feature: a.item, leg, chainageM, fromPrevM: chainageM - prevM, bank: a.bank, portage: PORTAGE_KINDS.has(a.item.kind) && !a.item.noCarry,
         ...(beside ? { beside: true as const } : {}),
         ...(theirs.length ? { portages: theirs.map(c => portageOnRoute(line, c, cum)) } : {}),
       })

@@ -1,6 +1,6 @@
 # Coverage: Kennet & Avon Canal, River Kennet and the Thames to Westminster
 
-Built 2026-10-31 by `pnpm --filter web waterways dw`. Generated — don't edit by hand.
+Built 2026-11-08 by `pnpm --filter web waterways dw`. Generated — don't edit by hand.
 
 ## Check: Devizes Wharf to Westminster Bridge
 
@@ -17,10 +17,10 @@ Locks and portages aren't the same count. Portages that aren't locks (the race's
 
 | Fact | Locks with it |
 |---|---|
-| Portage side | 0 / 77 (0%) |
-| Take-out | 0 / 77 (0%) |
-| Put-in | 0 / 77 (0%) |
-| Carry route | 1 / 77 (1%) |
+| Portage side | 11 / 77 (14%) |
+| Take-out | 11 / 77 (14%) |
+| Put-in | 11 / 77 (14%) |
+| Carry route | 12 / 77 (16%) |
 | Crew access | 61 / 77 (79%) |
 | Parking | 48 / 77 (62%) |
 | Facilities | 29 / 77 (38%) |
@@ -74,18 +74,18 @@ Locks and portages aren't the same count. Portages that aren't locks (the race's
 | 65.2 | Lock 93, Heales Lock | — | — | — | — | ✓ | — | — | crt |
 | 66.3 | Lock 94, Woolhampton Lock | — | — | — | — | ✓ | ✓ | — | crt, osm |
 | 69.7 | Lock 95, Aldermaston Lock | — | — | — | — | ✓ | ✓ | ✓ | crt, osm |
-| 70.2 | Lock 96, Padworth Middle Lock | — | — | — | — | ✓ | ✓ | — | crt, osm |
-| 71.1 | Lock 97, Towney Lock | — | — | — | — | ✓ | — | — | crt |
+| 70.2 | Lock 96, Padworth Middle Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
+| 71.1 | Lock 97, Towney Lock | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | crt, contribution |
 | 72.2 | Lock 98, Ufton Lock | — | — | — | — | ✓ | ✓ | — | crt, osm |
-| 73.3 | Lock 99, Tyle Mill Lock | — | — | — | — | ✓ | ✓ | ✓ | crt, osm |
-| 74.6 | Lock 100, Sulhamstead Lock | — | — | — | — | ✓ | — | — | crt |
-| 76.0 | Lock 101, Sheffield Lock | — | — | — | — | ✓ | ✓ | — | crt, osm |
-| 76.8 | Lock 102, Garston Lock | — | — | — | — | ✓ | — | — | crt |
-| 78.8 | Lock 103, Burghfield Lock | — | — | — | — | ✓ | — | — | crt |
-| 80.9 | Lock 104, Southcote Lock | — | — | — | — | ✓ | — | — | crt |
-| 82.2 | Lock 105, Fobney Lock | — | — | — | — | ✓ | ✓ | — | crt, osm |
-| 84.9 | Lock 106, County Lock | — | — | — | — | ✓ | ✓ | — | crt, osm |
-| 86.4 | Blakes Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
+| 73.3 | Lock 99, Tyle Mill Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | crt, contribution, osm |
+| 74.6 | Lock 100, Sulhamstead Lock | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | crt, contribution |
+| 76.0 | Lock 101, Sheffield Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
+| 76.8 | Lock 102, Garston Lock | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | crt, contribution |
+| 78.8 | Lock 103, Burghfield Lock | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | crt, contribution |
+| 80.9 | Lock 104, Southcote Lock | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | crt, contribution |
+| 82.2 | Lock 105, Fobney Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
+| 84.9 | Lock 106, County Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
+| 86.4 | Blakes Lock | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ea-thames-locks, contribution, osm |
 | 89.9 | Sonning Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
 | 94.5 | Shiplake Lock | — | — | — | — | ✓ | ✓ | ✓ | ea-thames-locks, ea-thames-site-guides |
 | 98.7 | Marsh Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |

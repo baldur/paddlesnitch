@@ -40,6 +40,10 @@ describe('gauges', () => {
     expect(marsh).toMatchObject({ name: 'Marsh Lock', river: 'River Thames', datum: 'stage' })
     expect(marsh.measure).toMatch(/2495TH-level-stage-i-15_min-mASD$/)
     expect(eaGauges([{ stationReference: 'X1', lat: 51, long: 0, measures: [{ '@id': 'm', qualifier: 'Stage', unitName: 'mASD' }] }])).toEqual([])
+    // Calcot Bridge lists a measure in m that has no readings before its live one in mASD.
+    const dead = { '@id': 'dead', qualifier: 'Stage', unitName: 'm' }, live = { '@id': 'live', qualifier: 'Stage', unitName: 'mASD' }
+    expect(eaGauges([{ stationReference: 'X3', lat: 51, long: 0, riverName: 'River Y', measures: [dead, live] }])[0].measure).toBe('live')
+    expect(eaGauges([{ stationReference: 'X4', lat: 51, long: 0, riverName: 'River Y', measures: [dead] }])[0].measure).toBe('dead')
     expect(eaGauges([{ stationReference: 'X2', lat: 51, long: 0, riverName: 'River Y', measures: [{ '@id': 'm', qualifier: 'Stage', unitName: 'mAOD' }] }])[0].datum).toBe('aod')
   })
 

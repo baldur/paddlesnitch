@@ -18,6 +18,7 @@ import { coverageSummary, lockCoverage, LOCK_FACTS, type LockCoverage } from '@p
 import { CRT_LAYERS, crtQueryUrl, featuresFromCrt, type CrtLayer } from '@paddlesnitch/waterways/ingest/crt'
 import { featureQuery, linksFromOverpass, networkQuery, osmElementsFromOverpass, osmPortageWaysFromOverpass, OVERPASS_URLS, portageQuery, withPortageEnds } from '@paddlesnitch/waterways/ingest/osm'
 import { osmPortages, type PublicPortage } from '@paddlesnitch/waterways/portage'
+import { mergeSurvey } from '@paddlesnitch/waterways/portage-survey'
 import { crewFromGuide, guidePaths, locksFromThamesPage, THAMES_GUIDES_URL, THAMES_LOCKS_URL } from '@paddlesnitch/waterways/ingest/thames'
 import { route, snap } from '@paddlesnitch/waterways/network'
 import { REGIONS } from '@paddlesnitch/waterways/regions'
@@ -135,14 +136,14 @@ async function main() {
   // and always changing, so fetched every build; the cached copy if offline.
   const shared = await fresh('openportage.json', () => get(OPENPORTAGE_URL))
   const contributions = (JSON.parse(shared.body).portages ?? []) as PublicPortage[]
-  console.log(`  paddlesnitch: ${contributions.length} portage contributions`)
+  console.log(`  paddlesnitch: ${mergeSurvey(contributions).length} portage contributions and surveys`)
 
   const dataset = buildRegion({ region: region.id, bbox: region.bbox, builtAt: now, links, features, osm, crewByLock })
   await fs.mkdir(OUT, { recursive: true })
   await fs.writeFile(path.join(OUT, `${region.id}.json`), JSON.stringify(dataset))
   console.log(`  wrote ${region.id}.json — ${dataset.features.length} features, ${dataset.osm.length} OSM points`)
 
-  await fs.writeFile(path.join(OUT, `${region.id}-coverage.md`), report(dataset, [...contributions, ...osmPortages(dataset.osm)]))
+  await fs.writeFile(path.join(OUT, `${region.id}-coverage.md`), report(dataset, [...mergeSurvey(contributions), ...osmPortages(dataset.osm)]))
   console.log(`  wrote ${region.id}-coverage.md`)
 }
 
