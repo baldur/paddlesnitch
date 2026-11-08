@@ -189,7 +189,7 @@ test('a plan link opens the whole Devizes to Westminster route', async ({ page }
   await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
   const summary = page.getByTestId('plan-summary')
   await expect(summary).toContainText(DW_KM, { timeout: 15_000 })
-  await expect(summary).toContainText('77')
+  await expect(summary).toContainText('78')  // 77 locks, less Ufton (paddled through), plus two low bridges
   await expect(page.getByTestId('stop-list')).toContainText('Teddington Lock')
   const oneWay = await kmIn(summary)
   await page.getByRole('button', { name: 'Return' }).click()

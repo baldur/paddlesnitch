@@ -1,5 +1,40 @@
 [
  {
+  "id": "survey-2026-11-08-blakes-river-kennet",
+  "name": "paddlesnitch survey",
+  "featureId": "ea-lock:blakes-river-kennet",
+  "at": [
+   51.456114,
+   -0.954551
+  ],
+  "notes": "Get out: timber staging by the yellow buoys. Back in: beside the concrete wall on the far side. Carry: over the strip of land. Seen 8 Nov 2026.",
+  "landings": [
+   [
+    51.455879,
+    -0.955587
+   ],
+   [
+    51.455771,
+    -0.955479
+   ]
+  ],
+  "licence": "CC0-1.0",
+  "observed": {
+   "at": "2026-11-08T10:53:18.000Z",
+   "gauge": {
+    "source": "ea",
+    "id": "2298TH",
+    "name": "Blakes Lock",
+    "river": "River Kennet",
+    "valueM": 0.059,
+    "readAt": "2026-11-08T11:00:00Z",
+    "state": "normal"
+   }
+  },
+  "createdAt": "2026-11-08T10:53:18.000Z",
+  "updatedAt": "2026-11-08T10:53:18.000Z"
+ },
+ {
   "id": "survey-2026-11-08-KA-001-010",
   "name": "paddlesnitch survey",
   "featureId": "crt:locks:KA-001-010",
@@ -42,7 +77,7 @@
    51.434444,
    -0.986242
   ],
-  "notes": "Get out: timber-capped piling with a rail. Back in: bank under willows below the brick arch. Carry: sandy gravel path, then steps. Seen 8 Nov 2026.",
+  "notes": "Get out: timber-capped piling with a rail. Back in: bank under willows below the brick arch. Carry: sandy gravel path, then steps. Tricky: bring someone to help. There is parking. Seen 8 Nov 2026.",
   "landings": [
    [
     51.434496,
@@ -356,5 +391,77 @@
   },
   "createdAt": "2026-11-08T09:00:55.100Z",
   "updatedAt": "2026-11-08T09:00:55.100Z"
+ },
+ {
+  "id": "survey-2026-11-08-low-bridge-padworth",
+  "name": "paddlesnitch survey",
+  "featureId": "survey:low-bridge-padworth",
+  "at": [
+   51.40262,
+   -1.12611
+  ],
+  "notes": "Get out: timber-capped quay. Back in: timber-capped quay. Carry: round the low bridge, which is too low to paddle under. Seen 8 Nov 2026.",
+  "landings": [
+   [
+    51.402432,
+    -1.126259
+   ],
+   [
+    51.402792,
+    -1.125903
+   ]
+  ],
+  "licence": "CC0-1.0",
+  "observed": {
+   "at": "2026-11-08T09:04:21.000Z",
+   "gauge": {
+    "source": "ea",
+    "id": "2292BTH",
+    "name": "Reading Calcot Bridge",
+    "river": "River Kennet",
+    "valueM": 1.892,
+    "readAt": "2026-11-08T09:00:00Z",
+    "flowM3s": 3.386,
+    "state": "low"
+   }
+  },
+  "createdAt": "2026-11-08T09:04:21.000Z",
+  "updatedAt": "2026-11-08T09:04:21.000Z"
+ },
+ {
+  "id": "survey-2026-11-08-low-bridge-sulhamstead",
+  "name": "paddlesnitch survey",
+  "featureId": "survey:low-bridge-sulhamstead",
+  "at": [
+   51.42318,
+   -1.08944
+  ],
+  "notes": "Get out: low bank by the blue sign. Back in: high concrete quay. Carry: round the low bridge, which is too low to paddle under. Seen 8 Nov 2026.",
+  "landings": [
+   [
+    51.42307,
+    -1.089732
+   ],
+   [
+    51.423255,
+    -1.089138
+   ]
+  ],
+  "licence": "CC0-1.0",
+  "observed": {
+   "at": "2026-11-08T09:29:19.000Z",
+   "gauge": {
+    "source": "ea",
+    "id": "2292BTH",
+    "name": "Reading Calcot Bridge",
+    "river": "River Kennet",
+    "valueM": 1.89,
+    "readAt": "2026-11-08T09:30:00Z",
+    "flowM3s": 3.346,
+    "state": "low"
+   }
+  },
+  "createdAt": "2026-11-08T09:29:19.000Z",
+  "updatedAt": "2026-11-08T09:29:19.000Z"
  }
 ]

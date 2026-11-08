@@ -8,7 +8,7 @@ import { sideOf } from '@paddlesnitch/waterways/along'
 import { cumulative, project } from '@paddlesnitch/waterways/line'
 import { routePlan } from '@paddlesnitch/waterways/plan'
 import { portageOnRoute, type PublicPortage } from '@paddlesnitch/waterways/portage'
-import { BANK_MIN_M, gaugeNote, levelNote, mergeSurvey, onBank, readingAt, surveyEntry, surveyGauge, surveyPortages, SURVEY_NAME, uncheckedDrafts, withSurveyEntries, type SurveyDraft } from '@paddlesnitch/waterways/portage-survey'
+import { BANK_MIN_M, withSurveyFeatures, gaugeNote, levelNote, mergeSurvey, onBank, readingAt, surveyEntry, surveyGauge, surveyPortages, SURVEY_NAME, uncheckedDrafts, withSurveyEntries, type SurveyDraft } from '@paddlesnitch/waterways/portage-survey'
 import { GAUGE_STATE_TEXT } from './plan-ui'
 import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
 
@@ -100,6 +100,28 @@ describe('surveys beside paddlers\' contributions', () => {
   })
 })
 
+describe('what a survey changes about the stops', () => {
+  const lock = { id: 'crt:locks:KA-014-004', kind: 'lock', name: 'Lock 98, Ufton Lock', at: [51.413353, -1.113277] } as never
+  const [ufton] = withSurveyFeatures([lock])
+
+  it('a lock you paddle through keeps its stop, says so, and isn\'t a portage', () => {
+    expect(ufton).toMatchObject({ kind: 'lock', noCarry: true, name: expect.stringContaining('no carry unless the river is very high') })
+  })
+  it('adds the low bridges nobody lists, as portages', () => {
+    const added = withSurveyFeatures([]).filter(f => f.kind === 'portage')
+    expect(added.map(f => f.name)).toEqual(['Low bridge near Padworth', 'Low bridge near Sulhamstead'])
+  })
+  it('on the route: Ufton isn\'t counted, and the two bridges are', () => {
+    const ds = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data/dw.json'), 'utf8')) as RegionDataset
+    const r = routePlan({ ...ds, features: withSurveyFeatures(ds.features) }, { start: [51.3999, -1.1357], finish: [51.4647, -0.9847], shape: 'one_way' })
+    if (typeof r === 'string') throw new Error(r)
+    const portages = r.stops.filter(s => s.portage).map(s => s.feature.name)
+    expect(r.stops.find(s => s.feature.id === 'crt:locks:KA-014-004')?.portage).toBe(false)
+    expect(portages).toContain('Low bridge near Padworth')
+    expect(portages).toContain('Low bridge near Sulhamstead')
+  })
+})
+
 describe('what may be published', () => {
   it('nothing a person has not finished checking', () => {
     expect(uncheckedDrafts([draft])).toEqual([])
@@ -125,7 +147,7 @@ describe('the committed surveys', () => {
   })
 
   it('each belongs to a lock on the DW route, with landings beside it', () => {
-    const locks = new Map(ds.features.filter(f => f.kind === 'lock').map(f => [f.id, f]))
+    const locks = new Map(withSurveyFeatures(ds.features).filter(f => f.kind === 'lock' || f.kind === 'portage').map(f => [f.id, f]))
     for (const p of surveyPortages) {
       const lock = locks.get(p.featureId!)!
       expect(lock, p.id).toBeTruthy()
@@ -139,13 +161,15 @@ describe('the committed surveys', () => {
     ['KA-010-001', 'right', 'right'], ['KA-009-002', 'right', 'right'], ['KA-007-003', 'left', 'left'], ['KA-005-004', 'right', 'right'],
     ['KA-004-002', 'right', 'left'], // Fobney: out beside the lock, back in on the far bank of the weir stream
     ['KA-001-010', 'right', 'right'],
+    ['blakes-river-kennet', 'left', 'right'], // over the strip of land: staging one side, wall the other
+    ['low-bridge-padworth', 'right', 'right'], ['low-bridge-sulhamstead', 'right', 'right'],
   ])('%s: Plan puts the take-out on the %s and the put-in on the %s, going downstream', (id, out, back) => {
     const r = routePlan(ds, { start: [51.3999, -1.1357], finish: [51.4647, -0.9847], shape: 'one_way' })
     if (typeof r === 'string') throw new Error(r)
-    const onRoute = portageOnRoute(r.line, surveyPortages.find(p => p.featureId === `crt:locks:${id}`)!)
+    const onRoute = portageOnRoute(r.line, surveyPortages.find(p => p.featureId!.endsWith(id))!)
     expect([onRoute.takeOut.bank, onRoute.putIn.bank]).toEqual([out, back])
     // Coming the other way, the same two landings swap roles and banks.
-    const upstream = portageOnRoute([...r.line].reverse(), surveyPortages.find(p => p.featureId === `crt:locks:${id}`)!)
+    const upstream = portageOnRoute([...r.line].reverse(), surveyPortages.find(p => p.featureId!.endsWith(id))!)
     const flip = (b: string) => (b === 'left' ? 'right' : 'left')
     expect([upstream.takeOut.bank, upstream.putIn.bank]).toEqual([flip(back), flip(out)])
   })

@@ -5,6 +5,7 @@
 //   pnpm --filter web waterways:survey <track.json | .fit | .gpx | .tcx>
 //       → .cache/waterways/survey/<date>/draft.json, plus a contact sheet per carry
 //         for GoPro MAX footage (--yaw 180 when the camera faces the stern, the default)
+//   --extra <file.json>: carries a person saw that aren't found on their own, [{ featureId, name, at, landings, t }]
 //   fill in sides, takeOut, putIn and carry from the sheets, or set skip: true
 //   pnpm --filter web waterways:survey --accept .cache/waterways/survey/<date>/draft.json
 //       → packages/waterways/data/portage-survey.json, then `waterways dw` for the scorecard
@@ -18,7 +19,7 @@ import { parseTrace } from '@paddlesnitch/timing/parse'
 import { eaGauges, gaugesAlong, stateOf, type Gauge } from '@paddlesnitch/waterways/live'
 import { cumulative, project, slice } from '@paddlesnitch/waterways/line'
 import { routePlan } from '@paddlesnitch/waterways/plan'
-import { portagesFromTrack, type TrackPoint } from '@paddlesnitch/waterways/portage-detect'
+import { portagesFromTrack, type PortageSuggestion, type TrackPoint } from '@paddlesnitch/waterways/portage-detect'
 import { readingAt, surveyEntry, uncheckedDrafts, withSurveyEntries, type SurveyDraft } from '@paddlesnitch/waterways/portage-survey'
 import type { PortageObserved, PublicPortage } from '@paddlesnitch/waterways/portage'
 import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
@@ -121,7 +122,8 @@ async function main() {
 
   const { points, gopro } = await readTrack(file)
   const ds = JSON.parse(fs.readFileSync(path.join(DATA, 'dw.json'), 'utf8')) as RegionDataset
-  const carries = portagesFromTrack(points, ds.features.filter(f => f.kind === 'lock'))
+  const extras = args.includes('--extra') ? JSON.parse(fs.readFileSync(path.resolve(base, args[args.indexOf('--extra') + 1]), 'utf8')) as PortageSuggestion[] : []
+  const carries = [...portagesFromTrack(points, ds.features.filter(f => f.kind === 'lock' && !extras.some(e => e.featureId === f.id))), ...extras.map(e => ({ ...e, minutes: e.minutes ?? 1 }))]
   const first = points[0], last = points[points.length - 1]
   const route = routePlan(ds, { start: [first.lat, first.lng], finish: [last.lat, last.lng], shape: 'one_way' })
   if (typeof route === 'string') throw new Error(`Couldn't route the paddle: ${route}`)

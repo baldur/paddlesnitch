@@ -4,9 +4,10 @@
 // level it was seen. Written by scripts/waterways/survey.ts; pure.
 import { fmtDay } from '@paddlesnitch/core/format'
 import data from '../data/portage-survey.json'
+import featureData from '../data/survey-features.json'
 import { sideOf } from './along'
 import { cumulative, project } from './line'
-import type { LatLng } from './types'
+import type { Feature, LatLng } from './types'
 import type { PortageObserved, PublicPortage } from './portage'
 
 type SurveyRecord = PublicPortage & { observed?: PortageObserved }
@@ -18,6 +19,15 @@ const records = data as unknown as SurveyRecord[]
 export const surveyPortages: PublicPortage[] = records.map(({ observed, ...p }) => ({ ...p, ...(observed ? { observed: { at: observed.at } } : {}) }))
 
 export const surveyGauge = (id: string): PortageObserved['gauge'] => records.find(p => p.id === id)?.observed?.gauge
+
+const surveyedFeatures = featureData as unknown as { added: Feature[]; noCarry: { featureId: string; name: string }[] }
+
+/** What a survey changes about the stops themselves: portages that aren't at a
+ *  lock (low bridges nobody lists), and locks with nothing to carry round. */
+export function withSurveyFeatures(features: Feature[]): Feature[] {
+  const clear = new Map(surveyedFeatures.noCarry.map(n => [n.featureId, n.name]))
+  return [...features.map(f => (clear.has(f.id) ? { ...f, name: clear.get(f.id), noCarry: true as const } : f)), ...surveyedFeatures.added]
+}
 
 /** Who a survey is credited to on Plan. Never a person's name: the file is public. */
 export const SURVEY_NAME = 'paddlesnitch survey'

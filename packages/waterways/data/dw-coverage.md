@@ -17,10 +17,10 @@ Locks and portages aren't the same count. Portages that aren't locks (the race's
 
 | Fact | Locks with it |
 |---|---|
-| Portage side | 10 / 77 (13%) |
-| Take-out | 10 / 77 (13%) |
-| Put-in | 10 / 77 (13%) |
-| Carry route | 11 / 77 (14%) |
+| Portage side | 11 / 77 (14%) |
+| Take-out | 11 / 77 (14%) |
+| Put-in | 11 / 77 (14%) |
+| Carry route | 12 / 77 (16%) |
 | Crew access | 61 / 77 (79%) |
 | Parking | 48 / 77 (62%) |
 | Facilities | 29 / 77 (38%) |
@@ -85,7 +85,7 @@ Locks and portages aren't the same count. Portages that aren't locks (the race's
 | 80.9 | Lock 104, Southcote Lock | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | crt, contribution |
 | 82.2 | Lock 105, Fobney Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
 | 84.9 | Lock 106, County Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
-| 86.4 | Blakes Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
+| 86.4 | Blakes Lock | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ea-thames-locks, contribution, osm |
 | 89.9 | Sonning Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
 | 94.5 | Shiplake Lock | — | — | — | — | ✓ | ✓ | ✓ | ea-thames-locks, ea-thames-site-guides |
 | 98.7 | Marsh Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
