@@ -42,6 +42,8 @@ Everything else checks deeper (a private resource answers 404, not 403).
 /profile/[id-or-handle]      P  public profile (opt-in; 404 if private). Owner sees
                                 EDIT PROFILE → /account#profile
 /profile/me                  A  → your own profile
+/plan/portage/[id]           P  one portage: landings both ways, satellite map and drawing,
+                                what else we know, today's river level
 /l/[code]                    P  tracker QR target → /devices?code=…#add
                                 (/L/[code], uppercase, is rewritten to it in the proxy)
 ```

@@ -30,7 +30,7 @@ export const KEEP = new Set([
 ])
 
 const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
-const PLAN_STATIC = new Set(['data', 'gaps', 'print', 'shared', 'sources'])
+const PLAN_STATIC = new Set(['data', 'gaps', 'portage', 'print', 'shared', 'sources'])
 /** packages/ui/src/metrics-events.ts publicPath, for lines logged before the
  *  route applied it to every path. Keep the two in step (the test compares). */
 export function cleanPath(path) {
@@ -45,7 +45,7 @@ export function cleanPath(path) {
   else if (a === 'profile' && b === 'me' && p[3] === 'devices') from(4)
   else if (a === 'profile' && b && b !== 'me') p[2] = '[id]'
   else if (a === 'devices' || a === 'buddies') from(2)
-  else if (a === 'plan' && b === 'shared') from(3)
+  else if (a === 'plan' && (b === 'shared' || b === 'portage')) from(3)
   else if (a === 'plan' && b && !PLAN_STATIC.has(b)) p[2] = '[id]'
   else if (a === 'att' && (b === 'entries' || b === 'groups')) from(3)
   else if ((a === 'l' || a === 'L') && b) p[2] = '[code]'
