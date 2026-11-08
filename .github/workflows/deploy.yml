@@ -122,3 +122,17 @@ jobs:
           asset=$(curl -s --max-time 20 "$BASE/" | grep -oE '/_next/static/[^"]+\.js' | head -1)
           [ -n "$asset" ] && check "$asset" 200
 
+      # Only CloudFront may call the server (#908): a request straight to the
+      # server's function URL must get 403. Catches the check being off (an
+      # SSM /att/origin-verify of "," turns it off) or not running. A bad first
+      # value refuses CloudFront too, and the smoke test above fails on that.
+      # The URL is masked: this log is public.
+      - name: Only CloudFront reaches the server
+        run: |
+          set -euo pipefail
+          fn=$(aws lambda list-functions --query "Functions[?starts_with(FunctionName, 'AttStack-ServerFn')].FunctionName | [0]" --output text)
+          url=$(aws lambda get-function-url-config --function-name "$fn" --query FunctionUrl --output text)
+          echo "::add-mask::$url"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${url}att")
+          echo "direct call to the server -> $code"
+          [ "$code" = 403 ]

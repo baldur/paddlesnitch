@@ -48,11 +48,12 @@ export function refuseDirectRequest(req: { headers: Headers; method: string }, e
   const verdict = originVerdict(req.headers.get(ORIGIN_VERIFY_HEADER), env.ORIGIN_VERIFY_SECRETS)
   const enforce = env.ORIGIN_VERIFY_MODE === 'enforce'
   if (verdict === 'off') {
-    // Asked to enforce with nothing to check against: say so (once per
-    // instance) rather than go quietly open.
+    // Asked to enforce with nothing to check against: the deploy is broken
+    // (SSM /att/origin-verify empty or ","), so say so as an error (it emails
+    // the owner), once per instance, rather than go quietly open.
     if (enforce && !warnedOff) {
       warnedOff = true
-      console.warn(JSON.stringify({ msg: 'origin_verify_off', reason: 'enforce without ORIGIN_VERIFY_SECRETS' }))
+      console.error(JSON.stringify({ msg: 'origin_verify_off', reason: 'enforce without ORIGIN_VERIFY_SECRETS' }))
     }
     return false
   }
