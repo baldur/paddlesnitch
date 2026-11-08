@@ -26,7 +26,7 @@ import { getJson, putJson, listKeys, deleteObject } from '@/lib/storage'
 import { paddleForRecording } from '@paddlesnitch/analysis/tracker-paddle'
 import { recordingReport } from '@/lib/recording-report'
 import { eraseAccountAgain, type EraseAgainPayload } from '@/lib/account-erasure'
-import { portageCheckJob, portageFlaggedJob } from '@/lib/portage-check'
+import { portageCheckJob, portageFlaggedJob, strandedPortage } from '@/lib/portage-check'
 
 export const MAX_ATTEMPTS = 5
 /** A job announced by S3 is usually running already; the sweep leaves it this long. */
@@ -135,6 +135,11 @@ export async function sweepJobs(now = Date.now()): Promise<Record<RunOutcome, nu
     counts[outcome]++
     if (outcome !== 'not_due' && outcome !== 'busy' && outcome !== 'gone') ran++
     if (alone && ran > 0) break
+  }
+  // A portage note whose job was lost or gave up. One a sweep is plenty; a failure just waits for the next.
+  if (Date.now() - started < SWEEP_BUDGET_MS) {
+    const stranded = await strandedPortage(now).catch(() => null)
+    if (stranded) await portageCheckJob({ id: stranded }, undefined, undefined, now).catch(err => console.warn('[portage-check] sweep: still no result', err))
   }
   return counts
 }

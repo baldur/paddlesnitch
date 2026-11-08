@@ -589,7 +589,8 @@ function AddPortage({ stop, landings, signedIn, here, onCancel, onSaved }: {
         <button type="button" className={buttonClass('quiet', 'sm')} onClick={onCancel}>Cancel</button>
       </div>
       {add.error && <p className="text-sm text-red">{
-        add.error.message === 'landings_apart' ? 'Those two landings are too far apart (or the same spot). Click again.'
+        add.error.message === 'too_many_notes' ? 'You’ve added a lot of notes today. Please try again tomorrow.'
+          : add.error.message === 'landings_apart' ? 'Those two landings are too far apart (or the same spot). Click again.'
           : add.error.message === 'landings_far' ? `Both landings must be near ${name}.`
           : 'Couldn’t save. Please try again.'}</p>}
     </section>

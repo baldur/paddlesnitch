@@ -62,7 +62,7 @@ describe('adding portage details', () => {
     await expect(addLive(ann, { ...PORTAGE, landings: [[51.5345, -0.8855], [51.5349, -0.8855]] })).rejects.toMatchObject({ message: 'landings_far' })
   })
 
-  it("is live at once on everyone's route, with the contributor's name and no user id", async () => {
+  it("once checked, is on everyone's route, with the contributor's name and no user id", async () => {
     const ann = await makeUser('Ann Paddler')
     const saved = await addLive(ann, PORTAGE)
     expect(saved).toMatchObject({ licence: 'CC0-1.0', name: 'Ann Paddler' })
