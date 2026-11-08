@@ -8,6 +8,7 @@ public struct Uploaded: Codable, Hashable, Sendable {
     public var bytes: Int?
     public var distanceMetres: Double?
     public var endedAt: Date?
+    public var gnssRows: Int?
     public var have: Int?
     public var motionRows: Int?
     public var part: Int?
@@ -20,6 +21,7 @@ public struct Uploaded: Codable, Hashable, Sendable {
         bytes: Int? = nil,
         distanceMetres: Double? = nil,
         endedAt: Date? = nil,
+        gnssRows: Int? = nil,
         have: Int? = nil,
         motionRows: Int? = nil,
         part: Int? = nil,
@@ -31,6 +33,7 @@ public struct Uploaded: Codable, Hashable, Sendable {
         self.bytes = bytes
         self.distanceMetres = distanceMetres
         self.endedAt = endedAt
+        self.gnssRows = gnssRows
         self.have = have
         self.motionRows = motionRows
         self.part = part
