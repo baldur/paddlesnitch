@@ -15,12 +15,13 @@ import { DELETE as deleteAccount } from '@/app/api/account/route'
 import { GET as mapData } from '@/app/plan/data/[version]/[name]/route'
 import { GET as v1Plan } from '@/app/api/v1/plan/route'
 import { handleMcp } from '@/lib/mcp'
-import { getJson, listKeys } from '@/lib/storage'
+import { deleteObject, getJson, listKeys, putJson } from '@/lib/storage'
+import { surveyPortages } from '@paddlesnitch/waterways/portage-survey'
 import {
-  addPendingPortage, clearPortageCache, deletePortage, getPendingPortage, holdPortage, listMyPortages, listPendingPortages,
-  listPublicPortages, publishPortage, reviewPortage,
+  addPendingPortage, clearPortageCache, deletePortage, finishReview, flagPortage, getPendingPortage, getReview, getReviewedPortage, holdPortage,
+  listMyPortages, listPendingPortages, listPublicPortages, publishPortage, recordReview, reviewPortage, setReviewRefOnHidden,
 } from '@paddlesnitch/waterways/portage-store'
-import { buildHeldNoteIssue, safeForIssue } from '@paddlesnitch/waterways/portage-moderation'
+import { buildHeldNoteIssue } from '@paddlesnitch/waterways/portage-moderation'
 import type { PortageContribution, PortageVerdict } from '@paddlesnitch/waterways/portage'
 
 const NOTE = 'SECRETNOTE zzqx'
@@ -134,94 +135,185 @@ describe('the check\'s outcomes', () => {
   })
   it('a status on a public copy is dropped: nothing waiting may be public', async () => {
     const c = await add(await makeUser('Ann'))
-    const { putJson } = await import('@/lib/storage')
     await putJson(`portages/public/${c.id}.json`, c)
     clearPortageCache()
     expect((await listPublicPortages()).map(p => p.id)).not.toContain(c.id)
   })
   it('lists what\'s waiting, oldest first', async () => {
-    const a = await add(await makeUser('Ann'))
-    const b = await add(await makeUser('Bo'))
-    expect((await listPendingPortages()).map(p => p.id).sort()).toEqual([a.id, b.id].sort())
+    const newer = await add(await makeUser('Ann'))
+    const older = await add(await makeUser('Bo'))
+    await putJson(`portages/pending/${older.id}.json`, { ...older, createdAt: '2020-01-01T00:00:00.000Z' })
+    expect((await listPendingPortages()).map(p => p.id)).toEqual([older.id, newer.id])
+  })
+  it('a stale job run can\'t publish a held note', async () => {
+    const c = await add(await makeUser('Ann'))
+    await holdPortage(c.id, VERDICT)
+    expect(await publishPortage(c.id)).toBe(false)
+    expect(await listKeys('portages/public/')).toEqual([])
+  })
+  it('a stale job run can\'t bring back a note deleted while it ran', async () => {
+    const me = await makeUser('Me')
+    const c = await add(me)
+    await deleteObject(`users/${me.id}/portages/${c.id}.json`)
+    expect(await publishPortage(c.id)).toBe(false)
+    expect(await listKeys('portages/public/')).toEqual([])
+    expect(await listKeys(`users/${me.id}/portages/`)).toEqual([])
+  })
+})
+
+async function heldWithIssue(u: TestUser, issue = 7) {
+  const c = await add(u)
+  const held = (await holdPortage(c.id, VERDICT))!
+  await recordReview(held.reviewRef!, c.id, issue, 'rude')
+  return held
+}
+async function flagThreeTimes(id: string) {
+  for (const name of ['F1', 'F2', 'F3']) await flagPortage((await makeUser(name)).id, id)
+}
+
+describe('the review ref', () => {
+  it('is random, safe on a command line, and not derived from the id', async () => {
+    const held = await heldWithIssue(await makeUser('Ann'))
+    expect(held.reviewRef).toMatch(/^[0-9a-z]{20}$/)
+    expect(held.reviewRef).not.toContain(held.id)
+  })
+  it('a repeated hold keeps it, so a repeated job finds the issue it filed', async () => {
+    const held = await heldWithIssue(await makeUser('Ann'))
+    expect((await holdPortage(held.id, VERDICT))!.reviewRef).toBe(held.reviewRef)
+  })
+  it('never reaches the author\'s copy, the export or anything public', async () => {
+    const me = await makeUser('Me')
+    const held = await heldWithIssue(me)
+    const ref = held.reviewRef!
+    expect(JSON.stringify(await listMyPortages(me.id))).not.toContain(ref)
+    signInAs(me.idToken)
+    expect(await (await exportData(new Request('http://x'))).text()).not.toContain(ref)
+    await reviewPortage(ref, 'publish')   // on the public copy until finishReview
+    clearPortageCache()
+    for (const surface of [await dump(), await route(), await v1(), await mcp(), JSON.stringify(await listPublicPortages())]) expect(surface).not.toContain(ref)
+    expect(JSON.stringify(await listMyPortages(me.id))).not.toContain(ref)
+  })
+  it('on a note hidden by flags, stays off the public list and its author\'s copy', async () => {
+    const me = await makeUser('Me')
+    const c = await add(me)
+    await publishPortage(c.id)
+    await flagThreeTimes(c.id)
+    const { reviewRef } = (await setReviewRefOnHidden(c.id))!
+    clearPortageCache()
+    expect(JSON.stringify(await listPublicPortages())).not.toContain(reviewRef!)
+    expect(JSON.stringify(await listMyPortages(me.id))).not.toContain(reviewRef!)
+    expect((await setReviewRefOnHidden(c.id))!.reviewRef).toBe(reviewRef)
+  })
+  it('is only for a hidden note', async () => {
+    const c = await add(await makeUser('Ann'))
+    await publishPortage(c.id)
+    expect(await setReviewRefOnHidden(c.id)).toBeNull()
   })
 })
 
 describe('the owner\'s decision', () => {
   it('publish lets a held note through', async () => {
-    const c = await add(await makeUser('Ann'))
-    await holdPortage(c.id, VERDICT)
-    expect(await reviewPortage(c.id, 'publish')).toBe('published')
+    const held = await heldWithIssue(await makeUser('Ann'))
+    expect(await reviewPortage(held.reviewRef!, 'publish')).toEqual({ outcome: 'published', issue: 7 })
     clearPortageCache()
-    expect((await listPublicPortages()).map(p => p.id)).toContain(c.id)
+    expect((await listPublicPortages()).map(p => p.id)).toContain(held.id)
   })
   it('remove keeps it for its author, marked not published, and nowhere public', async () => {
     const me = await makeUser('Me')
-    const c = await add(me)
-    await holdPortage(c.id, VERDICT)
-    expect(await reviewPortage(c.id, 'remove')).toBe('removed')
+    const held = await heldWithIssue(me)
+    expect(await reviewPortage(held.reviewRef!, 'remove')).toEqual({ outcome: 'removed', issue: 7 })
     clearPortageCache()
     expect((await listMyPortages(me.id))[0]).toMatchObject({ status: 'not_published' })
     expect((await listMyPortages(me.id))[0]).not.toHaveProperty('verdict')
     expect(await listKeys('portages/pending/')).toEqual([])
     expect(await dump()).not.toContain(NOTE)
   })
-  it('a note hidden by flags can be restored or removed', async () => {
-    const c = await add(await makeUser('Ann'))
-    await publishPortage(c.id)
-    const pub = await getJson<PortageContribution>(`portages/public/${c.id}.json`)
-    const { putJson } = await import('@/lib/storage')
-    await putJson(`portages/public/${c.id}.json`, { ...pub, hidden: true })
-    expect(await reviewPortage(c.id, 'remove')).toBe('removed')
+  it('show reads the note a ref points at', async () => {
+    const held = await heldWithIssue(await makeUser('Ann'))
+    expect((await getReviewedPortage(held.reviewRef!))?.notes).toBe(NOTE)
+  })
+  it('a failed close can be re-run: the decision stands and the mark waits', async () => {
+    const held = await heldWithIssue(await makeUser('Ann'))
+    const ref = held.reviewRef!
+    await reviewPortage(ref, 'publish')
+    expect(await getReview(ref)).toMatchObject({ issue: 7, decided: 'published' })
+    expect(await reviewPortage(ref, 'remove')).toEqual({ outcome: 'published', issue: 7 })
+    await finishReview(ref)
+    expect(await getReview(ref)).toBeNull()
+    expect(await reviewPortage(ref, 'publish')).toBeNull()
+    expect(await getJson(`portages/public/${held.id}.json`)).not.toHaveProperty('reviewRef')
+  })
+  it('a note withdrawn while held closes its issue, and says so', async () => {
+    const me = await makeUser('Me')
+    const held = await heldWithIssue(me)
+    await deletePortage(me.id, held.id)
+    expect(await getReviewedPortage(held.reviewRef!)).toBeNull()
+    expect(await reviewPortage(held.reviewRef!, 'publish')).toEqual({ outcome: 'withdrawn', issue: 7 })
     expect(await listKeys('portages/public/')).toEqual([])
   })
-  it('there is nothing to decide on a public note nobody hid, or one already decided', async () => {
+  it('an unknown ref has nothing to decide', async () => {
+    expect(await reviewPortage('nosuchref', 'remove')).toBeNull()
+    expect(await reviewPortage('../../users/x', 'remove')).toBeNull()
+  })
+  it('held, published, three flags: a new ref for a new issue', async () => {
+    const held = await heldWithIssue(await makeUser('Ann'))
+    const first = held.reviewRef!
+    await reviewPortage(first, 'publish')
+    await finishReview(first)
+    await flagThreeTimes(held.id)
+    const again = (await setReviewRefOnHidden(held.id))!.reviewRef!
+    expect(again).not.toBe(first)
+  })
+  it('flagged, restored, three flags: a new ref for a new issue', async () => {
     const c = await add(await makeUser('Ann'))
     await publishPortage(c.id)
-    expect(await reviewPortage(c.id, 'remove')).toBeNull()
-    expect(await reviewPortage(c.id, 'publish')).toBeNull()
-    expect(await reviewPortage('no-such-note', 'remove')).toBeNull()
+    await flagThreeTimes(c.id)
+    const first = (await setReviewRefOnHidden(c.id))!.reviewRef!
+    await recordReview(first, c.id, 8, 'flagged')
+    expect(await reviewPortage(first, 'publish')).toEqual({ outcome: 'published', issue: 8 })
+    await finishReview(first)
+    clearPortageCache()
+    expect((await listPublicPortages()).find(p => p.id === c.id)).not.toHaveProperty('hidden', true)
+    expect(await listKeys(`portages/flags/${c.id}/`)).toEqual([])
+    await flagThreeTimes(c.id)
+    expect((await setReviewRefOnHidden(c.id))!.reviewRef).not.toBe(first)
+  })
+  it('a note hidden by flags can be removed', async () => {
+    const me = await makeUser('Me')
+    const c = await add(me)
+    await publishPortage(c.id)
+    await flagThreeTimes(c.id)
+    const { reviewRef } = (await setReviewRefOnHidden(c.id))!
+    await recordReview(reviewRef!, c.id, 9, 'flagged')
+    expect(await reviewPortage(reviewRef!, 'remove')).toEqual({ outcome: 'removed', issue: 9 })
+    expect(await listKeys('portages/public/')).toEqual([])
+    expect((await listMyPortages(me.id))[0]).toMatchObject({ status: 'not_published' })
+  })
+  it('a surveyed portage hidden by flags can be removed: it stays hidden', async () => {
+    const survey = surveyPortages[0]
+    await flagThreeTimes(survey.id)
+    const { reviewRef } = (await setReviewRefOnHidden(survey.id))!
+    await recordReview(reviewRef!, survey.id, 10, 'flagged')
+    expect(await reviewPortage(reviewRef!, 'remove')).toEqual({ outcome: 'removed', issue: 10 })
+    await finishReview(reviewRef!)
+    clearPortageCache()
+    expect((await listPublicPortages()).find(p => p.id === survey.id)?.hidden).toBe(true)
+    expect(await listKeys('users/')).toEqual(expect.not.arrayContaining([expect.stringContaining('portages')]))
   })
 })
 
 describe('the public issue for a held note', () => {
-  const full = {
-    id: 'abc123', userId: 'user-sub-999', name: 'Real Name', notes: 'the slur itself', at: MARSH, landings: FIELDS.landings, featureId: 'ea-lock:marsh',
-    licence: 'CC0-1.0', createdAt: '2026-11-08T09:16:20.000Z', updatedAt: '2026-11-08T09:16:20.000Z', status: 'held',
-  } as PortageContribution
+  const { title, body } = buildHeldNoteIssue('r3f', 'rude')
 
-  it('can\'t reach the note, the name or the user id, even handed the whole record', () => {
-    const { title, body } = buildHeldNoteIssue(full, { category: 'racist' }, 'Marsh Lock')
-    for (const secret of ['the slur itself', 'Real Name', 'user-sub-999']) expect(title + body).not.toContain(secret)
-  })
-  it('says where, the day and why, and how to read and decide', () => {
-    const { title, body } = buildHeldNoteIssue(full, { category: 'rude' }, 'Marsh Lock')
-    expect(title).toBe('Portage note held for review at Marsh Lock')
-    expect(body).toContain('2026-11-08')
-    expect(body).not.toContain('09:16')
+  it('has a plain title with nothing about the note', () => expect(title).toBe('A portage note needs review'))
+  it('gives the reason and the commands, by ref', () => {
     expect(body).toContain('may be rude')
-    expect(body).toContain('s3://paddlesnitch-data-prod/portages/pending/abc123.json')
-    expect(body).toContain('waterways:review abc123 remove')
+    for (const action of ['show', 'publish', 'remove']) expect(body).toContain(`waterways:review r3f ${action}`)
   })
-  it('points at the public copy for a note hidden by flags', () => {
-    expect(buildHeldNoteIssue(full, { category: 'flagged' }).body).toContain('portages/public/abc123.json')
+  it('has no lock, date, place, id or bucket, whatever the record held', () => {
+    expect(body).not.toMatch(/\d{4}-\d{2}-\d{2}|\d+\.\d{3}|lock|s3:\/\/|data-prod/i)
   })
-  it('category only unless the bleeped text passed the check itself', () => {
-    expect(buildHeldNoteIssue(full, { category: 'rude', bleeped: 'b***dy lock' }).body).toContain('not shown here')
-    expect(buildHeldNoteIssue(full, { category: 'rude', bleeped: 'b***dy lock', bleepedPassed: false }).body).not.toContain('b***dy')
-    expect(buildHeldNoteIssue(full, { category: 'rude', bleeped: 'b***dy lock', bleepedPassed: true }).body).toContain('b***dy lock')
+  it.each(['racist', 'sexist', 'offensive', 'rude', 'flagged', 'unchecked'] as const)('says why for %s', c => {
+    expect(buildHeldNoteIssue('r', c).body).toContain('**Why:**')
   })
-  it('falls back to category only when nothing is left after cleaning', () => {
-    expect(buildHeldNoteIssue(full, { category: 'rude', bleeped: 'https://x.example @them', bleepedPassed: true }).body).toContain('not shown here')
-  })
-  it.each([
-    ['a link', 'see https://evil.example/a now', 'evil.example'],
-    ['www', 'www.evil.example now', 'evil.example'],
-    ['a bare domain', 'visit evil.example/page', 'evil.example'],
-    ['a mention', 'hey @baldur look', '@baldur'],
-    ['an email', 'mail me@evil.example', 'evil.example'],
-    ['an issue reference', 'see #913 and org/repo#4', '#'],
-    ['html', '<img src=x onerror=y> hi', '<'],
-    ['a markdown link', '[click](x)', '['],
-  ])('strips %s', (_, text, gone) => expect(safeForIssue(text)).not.toContain(gone))
-  it('keeps ordinary words', () => expect(safeForIssue('steep  steps, take care')).toBe('steep steps, take care'))
 })
