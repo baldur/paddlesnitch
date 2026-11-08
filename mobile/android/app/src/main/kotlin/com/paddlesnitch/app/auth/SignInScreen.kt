@@ -3,7 +3,6 @@ package com.paddlesnitch.app.auth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -154,7 +153,7 @@ fun SignInScreen(
 
     fun openGoogle() {
         error = null
-        runCatching { CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(google.start())) }
+        runCatching { com.paddlesnitch.app.tabBuilder().build().launchUrl(context, Uri.parse(google.start())) }
             .onFailure { google.cancel(); error = "Couldn’t open Google sign-in. Turn on or install a web browser, then try again." }
     }
 
@@ -167,13 +166,13 @@ fun SignInScreen(
             // Terms change before an app update, the server's 422 says why.
             if (creating) runCatching { api.signUp(email.trim(), name.trim(), password, Constants.tosVersion) }
                 .onSuccess { confirming = "signup"; code = ""; codeStatus = null; startPause() }
-                .onFailure { error = it.message }
+                .onFailure { error = it.shown("Couldn’t create your account. Please try again.") }
             else runCatching { api.login(email.trim(), password) }
                 .onSuccess(onSignedIn)
                 .onFailure {
                     // The right password for an account whose code was never entered: a new code has gone out.
                     if (it is ApiFailure && it.needsCode) { confirming = "signin"; code = ""; codeStatus = it.message; startPause() }
-                    else error = it.message
+                    else error = it.shown("Couldn’t sign in. Please try again.")
                 }
             busy = false
         }
@@ -187,7 +186,7 @@ fun SignInScreen(
             runCatching { api.confirmSignUp(email.trim(), code, password, Constants.tosVersion.takeIf { confirming == "signup" }) }
                 .onSuccess(onSignedIn)
                 .onFailure {
-                    codeStatus = null; error = it.message ?: "Couldn’t confirm your email. Please try again."
+                    codeStatus = null; error = it.shown("Couldn’t confirm your email. Please try again.")
                     // Confirmed, but signing in failed: the Sign in form takes it from here.
                     if (it is ApiFailure && it.status == 500) { confirming = null; creating = false; focusField = passwordFocus }
                 }
@@ -208,7 +207,7 @@ fun SignInScreen(
                 .onFailure {
                     // Signing in answers needsCode when a new code went out; anything else (429: too many) is an error.
                     if (it is ApiFailure && it.needsCode) { code = ""; codeStatus = NEW_CODE_SENT; startPause(); focusCode++ }
-                    else error = it.message ?: "Couldn’t send a new code. Please try again."
+                    else error = it.shown("Couldn’t send a new code. Please try again.")
                 }
             resending = false
         }

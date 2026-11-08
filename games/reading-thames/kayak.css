@@ -357,6 +357,9 @@ body.capsized #view { filter: saturate(0.5) brightness(0.8) hue-rotate(-15deg); 
 #boardlist td:nth-child(3) { font-family: var(--mono); }
 #boardlist td:last-child { color: var(--dim); }
 #boardlist .you td { font-weight: 700; color: var(--ink); }
+#boardlist button, #ranked button { min-height: 44px; } /* Try again, a full tap target */
+#ranked { margin: 0; } /* in the finish's grid form, where margins don't collapse: the gap spaces it */
+#ranked:empty { display: none; }
 #menu fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 0.6rem; padding: 0.4rem 0.75rem 0.6rem; }
 #menu legend { color: var(--dim); font-size: 0.85rem; padding: 0 0.25rem; }
 #menu .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; }
@@ -539,7 +542,9 @@ summary { cursor: pointer; }
 }
 /* An upright phone: a guest's cards two by two, so the stack stays low, under the scene's pins. */
 @media (orientation: portrait) and (max-width: 600px) {
-  #clubCards .signin-box .card { flex: 1 1 40%; }
+  /* Two to a row in any font: a long name wraps rather than taking the row. */
+  #clubCards .signin-box .card { flex: 1 1 calc(50% - 0.25rem); min-width: 0; }
+  #clubCards .signin-box .card .name { white-space: normal; }
 }
 /* An upright phone with Back showing: the cards sit above Back and Start over. */
 @media (orientation: portrait) and (max-width: 600px) {
@@ -645,10 +650,18 @@ body.walking #pause { display: none; }
 }
 
 /* The finish on a phone: the standings in three short columns, and the buttons
-   always on screen (a signed-out race adds a line that pushed them below). */
+   always on screen, in a row, with the leaderboard line above them in the same
+   sticky form (Sign in, or a time that didn't save and its Try again). The form
+   reaches down over the dialog's padding, so nothing peeks out below it. */
 @media (max-height: 500px) {
   #standings { columns: 3; column-gap: 1rem; font-size: 0.8rem; margin: 0.4rem 0; }
-  #finished form { position: sticky; bottom: 0; background: inherit; padding-block: 0.4rem; }
+  #finished h2 { margin-bottom: 0.5rem; }
+  #details { font-size: 0.9rem; margin: 0 0 0.4rem; } /* clear of the sticky buttons on the SE */
+  #finished form { position: sticky; bottom: -1.5rem; background: inherit; border-top: 1px solid var(--line); padding-block: 0.4rem 1.9rem; margin-bottom: -1.5rem; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); } /* the buttons side by side; the line says the rest scrolls behind */
+  #finished form > button { padding-inline: 0.6em; text-align: center; }
+  #ranked { grid-column: 1 / -1; font-size: 0.85rem; }
+  #ranked:has(button) { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; } /* Try again beside its line, not below it */
+  #ranked button { flex: none; white-space: nowrap; }
 }
 
 /* The narrowest phones on their side (iPhone SE, 568 px): the maps smaller,

@@ -1,31 +1,31 @@
 {
-  "version": "20261025-76d9ad3a",
-  "builtAt": "2026-10-25T08:14:41.532Z",
+  "version": "20261108-63d444cc",
+  "builtAt": "2026-11-08T09:56:47.695Z",
   "counts": {
-    "links": 352914,
-    "km": 329072,
-    "features": 143310,
-    "osmLocks": 4307,
-    "osmAccess": 7475,
-    "osmFacilities": 20708,
-    "shareAlike": 3903,
-    "osm": 724591,
-    "osmPortages": 1570,
-    "places": 305192
+    "links": 353670,
+    "km": 329444,
+    "features": 143492,
+    "osmLocks": 4304,
+    "osmAccess": 7482,
+    "osmFacilities": 20723,
+    "shareAlike": 3965,
+    "osm": 727777,
+    "osmPortages": 1567,
+    "places": 305301
   },
   "sources": {
-    "amber-eu": 69669,
-    "amber": 12280,
+    "amber-eu": 69823,
+    "amber": 12279,
     "crt": 11638,
     "ea-aims": 2177,
     "ea-thames": 45,
-    "ea-umap": 195,
-    "ifi": 2064,
-    "nl-waterboards": 50172,
-    "roe": 43524,
-    "rws-fis": 864,
+    "ea-umap": 194,
+    "ifi": 2069,
+    "nl-waterboards": 51874,
+    "roe": 43544,
+    "rws-fis": 865,
     "scottish-canals": 212,
-    "sepa": 2162,
-    "waterways-ireland": 681
+    "sepa": 2164,
+    "waterways-ireland": 684
   }
 }

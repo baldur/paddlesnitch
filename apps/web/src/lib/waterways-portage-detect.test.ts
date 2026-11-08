@@ -44,4 +44,67 @@ describe('portages from your own paddles', () => {
     const [s] = portagesFromTrack(track([[1440, 0, 2.5], [60, 15, 0.9], [20, 15, 2.2], [60, 15, 0.9], [1500, 0, 2.5]]), [lock])
     expect(s.carryM).toBeGreaterThan(120)
   })
+
+  // Measured on the Kennet, 8 Nov 2026: a carry done at a jog, a stop either side of the lock.
+  it('a carry walked slowly keeps its take-out before the lock, not at it', () => {
+    const [s] = portagesFromTrack(track([[1440, 0, 2.5], [130, 15, 0.7], [1500, 0, 2.5]]), [lock])
+    expect(s.landings[0][1]).toBeLessThan(-40 * M)
+    expect(s.carryM).toBeGreaterThan(110)
+  })
+
+  describe('a carry that is run, not walked', () => {
+    const STOP: [number, number, number] = [2, 15, 0.1]            // 20 s at the bank
+    const IN: [number, number, number] = [1440, 0, 2.8], OUT: [number, number, number] = [1500, 0, 2.8]
+    const carry = track([IN, STOP, [120, 15, 2.4], STOP, OUT])
+
+    it('finds it: stopped, past the lock at 2.4 m/s, stopped', () => {
+      const [s] = portagesFromTrack(carry, [lock])
+      expect(s.featureId).toBe('ea-lock:test')
+      expect(s.carryM).toBeGreaterThan(100)
+    })
+
+    it('takes the last stop before paddling again as the put-in, when the carry paused after the lock', () => {
+      const pts = track([IN, STOP, [90, 15, 2.4], [2, 15, 0.2], [60, 15, 2.2], STOP, OUT])
+      expect(portagesFromTrack(pts, [lock])[0].landings[1][1]).toBeGreaterThan(pts.filter(p => p.speed === 0.2).at(-1)!.lng)
+    })
+
+    it('a brief slowing well before the lock is not the take-out', () => {
+      const pts = track([[1400, 0, 2.8], [1, 0, 0.3], [30, 0, 2.8], STOP, [120, 15, 2.4], STOP, OUT])
+      const stopAt = pts.filter(p => p.lat > 51.5 && p.speed === 0.1)[0]
+      expect(portagesFromTrack(pts, [lock])[0].landings[0][1]).toBeCloseTo(stopAt.lng, 3)
+    })
+
+    it('a slow paddler\'s put-in is the end of the carry, not their next rest', () => {
+      const pts = track([[1440, 0, 1.5], STOP, [120, 15, 2.4], STOP, [120, 0, 1.5], STOP, [1400, 0, 1.5]])
+      expect(portagesFromTrack(pts, [lock])[0].carryM).toBeLessThan(160)
+    })
+
+    it('one bad speed reading in a dense track isn\'t a stop', () => {
+      const dense: TrackPoint[] = Array.from({ length: 1200 }, (_, i) => ({ t: i, lat: 51.5 + 15 / 111_000, lng: (i - 600) * 2.8 * M, speed: i === 570 || i === 640 ? 0.1 : 2.8 }))
+      expect(portagesFromTrack(dense, [lock])).toEqual([])
+    })
+
+    it('still finds it at the spacing of a saved paddle, a point every 10 s', () => {
+      expect(portagesFromTrack(carry.filter((_, i) => i % 2 === 0), [lock])).toHaveLength(1)
+    })
+
+    it('one stopped point counts at that spacing, where a short stop is all there is', () => {
+      const pts = track([IN, [0.5, 15, 0.1], [120, 15, 2.4], STOP, OUT]).filter((_, i, all) => i % 2 === 0 || all[i].speed === 0.1)
+      expect(pts.filter(p => p.speed === 0.1).length).toBeGreaterThan(1)
+      expect(portagesFromTrack(pts, [lock])).toHaveLength(1)
+    })
+
+    it('is not a carry when you paddle straight through (Ufton has no gates)', () => {
+      expect(portagesFromTrack(track([[3000, 0, 2.8]]), [lock])).toEqual([])
+    })
+
+    it('is not a carry when you stop on one side and paddle on past the lock', () => {
+      expect(portagesFromTrack(track([IN, STOP, [120, 15, 2.8], OUT]), [lock])).toEqual([])
+    })
+
+    it('says when you got out', () => {
+      const [s] = portagesFromTrack(carry, [lock])
+      expect(carry.find(p => p.t === s.t)?.speed).toBe(0.1)
+    })
+  })
 })

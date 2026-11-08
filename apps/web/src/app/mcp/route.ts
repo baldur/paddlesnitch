@@ -5,6 +5,7 @@
 // Hand-rolled (four methods) rather than a dependency; see src/lib/mcp.ts.
 import { NextRequest } from 'next/server'
 import { handleMcp, MCP_CORS } from '@/lib/mcp'
+import { canonicalBaseUrl } from '@paddlesnitch/core/url'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   try { msg = await req.json() } catch {
     return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400, headers: MCP_CORS })
   }
-  const reply = await handleMcp(msg, req.nextUrl.origin)
+  const reply = await handleMcp(msg, canonicalBaseUrl(req))
   // A notification (no id) gets no body.
   return reply ? Response.json(reply, { headers: MCP_CORS }) : new Response(null, { status: 202, headers: MCP_CORS })
 }

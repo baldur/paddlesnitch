@@ -52,6 +52,20 @@ function sessionId(): string {
   }
 }
 
+/** True once per tab: the first time it's asked (the tab's first page view).
+ *  Marked in sessionStorage beside the tab id, so it ends with the tab. If
+ *  storage is blocked, false: better no visit record than one per page. */
+export function isFirstPageview(): boolean {
+  try {
+    const KEY = 'tt_landed'
+    if (sessionStorage.getItem(KEY)) return false
+    sessionStorage.setItem(KEY, '1')
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Queue an event. No-op when disabled or when the name isn't allowlisted.
 export function capture(event: string, props?: Record<string, string>): void {
   if (!_config.enabled) return

@@ -51,7 +51,34 @@ describe('eventFromLine', () => {
     const { GAME_EVENT_PROPS } = await import('@paddlesnitch/ui/metrics-events')
     const { KEEP } = await import('../../../../infra/lambdas/analytics-archive/index.mjs')
     for (const rules of Object.values(GAME_EVENT_PROPS)) for (const k of Object.keys(rules)) expect(KEEP.has(k), k).toBe(true)
-    for (const k of ['campaign', 'repeat', 'sid', 'path', 'platform', 'appVersion', 'build', 'type', 'signature', 'frames', 'crashedVersion', 'crashedBuild', 'os']) expect(KEEP.has(k), k).toBe(true)
+    for (const k of ['campaign', 'repeat', 'sid', 'path', 'platform', 'appVersion', 'build', 'type', 'signature', 'frames', 'crashedVersion', 'crashedBuild', 'os', 'country', 'nation']) expect(KEEP.has(k), k).toBe(true)
+    // Never a visit's city or source: visits are only counted (visit-counts.test.ts).
+    const { VISIT_SOURCE_PROPS } = await import('@paddlesnitch/ui/metrics-events')
+    for (const k of ['city', ...VISIT_SOURCE_PROPS]) expect(KEEP.has(k), k).toBe(false)
+  })
+
+  // Where visitors come from (#906), second line of defence.
+  it('keeps no visit record at all: visits are only counted, once a day (visit-counts)', () => {
+    expect(eventFromLine(line(buildEmf('visit', { country: 'GB', city: 'Reading', ref: 'google.com', utm_source: 'newsletter' }, 1793469612345)))).toBeNull()
+  })
+
+  it('strips a city and source from any other event, so they are never kept with a sid', () => {
+    const e = eventFromLine(line(buildEmf('pageview', { sid: 'tab1', path: '/att', city: 'Reading', country: 'GB', nation: 'ENG', ref: 'google.com', utm_source: 'x' }, 1)))
+    expect(e).toEqual({ Event: 'pageview', sid: 'tab1', path: '/att', country: 'GB', nation: 'ENG', ts: 0 })
+  })
+
+  it('keeps a nation only as one of the four UK nations, and never a finer region', () => {
+    const e = eventFromLine(line(buildEmf('pageview', { country: 'GB', nation: 'WBK', region: 'WBK' }, 1)))
+    expect(e).toEqual({ Event: 'pageview', country: 'GB', ts: 0 })
+  })
+
+  it('keeps nothing finer than a country on a page view: no postcode, latitude, longitude, metro code, time zone or address', () => {
+    const e = eventFromLine(line(buildEmf('pageview', {
+      country: 'GB', postal: 'RG1 8AA', postcode: 'RG18AA', zip: '12345', latitude: '51.45', longitude: '-0.97', lat: '51.45', lng: '-0.97',
+      metro: '1', timezone: 'Europe/London', ip: '203.0.113.5', region: 'WBK',
+    }, 1)))
+    expect(e).toEqual({ Event: 'pageview', country: 'GB', ts: 0 })
+    expect(eventFromLine(line(buildEmf('pageview', { country: 'GBR' }, 1)))).toEqual({ Event: 'pageview', ts: 0 })
   })
 
   it('reads a bare JSON line too (no Lambda prefix)', () => {
@@ -97,6 +124,19 @@ describe('the Firehose transform', () => {
     expect(size).toBeLessThan(5.5 * 1024 * 1024)
     expect(out.records.some((r: { result: string }) => r.result === 'ProcessingFailed')).toBe(true)
     expect(out.records.map((r: { recordId: string }) => r.recordId)).toEqual(records.map(r => r.recordId))
+  })
+
+  // #906: a visit is logged straight after the page view that caused it, in
+  // the same request and so in the same batch. Filed together, its city would
+  // join to that page view's sid; so the archive drops it.
+  it('drops the visit from a batch of [pageview, visit], keeping the page view', async () => {
+    const out = await handler({ records: [record('a', { messageType: 'DATA_MESSAGE', logEvents: [
+      { id: '1', timestamp: 1, message: line(buildEmf('pageview', { sid: 'tab1', path: '/att', country: 'GB', nation: 'ENG' }, 1793469612345)) },
+      { id: '2', timestamp: 2, message: line(buildEmf('visit', { country: 'GB', city: 'Reading', ref: 'google.com' }, 1793469612345)) },
+    ] })] })
+    const lines = decode(out.records[0]).split('\n').filter(Boolean).map(l => JSON.parse(l))
+    expect(lines.map(l => l.Event)).toEqual(['pageview'])
+    expect(JSON.stringify(lines)).not.toMatch(/Reading|google/)
   })
 
   it('fails a record it cannot read, so Firehose keeps it in the errors folder rather than losing it', async () => {

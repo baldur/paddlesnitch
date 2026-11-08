@@ -125,11 +125,24 @@ function Panel({ title, caption, children }: { title: string; caption: string; c
 /* ---------------------------------------------------------------- charts --- */
 
 const H = 260, L = 44, R = 14, T = 14, B = 26
-// A chart with a legend keeps it in a band above the plot (legend text on
-// y 4–14), so the legend never covers the tallest bars or bands, which it did
+// A chart with a legend keeps it in a band above the plot (keys and words
+// centred on y 17, the middle of the band), so the legend never covers the tallest bars or bands, which it did
 // once the viewBox matched a phone's width.
 const TL = 34
 export const CHART_MARGIN = { L, R, T, B, TL }
+
+// The roll/pitch legend words, shared by both charts so they sit at the same x.
+// "pitch" ends at the right edge (drawn end-anchored at W - R, so it stays exact
+// if the font falls back); "roll" ends 8 px before pitch's 18 px line key and
+// its 6 px gap, as Android does (#894: they touched). Where "pitch" starts, for
+// the keys, is estimated: Plex Mono's characters are 0.6 em, 6.6 px at 11 px.
+const MONO_CH = 11 * 0.6
+function legendWordX(W: number) {
+  const pitch = W - R - 'pitch'.length * MONO_CH
+  return { roll: pitch - (18 + 6 + 8) - 'roll'.length * MONO_CH, pitch, pitchEnd: W - R }
+}
+// The legend's centre line, the middle of the band above the plot (as Android).
+const LEGEND_MID = TL / 2
 
 const axes = axisTicks
 
@@ -175,6 +188,7 @@ function EnvelopeChart({ report }: { report: AttitudeReport }) {
     `M ${env.map(b => `${x(b.t).toFixed(1)} ${y(hi(b)).toFixed(1)}`).join(' L ')} L ${[...env].reverse().map(b => `${x(b.t).toFixed(1)} ${y(lo(b)).toFixed(1)}`).join(' L ')} Z`
 
   const [startLabel, endLabel] = envelopeXLabels(t1 - t0)
+  const words = legendWordX(W)
   return (
     <div ref={ref}>
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img"
@@ -198,10 +212,10 @@ function EnvelopeChart({ report }: { report: AttitudeReport }) {
           0.28 was close to invisible on the surface. Outlined like the band
           edges, pitch dashed. */}
       <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
-        <rect data-legend data-series="roll" x={W - R - 108} y={4} width={10} height={10} fill={C.roll} fillOpacity={0.8} stroke={C.roll} strokeWidth={1.2} />
-        <text x={W - R - 94} y={13} fill={C.muted}>roll</text>
-        <rect data-legend data-series="pitch" x={W - R - 58} y={4} width={10} height={10} fill={C.pitch} fillOpacity={0.8} stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
-        <text x={W - R - 44} y={13} fill={C.muted}>pitch</text>
+        <rect data-legend data-series="roll" x={words.roll - 14} y={LEGEND_MID - 5} width={10} height={10} fill={C.roll} fillOpacity={0.8} stroke={C.roll} strokeWidth={1.2} />
+        <text x={words.roll} y={LEGEND_MID + 4} fill={C.muted}>roll</text>
+        <rect data-legend data-series="pitch" x={words.pitch - 14} y={LEGEND_MID - 5} width={10} height={10} fill={C.pitch} fillOpacity={0.8} stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
+        <text x={words.pitchEnd} y={LEGEND_MID + 4} fill={C.muted} textAnchor="end">pitch</text>
       </g>
     </svg>
     {/* Under the chart, not on its axis: it doesn't fit there on a phone. */}
@@ -224,6 +238,7 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
   const y = (d: number) => TL + ((maxDeg - d) / (2 * maxDeg)) * (H - TL - B)
   const line = (pick: (s: typeof ex[0]) => number) =>
     ex.map((s, i) => `${i ? 'L' : 'M'} ${x(s.t).toFixed(1)} ${y(pick(s)).toFixed(1)}`).join(' ')
+  const words = legendWordX(W)
 
   return (
     <div ref={ref}>
@@ -244,10 +259,10 @@ function ExcerptChart({ report }: { report: AttitudeReport }) {
       </text>
       {/* Keys match their lines; words line up with the session chart's. */}
       <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
-        <line data-legend data-series="roll" x1={W - R - 118} y1={9} x2={W - R - 100} y2={9} stroke={C.roll} strokeWidth={1.8} />
-        <text x={W - R - 94} y={13} fill={C.muted}>roll</text>
-        <line data-legend data-series="pitch" x1={W - R - 68} y1={9} x2={W - R - 50} y2={9} stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
-        <text x={W - R - 44} y={13} fill={C.muted}>pitch</text>
+        <line data-legend data-series="roll" x1={words.roll - 24} y1={LEGEND_MID} x2={words.roll - 6} y2={LEGEND_MID} stroke={C.roll} strokeWidth={1.8} />
+        <text x={words.roll} y={LEGEND_MID + 4} fill={C.muted}>roll</text>
+        <line data-legend data-series="pitch" x1={words.pitch - 24} y1={LEGEND_MID} x2={words.pitch - 6} y2={LEGEND_MID} stroke={C.pitch} strokeWidth={1.2} strokeDasharray="4 3" />
+        <text x={words.pitchEnd} y={LEGEND_MID + 4} fill={C.muted} textAnchor="end">pitch</text>
       </g>
     </svg>
     </div>
@@ -289,10 +304,10 @@ function HistogramChart({ report }: { report: AttitudeReport }) {
       <text x={L} y={HH - 14} fill={C.muted} fontSize={11} fontFamily="var(--font-mono, monospace)">−{maxDeg.toFixed(0)}°</text>
       <text x={W - R} y={HH - 14} fill={C.muted} fontSize={11} textAnchor="end" fontFamily="var(--font-mono, monospace)">+{maxDeg.toFixed(0)}°</text>
       <g fontFamily="var(--font-mono, monospace)" fontSize={11}>
-        <rect data-legend x={L + 6} y={4} width={10} height={10} fill={C.roll} opacity={0.8} />
-        <text x={L + 20} y={13} fill={C.muted}>actual</text>
-        <line x1={L + 70} y1={9} x2={L + 88} y2={9} stroke={C.warn} strokeWidth={1.6} strokeDasharray="4 3" />
-        <text x={L + 94} y={13} fill={C.muted}>mirrored</text>
+        <rect data-legend x={L + 6} y={LEGEND_MID - 5} width={10} height={10} fill={C.roll} opacity={0.8} />
+        <text x={L + 20} y={LEGEND_MID + 4} fill={C.muted}>actual</text>
+        <line x1={L + 70} y1={LEGEND_MID} x2={L + 88} y2={LEGEND_MID} stroke={C.warn} strokeWidth={1.6} strokeDasharray="4 3" />
+        <text x={L + 94} y={LEGEND_MID + 4} fill={C.muted}>mirrored</text>
       </g>
     </svg>
     </div>

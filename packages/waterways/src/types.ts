@@ -102,6 +102,7 @@ export type Feature = {
   source: SourceRef
   lock?: LockDetail
   portage?: PortageDetail
+  noCarry?: true             // a lock you can paddle straight through (surveyed): shown, not counted as a portage
   crew?: CrewDetail
   hire?: true               // canoe, kayak or paddleboard hire here (OSM)
   weir?: { heightM?: number; canoePass?: boolean }  // measured height, where the source has one; a canoe pass beside it (ROE)

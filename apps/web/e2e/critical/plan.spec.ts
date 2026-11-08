@@ -16,7 +16,7 @@ test('two clicks on the water give a route and its stops', async ({ page }) => {
   await page.mouse.click(box.x + box.width / 2 + 250, box.y + box.height / 2 - 60)
 
   await expect(page.getByTestId('plan-summary')).toContainText('Distance')
-  await expect(page.getByTestId('stop-list')).toContainText('Portage side not known yet.')
+  await expect(page.getByTestId('stop-list')).toContainText('Added by paddlesnitch survey')   // Blakes Lock's surveyed carry
   await expect(page).toHaveURL(/from=.*&to=/)   // the plan is in the address bar
 
   // Satellite swaps the dark map for aerial imagery, to see where to land.
@@ -189,7 +189,7 @@ test('a plan link opens the whole Devizes to Westminster route', async ({ page }
   await page.goto('/plan?from=51.355333,-1.994961&to=51.500833,-0.121667')
   const summary = page.getByTestId('plan-summary')
   await expect(summary).toContainText(DW_KM, { timeout: 15_000 })
-  await expect(summary).toContainText('77')
+  await expect(summary).toContainText('78')  // 77 locks, less Ufton (paddled through), plus two low bridges
   await expect(page.getByTestId('stop-list')).toContainText('Teddington Lock')
   const oneWay = await kmIn(summary)
   await page.getByRole('button', { name: 'Return' }).click()

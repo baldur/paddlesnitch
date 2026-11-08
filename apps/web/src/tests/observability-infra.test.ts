@@ -27,6 +27,61 @@ describe('dashboards', () => {
   })
 })
 
+// Where visitors come from (#906).
+describe('visitor location', () => {
+  it('the health dashboard shows page views by country (UK by nation), visits by city (under 5 grouped as other), and by source and campaign', () => {
+    expect(dashboards).toContain("table('Page views by country (UK by nation)', [")
+    expect(dashboards).toContain("'stats count(*) as views, count_distinct(sid) as tabs by country, nation',")
+    expect(dashboards).toContain("table('Visits by town or city (under 5 grouped as other)', [")
+    expect(dashboards).toContain("'fields if(n >= 5, concat(city, \", \", country), \"other\") as place',")
+    expect(dashboards).toContain("'stats sum(n) as visits by place',")
+    expect(dashboards).toContain("table('Visits by source and campaign', [")
+    expect(dashboards).toContain("'stats count(*) as visits by source, utm_source, utm_medium, utm_campaign',")
+  })
+
+  // The track beacon (POST /att/api/track) has no behaviour of its own, so it
+  // takes the default one: the server, with the managed policy that adds
+  // CloudFront's location headers, and caching off, so no header is in a cache
+  // key. Only visitor-location.ts reads them (visitor-location.test.ts).
+  it('the server behaviour (which the track beacon takes) gets the location headers, and its cache key is unchanged', () => {
+    const def = stack.slice(stack.indexOf('defaultBehavior: {'), stack.indexOf('additionalBehaviors: {'))
+    expect(def).toContain('origin: serverOrigin,')
+    expect(def).toContain('cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,')
+    expect(def).toContain('originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,')
+    const extra = stack.slice(stack.indexOf('additionalBehaviors: {'), stack.indexOf('// OpenNext v4 assets go under _assets/'))
+    expect(extra).not.toMatch(/'\/att[^']*':/)
+    // No cache policy keys on a location header.
+    expect(stack).not.toMatch(/cloudfront-viewer-/i)
+  })
+})
+
+// #906: visits are archived as daily counts only, by a scheduled job.
+describe('daily visit counts', () => {
+  const from = stack.indexOf("new lambda.Function(this, 'VisitCountsFn'")
+  const block = stack.slice(from, stack.indexOf("alarm('VisitCountsFailedAlarm'", from) + 700)
+  it('runs once a day after midnight UTC, over the server log group, into visits/ in the archive', () => {
+    expect(from).toBeGreaterThan(0)
+    expect(block).toContain("code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/visit-counts')),")
+    expect(block).toContain('environment: { LOG_GROUP: `/aws/lambda/${serverFn.functionName}`, BUCKET: analyticsBucket.bucketName },')
+    expect(block).toContain("schedule: events.Schedule.cron({ minute: '30', hour: '0' }),")
+  })
+  it('may only query that log group and write visits/: no read, no delete', () => {
+    expect(block).toContain("actions: ['logs:StartQuery'],")
+    expect(block).toContain('resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${serverFn.functionName}:*`],')
+    expect(block).toContain("actions: ['s3:PutObject'],\n      resources: [analyticsBucket.arnForObjects('visits/*')],")
+    expect(block).not.toMatch(/grant(Read|Write|ReadWrite|Delete|Put)|s3:GetObject|s3:Delete/)
+  })
+  it('emails when it fails', () => {
+    expect(block).toContain("alarmName: 'paddlesnitch-visit-counts-failed',")
+    expect(block).toContain("metric: visitCountsFn.metricErrors(")
+  })
+  it('the archive keeps one stream and one subscription; Firehose writes only events/ and errors/', () => {
+    expect(stack.match(/new firehose\.CfnDeliveryStream\(/g)).toHaveLength(1)
+    expect(stack.match(/new logs\.CfnSubscriptionFilter\(/g)).toHaveLength(1)
+    expect(stack).toContain("resources: [analyticsBucket.arnForObjects('events/*'), analyticsBucket.arnForObjects('errors/*')],")
+  })
+})
+
 describe('zero-tolerance alarms fire on the first one in 15 minutes', () => {
   it.each([
     ['ApiErrorsAlarm', 'paddlesnitch-api-errors', "count15('Paddlesnitch/Api', 'ServerErrors')"],

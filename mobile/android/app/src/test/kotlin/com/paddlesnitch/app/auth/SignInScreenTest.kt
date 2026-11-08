@@ -1,6 +1,7 @@
 package com.paddlesnitch.app.auth
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsOff
@@ -13,6 +14,7 @@ import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import com.paddlesnitch.app.Reauth
 import com.paddlesnitch.app.api.Api
@@ -121,6 +123,25 @@ class SignInScreenTest {
         compose.onNodeWithText(MADE_WITH_STRAVA).assertDoesNotExist()
     }
 
+    // A sign-in answer the app can't read shows our words, never the parser's (#896 review).
+    @Test fun anUnreadableSignInAnswerSaysCouldntSignIn() {
+        val server = mockwebserver3.MockWebServer().apply { start() }
+        try {
+            server.enqueue(mockwebserver3.MockResponse.Builder().code(200).body("""<html>Field 'idToken' is required</html>""").build())
+            val api = Api(server.url("/").toString(), MemoryTokenStore(), "0.1.0")
+            compose.setContent { PaddlesnitchTheme {
+                SignInScreen(api, google = GoogleSignIn(api, googleVerifiers), googleReturn = null, onGoogleReturnHandled = {},
+                    onSignedIn = {}, onCancel = {}, loadOptions = { SignInOptions(google = false, strava = false) })
+            } }
+            compose.onNode(hasSetTextAction() and hasText("Email")).performTextInput("a@example.com")
+            compose.onNode(hasSetTextAction() and hasText("Password")).performTextInput("Secret123")
+            compose.onAllNodes(hasText("Sign in") and androidx.compose.ui.test.hasClickAction()).onLast().performScrollTo().performClick()
+            waitFor("Couldn’t sign in. Please try again.")
+            compose.onNodeWithText("Field", substring = true).assertDoesNotExist()
+            compose.onNodeWithText("html", substring = true).assertDoesNotExist()
+        } finally { server.close() }
+    }
+
     // #885: the Terms open in a Custom Tab over the app, like every other web page, not in the browser app.
     @Test fun theTermsLinkOnCreateAccountOpensInACustomTab() {
         show(Reauth(), null)
@@ -191,7 +212,11 @@ class SignInScreenTest {
         show(Reauth(), null, SignInOptions(google = true, strava = false))
         waitFor("Sign in with Google")
         compose.onNodeWithText("Sign in with Google").performScrollTo().performClick()
-        val opened = Shadows.shadowOf(compose.activity).nextStartedActivity.data
+        val tab = Shadows.shadowOf(compose.activity).nextStartedActivity
+        // The app's dark bar, like every other tab (#889).
+        assertEquals(com.paddlesnitch.app.ui.PsColor.bg.toArgb(),
+            androidx.browser.customtabs.CustomTabsIntent.getColorSchemeParams(tab, androidx.browser.customtabs.CustomTabsIntent.COLOR_SCHEME_DARK).toolbarColor)
+        val opened = tab.data
         assertEquals("/att/api/auth/google/init", opened!!.path)
         assertEquals(Pkce.challenge(googleVerifiers.v!!), opened.getQueryParameter("challenge"))
     }
