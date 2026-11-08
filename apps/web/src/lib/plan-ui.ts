@@ -68,8 +68,16 @@ export const portageBankLine = (p: Pick<PortageOnRoute, 'takeOut' | 'putIn' | 'c
   ? `Get out on the ${p.takeOut.bank} bank; back in about ${p.carryM} m on.`
   : `Get out on the ${p.takeOut.bank} bank; back in on the ${p.putIn.bank} bank, about ${p.carryM} m on.`)
 
-/** A portage's own page. */
-export const portagePageHref = (featureId: string) => `/plan/portage/${encodeURIComponent(featureId)}`
+/** Where to get out and back in, on a page with no route: "your" left or right, the way you're going. */
+export const portageWayLine = (p: Pick<PortageOnRoute, 'takeOut' | 'putIn' | 'carryM'>) => (p.takeOut.bank === p.putIn.bank
+  ? `get out on your ${p.takeOut.bank}. Back in about ${p.carryM} m further on.`
+  : `get out on your ${p.takeOut.bank}. Back in on your ${p.putIn.bank}, about ${p.carryM} m further on.`)
+
+/** A portage's own page; `back` is the plan to return to. */
+export const portagePageHref = (featureId: string, back?: string) => `/plan/portage/${encodeURIComponent(featureId)}${back ? `?back=${encodeURIComponent(back)}` : ''}`
+
+/** Where "← Plan" goes: only ever a plan on this site. */
+export const safeBack = (back: string | string[] | undefined): string => (typeof back === 'string' && /^\/plan(\/[\w-]+)?(\?[^\s\\]*)?$/.test(back) && !back.startsWith('//') ? back : '/plan')
 
 /** A paddler's portage details as met on this route (OpenPortage). */
 export function portageLines(p: PortageOnRoute): string[] {

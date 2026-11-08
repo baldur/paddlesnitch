@@ -20,6 +20,7 @@ import Conditions from '@/components/plan/Conditions'
 import EndSearch from '@/components/plan/EndSearch'
 import { TIDES, useOfficialTides } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
+import type { PortageMarkState } from '@paddlesnitch/waterways/portage-page'
 import { trpc } from '@/lib/trpc'
 import {
   addPortageHref, portagePageHref, asInput, COVERAGE_LEVELS, draftParams, farEndLabel, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
@@ -65,6 +66,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   const [draft, setDraft] = useState<PlanDraft>(initial)
   const [shown, setShown] = useState<Set<StopGroup>>(() => new Set(STOP_GROUPS.filter(g => g.on).map(g => g.id)))
   const [focus, setFocus] = useState<MapFocus | null>(null)
+  // Read once: the address bar loses view= before the map's code has loaded.
+  const [firstView] = useState(() => view ?? (initial.start || saved || shared ? undefined : FIRST_VIEW))
   const [satellite, setSatellite] = useState(!!lock)
   const [coverage, setCoverage] = useState(false)
   // Adding portage details at a stop: the landings clicked so far (OpenPortage).
@@ -123,7 +126,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
 
   return (
     <main className="flex flex-col lg:flex-row lg:h-[calc(100vh-57px)]">
-      <div className="h-[50vh] lg:h-auto lg:flex-1 relative" role="region" aria-label="Map. Every stop on it is also in the list of stops.">
+      <div className="h-[50vh] lg:h-auto lg:flex-1 relative" role="region" aria-label="Map. The stops on a planned route are also in the list of stops.">
         <PlanMapClient
             version={VERSION}
             route={plan?.line ?? []}
@@ -132,13 +135,15 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             stops={visible.filter(s => s.leg === 'out').map(s => ({
               id: s.feature.id, at: s.feature.at, name: s.feature.name ?? KIND[s.feature.kind],
               colour: STOP_GROUPS.find(g => g.id === groupOf(s.feature.kind))!.colour,
+              card: stopCard(s),
             }))}
             focus={focus}
-            view={view ?? (initial.start || saved || shared ? undefined : FIRST_VIEW)}
+            view={firstView}
             satellite={satellite}
             coverage={coverage}
             marks={adding?.landings}
             showPortages={!adding}
+            back={saved ? `/plan/${saved.id}` : `/plan?${draftParams(draft)}`}
             choices={choosing?.choices.map(c => ({ at: c.at, label: c.waterway || 'Unnamed water' }))}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
@@ -364,6 +369,9 @@ function dayOffset(from: string, to: string): number {
 /** Stops where portage details can be added: locks, portages and weirs
  *  across the way (not a canal's bywash beside it, #509). */
 const canAddPortage = (s: Stop) => s.portage || (s.feature.kind === 'weir' && !s.beside)
+/** A portage's dot on the plan opens the same card as its map marker. */
+const stopCard = (s: Stop): PortageMarkState | undefined =>
+  s.portages?.length ? 'landings' : s.feature.noCarry ? 'no_carry' : canAddPortage(s) ? 'unknown' : undefined
 
 type PortageActions = {
   signedIn: boolean
@@ -444,7 +452,7 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
                   </div>
                 ))}
                 {actions.unpublished.filter(c => c.featureId === s.feature.id).map(c => <UnpublishedPortage key={c.id} c={c} onDelete={actions.onDelete} />)}
-                <Link className="inline-flex items-center min-h-11 pr-4 text-primary-text hover:underline" href={portagePageHref(s.feature.id)}>Portage details</Link>
+                <Link className="inline-flex items-center min-h-11 pr-4 text-primary-text hover:underline" href={portagePageHref(s.feature.id, actions.here)}>Portage details</Link>
                 {actions.onAdd && !actions.unpublished.some(c => c.featureId === s.feature.id) && (actions.signedIn
                   ? <button type="button" className="min-h-11 text-primary-text hover:underline" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ Add yours' : '+ Add portage details'}</button>
                   : <a className="text-muted underline hover:text-fg" href={`/signin?next=${encodeURIComponent(actions.here)}`}>Sign in to add portage details</a>)}

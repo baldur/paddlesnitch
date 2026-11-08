@@ -4,17 +4,24 @@
 import { conditionsAlong } from './live-store'
 import type { GaugeReading } from './live'
 import { loadNational } from './national'
-import { hasPortagePage, nearestAlong, portageFacts, portagePointsInArea, type PortageFacts, type PortagePoint } from './portage-page'
+import { GAUGE_STALE_MIN, gaugeSourceCovers, hasPortagePage, nearestAlong, portageFacts, portagePointsInArea, type PortageFacts, type PortagePoint } from './portage-page'
 import { listPublicPortages } from './portage-store'
 
 /** Far enough along the water to find a gauge. */
 const REACH_M = 15_000
 const LEVEL_WAIT_MS = 4000
+/** After an outage, say so at once for this long rather than wait on every view. */
+const OUTAGE_MS = 60_000
+
+const TOWN_KINDS = new Set(['city', 'town', 'village'])
 
 export async function loadPortageFacts(id: string): Promise<PortageFacts | null> {
   const [ds, stored] = await Promise.all([loadNational(), listPublicPortages()])
   const feature = ds.features.find(f => f.id === id && hasPortagePage(f))
-  return feature ? portageFacts(feature, ds.links, [...stored, ...ds.portages], REACH_M) : null
+  if (!feature) return null
+  const locks = ds.features.filter(f => f.id !== id && f.name && (f.kind === 'lock' || f.kind === 'portage')).map(f => ({ name: f.name!, at: f.at }))
+  const towns = ds.places.filter(p => TOWN_KINDS.has(p.kind))
+  return portageFacts(feature, ds.links, [...stored, ...ds.portages], REACH_M, locks, towns)
 }
 
 export async function loadPortagePoints(key: string): Promise<PortagePoint[]> {
@@ -22,15 +29,31 @@ export async function loadPortagePoints(key: string): Promise<PortagePoint[]> {
   return portagePointsInArea(ds.features, [...stored, ...ds.portages], key)
 }
 
-export type RiverLevelNow = { gauge?: GaugeReading; unavailable: boolean }
+export type GaugeNear = {
+  gauge?: GaugeReading
+  awayM?: number               // along the water
+  ageMin?: number              // how old the reading is
+  stale?: boolean
+  unavailable: boolean         // a source that covers this place couldn't be read
+}
 
-/** Today's reading at the nearest gauge. A slow source mustn't hold the page up. */
-export async function loadLevelNear(facts: PortageFacts): Promise<RiverLevelNow> {
+let outageUntil = 0
+export const clearLevelOutage = () => { outageUntil = 0 }
+
+/** The nearest gauge's latest reading. A slow or failing source mustn't hold the page up. */
+export async function loadGaugeNear(facts: PortageFacts, waitMs = LEVEL_WAIT_MS): Promise<GaugeNear> {
   if (facts.line.length < 2) return { unavailable: false }
-  const reading = conditionsAlong(facts.line, facts.waterways, []).then(c => ({
-    gauge: nearestAlong(c.gauges.filter(g => g.valueM !== undefined || g.flowM3s !== undefined), facts.alongM),
-    unavailable: c.unavailable.length > 0,
-  }), () => ({ unavailable: true }))
-  const slow = new Promise<RiverLevelNow>(done => setTimeout(() => done({ unavailable: true }), LEVEL_WAIT_MS))
-  return Promise.race([reading, slow])
+  if (Date.now() < outageUntil) return { unavailable: true }
+  const reading = conditionsAlong(facts.line, facts.waterways, []).then((c): GaugeNear => {
+    const gauge = nearestAlong(c.gauges.filter(g => g.valueM !== undefined || g.flowM3s !== undefined), facts.alongM)
+    if (!gauge) return { unavailable: c.unavailable.some(s => gaugeSourceCovers(s, facts.feature.at)) }
+    const ageMin = gauge.readAt ? (Date.now() - Date.parse(gauge.readAt)) / 60_000 : undefined
+    return { gauge, awayM: Math.abs(gauge.chainageM - facts.alongM), ageMin, stale: ageMin !== undefined && ageMin > GAUGE_STALE_MIN, unavailable: false }
+  }, (): GaugeNear => ({ unavailable: true }))
+  let timer: ReturnType<typeof setTimeout>
+  const slow = new Promise<GaugeNear>(done => { timer = setTimeout(() => done({ unavailable: true }), waitMs) })
+  const result = await Promise.race([reading, slow])
+  clearTimeout(timer!)
+  if (result.unavailable) outageUntil = Date.now() + OUTAGE_MS
+  return result
 }

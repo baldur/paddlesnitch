@@ -50,6 +50,12 @@ html, body {
 
 /* The river planner's printed sheets (/plan/print): only the sheet prints,
    black on white, whatever the site's chrome and widgets are doing. */
+/* A portage's card on Plan's map: the site's surface, not Leaflet's white. */
+.portage-card .leaflet-popup-content-wrapper,
+.portage-card .leaflet-popup-tip { background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-control, 6px); box-shadow: none; }
+.portage-card .leaflet-popup-content { margin: 10px 14px; font-size: 0.875rem; line-height: 1.4; }
+.portage-card a.leaflet-popup-close-button { color: var(--color-muted); }
+
 @media print {
   @page { size: A4; margin: 12mm; }
   body { background: #fff !important; }

@@ -9,7 +9,7 @@ export default function PortageDrawing({ map: d, id, name, photo, className = ''
   const ink = photo ? 'white' : 'black'
   return (
     <svg viewBox={`0 0 ${d.size} ${d.size}`} className={`border border-black bg-white ${className}`}
-      role="img" aria-label={d.takeOut ? `Map of ${name ?? 'the portage'}: take out at T, put in at P` : `Aerial photo of ${name ?? 'the lock'}`} data-testid="portage-drawing">
+      role="img" aria-label={d.takeOut ? `Map of ${name ?? 'the portage'}: take out at T, put in at P` : `${photo ? 'Aerial photo' : 'Map'} of ${name ?? 'the lock'}`} data-testid="portage-drawing">
       <clipPath id={clip}><rect width={d.size} height={d.size} /></clipPath>
       <g clipPath={`url(#${clip})`}>
         {photo
