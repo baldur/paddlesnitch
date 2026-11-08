@@ -237,21 +237,17 @@ describe('the nearest gauge\'s reading', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items: [], features: [] }))))
     const near = await loadGaugeNear(facts, 2000)
     expect(near.gauge).toBeUndefined()
-    expect(near.unavailable).toBeDefined()
+    expect(near.unavailable).toBe(false)
   })
   it('an outage only counts where that source covers', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down') }))
-    await loadGaugeNear(facts)
+    const onlySweden = vi.fn(async (u: string) => {
+      if (String(u).includes('smhi')) return new Response(JSON.stringify({ station: [] }))
+      throw new Error('down')
+    })
+    vi.stubGlobal('fetch', onlySweden)
+    expect((await loadGaugeNear(facts)).unavailable).toBe(true)     // England's source failed
     const inSweden = { ...facts, feature: lock('s', [59.3, 18.0]), line: [[59.3, 18.0], [59.31, 18.0]] as LatLng[] }
-    clearLiveCaches()
-    const answered = vi.fn(async (u: string) => (String(u).includes('smhi') ? new Response(JSON.stringify({ station: [] })) : new Response('{}', { status: 500 })))
-    vi.stubGlobal('fetch', answered)
-    clearLevelOutage()
-    await loadGaugeNear(facts)                       // England's sources fail
-    const asked = answered.mock.calls.length
-    await loadGaugeNear(inSweden)
-    expect(answered.mock.calls.length).toBeGreaterThanOrEqual(asked)
-    expect((await loadGaugeNear(facts)).unavailable).toBe(true)
+    expect((await loadGaugeNear(inSweden)).unavailable).toBe(false)
   })
   it('a failure somewhere else doesn\'t count here', () => {
     expect(gaugeSourceCovers('SMHI', ENGLAND)).toBe(false)
