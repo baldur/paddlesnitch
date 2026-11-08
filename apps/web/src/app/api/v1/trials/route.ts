@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { listCourses, listTrials } from '@/lib/catalogue'
 import { isListedForViewer } from '@/lib/permissions'
 import { ok, options, trialSummary } from '@/lib/api-v1'
+import { canonicalBaseUrl } from '@paddlesnitch/core/url'
 
 export const dynamic = 'force-dynamic'
 export const OPTIONS = options
@@ -16,5 +17,5 @@ export async function GET(req: NextRequest) {
     .filter(t => isListedForViewer(t, null))
     .filter(t => status !== 'open' && status !== 'closed' ? true : t.status === status)
     .sort((a, b) => b.date.localeCompare(a.date))
-  return ok({ trials: listed.map(t => trialSummary(t, byId.get(t.courseId) ?? null, req.nextUrl.origin)) })
+  return ok({ trials: listed.map(t => trialSummary(t, byId.get(t.courseId) ?? null, canonicalBaseUrl(req))) })
 }

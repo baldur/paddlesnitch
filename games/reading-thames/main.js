@@ -1628,8 +1628,10 @@ function showAccount() {
 
 
 // A finished race's time goes on the course's leaderboard (signed in only).
-async function submitResult(time) {
-  els.ranked.textContent = '';
+// If it doesn't get there, Try again sends the same time again (Go again
+// would race again, and still not save it); the answer then takes focus.
+async function submitResult(time, retry = false) {
+  if (!retry) els.ranked.textContent = '';
   if (!account.user) {
     // (Signed out there's nothing to say: a guest can't race on the site, owner 2026-11-07.)
     return;
@@ -1639,8 +1641,13 @@ async function submitResult(time) {
     els.ranked.textContent = best ? `A new best for you on the ${mode.label} leaderboard: ${ordinal(rank)}.`
       : rank ? `Your best on the ${mode.label} leaderboard is ${ordinal(rank)}.` : '';
   } catch {
-    els.ranked.textContent = "Couldn't reach the leaderboard.";
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.textContent = 'Try again';
+    again.addEventListener('click', () => { again.disabled = true; again.textContent = 'Trying again…'; submitResult(time, true); });
+    els.ranked.replaceChildren(`Couldn't save your time to the ${mode.label} leaderboard. `, again);
   }
+  if (retry) (els.ranked.querySelector('button') ?? els.ranked).focus();
 }
 
 // The leaderboards page: the top ten on each course, with the boat each time
@@ -1649,7 +1656,21 @@ const SHOW = 10;
 const boatName = (hull) => (isScullHull(hull) ? scullHullName(hull) : boatById(hull)?.name ?? HULLS[hull]?.name ?? hull);
 // Which boards the leaderboards page shows: the canoe club's courses, or the rowing club's.
 let boardModes = null;
-async function showBoards() {
+// Try again reloads them, then puts focus on the first board (its button
+// went with the reload); while loading, another tap does nothing. Busy is
+// cleared whatever happens, or every later Try again would do nothing.
+async function showBoards(retry = false) {
+  if (els.boardlist.getAttribute('aria-busy') === 'true') return;
+  els.boardlist.setAttribute('aria-busy', 'true');
+  try {
+    const focus = await loadBoards();
+    if (retry) focus?.focus();
+  } finally {
+    els.boardlist.setAttribute('aria-busy', 'false');
+  }
+}
+// Draws the boards; returns where focus goes after Try again.
+async function loadBoards() {
   els.boardlist.replaceChildren(make('<p>Loading…</p>'));
   const rowing = !!boardModes;
   const boards = await Promise.all((boardModes ?? Object.values(MODES)).map(async (m) => [m, await call('games.leaderboard', { course: m.key }).catch(() => null)]));
@@ -1664,23 +1685,32 @@ async function showBoards() {
       top.push(p);
     }
   }
+  const again = (m) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = 'Try again';
+    if (m) b.setAttribute('aria-label', `Try again: ${m.label}`);
+    b.addEventListener('click', () => { b.disabled = true; showBoards(true); });
+    return b;
+  };
   // None of them loaded: one message, and a way to try again.
   if (boards.every(([, b]) => !b)) {
-    const again = document.createElement('button');
-    again.type = 'button';
-    again.textContent = 'Try again';
-    again.addEventListener('click', showBoards);
     const p = make(`<p>Couldn't load the ${rowing ? 'honours board' : 'leaderboards'}. </p>`);
-    p.append(again);
-    return els.boardlist.replaceChildren(...top, p);
+    const b = again();
+    p.append(b);
+    els.boardlist.replaceChildren(...top, p);
+    return b;
   }
   els.boardlist.replaceChildren(...top, ...boards.map(([m, b]) => {
     const div = document.createElement('div');
     const title = document.createElement('h4');
     title.textContent = m.label;
+    title.tabIndex = -1; // focus lands here after Try again
     div.append(title);
     if (!b?.top.length) {
-      div.append(!b ? "Couldn't load this course." : rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
+      // One that didn't load: say so, and a way to try again (the same as when none did).
+      if (!b) div.append("Couldn't load this course's times. ", again(m));
+      else div.append(rowing ? 'No times yet: pick it on the whiteboard and row it.' : 'No times yet.');
       return div;
     }
     const table = document.createElement('table');
@@ -1699,6 +1729,7 @@ async function showBoards() {
     div.append(table);
     return div;
   }));
+  return els.boardlist.querySelector('h4');
 }
 
 // --- live races -------------------------------------------------------------------

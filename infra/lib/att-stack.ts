@@ -491,6 +491,17 @@ export class AttStack extends cdk.Stack {
     // Compute — OpenNext v4 outputs to server-functions/default
     // ---------------------------------------------------------------------------
 
+    // Only CloudFront may call the server (#908). The function URL below is
+    // public (AWS_IAM + OAC would need every POST to carry a body hash, which
+    // browsers, the apps and the trackers don't send), so CloudFront adds a
+    // secret header on the server origin and src/proxy.ts refuses requests
+    // without it (apps/web/src/lib/origin-verify.ts). The value lives in the
+    // SSM String /att/origin-verify, never in git: "current", or
+    // "current,previous" while rotating. CloudFormation reads it at every
+    // deploy, so a new value reaches CloudFront and the server on the next
+    // deploy. CloudFront sends the first; the server accepts either.
+    const originVerify = ssm.StringParameter.valueForStringParameter(this, '/att/origin-verify')
+
     const serverFn = new lambda.Function(this, 'ServerFn', {
       logRetention: LOG_RETENTION,
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -542,6 +553,14 @@ export class AttStack extends cdk.Stack {
         // not a flag in storage: no route can grant it, so escalating needs a
         // deploy. Unset means nobody, which is the safe default.
         ADMIN_USER_IDS: process.env.ADMIN_USER_IDS ?? '',
+        // The accepted x-origin-verify values (above, #908).
+        ORIGIN_VERIFY_SECRETS: originVerify,
+        // 'report' only warns about requests that didn't come through
+        // CloudFront; 'enforce' refuses them (403). The server Lambda updates
+        // before the distribution in a deploy, so the first deploy must not
+        // enforce: CloudFront isn't sending the header yet. Switch to
+        // 'enforce' once the logs show no origin_verify warnings.
+        ORIGIN_VERIFY_MODE: 'report',
       },
     })
 
@@ -744,8 +763,12 @@ export class AttStack extends cdk.Stack {
     // CloudFront — behaviors match OpenNext v4 output manifest
     // Assets are deployed under _assets/ prefix; origin path translates back
     // ---------------------------------------------------------------------------
+    // Every behaviour that reaches the server uses this one origin (the
+    // default, /plan/data/*), so they all carry the header. CloudFront
+    // overwrites a viewer's own x-origin-verify with this value.
     const serverOrigin = new origins.HttpOrigin(
-      cdk.Fn.select(2, cdk.Fn.split('/', serverUrl.url))
+      cdk.Fn.select(2, cdk.Fn.split('/', serverUrl.url)),
+      { customHeaders: { 'x-origin-verify': cdk.Fn.select(0, cdk.Fn.split(',', originVerify)) } },
     )
 
     const imageOptOrigin = new origins.HttpOrigin(
@@ -826,6 +849,12 @@ export class AttStack extends cdk.Stack {
         responseHeadersPolicy: securityHeaders,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        // Every viewer header but Host (a function URL answers 403 to any Host
+        // but its own), plus CloudFront's device and location headers. The
+        // server reads only country, region and city from those (#906,
+        // apps/web/src/lib/visitor-location.ts). A custom policy can't drop
+        // Host AND add CloudFront headers, and an allow list is capped at 10
+        // headers, fewer than the app needs: see infra/CLAUDE.md.
         originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       },
       additionalBehaviors: {
@@ -1187,10 +1216,11 @@ export class AttStack extends cdk.Stack {
         conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
       }),
     })
-    // What Firehose needs to write, and no more (no delete).
+    // What Firehose needs to write, and no more (no delete): its own two
+    // folders, not visits/ (the daily counts below).
     archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
       actions: ['s3:PutObject', 's3:AbortMultipartUpload'],
-      resources: [analyticsBucket.arnForObjects('*')],
+      resources: [analyticsBucket.arnForObjects('events/*'), analyticsBucket.arnForObjects('errors/*')],
     }))
     archiveFirehoseRole.addToPolicy(new iam.PolicyStatement({
       actions: ['s3:GetBucketLocation', 's3:ListBucket', 's3:ListBucketMultipartUploads'],
@@ -1283,6 +1313,46 @@ export class AttStack extends cdk.Stack {
         dimensionsMap: { DeliveryStreamName: 'paddlesnitch-analytics-archive' }, statistic: 'Minimum', period: cdk.Duration.hours(1),
       }),
       threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, evaluationPeriods: 1,
+    })
+
+    // Visits (#906): daily counts, never visit rows. A visit is logged in the
+    // same request as its page view; any per-visit copy kept for good could be
+    // joined back to a page view's sid (a rare country, a file's time, line
+    // order). So the events/ stream drops visits, and once a day, after
+    // midnight UTC, this job counts yesterday's visits with Logs Insights
+    // (by country and city, by source, by campaign), groups anything seen
+    // fewer than 5 times as "other", and writes visits/<yyyy>/<mm>/<dd>.json.
+    // A rerun overwrites the same day. The logs keep the lines 90 days.
+    const visitCountsFn = new lambda.Function(this, 'VisitCountsFn', {
+      logRetention: LOG_RETENTION,
+      functionName: 'paddlesnitch-visit-counts',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambdas/visit-counts')),
+      memorySize: 128,
+      timeout: cdk.Duration.minutes(5),
+      environment: { LOG_GROUP: `/aws/lambda/${serverFn.functionName}`, BUCKET: analyticsBucket.bucketName },
+    })
+    visitCountsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['logs:StartQuery'],
+      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${serverFn.functionName}:*`],
+    }))
+    // GetQueryResults takes a query id and has no resource-level permissions.
+    visitCountsFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['logs:GetQueryResults'], resources: ['*'] }))
+    visitCountsFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [analyticsBucket.arnForObjects('visits/*')],
+    }))
+    new events.Rule(this, 'VisitCountsDaily', {
+      schedule: events.Schedule.cron({ minute: '30', hour: '0' }),
+      targets: [new eventsTargets.LambdaFunction(visitCountsFn, { retryAttempts: 1 })],
+    })
+    alarm('VisitCountsFailedAlarm', {
+      alarmName: 'paddlesnitch-visit-counts-failed',
+      alarmDescription: 'The daily visit counts failed, so yesterday is missing from visits/ in paddlesnitch-analytics-archive. Rerun paddlesnitch-visit-counts with {"day":"YYYY-MM-DD"} within 90 days: see docs/features/observability.md.',
+      metric: visitCountsFn.metricErrors({ period: cdk.Duration.hours(6), statistic: 'Sum' }),
+      threshold: 0, comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1,
     })
 
     const logCount = (id: string, pattern: logs.IFilterPattern, metricName: string) => {

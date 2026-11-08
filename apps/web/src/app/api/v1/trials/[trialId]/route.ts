@@ -5,6 +5,7 @@ import { getJson } from '@/lib/storage'
 import { canViewTrial } from '@/lib/permissions'
 import type { CourseMetadata, TrialMetadata } from '@/lib/types'
 import { fail, ok, options, trialSummary } from '@/lib/api-v1'
+import { canonicalBaseUrl } from '@paddlesnitch/core/url'
 
 export const dynamic = 'force-dynamic'
 export const OPTIONS = options
@@ -14,5 +15,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ tria
   const trial = /^[A-Za-z0-9_-]{1,64}$/.test(trialId) ? await getJson<TrialMetadata>(`trials/${trialId}/metadata.json`) : null
   if (!trial || !canViewTrial(trial, null)) return fail(404, 'not_found', 'No such public trial.')
   const course = await getJson<CourseMetadata>(`courses/${trial.courseId}/metadata.json`)
-  return ok({ trial: trialSummary(trial, course, req.nextUrl.origin) })
+  return ok({ trial: trialSummary(trial, course, canonicalBaseUrl(req)) })
 }

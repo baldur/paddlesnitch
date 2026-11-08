@@ -10,6 +10,11 @@
 // answer past Lambda's 6 MB, is failed so Firehose keeps it under errors/.
 // The server logs in Lambda's text format (`time\trequestId\tINFO\t{json}`); a
 // switch to JSON logging would need eventFromLine changed. Plain JS.
+//
+// Visit records (#906) are dropped here: a visit is logged in the same request
+// as the page view that caused it, so any per-visit copy kept for good could
+// be joined back to that page view's sid. The archive keeps only daily counts
+// of visits, written by infra/lambdas/visit-counts to visits/.
 import { gunzipSync } from 'node:zlib'
 
 /** Every field an archived event may keep (the track route's rules, plus what
@@ -21,6 +26,7 @@ export const KEEP = new Set([
   'mode', 'course', 'end', 'secs', 'place', 'swims', 'knocked', 'bumps', 'km', 'from',
   'body', 'hair', 'hat', 'beard', 'aid', 'glasses', 'sleeves', 'boat', 'paddle', 'shape',
   'plays', 'places', 'input', 'gpu',          // game events
+  'country', 'nation',                        // where page views come from (#906); never city or source
 ])
 
 const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
@@ -51,7 +57,16 @@ export function cleanPath(path) {
 // older lines the backfill reads, logged before it did.
 const SID = /^[A-Za-z0-9._-]{1,64}$/
 const VALUE = /^[A-Za-z0-9_.,:|$<>()\/[\]-]{1,200}$/
-const looksSafe = (k, v) => k === 'sid' ? SID.test(v) : k === 'os' ? /^[A-Za-z0-9 ._-]{1,40}$/.test(v) : VALUE.test(v)
+// Where page views come from (#906): a country code, and a nation only as one
+// of the UK's four. City, source, postcodes, latitude/longitude, metro codes,
+// time zones and council-level regions aren't in KEEP.
+const RULES = {
+  sid: (v) => SID.test(v),
+  os: (v) => /^[A-Za-z0-9 ._-]{1,40}$/.test(v),
+  country: (v) => /^[A-Z]{2}$/.test(v),
+  nation: (v) => /^(ENG|SCT|WLS|NIR)$/.test(v),
+}
+const looksSafe = (k, v) => (RULES[k] ?? ((x) => VALUE.test(x)))(v)
 
 /** One log line → the event it carries, or null. The JSON starts at the first `{`. */
 export function eventFromLine(message) {
@@ -60,6 +75,8 @@ export function eventFromLine(message) {
   let o
   try { o = JSON.parse(message.slice(at)) } catch { return null }
   if (!o || typeof o !== 'object' || typeof o.Event !== 'string' || !o._aws || typeof o._aws.Timestamp !== 'number') return null
+  // Visits are counted daily, never kept one by one (#906).
+  if (o.Event === 'visit') return null
   const out = {}
   for (const [k, v] of Object.entries(o)) if (KEEP.has(k) && typeof v === 'string' && looksSafe(k, v)) out[k] = v
   if ('path' in o) { const p = cleanPath(o.path); if (p) out.path = p; else delete out.path }
