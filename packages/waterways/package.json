@@ -40,6 +40,8 @@
     "./waterway-coverage": "./src/waterway-coverage.ts",
     "./portage": "./src/portage.ts",
     "./portage-moderation": "./src/portage-moderation.ts",
+    "./portage-page": "./src/portage-page.ts",
+    "./portage-page-store": "./src/portage-page-store.ts",
     "./portage-store": "./src/portage-store.ts",
     "./portage-survey": "./src/portage-survey.ts",
     "./portage-detect": "./src/portage-detect.ts",

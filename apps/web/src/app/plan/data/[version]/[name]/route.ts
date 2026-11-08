@@ -1,7 +1,7 @@
 // What the planner's map draws, from the live national dataset
 // (docs/features/waterways-uk-ireland.md): `overview` (the whole network,
 // coarsely; `overview-chunks` says how many `overview-{i}` chunks of ≤2 MB to fetch, as the whole
-// passed Lambda's 6 MB limit with more countries), `area-{y}_{x}` (one 0.5° area in detail), `openportage` (paddlers' portage details, CC0), `needed`
+// passed Lambda's 6 MB limit with more countries), `area-{y}_{x}` (one 0.5° area in detail), `openportage` (paddlers' portage details, CC0), `portages-{y}_{x}` (every portage in one 0.5° area, for the map's markers), `needed`
 // (locks with no portage details, most-planned first), `tides-nl` (Rijkswaterstaat's predicted Dutch high and
 // low waters, fetched at build time), and coverage by waterway: `coverage` (the scores, for
 // /plan/gaps) and `coverage-lines` (how many chunks of scored water each level has) with
@@ -12,6 +12,7 @@
 import { areaLines, overviewLines } from '@paddlesnitch/waterways/display'
 import { loadCoverage, loadNational, loadNeeded, loadOfficialTides } from '@paddlesnitch/waterways/national'
 import { listPublicPortages } from '@paddlesnitch/waterways/portage-store'
+import { loadPortagePoints } from '@paddlesnitch/waterways/portage-page-store'
 import { chunkLines, coverageLines } from '@paddlesnitch/waterways/waterway-coverage'
 import type { LatLng } from '@paddlesnitch/waterways/types'
 
@@ -33,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
   }
   const ds = await loadNational()
   const area = /^area-(-?\d+_-?\d+)$/.exec(name)?.[1]
+  const portageArea = /^portages-(-?\d+_-?\d+)$/.exec(name)?.[1]
   let body: unknown
   const ov = () => {
     if (overview?.version !== ds.version) {
@@ -71,13 +73,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ version
       if (!chunk) return new Response('Not found', { status: 404 })
       body = chunk
     }
+  } else if (portageArea) {
+    body = await loadPortagePoints(portageArea)
   } else if (area) {
     body = areaLines(ds.links, area)
   } else {
     return new Response('Not found', { status: 404 })
   }
   // An old version's URL gets today's data, briefly cached, rather than a 404.
-  const live = name.startsWith('coverage') || name === 'needed'
+  const live = name.startsWith('coverage') || name === 'needed' || !!portageArea
   const cache = version === ds.version && !live ? 'public, max-age=31536000, immutable' : 'public, max-age=300'
   return Response.json(body, { headers: { 'Cache-Control': cache } })
 }

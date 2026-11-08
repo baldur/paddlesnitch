@@ -63,11 +63,17 @@ export function stopLines(stop: Stop): string[] {
   return out
 }
 
+/** Where to get out and back in, for one way of travel. */
+export const portageBankLine = (p: Pick<PortageOnRoute, 'takeOut' | 'putIn' | 'carryM'>) => (p.takeOut.bank === p.putIn.bank
+  ? `Get out on the ${p.takeOut.bank} bank; back in about ${p.carryM} m on.`
+  : `Get out on the ${p.takeOut.bank} bank; back in on the ${p.putIn.bank} bank, about ${p.carryM} m on.`)
+
+/** A portage's own page. */
+export const portagePageHref = (featureId: string) => `/plan/portage/${encodeURIComponent(featureId)}`
+
 /** A paddler's portage details as met on this route (OpenPortage). */
 export function portageLines(p: PortageOnRoute): string[] {
-  const out = [p.takeOut.bank === p.putIn.bank
-    ? `Get out on the ${p.takeOut.bank} bank; back in about ${p.carryM} m on.`
-    : `Get out on the ${p.takeOut.bank} bank; back in on the ${p.putIn.bank} bank, about ${p.carryM} m on.`]
+  const out = [portageBankLine(p)]
   if (p.rollers) out.push('Rollers.')
   if (p.notes) out.push(`“${p.notes}”`)
   return out

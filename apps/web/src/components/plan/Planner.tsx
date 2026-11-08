@@ -22,7 +22,7 @@ import { TIDES, useOfficialTides } from '@/lib/tides'
 import type { MapFocus } from '@/components/map/PlanMap'
 import { trpc } from '@/lib/trpc'
 import {
-  addPortageHref, asInput, COVERAGE_LEVELS, draftParams, farEndLabel, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
+  addPortageHref, portagePageHref, asInput, COVERAGE_LEVELS, draftParams, farEndLabel, groupOf, isDarkStop, km, localInput, PICK_MIN_ZOOM, stopId, pixelsToMetres, placeClick, PLAN_ERROR_TEXT, portageLines, printHref, STOP_GROUPS, stopLines, tideWindow,
   type LockLink, type PlanDraft, type StopGroup, type View,
 } from '@/lib/plan-ui'
 
@@ -138,6 +138,7 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
             satellite={satellite}
             coverage={coverage}
             marks={adding?.landings}
+            showPortages={!adding}
             choices={choosing?.choices.map(c => ({ at: c.at, label: c.waterway || 'Unnamed water' }))}
             onPick={(p, zoom) => {
               if (zoom < PICK_MIN_ZOOM) { setFocus({ at: p, zoom: Math.min(zoom + 4, 14) }); return }
@@ -443,6 +444,7 @@ function StopList({ plan, stops, startAt, onFocus, actions, stopNotes, onSaveNot
                   </div>
                 ))}
                 {actions.unpublished.filter(c => c.featureId === s.feature.id).map(c => <UnpublishedPortage key={c.id} c={c} onDelete={actions.onDelete} />)}
+                <Link className="inline-flex items-center min-h-11 pr-4 text-primary-text hover:underline" href={portagePageHref(s.feature.id)}>Portage details</Link>
                 {actions.onAdd && !actions.unpublished.some(c => c.featureId === s.feature.id) && (actions.signedIn
                   ? <button type="button" className="min-h-11 text-primary-text hover:underline" onClick={() => actions.onAdd!(s)}>{s.portages?.length ? '+ Add yours' : '+ Add portage details'}</button>
                   : <a className="text-muted underline hover:text-fg" href={`/signin?next=${encodeURIComponent(actions.here)}`}>Sign in to add portage details</a>)}

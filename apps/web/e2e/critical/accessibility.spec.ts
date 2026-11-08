@@ -14,6 +14,7 @@ const PAGES = [
   '/',
   '/plan?from=51.399410,-1.347414&to=51.400405,-1.134311',   // Guyers Lock to Aldermaston Wharf: a route and its stops
   '/plan/gaps',
+  '/plan/portage/crt%3Alocks%3AKA-013-009',
   '/att',
   '/paddles',
   '/help',

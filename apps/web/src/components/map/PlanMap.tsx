@@ -1,10 +1,11 @@
 'use client'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, WMSTileLayer, Pane, Polyline, CircleMarker, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, WMSTileLayer, Pane, Polyline, CircleMarker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AREA_MIN_ZOOM, areasIn } from '@paddlesnitch/waterways/display'
+import { PORTAGE_MIN_ZOOM, type PortagePoint } from '@paddlesnitch/waterways/portage-page'
 import type { LatLng } from '@paddlesnitch/waterways/types'
-import { COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inAustria, inFrance, inNetherlands, inSwitzerland, mapTiles, nearFlanders, type GermanPhotoId } from '@/lib/plan-ui'
+import { portagePageHref, COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inAustria, inFrance, inNetherlands, inSwitzerland, mapTiles, nearFlanders, type GermanPhotoId } from '@/lib/plan-ui'
 
 // The planner's map: the rivers and canals of the UK, Ireland, the Netherlands, Belgium, France, Germany, Austria, Switzerland, Denmark and Sweden, the planned
 // route, its ends and its stops. A click is passed up; the page decides whether
@@ -14,9 +15,9 @@ import { COVERAGE_LEVELS, FLANDERS_PHOTOS, GERMAN_PHOTOS, germanPhotosNear, inAu
 const HOME: [[number, number], [number, number]] = [[42.3, -10.6], [69.1, 24.2]]
 
 // Network pieces already fetched, shared across map instances; keyed by URL.
-const loaded = new Map<string, Promise<LatLng[][]>>()
-const fetchLines = (url: string) => {
-  let p = loaded.get(url)
+const loaded = new Map<string, Promise<unknown>>()
+const fetchLines = <T = LatLng[][],>(url: string) => {
+  let p = loaded.get(url) as Promise<T> | undefined
   if (!p) {
     p = fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
     p.catch(() => loaded.delete(url))   // let a later pan retry
@@ -82,6 +83,40 @@ function Network({ version }: { version: string }) {
   return <Polyline positions={lines} interactive={false} pathOptions={{ color: '#06b6d4', weight: 2, opacity: 0.55 }} />
 }
 
+const PORTAGE_COLOUR = '#f59e0b'   // the Portages stop colour
+
+/** Every portage in view once zoomed in: filled where we know the landings. A
+ *  tap opens a small card rather than placing a route end. */
+function Portages({ version }: { version: string }) {
+  const map = useMap()
+  const [points, setPoints] = useState<PortagePoint[]>([])
+  const latest = useRef(0)
+  const refresh = useCallback(() => {
+    const n = ++latest.current
+    const b = map.getBounds()
+    const urls = map.getZoom() < PORTAGE_MIN_ZOOM ? [] : areasIn(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).map(k => `/plan/data/${version}/portages-${k}`)
+    Promise.allSettled(urls.map(u => fetchLines<PortagePoint[]>(u))).then(rs => {
+      if (n === latest.current) setPoints(rs.flatMap(r => (r.status === 'fulfilled' ? r.value : [])))
+    })
+  }, [map, version])
+  useMapEvents({ moveend: refresh })
+  useEffect(() => { refresh() }, [refresh])
+  return (
+    <>
+      {points.map(p => (
+        <CircleMarker key={p.id} center={p.at} radius={5} bubblingMouseEvents={false}
+          pathOptions={{ color: PORTAGE_COLOUR, fillColor: PORTAGE_COLOUR, fillOpacity: p.known ? 0.9 : 0, weight: 2 }}>
+          <Popup>
+            <strong className="block">{p.name}</strong>
+            <span className="block">{p.known ? 'Landing details known.' : 'No landing details yet.'}</span>
+            <a className="underline text-primary" href={portagePageHref(p.id)}>Portage details</a>
+          </Popup>
+        </CircleMarker>
+      ))}
+    </>
+  )
+}
+
 export type MapStop = { id: string; at: LatLng; name: string; colour: string }
 
 function Clicks({ onPick }: { onPick: (p: LatLng, zoom: number) => void }) {
@@ -122,7 +157,7 @@ function WatchCentre({ onChange }: { onChange: (c: LatLng) => void }) {
 }
 
 export default function PlanMap({
-  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], choices = [], onPick,
+  version, route, start, finish, stops, focus, view, satellite = false, coverage = false, marks = [], choices = [], showPortages = true, onPick,
 }: {
   version: string                          // the dataset's version, for the network's URLs
   route: LatLng[]
@@ -135,6 +170,7 @@ export default function PlanMap({
   coverage?: boolean                       // colour the water by how well we know it
   marks?: LatLng[]                         // landings being placed for a portage
   choices?: { at: LatLng; label: string }[] // the waterways an unclear click could have meant
+  showPortages?: boolean                   // off while placing landings: a marker would catch the click
   onPick: (p: LatLng, zoom: number) => void
 }) {
   // Only whether the view is over the Netherlands, Flanders or France matters (which photos to use).
@@ -162,6 +198,7 @@ export default function PlanMap({
       <Pane name="labels" style={{ zIndex: 450, pointerEvents: 'none' }}>
         <TileLayer key={tiles.labels} url={tiles.labels} maxNativeZoom={tiles.labelsNativeZoom} maxZoom={19} />
       </Pane>
+      {showPortages && <Portages version={version} />}
       {route.length > 0 && <Polyline positions={route} interactive={false} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.9 }} />}
       {stops.map(st => (
         <CircleMarker key={st.id} center={st.at} radius={5} pathOptions={{ color: st.colour, fillColor: st.colour, fillOpacity: 0.9, weight: 1 }}>

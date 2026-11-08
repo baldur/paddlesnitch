@@ -178,7 +178,7 @@ export function campaignFrom(search: string): string | undefined {
 // minutes, a profile handle or tracker id says who someone is. Trial and course
 // ids stay: they're public and are what the analytics are for.
 const PADDLES_STATIC = new Set(['new', 'compare', 'shared', 'api', 'section', 'sections'])
-const PLAN_STATIC = new Set(['data', 'gaps', 'print', 'shared', 'sources'])
+const PLAN_STATIC = new Set(['data', 'gaps', 'portage', 'print', 'shared', 'sources'])
 /** Every page's path as it may be recorded; public-path.test.ts walks every
  *  dynamic page on disk and fails if a personal id survives. Only trial and
  *  course ids stay. Never a query string or fragment. */
@@ -191,7 +191,7 @@ export function publicPath(pathname: string): string {
   else if (a === 'profile' && b === 'me' && p[3] === 'devices') from(4)
   else if (a === 'profile' && b && b !== 'me') p[2] = '[id]'
   else if (a === 'devices' || a === 'buddies') from(2)
-  else if (a === 'plan' && b === 'shared') from(3)
+  else if (a === 'plan' && (b === 'shared' || b === 'portage')) from(3)
   else if (a === 'plan' && b && !PLAN_STATIC.has(b)) p[2] = '[id]'
   else if (a === 'att' && (b === 'entries' || b === 'groups')) from(3)
   else if ((a === 'l' || a === 'L') && b) p[2] = '[code]'

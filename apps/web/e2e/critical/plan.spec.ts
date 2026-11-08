@@ -224,6 +224,33 @@ test('a saved, shared plan opens from its link for someone signed out', async ({
   await ownerCtx.close(); await guestCtx.close()
 })
 
+test('a portage has its own page: what we know, on the satellite map, and only the drawing in print', async ({ page }) => {
+  await page.goto('/plan/portage/crt%3Alocks%3AKA-013-009')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Tyle Mill')
+  const details = page.getByTestId('portage-landings')
+  await expect(details).toContainText('get out on the right bank')
+  await expect(details).toContainText('Seen 8 Nov 2026')
+  await expect(page.locator('img.leaflet-tile[src*="World_Imagery"]').first()).toBeAttached()
+  await expect(page.getByTestId('portage-drawing').first()).toBeVisible()
+
+  // Esri's imagery may not be printed; the drawing is ours.
+  await page.emulateMedia({ media: 'print' })
+  await expect(page.getByTestId('portage-satellite')).toBeHidden()
+  await expect(page.getByTestId('portage-drawing').first()).toBeVisible()
+})
+
+test('a plan links each portage to its page', async ({ page }) => {
+  await page.goto('/plan?from=51.4190,-1.1000&to=51.4247,-1.0830')
+  const link = page.getByTestId('portage-block').getByRole('link', { name: 'Portage details' }).first()
+  await link.click()
+  await expect(page).toHaveURL(/\/plan\/portage\//)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+})
+
+test('an unknown portage is a 404, not a broken page', async ({ page }) => {
+  expect((await page.goto('/plan/portage/no-such-lock'))?.status()).toBe(404)
+})
+
 test('OpenPortage: a paddler adds portage details at a lock and sees them on the route', async ({ page }) => {
   await signUpFlow(page, { displayName: 'Lock Keeper' })
   // Henley downstream to Hambleden, through Hambleden Lock.
