@@ -20,19 +20,19 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T10:53:18.000Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2298TH",
     "name": "Blakes Lock",
     "river": "River Kennet",
     "valueM": 0.059,
-    "readAt": "2026-11-08T11:00:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "state": "normal"
    }
   },
-  "createdAt": "2026-11-08T10:53:18.000Z",
-  "updatedAt": "2026-11-08T10:53:18.000Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-001-010",
@@ -55,19 +55,19 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T10:43:24.100Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2298TH",
     "name": "Blakes Lock",
     "river": "River Kennet",
     "valueM": 0.054,
-    "readAt": "2026-11-08T10:45:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "state": "normal"
    }
   },
-  "createdAt": "2026-11-08T10:43:24.100Z",
-  "updatedAt": "2026-11-08T10:43:24.100Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-004-002",
@@ -90,19 +90,19 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T10:24:45.099Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2298TH",
     "name": "Blakes Lock",
     "river": "River Kennet",
     "valueM": 0.052,
-    "readAt": "2026-11-08T10:30:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "state": "normal"
    }
   },
-  "createdAt": "2026-11-08T10:24:45.099Z",
-  "updatedAt": "2026-11-08T10:24:45.099Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-005-004",
@@ -125,20 +125,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T10:15:42.099Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.889,
-    "readAt": "2026-11-08T10:15:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.364,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T10:15:42.099Z",
-  "updatedAt": "2026-11-08T10:15:42.099Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-007-003",
@@ -161,20 +161,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T10:02:03.100Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.89,
-    "readAt": "2026-11-08T10:00:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.361,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T10:02:03.100Z",
-  "updatedAt": "2026-11-08T10:02:03.100Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-009-002",
@@ -197,20 +197,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:48:13.100Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.89,
-    "readAt": "2026-11-08T09:45:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.342,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:48:13.100Z",
-  "updatedAt": "2026-11-08T09:48:13.100Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-010-001",
@@ -233,20 +233,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:41:51.099Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.89,
-    "readAt": "2026-11-08T09:45:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.342,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:41:51.099Z",
-  "updatedAt": "2026-11-08T09:41:51.099Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-011-002",
@@ -269,20 +269,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:32:13.099Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.89,
-    "readAt": "2026-11-08T09:30:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.346,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:32:13.099Z",
-  "updatedAt": "2026-11-08T09:32:13.099Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-013-009",
@@ -305,20 +305,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:22:31.099Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.89,
-    "readAt": "2026-11-08T09:30:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.346,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:22:31.099Z",
-  "updatedAt": "2026-11-08T09:22:31.099Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-015-002",
@@ -341,20 +341,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:08:41.100Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.892,
-    "readAt": "2026-11-08T09:15:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.385,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:08:41.100Z",
-  "updatedAt": "2026-11-08T09:08:41.100Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-KA-016-001",
@@ -377,20 +377,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:00:55.100Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.892,
-    "readAt": "2026-11-08T09:00:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.386,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:00:55.100Z",
-  "updatedAt": "2026-11-08T09:00:55.100Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-low-bridge-padworth",
@@ -413,20 +413,20 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:04:21.000Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.892,
-    "readAt": "2026-11-08T09:00:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.386,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:04:21.000Z",
-  "updatedAt": "2026-11-08T09:04:21.000Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  },
  {
   "id": "survey-2026-11-08-low-bridge-sulhamstead",
@@ -449,19 +449,19 @@
   ],
   "licence": "CC0-1.0",
   "observed": {
-   "at": "2026-11-08T09:29:19.000Z",
+   "at": "2026-11-08T12:00:00.000Z",
    "gauge": {
     "source": "ea",
     "id": "2292BTH",
     "name": "Reading Calcot Bridge",
     "river": "River Kennet",
     "valueM": 1.89,
-    "readAt": "2026-11-08T09:30:00Z",
+    "readAt": "2026-11-08T12:00:00.000Z",
     "flowM3s": 3.346,
     "state": "low"
    }
   },
-  "createdAt": "2026-11-08T09:29:19.000Z",
-  "updatedAt": "2026-11-08T09:29:19.000Z"
+  "createdAt": "2026-11-08T12:00:00.000Z",
+  "updatedAt": "2026-11-08T12:00:00.000Z"
  }
 ]

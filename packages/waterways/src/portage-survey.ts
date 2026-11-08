@@ -112,14 +112,20 @@ export type SurveyDraft = {
   skip?: boolean                // checked, and not a real carry
 }
 
+/** The day only, as a timestamp. The file is public, and times to the second
+ *  at each lock are a timeline of someone's paddle; the level needs only the day. */
+export const dayOnly = (iso: string) => `${iso.slice(0, 10)}T12:00:00.000Z`
+
 /** A checked draft as the record Plan shows. Same lock on the same day replaces itself. */
 export function surveyEntry(d: SurveyDraft): PublicPortage {
+  const at = dayOnly(d.observed.at)
+  const observed: PortageObserved = { at, ...(d.observed.gauge ? { gauge: { ...d.observed.gauge, readAt: at } } : {}) }
   const notes = `Get out: ${d.takeOut}. Back in: ${d.putIn}. Carry: ${d.carry}. ${seenNote(d.observed.at)}`
   const slug = d.featureId.split(':').pop()!.replace(/[^\w-]/g, '-')
   return {
     id: `survey-${d.observed.at.slice(0, 10)}-${slug}`, name: SURVEY_NAME, featureId: d.featureId, at: d.at, notes,
     landings: [onBank(d.line, d.landings[0], d.sides[0] as 'left' | 'right'), onBank(d.line, d.landings[1], d.sides[1] as 'left' | 'right')],
-    licence: 'CC0-1.0', observed: d.observed, createdAt: d.observed.at, updatedAt: d.observed.at,
+    licence: 'CC0-1.0', observed, createdAt: at, updatedAt: at,
   }
 }
 

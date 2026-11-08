@@ -45,6 +45,11 @@ describe('adding a checked carry', () => {
     expect(e).toMatchObject({ id: 'survey-2026-11-08-KA-1', name: SURVEY_NAME, licence: 'CC0-1.0', featureId: 'crt:locks:KA-1' })
     expect(e.notes).toBe('Get out: a low bank. Back in: a timber staging. Carry: grass. Seen 8 Nov 2026.')
   })
+  it('writes only the day, whatever time the draft held', () => {
+    const e = surveyEntry({ ...draft, observed: { at: '2026-01-02T07:41:03.250Z', gauge: { ...gauge, readAt: '2026-01-02T07:45:00Z' } } })
+    expect(JSON.stringify(e).match(/T[\d:.]+Z/g)!.every(t => t === 'T12:00:00.000Z')).toBe(true)
+    expect(e.id).toBe('survey-2026-01-02-KA-1')
+  })
   it('the same lock on another day is a second record: levels differ, and both are worth keeping', () => {
     const later = surveyEntry({ ...draft, observed: { at: '2026-12-01T09:00:00Z' } })
     expect(withSurveyEntries([surveyEntry(draft)], [later])).toHaveLength(2)
@@ -140,10 +145,21 @@ describe('the committed surveys', () => {
       expect(p).toMatchObject({ name: SURVEY_NAME, licence: 'CC0-1.0' })
       expect(p.id).toMatch(/^[\w-]{1,64}$/)
       expect(p).not.toHaveProperty('userId')
-      const g = surveyGauge(p.id)
-      if (g) expect(Math.abs(Date.parse(g.readAt) - Date.parse(p.observed!.at))).toBeLessThanOrEqual(30 * 60_000)
       expect(p.notes!.length).toBeLessThanOrEqual(500)
     }
+  })
+
+  it.each(['portage-survey.json', 'survey-features.json'])('%s has no time of day: the repo is public, and times at each lock are a timeline of a paddle', file => {
+    const text = fs.readFileSync(path.join(__dirname, '../../../../packages/waterways/data', file), 'utf8')
+    const stamps = text.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z?/g) ?? []
+    expect(stamps.length).toBeGreaterThan(0)
+    expect(stamps.filter(t => !t.endsWith('T12:00:00.000Z'))).toEqual([])
+  })
+
+  it('keeps the day and the level, which is what a landing depends on', () => {
+    const g = surveyGauge(surveyPortages[0].id)!
+    expect(g.valueM).toBeGreaterThan(0)
+    expect(g.readAt.slice(0, 10)).toBe('2026-11-08')
   })
 
   it('each belongs to a lock on the DW route, with landings beside it', () => {
