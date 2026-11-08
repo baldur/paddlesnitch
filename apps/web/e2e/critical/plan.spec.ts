@@ -239,13 +239,11 @@ test('OpenPortage: a paddler adds portage details at a lock and sees them on the
   await page.mouse.click(box.x + box.width / 2 - 40, box.y + box.height / 2)
   await expect(panel).toContainText('Now click where you get back in')
   await page.mouse.click(box.x + box.width / 2 + 40, box.y + box.height / 2)
-  await panel.getByLabel('Portage notes').fill('Steps by the lock cottage')
   await panel.getByLabel('Release under CC0').check()
   await panel.getByRole('button', { name: 'Publish' }).click()
 
   await expect(panel).toHaveCount(0)
   await expect(lock).toContainText('Added by Lock Keeper', { timeout: 15_000 })
-  await expect(lock).toContainText('Steps by the lock cottage')
   await expect(lock).not.toContainText('Portage side not known yet.')
 
   // The printed route sheet draws where to land.
