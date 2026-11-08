@@ -89,6 +89,8 @@ const CASES = [
   { name: 'iphone se, a guest on the bridge', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true },
   { name: 'iphone se upright, a guest on the bridge', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, guest: true, site: true, signedOut: true },
   // …and from the menu, picked before the site has answered who's signed in: only the cruise starts.
+  // Wider letters than the iPhone's, as CI's Linux fonts or a phone's larger text: still two by two, under the pins.
+  { name: 'iphone se upright, a guest on the bridge, wider letters', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, guest: true, site: true, signedOut: true, wide: true },
   { name: 'webkit, desktop, a guest at the menu', engine: webkit, ctx: desktop, guestMenu: true, site: true, signedOut: true, slowMe: true },
   // The outings from Caversham Pier: the river cruise, and a hired launch driven with the keys.
   // A race link goes to its race, not the walk; with no graphics at all (CI's Firefox) the walk falls back to the menu.
@@ -124,6 +126,7 @@ async function play(c, page, errors) {
       await r.fulfill({ json: { result: { data: me ? { user: c.signedOut ? null : { id: 'test', displayName: 'Pat R.' } } : null } } });
     }).catch(() => {});
   }
+  if (c.wide) await page.addInitScript(() => addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '#clubCards * { letter-spacing: 0.08em; }'; document.head.append(st); }));
   // A guest who was outside the canoe club last time, and has raced the Loop
   // (they start on the bridge, with no Race again or racing friends); sign in is a blank page here.
   if (c.guest) await page.addInitScript(() => { if (!sessionStorage.getItem('seen')) { localStorage.setItem('snitchmedia:kayak:place', 'club'); localStorage.setItem('snitchmedia:kayak:last', 'loop'); } sessionStorage.setItem('seen', '1'); });
@@ -214,6 +217,10 @@ async function play(c, page, errors) {
     // Keyboard focus starts on the cruise.
     const focused = await page.evaluate(() => document.activeElement?.querySelector?.('.name')?.textContent ?? document.activeElement?.tagName);
     if (!c.touch && focused !== 'River cruise') errors.push(`a guest's first focus is on ${focused}, not the river cruise`);
+    // The scene's pins are placed by the next frame drawn after the cards are made. On CI's
+    // slow frames this read once came first, with both still at the screen's left edge.
+    await page.waitForFunction(() => ['rowing', 'canoe'].every((pin) => { const p = document.querySelector(`#clubDoors .pin.${pin}`); return p && !p.hidden && p.style.transform; }), null, { timeout: 30_000 })
+      .catch(() => errors.push("the scene's club pins were never placed"));
     const got = await page.evaluate(() => {
       const box = document.querySelector('#clubCards .signin-box');
       const names = (sel) => [...document.querySelectorAll(sel)].map((b) => b.querySelector('.name').textContent);
@@ -565,6 +572,10 @@ async function play(c, page, errors) {
   const practice = page.locator(`#menu button[value="${c.course ?? 'practice'}"]`);
   if (!c.club) await (c.touch ? practice.tap() : practice.click());
   await page.waitForFunction(() => window.kayak.state === 'start' || window.kayak.state === 'racing', null, { timeout: 30_000 });
+  // A hired boat on an empty river: these cases are about its controls and what it reports.
+  // A swan just ahead once stopped the speedboat within 5 m, so it reported 0.00 km on CI.
+  // (Swans and traffic have their own tests: kayak-birds, kayak-outing, kayak-traffic.)
+  if (c.boat) await page.evaluate(() => { window.kayak.race.traffic.boats.length = 0; window.kayak.race.birds.length = 0; });
   // On a phone the race is locked sideways once full screen comes, even when the tap that asked
   // for full screen also started the race.
   if (c.touch && !c.strip && !c.erg) {

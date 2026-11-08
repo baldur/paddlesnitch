@@ -542,7 +542,9 @@ summary { cursor: pointer; }
 }
 /* An upright phone: a guest's cards two by two, so the stack stays low, under the scene's pins. */
 @media (orientation: portrait) and (max-width: 600px) {
-  #clubCards .signin-box .card { flex: 1 1 40%; }
+  /* Two to a row in any font: a long name wraps rather than taking the row. */
+  #clubCards .signin-box .card { flex: 1 1 calc(50% - 0.25rem); min-width: 0; }
+  #clubCards .signin-box .card .name { white-space: normal; }
 }
 /* An upright phone with Back showing: the cards sit above Back and Start over. */
 @media (orientation: portrait) and (max-width: 600px) {
