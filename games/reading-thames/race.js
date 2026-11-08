@@ -74,7 +74,7 @@ const ON_LINE = 2.5; // a bow this close behind the line is on it
 // starter, everyone on the line) or 'interval' (a time trial: see below).
 // live: a race against other people ({ players: [{ id, name }], you, host }),
 // whose boats are driven over the network (main.js, live.js), not by think().
-// easy: a first race (Try it now): you start on the line in a gap, and your
+// easy: a first race (unused since Try it now went, 2026-11-07): you start on the line in a gap, and your
 // strokes don't move the boat until the horn, so there's no lining up to learn first.
 export function createRace(course, { rivals = [], seed = 1, you = {}, birds = true, traffic = true, format = 'mass', live = null, easy = false } = {}) {
   const race = live ? liveRace(course, { seed, you, birds, live })

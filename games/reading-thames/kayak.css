@@ -501,7 +501,7 @@ summary { cursor: pointer; }
 #clubDoors .spot.small::after { content: ""; position: absolute; inset: -5px; } /* 44 px to tap, though it looks smaller */
 #clubDoors .spot.on { border: 2px solid #f2c230; color: #f2c230; }
 /* The bridge: the clubs as cards along the bottom, pins over their buildings. */
-#clubCards { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; width: max-content; max-width: calc(100vw - 32px); }
+#clubCards { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 0.5rem; width: max-content; max-width: calc(100vw - 32px); }
 #clubCards .card { pointer-events: auto; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 0.6rem; align-items: center; text-align: left; min-height: 44px; padding: 0.4rem 0.8rem 0.4rem 0.4rem;
   border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(10, 18, 18, 0.7); color: #fff; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-family: system-ui, sans-serif; }
 #clubCards .card svg { grid-row: span 2; width: 60px; height: 40px; border-radius: 7px; display: block; }
@@ -517,11 +517,34 @@ summary { cursor: pointer; }
 #clubCards .friend small { font-size: 0.74rem; opacity: 0.85; }
 #clubCards .friend:hover { border-color: #fff; }
 #clubCards .friend:focus-visible { outline: 3px solid #fff; outline-offset: 2px; } /* plain to see on the yellow, for a keyboard or a d-pad */
+/* A guest on the bridge: the river cruise on its own, the rest in a box that
+   says they need an account, with Sign in (its heading shows at every size: on
+   a phone on its side the cards lose their lines). Signed in, no box. */
+#clubCards > .card.open { background: #d6452b; border-color: #d6452b; } /* the one thing a guest can play: the game's "start here" red */
+#clubCards > .card:last-child { margin-left: auto; } /* the river cruise, on the right even when the cards wrap */
+#clubCards .signin-box { pointer-events: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem 0.5rem; border: 2px solid #f2c230; border-radius: 18px; background: rgba(10, 18, 18, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#clubCards .signin-box .card { background: rgba(10, 18, 18, 0.55); }
+#clubCards .signin-box .card svg { opacity: 0.7; } /* a little quieter than the open card: they need an account */
+#clubCards .signin-box .head { flex-basis: 100%; margin: 0; text-align: center; color: #f2c230; font: 700 0.85rem/1.2 system-ui, sans-serif; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+#clubCards .signin-box .signin { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.1rem; border-radius: 14px; background: #f2c230; color: #1b1a14; font: 700 0.92rem system-ui, sans-serif; text-decoration: none; }
+#clubCards .signin-box .signin:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 /* A phone held sideways: one row for everything, names only, so the scene (and the canoe club's pin) shows. */
 @media (max-height: 500px) {
   #clubCards .friends { flex-basis: auto; }
   #clubCards .card small, #clubCards .card svg { display: none; }
-  #clubCards .card.go small { display: block; } /* Try it now says what it is */
+  #clubCards .card.go small { display: block; } /* Race again says which course */
+  /* A guest's box in one row (its heading kept for screen readers, Sign in says it), so the scene's club pins show above the cards. */
+  #clubCards .signin-box { padding: 0.3rem; }
+  #clubCards .card { padding-inline: 0.55rem; } /* the box and the cruise in one row on the SE */
+  #clubCards .card .name, #clubCards .signin-box .signin { font-size: 0.85rem; }
+  #clubCards .signin-box .signin { padding: 0 0.8rem; }
+  #clubCards .signin-box .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* An upright phone: a guest's cards two by two, so the stack stays low, under the scene's pins. */
+@media (orientation: portrait) and (max-width: 600px) {
+  /* Two to a row in any font: a long name wraps rather than taking the row. */
+  #clubCards .signin-box .card { flex: 1 1 calc(50% - 0.25rem); min-width: 0; }
+  #clubCards .signin-box .card .name { white-space: normal; }
 }
 /* An upright phone with Back showing: the cards sit above Back and Start over. */
 @media (orientation: portrait) and (max-width: 600px) {
@@ -537,7 +560,7 @@ summary { cursor: pointer; }
 #clubDoors .pin { position: absolute; left: 0; top: 0; width: 16px; height: 16px; }
 @media (max-width: 860px) { #clubCards .card { padding: 0.35rem 0.6rem 0.35rem 0.35rem; column-gap: 0.45rem; } #clubCards .long { display: none; } #clubCards .card small { font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; } #clubCards .card svg { width: 50px; height: 34px; } }
 @media (max-width: 640px) { #clubCards .card svg { display: none; } #clubCards .card { grid-template-columns: 1fr; } }
-@media (max-width: 860px) { #clubCards .card.go small { white-space: normal; max-width: 10rem; } } /* Try it now's line in full, on two lines */
+@media (max-width: 860px) { #clubCards .card.go small { white-space: normal; max-width: 10rem; } } /* Race again's line in full, on two lines */
 #clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
 #clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
 /* In the club the editors and the plan are a sheet at the side, the room still in view. */
@@ -559,7 +582,7 @@ body.walking #pause { display: none; }
 /* Finish from anywhere in a long step: its buttons stay at the bottom of the sheet. */
 #menu.sheet .step-buttons { position: sticky; bottom: -1px; margin-bottom: 0; padding-block: 0.5rem; background: var(--bg); }
 /* The walk's labels and cards wait for the scene. */
-#club.waiting #clubDoors, #club.waiting #clubCards, #club.waiting #clubNav { visibility: hidden; }
+#club.waiting #clubDoors, #club.waiting #clubCards, #club.waiting #clubNav, #club.asking #clubCards { visibility: hidden; }
 #menu.sheet::backdrop { background: transparent; }
 #menu.sheet > h2, #menu.sheet .me, #menu.sheet .rotate-hint { display: none; }
 /* In the changing room your paddler stands full size beside the picker, so the picker drops its picture. */
