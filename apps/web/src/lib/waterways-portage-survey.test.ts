@@ -8,7 +8,7 @@ import { sideOf } from '@paddlesnitch/waterways/along'
 import { cumulative, project } from '@paddlesnitch/waterways/line'
 import { routePlan } from '@paddlesnitch/waterways/plan'
 import { portageOnRoute, type PublicPortage } from '@paddlesnitch/waterways/portage'
-import { BANK_MIN_M, withSurveyFeatures, gaugeNote, levelNote, mergeSurvey, onBank, readingAt, surveyEntry, surveyGauge, surveyPortages, SURVEY_NAME, uncheckedDrafts, withSurveyEntries, type SurveyDraft } from '@paddlesnitch/waterways/portage-survey'
+import { withSurveyFeatures, gaugeNote, levelNote, mergeSurvey, readingAt, surveyEntry, surveyGauge, surveyPortages, SURVEY_NAME, uncheckedDrafts, withSurveyEntries, type SurveyDraft } from '@paddlesnitch/waterways/portage-survey'
 import { GAUGE_STATE_TEXT } from './plan-ui'
 import type { LatLng, RegionDataset } from '@paddlesnitch/waterways/types'
 
@@ -62,34 +62,29 @@ describe('adding a checked carry', () => {
   })
 })
 
-describe('holding a landing on the bank it was seen on', () => {
-  const line: LatLng[] = [[51.4, -1.11], [51.4, -1.09]]          // heading east: left is north
-  const sideM = (p: LatLng) => (p[0] - 51.4) * 111_200
+describe('a surveyed carry on a route', () => {
+  // Heading east along a line. Out of the channel on the left, over a strip of
+  // land to a channel the route doesn't follow, back in on the right, a little
+  // behind where they got out: nothing about the line can work that out.
+  const line: LatLng[] = [[51.4, -1.11], [51.4, -1.09]]
+  const c = { id: 's', name: SURVEY_NAME, at: [51.4, -1.1], licence: 'CC0-1.0', createdAt: '', updatedAt: '', landings: [[51.40005, -1.1], [51.4002, -1.10005]], seen: { banks: ['left', 'right'], headingDeg: 90 } } as PublicPortage
 
-  it('leaves a landing clearly on the right side where it is', () => {
-    expect(onBank(line, [51.4001, -1.1], 'left')).toEqual([51.4001, -1.1])
+  it('keeps the landings exactly where they were recorded', () => {
+    expect(portageOnRoute(line, c).takeOut.at).toEqual(c.landings[0])
+    expect(portageOnRoute(line, c).putIn.at).toEqual(c.landings[1])
   })
-  it('moves a landing on the centre line to the bank it was seen on', () => {
-    expect(sideM(onBank(line, [51.4, -1.1], 'left'))).toBeGreaterThanOrEqual(BANK_MIN_M)
-    expect(sideM(onBank(line, [51.4, -1.1], 'right'))).toBeLessThanOrEqual(-BANK_MIN_M)
+  it('uses the banks that were seen, the way it was paddled', () => {
+    const on = portageOnRoute(line, c)
+    expect([on.takeOut.bank, on.putIn.bank]).toEqual(['left', 'right'])
   })
-  it('corrects a landing GPS put just over the line', () => {
-    expect(sideM(onBank(line, [51.40001, -1.1], 'right'))).toBeLessThan(0)
+  it('the other way, the landings swap and each bank flips', () => {
+    const on = portageOnRoute([...line].reverse(), c)
+    expect(on.takeOut.at).toEqual(c.landings[1])
+    expect([on.takeOut.bank, on.putIn.bank]).toEqual(['left', 'right'])
   })
-  it('lands on the asked bank on the inside of a sharp bend', () => {
-    const bend: LatLng[] = [[51.4, -1.11], [51.4, -1.1], [51.39, -1.095]]     // east, then sharply south-east
-    const cum = cumulative(bend)
-    const out = onBank(bend, [51.4, -1.10004], 'right')
-    const p = project(bend, out, cum)
-    expect(sideOf(bend, cum, p.along, out)).toBe('right')
-    expect(p.dist).toBeGreaterThanOrEqual(BANK_MIN_M)
-  })
-  it('works on any heading', () => {
-    const north: LatLng[] = [[51.39, -1.1], [51.41, -1.1]]                   // heading north: left is west
-    expect(onBank(north, [51.4, -1.1], 'left')[1]).toBeLessThan(-1.1)
-  })
-  it('stays beside the same place along the water', () => {
-    expect(onBank(line, [51.4, -1.1], 'right')[1]).toBeCloseTo(-1.1, 5)
+  it('writes the heading it was paddled and the banks into the record', () => {
+    expect(surveyEntry(draft).seen).toEqual({ banks: ['left', 'left'], headingDeg: 90 })
+    expect(surveyEntry(draft).landings).toEqual(draft.landings)
   })
 })
 
@@ -172,12 +167,18 @@ describe('the committed surveys', () => {
   })
 
   // What the video showed, 8 Nov 2026, looking downstream: a wrong bank sends someone to the wrong side.
+  it('Blakes Lock: the put-in is on the north channel, across the strip of land, about 20 m from the take-out', () => {
+    const blakes = surveyPortages.find(p => p.featureId === 'ea-lock:blakes-river-kennet')!
+    expect(blakes.landings[1][0]).toBeGreaterThan(blakes.landings[0][0])
+    expect(haversine(blakes.landings[0], blakes.landings[1])).toBeGreaterThan(15)
+  })
+
   it.each([
     ['KA-016-001', 'left', 'left'], ['KA-015-002', 'left', 'left'], ['KA-013-009', 'right', 'right'], ['KA-011-002', 'right', 'right'],
     ['KA-010-001', 'right', 'right'], ['KA-009-002', 'right', 'right'], ['KA-007-003', 'left', 'left'], ['KA-005-004', 'right', 'right'],
     ['KA-004-002', 'right', 'left'], // Fobney: out beside the lock, back in on the far bank of the weir stream
     ['KA-001-010', 'right', 'right'],
-    ['blakes-river-kennet', 'left', 'right'], // over the strip of land: staging one side, wall the other
+    ['blakes-river-kennet', 'left', 'right'], // out of the south channel, over the strip of land, back into the north one
     ['low-bridge-padworth', 'right', 'right'], ['low-bridge-sulhamstead', 'right', 'right'],
   ])('%s: Plan puts the take-out on the %s and the put-in on the %s, going downstream', (id, out, back) => {
     const r = routePlan(ds, { start: [51.3999, -1.1357], finish: [51.4647, -0.9847], shape: 'one_way' })

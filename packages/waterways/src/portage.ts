@@ -5,7 +5,7 @@
 // points, not "left bank": which is the take-out, and which bank it's on,
 // depends on which way you're paddling, so a route works it out for itself.
 import { haversine } from '@paddlesnitch/timing/geo'
-import { cumulative, project } from './line'
+import { cumulative, project, slice } from './line'
 import { sideOf } from './along'
 import { levelNote } from './portage-survey'
 import type { Feature, LatLng, OsmElement } from './types'
@@ -24,6 +24,7 @@ export type PortageContribution = {
   updatedAt: string
   hidden?: boolean               // hidden by an admin, or by FLAGS_TO_HIDE flags
   observed?: PortageObserved     // first-hand survey: when, and how high the river was
+  seen?: PortageSeen             // first-hand survey: the banks a person saw, which beat working them out
   status?: PortageStatus         // absent once public; never set on a public record
   verdict?: PortageVerdict       // why a note is held
   reviewRef?: string             // the random name of its public review issue; on the held or hidden copy only, never derived from the id
@@ -37,6 +38,13 @@ export type PortageStatus = 'pending' | 'held' | 'not_published'
 export type PortageVerdict = {
   category: 'racist' | 'sexist' | 'offensive' | 'rude' | 'flagged' | 'unchecked'  // flagged: hidden by paddlers' flags; unchecked: the check couldn't run
 }
+
+/** Banks as seen on the water, looking the way it was paddled from landings[0]
+ *  to landings[1]. GPS and the mapped line can't always tell: a boat at the bank
+ *  records within a metre of the centre line, and a carry can cross to a
+ *  channel the route doesn't follow (Blakes Lock). */
+export type PortageSeen = { banks: [Bank, Bank]; headingDeg: number }
+type Bank = 'left' | 'right'
 
 /** When a carry was seen, and what the nearest gauge read then: a landing that
  *  works at one level may be under water, or out of reach, at another. */
@@ -94,18 +102,37 @@ export type PortageOnRoute = {
 /** A contribution as met along a route: the landing reached first is the
  *  take-out; banks are looking the way the route goes. */
 export function portageOnRoute(line: LatLng[], c: PublicPortage, cum = cumulative(line)): PortageOnRoute {
+  const shared = {
+    id: c.id,
+    by: c.name,
+    notes: [c.notes, levelNote(c.id)].filter(Boolean).join(' ') || undefined,
+    rollers: c.rollers,
+    carryM: Math.round(haversine(c.landings[0], c.landings[1])),
+    ...(c.licence === 'ODbL-1.0' ? { osm: true as const } : {}),
+  }
+  if (c.seen) {
+    const flip = (b: Bank): Bank => (b === 'left' ? 'right' : 'left')
+    const sameWay = Math.cos(((routeHeading(line, cum, c.landings[0]) - c.seen.headingDeg) * Math.PI) / 180) >= 0
+    const [out, back] = c.landings, [b0, b1] = c.seen.banks
+    return sameWay
+      ? { ...shared, takeOut: { at: out, bank: b0 }, putIn: { at: back, bank: b1 } }
+      : { ...shared, takeOut: { at: back, bank: flip(b1) }, putIn: { at: out, bank: flip(b0) } }
+  }
   const [a, b] = c.landings.map(p => ({ at: p, along: project(line, p, cum).along }))
   const [first, second] = a.along <= b.along ? [a, b] : [b, a]
   return {
-    id: c.id,
-    by: c.name,
+    ...shared,
     takeOut: { at: first.at, bank: sideOf(line, cum, first.along, first.at) },
     putIn: { at: second.at, bank: sideOf(line, cum, second.along, second.at) },
-    carryM: Math.round(haversine(first.at, second.at)),
-    notes: [c.notes, levelNote(c.id)].filter(Boolean).join(' ') || undefined,
-    rollers: c.rollers,
-    ...(c.licence === 'ODbL-1.0' ? { osm: true as const } : {}),
   }
+}
+
+/** The way a line runs where it passes a point, in degrees clockwise from north. */
+export function routeHeading(line: LatLng[], cum: number[], p: LatLng): number {
+  const { along } = project(line, p, cum)
+  const part = slice(line, Math.max(0, along - 15), along + 15, cum)
+  const [a, b] = [part[0], part[part.length - 1]]
+  return (Math.atan2((b[1] - a[1]) * Math.cos((a[0] * Math.PI) / 180), b[0] - a[0]) * 180) / Math.PI
 }
 
 /** Portage paths mapped in OpenStreetMap (ways tagged portage=*), as landings

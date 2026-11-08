@@ -5,10 +5,9 @@
 import { fmtDay } from '@paddlesnitch/core/format'
 import data from '../data/portage-survey.json'
 import featureData from '../data/survey-features.json'
-import { sideOf } from './along'
-import { cumulative, project } from './line'
+import { cumulative } from './line'
 import type { Feature, LatLng } from './types'
-import type { PortageObserved, PublicPortage } from './portage'
+import { routeHeading, type PortageObserved, type PublicPortage } from './portage'
 
 type SurveyRecord = PublicPortage & { observed?: PortageObserved }
 const records = data as unknown as SurveyRecord[]
@@ -73,31 +72,6 @@ export function levelNote(id: string): string | undefined {
   return g && gaugeNote(g)
 }
 
-/** A landing this close to the centre line has no reliable bank: GPS is good to a few metres. */
-export const BANK_MIN_M = 6
-
-/** Hold a landing on the bank a person saw it on, looking along `line`. A boat at
- *  the bank can record within a metre of the mapped centre line, where the bank
- *  Plan works out is a coin toss; a point already clear on the right side stays put. */
-export function onBank(line: LatLng[], p: LatLng, side: 'left' | 'right'): LatLng {
-  const cum = cumulative(line)
-  const { along, dist, at } = project(line, p, cum)
-  if (dist >= BANK_MIN_M && sideOf(line, cum, along, p) === side) return p
-  let i = 1
-  while (i < cum.length - 1 && cum[i] < along) i++
-  const k = Math.cos((at[0] * Math.PI) / 180)
-  const dx = (line[i][1] - line[i - 1][1]) * k, dy = line[i][0] - line[i - 1][0], len = Math.hypot(dx, dy)
-  const toLeft = side === 'left' ? 1 : -1
-  // Further out only if needed: on the inside of a bend the nearest offset can land across the line.
-  for (const m of [BANK_MIN_M + 1, 10, 15, 20, 30]) {
-    const deg = m / 111_200
-    const q: LatLng = [Number((at[0] + (toLeft * dx / len) * deg).toFixed(6)), Number((at[1] - (toLeft * dy / len) * deg / k).toFixed(6))]
-    const pq = project(line, q, cum)
-    if (pq.dist >= BANK_MIN_M && sideOf(line, cum, pq.along, q) === side) return q
-  }
-  throw new Error(`Couldn't place ${p.join(',')} on the ${side} bank`)
-}
-
 export type SurveyDraft = {
   featureId: string
   lock: string
@@ -124,7 +98,8 @@ export function surveyEntry(d: SurveyDraft): PublicPortage {
   const slug = d.featureId.split(':').pop()!.replace(/[^\w-]/g, '-')
   return {
     id: `survey-${d.observed.at.slice(0, 10)}-${slug}`, name: SURVEY_NAME, featureId: d.featureId, at: d.at, notes,
-    landings: [onBank(d.line, d.landings[0], d.sides[0] as 'left' | 'right'), onBank(d.line, d.landings[1], d.sides[1] as 'left' | 'right')],
+    landings: d.landings,
+    seen: { banks: d.sides as ['left' | 'right', 'left' | 'right'], headingDeg: Math.round(routeHeading(d.line, cumulative(d.line), d.landings[0])) },
     licence: 'CC0-1.0', observed, createdAt: at, updatedAt: at,
   }
 }
