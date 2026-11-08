@@ -70,6 +70,8 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
   const [firstView] = useState(() => view ?? (initial.start || saved || shared ? undefined : FIRST_VIEW))
   const [satellite, setSatellite] = useState(!!lock)
   const [coverage, setCoverage] = useState(false)
+  // The pace input's text, so it can be cleared and retyped on a phone (#918).
+  const [paceText, setPaceText] = useState(() => String(initial.paceKmh))
   // Adding portage details at a stop: the landings clicked so far (OpenPortage).
   const [adding, setAdding] = useState<{ stop: Stop; landings: LatLng[] } | null>(() => (lock ? { stop: stopAt(lock), landings: [] } : null))
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
@@ -261,8 +263,22 @@ export default function Planner({ initial, view, saved, shared, lock, unfound = 
               onChange={e => setDraft(d => ({ ...d, startAt: e.target.value ? new Date(e.target.value).toISOString() : undefined }))} />
           </Field>
           <Field label="Pace (km/h)" htmlFor="plan-pace">
-            <input id="plan-pace" type="number" inputMode="decimal" min={1} max={30} step={0.5} className={INPUT} value={draft.paceKmh}
-              onChange={e => { const v = Number(e.target.value); if (v >= 1 && v <= 30) setDraft(d => ({ ...d, paceKmh: v })) }} />
+            {/* The field holds what you type (incl. empty, to clear and retype
+                on a phone); the draft follows an in-range number and the value
+                is clamped to 1–30 on blur. value={draft.paceKmh} rejected the
+                empty string mid-edit, so the number snapped back (#918). */}
+            <input id="plan-pace" type="number" inputMode="decimal" min={1} max={30} step={0.5} className={INPUT} value={paceText}
+              onChange={e => {
+                setPaceText(e.target.value)
+                const v = Number(e.target.value)
+                if (e.target.value !== '' && v >= 1 && v <= 30) setDraft(d => ({ ...d, paceKmh: v }))
+              }}
+              onBlur={() => {
+                const v = Number(paceText)
+                const clamped = paceText !== '' && Number.isFinite(v) ? Math.min(30, Math.max(1, v)) : draft.paceKmh
+                setPaceText(String(clamped))
+                setDraft(d => ({ ...d, paceKmh: clamped }))
+              }} />
           </Field>
           <Field label="Minutes per portage" htmlFor="plan-portage">
             <input id="plan-portage" type="number" inputMode="numeric" min={0} max={120} step={1} className={INPUT} value={draft.portageMinutes}
