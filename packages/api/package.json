@@ -14,7 +14,7 @@
     "@paddlesnitch/core": "workspace:*",
     "@paddlesnitch/timing": "workspace:*",
     "@paddlesnitch/waterways": "workspace:*",
-    "@trpc/server": "^11.22.1",
+    "@trpc/server": "^11.25.0",
     "zod": "^4.6.7"
   }
 }
