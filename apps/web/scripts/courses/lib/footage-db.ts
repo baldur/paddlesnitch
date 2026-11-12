@@ -84,13 +84,37 @@ export function openStore(dir = STORE): DatabaseSync {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, y REAL, at TEXT
     );
+  `)
+  // Stores made before missed kept y.
+  try { db.exec('ALTER TABLE missed ADD COLUMN y REAL') } catch { /* already there */ }
+  for (const t of ['stations', 'looks', 'items', 'missed']) addAutoincrement(db, t)
+  db.exec(`
     CREATE INDEX IF NOT EXISTS items_look ON items(look_id);
     CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
     CREATE INDEX IF NOT EXISTS looks_station ON looks(station_id);
   `)
-  // Stores made before missed kept y.
-  try { db.exec('ALTER TABLE missed ADD COLUMN y REAL') } catch { /* already there */ }
   return db
+}
+
+/**
+ * Stores made before ids were AUTOINCREMENT reuse a deleted top id. Rebuild such
+ * a table once, keeping every row and id, in one transaction (safe while
+ * course:look is writing: it waits on the lock, and re-reads the schema after).
+ */
+export function addAutoincrement(db: DatabaseSync, table: string) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { sql: string } | undefined
+  if (!row || /AUTOINCREMENT/i.test(row.sql)) return
+  const sql = row.sql
+    .replace(/^CREATE TABLE\s+("?)\w+\1/i, `CREATE TABLE ${table}__new`)
+    .replace(/\bid INTEGER PRIMARY KEY\b/i, 'id INTEGER PRIMARY KEY AUTOINCREMENT')
+  // Dropping the old table would otherwise trip the foreign keys of the rows pointing at it.
+  db.exec('PRAGMA foreign_keys = OFF')
+  try {
+    tx(db, () => {
+      db.exec(sql)
+      db.exec(`INSERT INTO ${table}__new SELECT * FROM ${table}; DROP TABLE ${table}; ALTER TABLE ${table}__new RENAME TO ${table}`)
+    })
+  } finally { db.exec('PRAGMA foreign_keys = ON') }
 }
 
 function tx<T>(db: DatabaseSync, fn: () => T): T {

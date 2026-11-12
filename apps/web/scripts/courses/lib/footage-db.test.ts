@@ -205,6 +205,36 @@ describe('checking the answers (course:explore)', () => {
     expect(itemIds().some((id) => old.includes(id))).toBe(false)
   })
 
+  it('a store made before ids were never reused is upgraded once, keeping its rows and ids', () => {
+    const old = fs.mkdtempSync(path.join(os.tmpdir(), 'footage-old-'))
+    const sqlite = process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite')
+    const raw = new sqlite.DatabaseSync(path.join(old, 'footage.db'))
+    raw.exec(`CREATE TABLE stations (id INTEGER PRIMARY KEY, chapter_id INTEGER NOT NULL REFERENCES chapters(id), level INTEGER NOT NULL, n INTEGER NOT NULL,
+        ft REAL, lat REAL, lng REAL, heading REAL, speed REAL, UNIQUE (chapter_id, level, n));
+      CREATE TABLE looks (id INTEGER PRIMARY KEY, station_id INTEGER NOT NULL REFERENCES stations(id), view_yaw REAL NOT NULL, model TEXT NOT NULL,
+        prompt_version INTEGER NOT NULL, ok INTEGER NOT NULL, scene TEXT, water TEXT, light TEXT, own_person TEXT, own_propulsion TEXT, raw TEXT, ms INTEGER,
+        created_at TEXT, UNIQUE (station_id, view_yaw, model, prompt_version));
+      CREATE TABLE items (id INTEGER PRIMARY KEY, look_id INTEGER NOT NULL REFERENCES looks(id), kind TEXT, detail TEXT, x REAL, distance TEXT, count INTEGER);
+      CREATE TABLE missed (id INTEGER PRIMARY KEY, look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, at TEXT);
+      CREATE TABLE chapters (id INTEGER PRIMARY KEY, key TEXT UNIQUE NOT NULL, path TEXT NOT NULL, status TEXT NOT NULL);
+      INSERT INTO chapters (id, key, path, status) VALUES (1, 'k', 'p', 'ok');
+      INSERT INTO stations (id, chapter_id, level, n) VALUES (3, 1, 0, 0);
+      INSERT INTO looks (id, station_id, view_yaw, model, prompt_version, ok) VALUES (1, 3, 0, 'm', 2, 1);
+      INSERT INTO items (id, look_id, kind) VALUES (7, 1, 'swan');`)
+    raw.close()
+    const up = openStore(old)
+    try {
+      for (const t of ['stations', 'looks', 'items', 'missed']) {
+        expect((up.prepare("SELECT sql FROM sqlite_master WHERE name = ?").get(t) as { sql: string }).sql).toMatch(/AUTOINCREMENT/)
+      }
+      expect(up.prepare('SELECT id, kind FROM items').all()).toEqual([{ id: 7, kind: 'swan' }])
+      up.exec('DELETE FROM items')
+      expect(Number(up.prepare("INSERT INTO items (look_id, kind) VALUES (1, 'bridge')").run().lastInsertRowid)).toBe(8)
+      expect(up.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'items_look'").get()).toBeDefined()
+      expect(up.prepare("SELECT y FROM missed").all()).toEqual([])
+    } finally { up.close(); fs.rmSync(old, { recursive: true, force: true }) }
+  })
+
   it('a clip that changed gets new spot ids, so cached pictures of the old spots are never shown for them', () => {
     const { id } = saveClip(db, clip(), null)
     ensureStations(db, id, 100, 1)

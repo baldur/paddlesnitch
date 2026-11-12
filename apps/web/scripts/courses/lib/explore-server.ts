@@ -47,7 +47,7 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
       return (JSON.parse(r.track) as number[][]).filter(([ft]) => (ft - last >= 10 ? ((last = ft), true) : false)).map(([, lat, lng]) => [+lat.toFixed(5), +lng.toFixed(5)])
     })
 
-  function spot(id: number) {
+  function spot(id: number, viewPx: number) {
     const all = spots()
     const at = all.find((s) => s.id === id)
     if (!at) return null
@@ -60,7 +60,7 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
       const missed = l ? db.prepare('SELECT id, kind, x, coalesce(y, 0.86) AS y FROM missed WHERE look_id = ?').all(l.id) : []
       return {
         ...v, lookId: l?.id ?? null, ok: !!l?.ok, scene: l?.scene ?? null, water: l?.water ?? null, light: l?.light ?? null, missed,
-        pins: layoutPins(items.map((i) => ({ ...i, label: i.kind + (i.count > 1 ? ` ×${i.count}` : '') }))),
+        pins: layoutPins(items.map((i) => ({ ...i, label: i.kind + (i.count > 1 ? ` ×${i.count}` : '') })), viewPx),
       }
     })
     const sameClip = all.filter((s) => s.chapterId === at.chapterId)
@@ -78,12 +78,14 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
     return scoreOf(reviews, missed)
   }
 
-  // Cutting a 360 frame is heavy: at most two at once, and one job per spot however many views are asked for.
+  // Cutting a 360 frame is heavy: at most two at once, and one job per spot however
+  // many views are asked for. The newest request goes first, so the spot the owner
+  // stops on isn't stuck behind ones skipped past.
   const cutting = new Map<number, Promise<void>>()
   const queue: Array<() => void> = []
   let running = 0
   const slot = () => new Promise<void>((go) => { if (running < 2) { running++; go() } else queue.push(go) })
-  const free = () => { const next = queue.shift(); if (next) next(); else running-- }
+  const free = () => { const next = queue.pop(); if (next) next(); else running-- }
   function cut(id: number): Promise<void> {
     if (VIEWS.every((v) => fs.existsSync(viewFile(viewDir, id, v.yaw)))) return Promise.resolve()
     if (!cutting.has(id)) {
@@ -118,8 +120,9 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
     const port = (server.address() as { port: number }).port
     try {
       if (!hostAllowed(req.headers.host, port)) return send(res, 403, { error: 'This server only answers localhost.' })
-      if (!fetchSiteAllowed(req.headers['sec-fetch-site'] as string | undefined)) return send(res, 403, { error: 'Only from this page.' })
-      const r = route(req.method ?? 'GET', new URL(req.url ?? '/', 'http://localhost').pathname)
+      const url = new URL(req.url ?? '/', 'http://localhost')
+      const r = route(req.method ?? 'GET', url.pathname)
+      if (!fetchSiteAllowed(req.headers['sec-fetch-site'] as string | undefined, r.kind === 'page')) return send(res, 403, { error: 'Only from this page.' })
       if (req.method === 'POST' && (!originAllowed(req.headers.origin, port) || !isJson(req.headers['content-type']))) return send(res, 403, { error: 'Only from this page.' })
       switch (r.kind) {
         case 'page':
@@ -127,14 +130,18 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           return res.end(page)
         case 'spots': return send(res, 200, { model, spots: spots(), tracks: tracks() })
         case 'score': return send(res, 200, score())
-        case 'spot': { const s = spot(r.id); return s ? send(res, 200, s) : send(res, 404, { error: 'No such spot.' }) }
+        case 'spot': {
+          // How wide the page shows a picture, so the pins are laid out for it.
+          const w = Number(url.searchParams.get('w'))
+          const s = spot(r.id, Number.isFinite(w) && w >= 150 && w <= 2000 ? w : 520)
+          return s ? send(res, 200, s) : send(res, 404, { error: 'No such spot.' }) }
         case 'view': {
           try { await cut(r.id) } catch (e) {
             if ((e as Error).message !== 'missing') log(`couldn't cut spot ${r.id}: ${(e as Error).message.split('\n')[0]}`)
             return send(res, 404, { error: "Couldn't cut this picture." })
           }
-          // A spot's id is never reused (footage-db.ts), so its pictures never change.
-          res.writeHead(200, { ...HEADERS, 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=31536000, immutable' })
+          // Not kept by the browser: deleting views/ is then enough to remove the pictures.
+          res.writeHead(200, { ...HEADERS, 'content-type': 'image/jpeg' })
           return res.end(fs.readFileSync(viewFile(viewDir, r.id, r.yaw)))
         }
         case 'review': {
@@ -142,22 +149,22 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           const b = await readJson(req)
           const ids = b && (Array.isArray(b.itemIds) ? b.itemIds.slice(0, 100).map(whole) : [whole(b.itemId)])
           const verdict = b?.verdict === 'right' || b?.verdict === 'wrong' ? b.verdict : b?.verdict === null ? null : undefined
-          if (!ids?.length || ids.includes(null) || verdict === undefined) return send(res, 400, { error: 'itemId and verdict (right, wrong or null).' })
+          if (!ids?.length || ids.includes(null) || verdict === undefined) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
           const saved = (ids as number[]).filter((id) => saveReview(db, id, verdict))
-          return saved.length ? send(res, 200, { saved, score: score() }) : send(res, 404, { error: 'That answer has changed; reload the spot.' })
+          return saved.length ? send(res, 200, { saved, score: score() }) : send(res, 404, { error: 'The model has looked here again since. Reload the page.' })
         }
         case 'missed': {
           const b = await readJson(req)
-          if (!b) return send(res, 400, { error: 'Not JSON.' })
+          if (!b) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
           const remove = whole(b.remove)
           if (remove !== null) { saveMissed(db, { remove }); return send(res, 200, { score: score() }) }
           const lookId = whole(b.lookId)
           const x = share(b.x)
           const y = share(b.y)
           const kind = (KINDS as readonly string[]).includes(b.kind as string) ? (b.kind as string) : null
-          if (lookId === null || x === null || y === null || kind === null) return send(res, 400, { error: 'lookId, a kind from the list, and x and y 0–1.' })
+          if (lookId === null || x === null || y === null || kind === null) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
           const id = saveMissed(db, { lookId, kind, x, y })
-          return id === null ? send(res, 404, { error: 'That answer has changed; reload the spot.' }) : send(res, 200, { id, score: score() })
+          return id === null ? send(res, 404, { error: 'The model has looked here again since. Reload the page.' }) : send(res, 200, { id, score: score() })
         }
         default: return send(res, 404, { error: 'Not found.' })
       }

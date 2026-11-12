@@ -61,7 +61,7 @@ function lookedAt(version = PROMPT_VERSION) {
 
 type Res = { status: number; headers: http.IncomingHttpHeaders; body: string; json: () => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 function request(method: string, p: string, opts: { body?: unknown; headers?: Record<string, string> } = {}): Promise<Res> {
-  const own = { host: `localhost:${port}`, ...(method === 'POST' ? { origin: `http://localhost:${port}`, 'content-type': 'application/json' } : {}) }
+  const own = { host: `localhost:${port}`, 'sec-fetch-site': 'same-origin', ...(method === 'POST' ? { origin: `http://localhost:${port}`, 'content-type': 'application/json' } : {}) }
   return new Promise((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port, method, path: p, headers: { ...own, ...opts.headers } }, (res) => {
       let body = ''
@@ -93,12 +93,21 @@ describe('who it answers', () => {
     expect((await post('/api/review', body, { 'content-type': 'text/plain' })).status).toBe(403)
     expect((await post('/api/review', body, { 'content-type': 'application/json; charset=utf-8' })).status).toBe(200)
   })
+  it('opens the page from the address bar, but gives data only to the page', async () => {
+    expect((await request('GET', '/', { headers: { 'sec-fetch-site': 'none' } })).status).toBe(200)
+    expect((await request('GET', '/api/spots', { headers: { 'sec-fetch-site': 'none' } })).status).toBe(403)
+  })
+  it('lays the pins out for the width the page shows pictures at', async () => {
+    const { spotId } = lookedAt()
+    const at = async (w: number) => (await request('GET', `/api/spot/${spotId}?w=${w}`)).json().views.find((v: { viewYaw: number }) => v.viewYaw === 0).pins[0].w
+    expect(await at(300)).toBeGreaterThan(await at(600))
+  })
   it('sends the page with a policy that runs only its own script', async () => {
     const r = await request('GET', '/')
     const script = /<script>([\s\S]*)<\/script>/.exec(r.body)![1]
     const hash = crypto.createHash('sha256').update(script).digest('base64')
     expect(r.headers['content-security-policy']).toContain(`'sha256-${hash}'`)
-    expect(/script-src [^;]*unsafe-inline/.test(r.headers['content-security-policy']!)).toBe(false)
+    expect(/script-src [^;]*unsafe-inline/.test(String(r.headers["content-security-policy"]))).toBe(false)
     expect(r.headers['cross-origin-resource-policy']).toBe('same-origin')
   })
 })
@@ -157,13 +166,44 @@ describe('spots and pictures', () => {
     expect(pins.map((p: { label: string }) => p.label)).toEqual(['bridge', 'swan ×2'])
     expect((await request('GET', '/api/spot/99999')).status).toBe(404)
   })
-  it('cuts a spot once however many of its views are asked for at once, then serves them as unchanging', async () => {
+  it("cuts a spot once however many of its views are asked for at once, and the browser doesn't keep them", async () => {
     const { spotId } = lookedAt()
     const rs = await Promise.all(VIEWS.map((v) => request('GET', `/view/${spotId}/${v.yaw}.jpg`)))
     expect(rs.map((r) => r.status)).toEqual([200, 200, 200, 200])
     expect(cuts).toEqual([spotId])
-    expect(rs[0].headers['cache-control']).toContain('immutable')
+    expect(rs[0].headers['cache-control']).toBe('no-store')
   })
+  it('cuts at most two spots at once, newest first, and a failed cut frees its place', async () => {
+    lookedAt()
+    const ids = (db.prepare('SELECT id FROM stations ORDER BY id LIMIT 5').all() as Array<{ id: number }>).map((r) => r.id)
+    let now = 0, most = 0
+    const order: number[] = []
+    const viewDir = path.join(dir, 'views2')
+    fs.mkdirSync(viewDir)
+    const busy = createExplorer(db, {
+      model: MODEL, viewDir, log: () => {},
+      cut: async (st) => {
+        order.push(st.id); most = Math.max(most, ++now)
+        await new Promise((r) => setTimeout(r, 30))
+        now--
+        if (st.id === ids[0]) throw new Error('ffmpeg exited 1: /secret/path.360: Invalid data')
+        for (const v of VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw), 'jpeg')
+      },
+    })
+    await new Promise<void>((r) => busy.listen(0, '127.0.0.1', r))
+    const p2 = (busy.address() as { port: number }).port
+    const get = (id: number) => new Promise<number>((resolve) => {
+      http.get({ host: '127.0.0.1', port: p2, path: `/view/${id}/0.jpg`, headers: { host: `localhost:${p2}`, 'sec-fetch-site': 'same-origin' } }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode!)) })
+    })
+    try {
+      const results: Promise<number>[] = []
+      for (const id of ids) { results.push(get(id)); await new Promise((r) => setTimeout(r, 2)) }
+      expect(await Promise.all(results)).toEqual([404, 200, 200, 200, 200])
+      expect(most).toBe(2)
+      expect(order.slice(2)).toEqual([ids[4], ids[3], ids[2]])
+    } finally { await new Promise((r) => busy.close(r)) }
+  })
+
   it("says so without a path when the clip isn't on this machine", async () => {
     const { spotId } = lookedAt()
     fs.rmSync(video)

@@ -17,17 +17,22 @@ describe('stripOrder', () => {
 
 describe('layoutPins', () => {
   const pin = (x: number, distance: 'near' | 'mid' | 'far', label = 'trees') => ({ x, distance, label })
-  const overlap = (a: { px: number; py: number; w: number }, b: { px: number; py: number; w: number }) =>
-    a.px < b.px + b.w && b.px < a.px + a.w && Math.abs(a.py - b.py) < 0.069
+  const overlap = (a: { px: number; py: number; w: number }, b: { px: number; py: number; w: number }, viewPx: number) =>
+    a.px < b.px + b.w && b.px < a.px + a.w && Math.abs(a.py - b.py) * viewPx * 0.625 < 23.9
 
   it('places pins across by x and down by distance, far higher than near', () => {
     const [far, near] = layoutPins([pin(0.2, 'far'), pin(0.8, 'near')])
     expect(far.px + far.w / 2).toBeCloseTo(0.2)
     expect(far.py).toBeLessThan(near.py)
   })
-  it('labels never overlap, even long ones close together', () => {
-    const pins = layoutPins([pin(0.5, 'mid', 'moored-narrowboat ×2'), pin(0.6, 'mid', 'moored-cruiser'), pin(0.55, 'mid'), pin(0.9, 'mid')])
-    for (let i = 0; i < pins.length; i++) for (let j = i + 1; j < pins.length; j++) expect(overlap(pins[i], pins[j])).toBe(false)
+  it('labels never overlap at the sizes the page shows pictures, even long ones close together', () => {
+    for (const viewPx of [290, 400, 560]) {
+      const pins = layoutPins([pin(0.5, 'mid', 'moored-narrowboat ×2'), pin(0.6, 'mid', 'moored-cruiser'), pin(0.55, 'mid'), pin(0.9, 'mid'), pin(0.52, 'near', 'bridge')], viewPx)
+      for (let i = 0; i < pins.length; i++) for (let j = i + 1; j < pins.length; j++) expect(overlap(pins[i], pins[j], viewPx)).toBe(false)
+    }
+  })
+  it('a label is as wide as its text needs on a smaller picture', () => {
+    expect(layoutPins([pin(0.5, 'mid', 'moored-narrowboat')], 290)[0].w).toBeGreaterThan(layoutPins([pin(0.5, 'mid', 'moored-narrowboat')], 560)[0].w)
   })
   it('labels at the edges stay inside the picture', () => {
     for (const p of layoutPins([pin(0, 'mid', 'moored-narrowboat'), pin(1, 'far', 'pub-restaurant')])) {
@@ -36,7 +41,7 @@ describe('layoutPins', () => {
     }
   })
   it('a pile of pins at one place spreads up the picture instead of stacking at the bottom', () => {
-    const pins = layoutPins(Array.from({ length: 8 }, () => pin(0.5, 'near')))
+    const pins = layoutPins(Array.from({ length: 8 }, () => pin(0.5, 'near')), 560)
     expect(new Set(pins.map((p) => p.py.toFixed(3))).size).toBe(8)
     expect(Math.max(...pins.map((p) => p.py))).toBeLessThanOrEqual(0.94 + 1e-9)
   })
@@ -79,12 +84,18 @@ describe('who the server answers', () => {
     expect(hostAllowed('evil.example:3201', 3201)).toBe(false)
     expect(hostAllowed(undefined, 3201)).toBe(false)
   })
-  it("refuses another site's page, even through an <img>, but not its own page or the typed address", () => {
-    expect(fetchSiteAllowed('cross-site')).toBe(false)
-    expect(fetchSiteAllowed('same-site')).toBe(false)
-    expect(fetchSiteAllowed('same-origin')).toBe(true)
-    expect(fetchSiteAllowed('none')).toBe(true)
-    expect(fetchSiteAllowed(undefined)).toBe(true)
+  it("refuses another site's page, even through an <img>; the page itself can be typed in", () => {
+    for (const isPage of [true, false]) {
+      expect(fetchSiteAllowed('cross-site', isPage)).toBe(false)
+      expect(fetchSiteAllowed('same-site', isPage)).toBe(false)
+      expect(fetchSiteAllowed('same-origin', isPage)).toBe(true)
+    }
+    expect(fetchSiteAllowed('none', true)).toBe(true)
+    expect(fetchSiteAllowed(undefined, true)).toBe(true)
+  })
+  it('data and pictures only from the page, so an old browser that says nothing gets nothing', () => {
+    expect(fetchSiteAllowed('none', false)).toBe(false)
+    expect(fetchSiteAllowed(undefined, false)).toBe(false)
   })
   it('takes JSON with or without a charset, nothing else', () => {
     expect(isJson('application/json')).toBe(true)

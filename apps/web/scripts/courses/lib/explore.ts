@@ -27,28 +27,32 @@ export function stripOrder(cameraYaw: number | null): Array<{ viewYaw: number; f
 
 /** How far down the picture a thing of each distance usually sits (the horizon is a little above the middle). */
 const BAND_Y: Record<Distance, number> = { far: 0.42, mid: 0.52, near: 0.68 }
-const ROW = 0.07
 const BOTTOM = 0.94
+/** The pictures are 1024×640; a pin is about 22 px tall whatever the picture's size. */
+const ASPECT = 640 / 1024
+const PIN_PX = 24
 
-/** A pin's label is its kind (and "×n"): about this share of a view's width. */
-export const labelWidth = (label: string, viewPx = 520) => (label.length * 7 + 22) / viewPx
+/** A pin's label is its kind (and "×n") in 11 px mono, after a dot: its share of a view `viewPx` wide. */
+export const labelWidth = (label: string, viewPx: number) => (label.length * 6.7 + 26) / viewPx
 
 /**
- * Pins for one view, as label boxes that stay inside the picture and don't
- * overlap: across at the item's x (anchored left or right near an edge), down by
- * its distance, and moved to the next free row below, then above, when taken.
- * `px` is the label's left edge, `py` its centre, both 0–1.
+ * Pins for one view `viewPx` wide on screen, as label boxes that stay inside the
+ * picture and don't overlap: across at the item's x (pushed in from an edge),
+ * down by its distance, and moved to the next free row below, then above, when
+ * taken. `px` is the label's left edge, `py` its centre, `w` its width, all 0–1.
+ * When a small picture has no free row left, a pin goes on its own band.
  */
 export function layoutPins<T extends { x: number; distance: Distance; label: string }>(items: T[], viewPx = 520): Array<T & { px: number; py: number; w: number }> {
+  const row = PIN_PX / (viewPx * ASPECT)
   const placed: Array<T & { px: number; py: number; w: number }> = []
   for (const it of items) {
     const w = Math.min(labelWidth(it.label, viewPx), 1)
     const px = Math.min(Math.max(it.x - w / 2, 0), 1 - w)
     const band = BAND_Y[it.distance] ?? BAND_Y.mid
     const rows: number[] = []
-    for (let y = band; y <= BOTTOM + 1e-9; y += ROW) rows.push(y)
-    for (let y = band - ROW; y >= 0.06; y -= ROW) rows.push(y)
-    const free = (y: number) => !placed.some((p) => px < p.px + p.w && p.px < px + w && Math.abs(p.py - y) < ROW - 1e-9)
+    for (let y = band; y <= BOTTOM + 1e-9; y += row) rows.push(y)
+    for (let y = band - row; y >= row / 2; y -= row) rows.push(y)
+    const free = (y: number) => !placed.some((p) => px < p.px + p.w && p.px < px + w && Math.abs(p.py - y) < row - 1e-9)
     placed.push({ ...it, w, px, py: rows.find(free) ?? band })
   }
   return placed
@@ -111,8 +115,11 @@ export function originAllowed(origin: string | undefined, port: number): boolean
  * own page, or the address typed in, gets an answer. Tools that don't send it
  * (curl) are still bound by the Host check.
  */
-export function fetchSiteAllowed(site: string | undefined): boolean {
-  return site === undefined || site === 'same-origin' || site === 'none'
+export function fetchSiteAllowed(site: string | undefined, isPage: boolean): boolean {
+  // The page may be opened from the address bar ("none") or by a tool that
+  // doesn't say; the data and pictures only from the page itself.
+  if (isPage) return site === undefined || site === 'same-origin' || site === 'none'
+  return site === 'same-origin'
 }
 export const isJson = (contentType: string | undefined) => /^application\/json(\s*;|$)/i.test(contentType ?? '')
 

@@ -14,7 +14,7 @@ import path from 'path'
 import { eacGraph, eacLayout, flatView } from './lib/eac'
 import { createExplorer, viewFile } from './lib/explore-server'
 import { openStore, STORE } from './lib/footage-db'
-import { VIEW, VIEWS } from './lib/look'
+import { PROMPT_VERSION, VIEW, VIEWS } from './lib/look'
 import { runDetached } from './lib/proc'
 
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined }
@@ -38,10 +38,10 @@ const server = createExplorer(db, {
 })
 
 server.listen(PORT, '127.0.0.1', () => {
-  const n = (db.prepare('SELECT count(DISTINCT station_id) AS n FROM looks WHERE model = ?').get(MODEL) as { n: number }).n
+  const n = (db.prepare('SELECT count(DISTINCT station_id) AS n FROM looks WHERE model = ? AND prompt_version = ?').get(MODEL, PROMPT_VERSION) as { n: number }).n
   // The model is named here and on the page: the score is that model's.
   console.log(`River Explorer: http://localhost:${PORT}  (${n} ${n === 1 ? 'spot' : 'spots'} looked at by ${MODEL}; store ${STORE})`)
-  if (!n) console.log('nothing to explore yet: run pnpm --filter web course:look first')
+  if (!n) console.log(`nothing to explore yet for ${MODEL}: run pnpm --filter web course:look first, or pass the --model it used`)
 })
 server.on('error', (e) => { console.error(`stopped: ${e.message}`); process.exit(1) })
 process.on('SIGINT', () => { server.close(); db.close(); process.exit(0) })
