@@ -116,9 +116,10 @@ export function originAllowed(origin: string | undefined, port: number): boolean
  * (curl) are still bound by the Host check.
  */
 export function fetchSiteAllowed(site: string | undefined, isPage: boolean): boolean {
-  // The page may be opened from the address bar ("none") or by a tool that
-  // doesn't say; the data and pictures only from the page itself.
-  if (isPage) return site === undefined || site === 'same-origin' || site === 'none'
+  // The page holds no data and can't be framed, so it may be opened from anywhere
+  // (the address bar, a link, another local page); the data and pictures go only
+  // to the page itself.
+  if (isPage) return true
   return site === 'same-origin'
 }
 export const isJson = (contentType: string | undefined) => /^application\/json(\s*;|$)/i.test(contentType ?? '')

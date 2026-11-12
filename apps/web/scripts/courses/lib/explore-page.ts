@@ -336,7 +336,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowLeft') current.prev != null ? go(current.prev) : atEnd()
   else if (e.key === 'ArrowRight') current.next != null ? go(current.next) : atEnd()
   else if (e.key === 'n') { const nxt = nextUnmarked(); nxt ? go(nxt.id) : say('No other spot has unmarked pins.') }
-  else if (e.key === 'A' && !e.repeat) markRestRight()
+  else if ((e.key === 'A' || (e.key === 'a' && e.shiftKey)) && !e.repeat) markRestRight()
 })
 
 let resizing

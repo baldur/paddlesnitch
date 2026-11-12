@@ -84,14 +84,11 @@ describe('who the server answers', () => {
     expect(hostAllowed('evil.example:3201', 3201)).toBe(false)
     expect(hostAllowed(undefined, 3201)).toBe(false)
   })
-  it("refuses another site's page, even through an <img>; the page itself can be typed in", () => {
-    for (const isPage of [true, false]) {
-      expect(fetchSiteAllowed('cross-site', isPage)).toBe(false)
-      expect(fetchSiteAllowed('same-site', isPage)).toBe(false)
-      expect(fetchSiteAllowed('same-origin', isPage)).toBe(true)
-    }
-    expect(fetchSiteAllowed('none', true)).toBe(true)
-    expect(fetchSiteAllowed(undefined, true)).toBe(true)
+  it("refuses another site's page, even through an <img>; the page itself opens from anywhere", () => {
+    expect(fetchSiteAllowed('cross-site', false)).toBe(false)
+    expect(fetchSiteAllowed('same-site', false)).toBe(false)
+    expect(fetchSiteAllowed('same-origin', false)).toBe(true)
+    for (const site of ['cross-site', 'same-site', 'same-origin', 'none', undefined]) expect(fetchSiteAllowed(site, true)).toBe(true)
   })
   it('data and pictures only from the page, so an old browser that says nothing gets nothing', () => {
     expect(fetchSiteAllowed('none', false)).toBe(false)
