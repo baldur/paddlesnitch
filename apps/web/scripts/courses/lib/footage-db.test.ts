@@ -4,7 +4,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
-import { assertOutsideRepo, ensureStations, nextStation, openStore, refreshPresence, saveClip, saveLook, setCameraYaw, takeLock, spotSpacing, type Clip } from './footage-db'
+import { assertOutsideRepo, ensureStations, nextStation, openStore, refreshPresence, saveClip, saveLook, saveMissed, saveReview, setCameraYaw, takeLock, spotSpacing, type Clip } from './footage-db'
 import { destination, type Fix } from './stations'
 
 const ORIGIN = { lat: 51.4676, lng: -0.9822 }
@@ -145,6 +145,54 @@ describe('looking', () => {
     look(s.id, 0, 3)
     look(s.id, 0, 2)
     expect(count('SELECT count(*) n FROM items')).toBe(2)
+  })
+})
+
+describe('checking the answers (course:explore)', () => {
+  const lookedAt = () => {
+    const { id } = saveClip(db, clip(), null)
+    ensureStations(db, id, 100, 1)
+    const s = nextStation(db, 'm', 2, 1, 4)!
+    look(s.id, 0, 2)
+    return s.id
+  }
+  const itemIds = () => (db.prepare('SELECT id FROM items ORDER BY id').all() as Array<{ id: number }>).map((r) => r.id)
+  const lookId = () => (db.prepare('SELECT id FROM looks').get() as { id: number }).id
+
+  it('a verdict can be given, changed and taken back, and only for a real item', () => {
+    lookedAt()
+    const [a] = itemIds()
+    expect(saveReview(db, a, 'right')).toBe(true)
+    saveReview(db, a, 'wrong')
+    expect((db.prepare('SELECT verdict FROM reviews').get() as { verdict: string }).verdict).toBe('wrong')
+    saveReview(db, a, null)
+    expect(count('SELECT count(*) n FROM reviews')).toBe(0)
+    expect(saveReview(db, 9999, 'right')).toBe(false)
+  })
+
+  it('a missed thing is kept against its view, and refused for a view that does not exist', () => {
+    lookedAt()
+    const m = saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3 })
+    expect(m).not.toBeNull()
+    expect(saveMissed(db, { lookId: 9999, kind: 'swan', x: 0.3 })).toBeNull()
+    saveMissed(db, { remove: m! })
+    expect(count('SELECT count(*) n FROM missed')).toBe(0)
+  })
+
+  it('redoing a look drops the verdicts on its old answer, so they never score a different answer', () => {
+    const s = lookedAt()
+    for (const id of itemIds()) saveReview(db, id, 'right')
+    saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3 })
+    look(s, 0, 1)
+    expect(count('SELECT count(*) n FROM reviews')).toBe(0)
+    expect(count('SELECT count(*) n FROM missed')).toBe(0)
+  })
+
+  it('a clip that changed drops its verdicts with its spots', () => {
+    lookedAt()
+    saveReview(db, itemIds()[0], 'wrong')
+    saveClip(db, clip({ track: TRACK.slice(0, 200) }), null)
+    expect(count('SELECT count(*) n FROM reviews')).toBe(0)
   })
 })
 

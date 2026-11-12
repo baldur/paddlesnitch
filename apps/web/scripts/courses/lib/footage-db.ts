@@ -73,6 +73,15 @@ export function openStore(dir = STORE): DatabaseSync {
       look_id INTEGER NOT NULL REFERENCES looks(id),
       kind TEXT, detail TEXT, x REAL, distance TEXT, count INTEGER
     );
+    -- course:explore: the owner checking the model's answers against the picture.
+    CREATE TABLE IF NOT EXISTS reviews (
+      item_id INTEGER PRIMARY KEY,       -- goes with its item when a look is redone
+      verdict TEXT NOT NULL, at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS missed (
+      id INTEGER PRIMARY KEY,
+      look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, at TEXT
+    );
     CREATE INDEX IF NOT EXISTS items_look ON items(look_id);
     CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
     CREATE INDEX IF NOT EXISTS looks_station ON looks(station_id);
@@ -153,6 +162,9 @@ export function saveClip(db: DatabaseSync, clip: Clip & { startUtc: string | nul
 }
 
 function dropSpots(db: DatabaseSync, chapterId: number) {
+  const looks = 'SELECT l.id FROM looks l JOIN stations s ON s.id = l.station_id WHERE s.chapter_id = ?'
+  db.prepare(`DELETE FROM reviews WHERE item_id IN (SELECT id FROM items WHERE look_id IN (${looks}))`).run(chapterId)
+  db.prepare(`DELETE FROM missed WHERE look_id IN (${looks})`).run(chapterId)
   db.prepare('DELETE FROM items WHERE look_id IN (SELECT l.id FROM looks l JOIN stations s ON s.id = l.station_id WHERE s.chapter_id = ?)').run(chapterId)
   db.prepare('DELETE FROM looks WHERE station_id IN (SELECT id FROM stations WHERE chapter_id = ?)').run(chapterId)
   db.prepare('DELETE FROM stations WHERE chapter_id = ?').run(chapterId)
@@ -216,6 +228,9 @@ export type SavedLook = {
 /** One view's answer, with its items, in one transaction. Replacing a look replaces its items. */
 export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, model: string, version: number, look: SavedLook) {
   tx(db, () => {
+    const old = 'SELECT id FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?'
+    db.prepare(`DELETE FROM reviews WHERE item_id IN (SELECT id FROM items WHERE look_id IN (${old}))`).run(stationId, viewYaw, model, version)
+    db.prepare(`DELETE FROM missed WHERE look_id IN (${old})`).run(stationId, viewYaw, model, version)
     db.prepare('DELETE FROM items WHERE look_id IN (SELECT id FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?)').run(stationId, viewYaw, model, version)
     db.prepare('DELETE FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?').run(stationId, viewYaw, model, version)
     const r = db.prepare(`INSERT INTO looks (station_id, view_yaw, model, prompt_version, ok, scene, water, light, own_person, own_propulsion, raw, ms, created_at)
@@ -224,6 +239,22 @@ export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, m
     const ins = db.prepare('INSERT INTO items (look_id, kind, detail, x, distance, count) VALUES (?, ?, ?, ?, ?, ?)')
     for (const i of look.items ?? []) ins.run(r.lastInsertRowid, i.kind, i.detail, i.x, i.distance, i.count)
   })
+}
+
+/** The owner's verdict on one thing the model saw; null takes it back. Unknown items are refused. */
+export function saveReview(db: DatabaseSync, itemId: number, verdict: 'right' | 'wrong' | null): boolean {
+  if (!db.prepare('SELECT 1 FROM items WHERE id = ?').get(itemId)) return false
+  if (verdict === null) db.prepare('DELETE FROM reviews WHERE item_id = ?').run(itemId)
+  else db.prepare(`INSERT INTO reviews (item_id, verdict, at) VALUES (?, ?, ?)
+    ON CONFLICT(item_id) DO UPDATE SET verdict = excluded.verdict, at = excluded.at`).run(itemId, verdict, new Date().toISOString())
+  return true
+}
+
+/** Something in the picture the model didn't list; `remove` takes one back. Unknown looks are refused. */
+export function saveMissed(db: DatabaseSync, m: { lookId: number; kind: string; x: number } | { remove: number }): number | null {
+  if ('remove' in m) { db.prepare('DELETE FROM missed WHERE id = ?').run(m.remove); return m.remove }
+  if (!db.prepare('SELECT 1 FROM looks WHERE id = ?').get(m.lookId)) return null
+  return Number(db.prepare('INSERT INTO missed (look_id, kind, x, at) VALUES (?, ?, ?, ?)').run(m.lookId, m.kind, m.x, new Date().toISOString()).lastInsertRowid)
 }
 
 /**

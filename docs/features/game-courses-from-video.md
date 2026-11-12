@@ -113,8 +113,26 @@ pnpm --filter web course:look --export     # everything seen, placed, as GeoJSON
 
 - Frames only go to a model on this machine: the endpoint (`PADDLESNITCH_OLLAMA`, default `localhost:11434`; not `OLLAMA_HOST`, which is often set for other reasons) must be loopback unless `--allow-remote`, and Ollama's cloud models are refused, by name and, for one copied to another name, by its details (`remote_host`). Only the image, the prompt and the schema are sent.
 - The store is a SQLite file outside the repo: `~/.paddlesnitch/footage/footage.db` (`PADDLESNITCH_FOOTAGE` moves it), tables `chapters` (with each clip's track), `stations`, `looks` (with the raw reply) and `items`. Open it with `sqlite3` or anything else. The store and `--export` refuse any path inside a git work tree (following symlinks). They can't see synced folders: don't point either into iCloud Drive or a Documents folder that syncs. **The export is personal data too**: its points and bearings trace the paddles. Neither goes in the repo, an issue or a chat.
-- Frames aren't kept: each spot's views are cut to a temp folder and removed (also on a hard stop). Any spot can be cut again from the clip.
+- course:look keeps no frames: each spot's views are cut to a temp folder and removed (also on a hard stop). Any spot can be cut again from the clip. course:explore keeps the views it shows in the store's `views/` folder (outside the repo, like the store); delete the folder to free the space.
 - The model is asked not to name boats or describe who people are, but that's a request, not a guarantee: `detail`, `scene` and `raw` stay in the store.
+
+### Checking what it saw (`explore.ts`, page `lib/explore-page.ts`, pure parts in `lib/explore.ts`, tested)
+
+Added 2026-11-12 so the owner can judge the model before anything it saw goes into the game.
+
+```
+pnpm --filter web course:explore [--port 3201] [--model qwen2.5vl:32b]   # then open http://localhost:3201
+```
+
+River Explorer is a small local web page over the store. It can run while course:look is looking.
+
+- **Map:** every spot looked at, over the clips' tracks; green once every pin on it is marked.
+- **A spot:** its four views as a strip with the bow in the middle (left, ahead, right, behind; `stripOrder`, using the clip's camera direction or the usual back-deck one), the model's things pinned where it said they were (across by `x`, down by distance band; `layoutPins`), and its sentence under each view. The views are the same ones the model was shown, cut when first opened.
+- **Marking:** click a pin for right, again for made up, again to clear. Click the picture where the model missed something and pick its kind. Keys: ← → along the clip, `n` the next spot with unmarked pins, `a` marks the rest of this spot right.
+- **Score:** share of marked things that were right, made up, missed, and the same per kind (`scoreOf`). This is the spot-check that decides whether the model is good enough to feed the game, and which kinds to trust.
+- **The same place on other days:** the nearest spot from each other clip within 30 m (`otherPasses`), to see whether the model agrees with itself.
+- **Stored** in the store's `reviews` (one verdict per item) and `missed` tables. Redoing a look, or a clip that changed, drops its verdicts with its items, so a verdict never scores a different answer.
+- **Local only:** the server listens on 127.0.0.1, answers only a `Host` of localhost or 127.0.0.1 on its port (so another site can't reach it by pointing a name at 127.0.0.1), takes changes only as JSON from its own page (`Origin`), and the page loads nothing from anywhere else. The model's words are put on the page as text, never HTML.
 
 **Into the game (next).** A separate step will merge items across passes and clips (seen on most passes at a place: scenery; seen sometimes: a spawn rate) into `observations.json` and the course files. **What it may commit is an allowlist:** a `kind` from `KINDS`, an aggregated count or rate, and a position merged across passes: only places seen on at least 3 passes on at least 2 different days, snapped to the river line (distance along it, every 25 m) and a side, never raw latitude and longitude. Never `detail`, `scene`, `raw`, clip names, times (`ft`, `start_utc`), dates, or anything per pass. Its output gets a test that rejects any other key, and the `security-privacy` reviewer checks it before anything derived from the store is committed.
 
