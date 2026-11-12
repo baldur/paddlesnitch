@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+// River Explorer: walk the river spot by spot and see what the local model saw,
+// pinned on the pictures, and mark whether it was right.
+//
+//   pnpm --filter web course:explore [--port 3201] [--model qwen2.5vl:32b]   then open http://localhost:3201
+//
+// Reads the course:look store (lib/footage-db.ts) and can run while course:look
+// is looking. The pictures are cut from the clips when first opened and kept in
+// the store's views/ folder. Everything stays on this machine: the server
+// answers only localhost (lib/explore-server.ts).
+// See docs/features/game-courses-from-video.md, "Checking what it saw".
+import fs from 'fs'
+import path from 'path'
+import { eacGraph, eacLayout, flatView } from './lib/eac'
+import { createExplorer, viewFile } from './lib/explore-server'
+import { openStore, STORE } from './lib/footage-db'
+import { PROMPT_VERSION, VIEW, VIEWS } from './lib/look'
+import { runDetached } from './lib/proc'
+
+const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined }
+const PORT = Number(arg('port') ?? 3201)
+if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) { console.error('stopped: --port must be 1024–65535'); process.exit(1) }
+const MODEL = arg('model') ?? 'qwen2.5vl:32b'
+
+const db = openStore()
+const viewDir = path.join(STORE, 'views')
+fs.mkdirSync(viewDir, { recursive: true })
+
+const server = createExplorer(db, {
+  model: MODEL, viewDir,
+  // The same views the model was shown (look.ts), written beside their final names and moved in when complete.
+  cut: async (st) => {
+    const graph = eacGraph(eacLayout(st.width, st.height), VIEWS.length) + VIEWS.map((v, i) => flatView(i, v.name, { ...VIEW, yaw: v.yaw })).join(';')
+    await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', st.ft.toFixed(2), '-i', st.path, '-filter_complex', graph,
+      ...VIEWS.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', `${viewFile(viewDir, st.id, v.yaw)}.part.jpg`])])
+    for (const v of VIEWS) fs.renameSync(`${viewFile(viewDir, st.id, v.yaw)}.part.jpg`, viewFile(viewDir, st.id, v.yaw))
+  },
+})
+
+server.listen(PORT, '127.0.0.1', () => {
+  const n = (db.prepare('SELECT count(DISTINCT station_id) AS n FROM looks WHERE model = ? AND prompt_version = ?').get(MODEL, PROMPT_VERSION) as { n: number }).n
+  // The model is named here and on the page: the score is that model's.
+  console.log(`River Explorer: http://localhost:${PORT}  (${n} ${n === 1 ? 'spot' : 'spots'} looked at by ${MODEL}; store ${STORE})`)
+  if (!n) console.log(`nothing to explore yet for ${MODEL}: run pnpm --filter web course:look first, or pass the --model it used`)
+})
+server.on('error', (e) => { console.error(`stopped: ${e.message}`); process.exit(1) })
+process.on('SIGINT', () => { server.close(); db.close(); process.exit(0) })

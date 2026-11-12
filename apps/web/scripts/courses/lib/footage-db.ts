@@ -51,15 +51,17 @@ export function openStore(dir = STORE): DatabaseSync {
       track TEXT,                        -- JSON [[ft, lat, lng, speed], …] every usable fix
       scanned_at TEXT
     );
+    -- AUTOINCREMENT: an id is never reused after a delete, so a verdict, a cached
+    -- view or an open page can't end up on a different spot, look or item.
     CREATE TABLE IF NOT EXISTS stations (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       chapter_id INTEGER NOT NULL REFERENCES chapters(id),
       level INTEGER NOT NULL, n INTEGER NOT NULL,
       ft REAL, lat REAL, lng REAL, heading REAL, speed REAL,
       UNIQUE (chapter_id, level, n)
     );
     CREATE TABLE IF NOT EXISTS looks (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       station_id INTEGER NOT NULL REFERENCES stations(id),
       view_yaw REAL NOT NULL,            -- degrees from the lens
       model TEXT NOT NULL, prompt_version INTEGER NOT NULL,
@@ -69,15 +71,50 @@ export function openStore(dir = STORE): DatabaseSync {
       UNIQUE (station_id, view_yaw, model, prompt_version)
     );
     CREATE TABLE IF NOT EXISTS items (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       look_id INTEGER NOT NULL REFERENCES looks(id),
       kind TEXT, detail TEXT, x REAL, distance TEXT, count INTEGER
     );
+    -- course:explore: the owner checking the model's answers against the picture.
+    CREATE TABLE IF NOT EXISTS reviews (
+      item_id INTEGER PRIMARY KEY,       -- goes with its item when a look is redone
+      verdict TEXT NOT NULL, at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS missed (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, y REAL, at TEXT
+    );
+  `)
+  // Stores made before missed kept y.
+  try { db.exec('ALTER TABLE missed ADD COLUMN y REAL') } catch { /* already there */ }
+  for (const t of ['stations', 'looks', 'items', 'missed']) addAutoincrement(db, t)
+  db.exec(`
     CREATE INDEX IF NOT EXISTS items_look ON items(look_id);
     CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
     CREATE INDEX IF NOT EXISTS looks_station ON looks(station_id);
   `)
   return db
+}
+
+/**
+ * Stores made before ids were AUTOINCREMENT reuse a deleted top id. Rebuild such
+ * a table once, keeping every row and id, in one transaction (safe while
+ * course:look is writing: it waits on the lock, and re-reads the schema after).
+ */
+export function addAutoincrement(db: DatabaseSync, table: string) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { sql: string } | undefined
+  if (!row || /AUTOINCREMENT/i.test(row.sql)) return
+  const sql = row.sql
+    .replace(/^CREATE TABLE\s+("?)\w+\1/i, `CREATE TABLE ${table}__new`)
+    .replace(/\bid INTEGER PRIMARY KEY\b/i, 'id INTEGER PRIMARY KEY AUTOINCREMENT')
+  // Dropping the old table would otherwise trip the foreign keys of the rows pointing at it.
+  db.exec('PRAGMA foreign_keys = OFF')
+  try {
+    tx(db, () => {
+      db.exec(sql)
+      db.exec(`INSERT INTO ${table}__new SELECT * FROM ${table}; DROP TABLE ${table}; ALTER TABLE ${table}__new RENAME TO ${table}`)
+    })
+  } finally { db.exec('PRAGMA foreign_keys = ON') }
 }
 
 function tx<T>(db: DatabaseSync, fn: () => T): T {
@@ -153,6 +190,9 @@ export function saveClip(db: DatabaseSync, clip: Clip & { startUtc: string | nul
 }
 
 function dropSpots(db: DatabaseSync, chapterId: number) {
+  const looks = 'SELECT l.id FROM looks l JOIN stations s ON s.id = l.station_id WHERE s.chapter_id = ?'
+  db.prepare(`DELETE FROM reviews WHERE item_id IN (SELECT id FROM items WHERE look_id IN (${looks}))`).run(chapterId)
+  db.prepare(`DELETE FROM missed WHERE look_id IN (${looks})`).run(chapterId)
   db.prepare('DELETE FROM items WHERE look_id IN (SELECT l.id FROM looks l JOIN stations s ON s.id = l.station_id WHERE s.chapter_id = ?)').run(chapterId)
   db.prepare('DELETE FROM looks WHERE station_id IN (SELECT id FROM stations WHERE chapter_id = ?)').run(chapterId)
   db.prepare('DELETE FROM stations WHERE chapter_id = ?').run(chapterId)
@@ -216,6 +256,9 @@ export type SavedLook = {
 /** One view's answer, with its items, in one transaction. Replacing a look replaces its items. */
 export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, model: string, version: number, look: SavedLook) {
   tx(db, () => {
+    const old = 'SELECT id FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?'
+    db.prepare(`DELETE FROM reviews WHERE item_id IN (SELECT id FROM items WHERE look_id IN (${old}))`).run(stationId, viewYaw, model, version)
+    db.prepare(`DELETE FROM missed WHERE look_id IN (${old})`).run(stationId, viewYaw, model, version)
     db.prepare('DELETE FROM items WHERE look_id IN (SELECT id FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?)').run(stationId, viewYaw, model, version)
     db.prepare('DELETE FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?').run(stationId, viewYaw, model, version)
     const r = db.prepare(`INSERT INTO looks (station_id, view_yaw, model, prompt_version, ok, scene, water, light, own_person, own_propulsion, raw, ms, created_at)
@@ -224,6 +267,25 @@ export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, m
     const ins = db.prepare('INSERT INTO items (look_id, kind, detail, x, distance, count) VALUES (?, ?, ?, ?, ?, ?)')
     for (const i of look.items ?? []) ins.run(r.lastInsertRowid, i.kind, i.detail, i.x, i.distance, i.count)
   })
+}
+
+/**
+ * The owner's verdict on one thing the model saw; null takes it back. Refused for
+ * an item that isn't there any more (its look was redone while the page was open).
+ */
+export function saveReview(db: DatabaseSync, itemId: number, verdict: 'right' | 'wrong' | null): boolean {
+  if (!db.prepare('SELECT 1 FROM items WHERE id = ?').get(itemId)) return false
+  if (verdict === null) db.prepare('DELETE FROM reviews WHERE item_id = ?').run(itemId)
+  else db.prepare(`INSERT INTO reviews (item_id, verdict, at) VALUES (?, ?, ?)
+    ON CONFLICT(item_id) DO UPDATE SET verdict = excluded.verdict, at = excluded.at`).run(itemId, verdict, new Date().toISOString())
+  return true
+}
+
+/** Something in the picture the model didn't list; `remove` takes one back. Unknown looks are refused. */
+export function saveMissed(db: DatabaseSync, m: { lookId: number; kind: string; x: number; y: number } | { remove: number }): number | null {
+  if ('remove' in m) { db.prepare('DELETE FROM missed WHERE id = ?').run(m.remove); return m.remove }
+  if (!db.prepare('SELECT 1 FROM looks WHERE id = ?').get(m.lookId)) return null
+  return Number(db.prepare('INSERT INTO missed (look_id, kind, x, y, at) VALUES (?, ?, ?, ?, ?)').run(m.lookId, m.kind, m.x, m.y, new Date().toISOString()).lastInsertRowid)
 }
 
 /**
