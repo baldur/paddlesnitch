@@ -9,14 +9,11 @@
 //   apps/web/.cache/courses/<NNNN>/track.geojson  the same, to drop on a map
 // Only the telemetry stream is read, so even 10 GB chapters take a second or two.
 // See docs/features/game-courses-from-video.md.
-import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import { parseGpmfGps } from '@paddlesnitch/timing/gpmf'
+import { probeVideo, readChapterFixes } from './lib/telemetry'
 
 const CACHE = path.join(process.cwd(), '.cache/courses')
-// Fixes worse than this are dropped: on the water a MAX sits around 1–2.
-const MAX_DOP = 5
 
 const inputs = process.argv.slice(2).map((p) => path.resolve(process.env.INIT_CWD ?? process.cwd(), p))
 if (inputs.length === 0) throw new Error('usage: course:ingest <folder or video files…>')
@@ -30,33 +27,29 @@ for (const f of files) {
   recordings.set(id, [...(recordings.get(id) ?? []), f])
 }
 
-for (const [id, chapters] of recordings) {
-  chapters.sort((a, b) => path.basename(a).slice(2, 4).localeCompare(path.basename(b).slice(2, 4)))
-  const out = path.join(CACHE, id)
-  fs.mkdirSync(out, { recursive: true })
-  const track: Array<{ t: number; lat: number; lng: number; speed: number; dop: number; utc: string; file: string; ft: number }> = []
-  const sources: Array<{ file: string; offset: number; duration: number }> = []
-  let offset = 0
-  for (const file of chapters) {
-    const duration = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).toString())
-    const bin = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-map', '0:m:handler_name:GoPro MET', '-c', 'copy', '-f', 'data', '-'], { maxBuffer: 1 << 30 })
-    const { payloads, fixes } = parseGpmfGps(bin)
-    const perPayload = duration / payloads
-    let kept = 0
-    for (const f of fixes) {
-      if (f.fix < 3 || f.dop > MAX_DOP) continue
-      const ft = f.at * perPayload
-      track.push({ t: +(offset + ft).toFixed(2), lat: f.lat, lng: f.lng, speed: +f.speed.toFixed(2), dop: f.dop, utc: f.timestamp.toISOString(), file: path.basename(file), ft: +ft.toFixed(2) })
-      kept++
+async function main() {
+  for (const [id, chapters] of recordings) {
+    chapters.sort((a, b) => path.basename(a).slice(2, 4).localeCompare(path.basename(b).slice(2, 4)))
+    const out = path.join(CACHE, id)
+    fs.mkdirSync(out, { recursive: true })
+    const track: Array<{ t: number; lat: number; lng: number; speed: number; dop: number; utc: string; file: string; ft: number }> = []
+    const sources: Array<{ file: string; offset: number; duration: number }> = []
+    let offset = 0
+    for (const file of chapters) {
+      const { duration } = await probeVideo(file)
+      const { fixes, total } = await readChapterFixes(file, duration)
+      for (const f of fixes) track.push({ t: +(offset + f.ft).toFixed(2), lat: f.lat, lng: f.lng, speed: f.speed, dop: f.dop, utc: f.utc, file: path.basename(file), ft: +f.ft.toFixed(2) })
+      sources.push({ file, offset, duration })
+      console.log(`${path.basename(file)}: ${duration.toFixed(0)} s, ${total} fixes, ${fixes.length} kept`)
+      offset += duration
     }
-    sources.push({ file, offset, duration })
-    console.log(`${path.basename(file)}: ${duration.toFixed(0)} s, ${fixes.length} fixes, ${kept} kept`)
-    offset += duration
+    fs.writeFileSync(path.join(out, 'track.json'), JSON.stringify({ recording: id, sources, track }))
+    fs.writeFileSync(path.join(out, 'track.geojson'), JSON.stringify({
+      type: 'Feature', properties: { recording: id },
+      geometry: { type: 'LineString', coordinates: track.filter((_, i) => i % 10 === 0).map((p) => [p.lng, p.lat]) },
+    }))
+    console.log(`recording ${id}: ${(offset / 60).toFixed(0)} min, ${track.length} fixes → ${path.relative(process.cwd(), out)}`)
   }
-  fs.writeFileSync(path.join(out, 'track.json'), JSON.stringify({ recording: id, sources, track }))
-  fs.writeFileSync(path.join(out, 'track.geojson'), JSON.stringify({
-    type: 'Feature', properties: { recording: id },
-    geometry: { type: 'LineString', coordinates: track.filter((_, i) => i % 10 === 0).map((p) => [p.lng, p.lat]) },
-  }))
-  console.log(`recording ${id}: ${(offset / 60).toFixed(0)} min, ${track.length} fixes → ${path.relative(process.cwd(), out)}`)
 }
+
+main().catch((e) => { console.error(e); process.exit(1) })
