@@ -24,6 +24,7 @@ export function parseLookArgs(argv: string[], resolve: (p: string) => string): L
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
+    if (a === '--') continue // pnpm passes its separator through
     if (!a.startsWith('--')) { out.folders.push(resolve(a)); continue }
     const eq = a.indexOf('=')
     const name = a.slice(2, eq > 0 ? eq : undefined)

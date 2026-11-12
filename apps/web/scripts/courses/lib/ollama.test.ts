@@ -46,6 +46,18 @@ describe('checkOllama and chat', () => {
     const tags = (async () => new Response(JSON.stringify({ models: [{ name: 'llama3.3:70b' }] }))) as unknown as typeof fetch
     await expect(checkOllama('http://localhost:11434', 'qwen2.5vl:32b', tags)).rejects.toThrow(/ollama pull qwen2.5vl:32b/)
   })
+  it('refuses a cloud model copied to a plain name', async () => {
+    const f = (async (url: string) => url.endsWith('/api/tags')
+      ? new Response(JSON.stringify({ models: [{ name: 'vision:latest' }] }))
+      : new Response(JSON.stringify({ remote_host: 'https://ollama.com:443', remote_model: 'qwen3-vl:235b' }))) as unknown as typeof fetch
+    await expect(checkOllama('http://localhost:11434', 'vision', f)).rejects.toThrow(/refusing vision: it runs on https:\/\/ollama.com/)
+  })
+  it('accepts a local model', async () => {
+    const f = (async (url: string) => url.endsWith('/api/tags')
+      ? new Response(JSON.stringify({ models: [{ name: 'qwen2.5vl:32b' }] }))
+      : new Response(JSON.stringify({ details: { family: 'qwen25vl' } }))) as unknown as typeof fetch
+    await expect(checkOllama('http://localhost:11434', 'qwen2.5vl:32b', f)).resolves.toBeUndefined()
+  })
   it('a refused connection or an HTTP error is OllamaDown, never a reply', async () => {
     await expect(chat('http://localhost:11999', {}, refused)).rejects.toBeInstanceOf(OllamaDown)
     const notFound = (async () => new Response('model not found', { status: 404 })) as unknown as typeof fetch

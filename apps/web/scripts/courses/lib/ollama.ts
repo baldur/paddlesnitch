@@ -57,6 +57,10 @@ export async function checkOllama(endpoint: string, model: string, fetchFn = fet
   const { models } = (await res.json()) as { models?: Array<{ name: string }> }
   const names = (models ?? []).map((m) => m.name)
   if (!names.includes(model) && !names.includes(`${model}:latest`)) throw new OllamaDown(`Ollama doesn't have ${model} (pull it with: ollama pull ${model})`)
+  // A cloud model copied to a plain name (ollama cp) is still run remotely: its details name the remote.
+  const show = await fetchFn(`${endpoint}/api/show`, { method: 'POST', body: JSON.stringify({ model }) }).catch(() => null)
+  const details = show?.ok ? ((await show.json()) as Record<string, unknown>) : {}
+  if (details.remote_host || details.remote_model) throw new Error(`refusing ${model}: it runs on ${String(details.remote_host ?? 'a remote host')}, and frames must stay on this machine`)
 }
 
 /** One streamed chat with an image. Anything other than a model reply throws OllamaDown. */

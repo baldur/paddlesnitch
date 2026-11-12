@@ -27,25 +27,29 @@ for (const f of files) {
   recordings.set(id, [...(recordings.get(id) ?? []), f])
 }
 
-for (const [id, chapters] of recordings) {
-  chapters.sort((a, b) => path.basename(a).slice(2, 4).localeCompare(path.basename(b).slice(2, 4)))
-  const out = path.join(CACHE, id)
-  fs.mkdirSync(out, { recursive: true })
-  const track: Array<{ t: number; lat: number; lng: number; speed: number; dop: number; utc: string; file: string; ft: number }> = []
-  const sources: Array<{ file: string; offset: number; duration: number }> = []
-  let offset = 0
-  for (const file of chapters) {
-    const { duration } = probeVideo(file)
-    const { fixes, total } = readChapterFixes(file, duration)
-    for (const f of fixes) track.push({ t: +(offset + f.ft).toFixed(2), lat: f.lat, lng: f.lng, speed: f.speed, dop: f.dop, utc: f.utc, file: path.basename(file), ft: +f.ft.toFixed(2) })
-    sources.push({ file, offset, duration })
-    console.log(`${path.basename(file)}: ${duration.toFixed(0)} s, ${total} fixes, ${fixes.length} kept`)
-    offset += duration
+async function main() {
+  for (const [id, chapters] of recordings) {
+    chapters.sort((a, b) => path.basename(a).slice(2, 4).localeCompare(path.basename(b).slice(2, 4)))
+    const out = path.join(CACHE, id)
+    fs.mkdirSync(out, { recursive: true })
+    const track: Array<{ t: number; lat: number; lng: number; speed: number; dop: number; utc: string; file: string; ft: number }> = []
+    const sources: Array<{ file: string; offset: number; duration: number }> = []
+    let offset = 0
+    for (const file of chapters) {
+      const { duration } = await probeVideo(file)
+      const { fixes, total } = await readChapterFixes(file, duration)
+      for (const f of fixes) track.push({ t: +(offset + f.ft).toFixed(2), lat: f.lat, lng: f.lng, speed: f.speed, dop: f.dop, utc: f.utc, file: path.basename(file), ft: +f.ft.toFixed(2) })
+      sources.push({ file, offset, duration })
+      console.log(`${path.basename(file)}: ${duration.toFixed(0)} s, ${total} fixes, ${fixes.length} kept`)
+      offset += duration
+    }
+    fs.writeFileSync(path.join(out, 'track.json'), JSON.stringify({ recording: id, sources, track }))
+    fs.writeFileSync(path.join(out, 'track.geojson'), JSON.stringify({
+      type: 'Feature', properties: { recording: id },
+      geometry: { type: 'LineString', coordinates: track.filter((_, i) => i % 10 === 0).map((p) => [p.lng, p.lat]) },
+    }))
+    console.log(`recording ${id}: ${(offset / 60).toFixed(0)} min, ${track.length} fixes → ${path.relative(process.cwd(), out)}`)
   }
-  fs.writeFileSync(path.join(out, 'track.json'), JSON.stringify({ recording: id, sources, track }))
-  fs.writeFileSync(path.join(out, 'track.geojson'), JSON.stringify({
-    type: 'Feature', properties: { recording: id },
-    geometry: { type: 'LineString', coordinates: track.filter((_, i) => i % 10 === 0).map((p) => [p.lng, p.lat]) },
-  }))
-  console.log(`recording ${id}: ${(offset / 60).toFixed(0)} min, ${track.length} fixes → ${path.relative(process.cwd(), out)}`)
 }
+
+main().catch((e) => { console.error(e); process.exit(1) })

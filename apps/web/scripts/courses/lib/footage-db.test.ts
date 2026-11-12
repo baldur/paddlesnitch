@@ -73,16 +73,22 @@ describe('clips that move, are renamed, copied or change', () => {
     expect(count('SELECT count(*) n FROM chapters')).toBe(1)
   })
 
-  it('a clip scanned mid-copy gets its full track, and its old spots and looks go', () => {
-    const { id } = saveClip(db, clip({ track: TRACK.slice(0, 200) }), null)
+  it('a clip scanned while still copying (a smaller file) is replaced by the full clip at the same path', () => {
+    const { id } = saveClip(db, clip({ size: 1_500_000_000, track: TRACK.slice(0, 200) }), null)
     ensureStations(db, id, 100, 1)
     look(nextStation(db, 'm', 2, 1, 4)!.id, 0)
-    saveClip(db, clip(), null)
-    expect(count('SELECT count(*) n FROM stations')).toBe(0)
+    const full = saveClip(db, clip(), null)
+    expect(count('SELECT count(*) n FROM chapters')).toBe(1)
     expect(count('SELECT count(*) n FROM looks')).toBe(0)
     expect(count('SELECT count(*) n FROM items')).toBe(0)
+    expect(ensureStations(db, full.id, 100, 1)).toBe(11)
+  })
+
+  it('a clip whose track changed at the same size drops its old spots', () => {
+    const { id } = saveClip(db, clip({ track: TRACK.slice(0, 200) }), null)
     ensureStations(db, id, 100, 1)
-    expect(count('SELECT count(*) n FROM stations')).toBe(11)
+    saveClip(db, clip(), null)
+    expect(count('SELECT count(*) n FROM stations')).toBe(0)
   })
 
   it('a clip whose file has gone is missing and skipped, and comes back when it does', () => {
@@ -157,11 +163,24 @@ describe('keeping the data out of the repo', () => {
     expect(() => assertOutsideRepo(path.join(dir, 'export.geojson'))).not.toThrow()
   })
 
+  it('follows a symlink that points into a repo', () => {
+    const link = path.join(dir, 'into-repo')
+    fs.symlinkSync(__dirname, link)
+    expect(() => assertOutsideRepo(path.join(link, 'new-folder', 'export.geojson'))).toThrow(/inside the git work tree/)
+  })
+
   it('one look run per store; a lock left by a dead process is taken over', () => {
     const release = takeLock(dir, 111, () => true)
     expect(() => takeLock(dir, 222, () => true)).toThrow(/process 111/)
     expect(() => takeLock(dir, 222, () => false)).not.toThrow()
     release() // 111's release doesn't remove 222's lock
     expect(fs.readFileSync(path.join(dir, 'look.lock'), 'utf8')).toBe('222')
+  })
+
+  it('two runs taking over the same stale lock: only one wins', () => {
+    fs.writeFileSync(path.join(dir, 'look.lock'), '999')
+    const isAlive = (p: number) => p !== 999
+    takeLock(dir, 301, isAlive)
+    expect(() => takeLock(dir, 302, isAlive)).toThrow(/process 301/)
   })
 })

@@ -18,7 +18,12 @@ export const STORE = process.env.PADDLESNITCH_FOOTAGE ?? path.join(os.homedir(),
 
 /** Refuse a path inside a git work tree: the store and exports are personal data. */
 export function assertOutsideRepo(p: string) {
-  for (let dir = path.resolve(p); ; dir = path.dirname(dir)) {
+  // Follow symlinks: resolve the nearest part of the path that exists.
+  let real = path.resolve(p)
+  let rest = ''
+  while (!fs.existsSync(real) && path.dirname(real) !== real) { rest = path.join(path.basename(real), rest); real = path.dirname(real) }
+  real = path.join(fs.realpathSync(real), rest)
+  for (let dir = real; ; dir = path.dirname(dir)) {
     if (fs.existsSync(path.join(dir, '.git'))) throw new Error(`${p} is inside the git work tree ${dir}: footage data holds personal tracks and must stay outside any repo`)
     if (path.dirname(dir) === dir) return
   }
@@ -55,7 +60,7 @@ export function openStore(dir = STORE): DatabaseSync {
       station_id INTEGER NOT NULL REFERENCES stations(id),
       view_yaw REAL NOT NULL,            -- degrees from the lens
       model TEXT NOT NULL, prompt_version INTEGER NOT NULL,
-      ok INTEGER NOT NULL,               -- 0: the reply wasn't a look, or the view couldn't be cut (kept, not retried)
+      ok INTEGER NOT NULL,               -- 0: the reply wasn't a look after two tries (kept, not retried)
       scene TEXT, water TEXT, light TEXT, own_person TEXT, own_propulsion TEXT,
       raw TEXT, ms INTEGER, created_at TEXT,
       UNIQUE (station_id, view_yaw, model, prompt_version)
@@ -75,6 +80,12 @@ export function openStore(dir = STORE): DatabaseSync {
 function tx<T>(db: DatabaseSync, fn: () => T): T {
   db.exec('BEGIN IMMEDIATE')
   try { const r = fn(); db.exec('COMMIT'); return r } catch (e) { db.exec('ROLLBACK'); throw e }
+}
+
+/** The store's spot spacing, without fixing one (for reports). */
+export function storedSpacing(db: DatabaseSync): number {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'base'").get() as { value: string } | undefined
+  return row ? Number(row.value) : 100
 }
 
 /** The spot spacing is fixed per store: a level means the same metres for every clip. */
@@ -110,8 +121,9 @@ export type Clip = {
 /**
  * Add or refresh a clip. Its key is its first fix time and size, so a moved or
  * renamed clip keeps its spots and looks. If a clip with that key is still at
- * another path, this one is a copy and is skipped. If the clip's track changed
- * (it was scanned mid-copy), its old spots and looks are dropped.
+ * another path, this one is a copy and is skipped. If the file at this path is
+ * a different clip now (another size, or another track), the old one's spots
+ * and looks are dropped.
  */
 export function saveClip(db: DatabaseSync, clip: Clip & { startUtc: string | null }, cameraYaw: number | null): { id: number; skipped?: 'copy' } {
   const key = `${clip.startUtc ?? 'nogps'}#${clip.size}`
@@ -119,6 +131,9 @@ export function saveClip(db: DatabaseSync, clip: Clip & { startUtc: string | nul
   return tx(db, () => {
     const old = db.prepare('SELECT id, path, track FROM chapters WHERE key = ?').get(key) as { id: number; path: string; track: string } | undefined
     if (old && old.path !== clip.path && fs.existsSync(old.path)) return { id: old.id, skipped: 'copy' as const }
+    // The file at this path changed size (it was still being copied, or was replaced): what was known about it goes.
+    const was = db.prepare('SELECT id FROM chapters WHERE path = ? AND key != ?').get(clip.path, key) as { id: number } | undefined
+    if (was) { dropSpots(db, was.id); db.prepare('DELETE FROM chapters WHERE id = ?').run(was.id) }
     const status = clip.track.length > 1 ? 'ok' : 'no-gps'
     if (old && old.track !== track) dropSpots(db, old.id)
     db.prepare(`INSERT INTO chapters (key, path, size, mtime, recording, chapter, start_utc, duration, width, height, status, camera_yaw, yaw_source, track, scanned_at)
@@ -209,20 +224,26 @@ export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, m
 }
 
 /**
- * Only one look run per store: two would pick the same spots. The lock names the
- * process holding it; a lock left by a process that's gone is taken over.
+ * Only one run that writes per store (a scan or a look): two would pick the same
+ * spots. The lock names the process holding it; a lock left by a process that's
+ * gone is taken over, and the takeover is checked so two runs can't both win.
  */
 export function takeLock(dir = STORE, pid = process.pid, alive = (p: number) => { try { process.kill(p, 0); return true } catch { return false } }): () => void {
   const file = path.join(dir, 'look.lock')
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const release = () => { try { if (fs.readFileSync(file, 'utf8') === String(pid)) fs.unlinkSync(file) } catch { /* already gone */ } }
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       fs.writeFileSync(file, String(pid), { flag: 'wx' })
-      return () => { try { if (fs.readFileSync(file, 'utf8') === String(pid)) fs.unlinkSync(file) } catch { /* already gone */ } }
-    } catch {
-      const holder = Number(fs.readFileSync(file, 'utf8'))
-      if (alive(holder)) throw new Error(`another course:look (process ${holder}) is already looking at this store`)
-      fs.unlinkSync(file)
-    }
+      return release
+    } catch { /* held, or just taken */ }
+    let holder: string
+    try { holder = fs.readFileSync(file, 'utf8') } catch { continue } // released in between: try again
+    if (alive(Number(holder))) throw new Error(`another course:look (process ${holder}) is already using this store`)
+    // Stale: replace it in one step, then make sure it's ours (another run may have done the same).
+    const mine = `${file}.${pid}`
+    fs.writeFileSync(mine, String(pid))
+    fs.renameSync(mine, file)
+    if (fs.readFileSync(file, 'utf8') === String(pid)) return release
   }
   throw new Error('could not take the store lock')
 }

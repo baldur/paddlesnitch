@@ -15,16 +15,16 @@
 // redone next time). The store (lib/footage-db.ts) is outside the repo and holds
 // the owner's tracks. See docs/features/game-courses-from-video.md,
 // "Looking with a local model".
-import { execFile } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
 import { eacGraph, eacLayout, flatView } from './lib/eac'
-import { assertOutsideRepo, cameraOverrides, ensureStations, knownByPath, nextStation, openStore, refreshPresence, saveClip, saveLook, setCameraYaw, STORE, takeLock, spotSpacing, type Next } from './lib/footage-db'
+import { assertOutsideRepo, cameraOverrides, ensureStations, knownByPath, nextStation, openStore, refreshPresence, saveClip, saveLook, setCameraYaw, STORE, storedSpacing, takeLock, spotSpacing, type Next } from './lib/footage-db'
 import { decideCameraYaw, KINDS, parseLook, placeItem, PROMPT, PROMPT_VERSION, SCHEMA, VIEW, VIEWS, type Look } from './lib/look'
 import { parseLookArgs } from './lib/look-args'
 import { assertLocalModel, chat, checkOllama, ollamaEndpoint, OllamaDown } from './lib/ollama'
+import { killRunning, runDetached } from './lib/proc'
 import { probeVideo, readChapterFixes } from './lib/telemetry'
 
 /** A refusal or a setup problem: one line, not a stack trace. */
@@ -39,19 +39,30 @@ const MAX_TOKENS = 2000
 
 const db = (() => { try { return openStore() } catch (e) { fail(e) } })()
 
-// Ctrl+C: the first lets the current spot finish, the second stops at once. Child
-// processes run in their own group (detached) so the terminal's Ctrl+C doesn't
-// kill an ffmpeg cut halfway; a frame folder left by a hard stop is removed.
+// Ctrl+C: the first lets the current spot (or clip, while scanning) finish; the
+// second stops at once. ffmpeg and ffprobe run in their own process group
+// (lib/proc.ts), so the terminal's Ctrl+C reaches only this process. A second
+// signal within a second is the same Ctrl+C passed on by pnpm or tsx. A hard
+// stop, or the terminal closing, kills the children and removes the frames.
 let stopping = false
+let stoppedAt = 0
 let frameDir: string | null = null
+let releaseLock: (() => void) | null = null
+function hardStop(code: number): never {
+  killRunning()
+  if (frameDir) { try { fs.rmSync(frameDir, { recursive: true, force: true }) } catch { /* best effort */ } }
+  releaseLock?.()
+  process.exit(code)
+}
 process.on('SIGINT', () => {
-  if (stopping) {
-    if (frameDir) fs.rmSync(frameDir, { recursive: true, force: true })
-    process.exit(130)
-  }
+  if (stopping && Date.now() - stoppedAt > 1000) hardStop(130)
+  if (stopping) return
   stopping = true
-  console.log('\nfinishing this spot, then stopping (Ctrl+C again to stop now)')
+  stoppedAt = Date.now()
+  console.log('\nfinishing this step, then stopping (Ctrl+C again to stop now)')
 })
+process.on('SIGTERM', () => hardStop(143))
+process.on('SIGHUP', () => hardStop(129))
 
 // ---------- finding the footage ----------
 
@@ -67,7 +78,7 @@ function* find360(dir: string): Generator<string> {
   }
 }
 
-function scan(roots: string[], base: number) {
+async function scan(roots: string[], base: number) {
   const known = knownByPath(db)
   const overrides = cameraOverrides()
   let added = 0
@@ -80,13 +91,14 @@ function scan(roots: string[], base: number) {
       const yaw = overrides[name] ?? overrides[recording] ?? null
       const k = known.get(file)
       if (k && k.size === st.size && k.mtime === Math.round(st.mtimeMs)) { setCameraYaw(db, k.id, yaw); continue }
-      let probe: ReturnType<typeof probeVideo>
-      let fixes: ReturnType<typeof readChapterFixes>['fixes']
+      let probe: Awaited<ReturnType<typeof probeVideo>>
+      let fixes: Awaited<ReturnType<typeof readChapterFixes>>['fixes']
       try {
-        probe = probeVideo(file)
+        probe = await probeVideo(file)
         eacLayout(probe.width, probe.height)
-        fixes = readChapterFixes(file, probe.duration).fixes
+        fixes = (await readChapterFixes(file, probe.duration)).fixes
       } catch (e) {
+        if (stopping) return
         console.log(`skip ${file}: ${(e as Error).message.split('\n')[0]}`)
         continue
       }
@@ -109,18 +121,18 @@ function scan(roots: string[], base: number) {
 
 // ---------- looking ----------
 
-function cutViews(st: Next, views: Array<(typeof VIEWS)[number]>): Promise<Map<number, string>> {
+async function cutViews(st: Next, views: Array<(typeof VIEWS)[number]>): Promise<Map<number, string>> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'look-'))
   frameDir = dir
-  const graph = eacGraph(eacLayout(st.width, st.height), views.length) + views.map((v, i) => flatView(i, v.name, { ...VIEW, yaw: v.yaw })).join(';')
-  const argv = ['-v', 'error', '-y', '-ss', st.ft.toFixed(2), '-i', st.path, '-filter_complex', graph,
-    ...views.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', path.join(dir, `${v.name}.jpg`)])]
-  return new Promise<Map<number, string>>((resolve, reject) => {
-    execFile('ffmpeg', argv, { detached: true } as Parameters<typeof execFile>[2], (err) => {
-      if (err) return reject(err)
-      try { resolve(new Map(views.map((v) => [v.yaw, fs.readFileSync(path.join(dir, `${v.name}.jpg`)).toString('base64')]))) } catch (e) { reject(e) }
-    })
-  }).finally(() => { fs.rmSync(dir, { recursive: true, force: true }); frameDir = null })
+  try {
+    const graph = eacGraph(eacLayout(st.width, st.height), views.length) + views.map((v, i) => flatView(i, v.name, { ...VIEW, yaw: v.yaw })).join(';')
+    await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', st.ft.toFixed(2), '-i', st.path, '-filter_complex', graph,
+      ...views.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', path.join(dir, `${v.name}.jpg`)])])
+    return new Map(views.map((v) => [v.yaw, fs.readFileSync(path.join(dir, `${v.name}.jpg`)).toString('base64')]))
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+    frameDir = null
+  }
 }
 
 /** A look, or null with the reply that wasn't one. OllamaDown (Ollama itself failing) is thrown, never saved. */
@@ -150,41 +162,34 @@ function updateCameraYaw(chapterId: number) {
 }
 
 async function lookLoop(endpoint: string) {
-  assertLocalModel(args.model)
-  await checkOllama(endpoint, args.model)
-  const release = takeLock()
   console.log(`looking with ${args.model} at ${endpoint}`)
   const until = args.minutes > 0 ? Date.now() + args.minutes * 60_000 : Infinity
   const uncuttable: number[] = []
   const started = Date.now()
   let spots = 0
-  try {
-    for (let st = nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length, uncuttable); st && !stopping && Date.now() < until;
-      st = nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length, uncuttable)) {
-      if (!fs.existsSync(st.path)) { refreshPresence(db); continue }
-      const todo = VIEWS.filter((v) => !st!.done.includes(v.yaw))
-      let images: Map<number, string>
-      try { images = await cutViews(st, todo) } catch (e) {
-        if (stopping) break
-        // A bad stretch of video: leave it for next run rather than stop or loop on it.
-        console.log(`  couldn't cut ${path.basename(st.path)} at ${st.ft.toFixed(0)} s: ${(e as Error).message.split('\n')[0]}`)
-        uncuttable.push(st.id)
-        continue
-      }
-      for (const v of todo) {
-        const t0 = Date.now()
-        const { look, raw } = await ask(endpoint, images.get(v.yaw)!)
-        saveLook(db, st.id, v.yaw, args.model, PROMPT_VERSION, {
-          ok: !!look, scene: look?.scene, water: look?.water, light: look?.light, ownPerson: look?.own.person, ownPropulsion: look?.own.propulsion,
-          items: look?.items, raw, ms: Date.now() - t0,
-        })
-      }
-      updateCameraYaw(st.chapter_id)
-      spots++
-      console.log(`${path.basename(st.path)} ${st.ft.toFixed(0)} s, level ${st.level}: ${spots} spots this run, ${((Date.now() - started) / spots / 1000).toFixed(0)} s each`)
+  for (let st = nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length, uncuttable); st && !stopping && Date.now() < until;
+    st = nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length, uncuttable)) {
+    if (!fs.existsSync(st.path)) { refreshPresence(db); continue }
+    const todo = VIEWS.filter((v) => !st!.done.includes(v.yaw))
+    let images: Map<number, string>
+    try { images = await cutViews(st, todo) } catch (e) {
+      if (stopping) break
+      // A bad stretch of video: leave it for next run rather than stop or loop on it.
+      console.log(`  couldn't cut ${path.basename(st.path)} at ${st.ft.toFixed(0)} s: ${(e as Error).message.split('\n')[0]}`)
+      uncuttable.push(st.id)
+      continue
     }
-  } finally {
-    release()
+    for (const v of todo) {
+      const t0 = Date.now()
+      const { look, raw } = await ask(endpoint, images.get(v.yaw)!)
+      saveLook(db, st.id, v.yaw, args.model, PROMPT_VERSION, {
+        ok: !!look, scene: look?.scene, water: look?.water, light: look?.light, ownPerson: look?.own.person, ownPropulsion: look?.own.propulsion,
+        items: look?.items, raw, ms: Date.now() - t0,
+      })
+    }
+    updateCameraYaw(st.chapter_id)
+    spots++
+    console.log(`${path.basename(st.path)} ${st.ft.toFixed(0)} s, level ${st.level}: ${spots} spots this run, ${((Date.now() - started) / spots / 1000).toFixed(0)} s each`)
   }
   if (!stopping && !nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length)) console.log('every spot has been looked at; raise --levels to go finer')
 }
@@ -242,13 +247,23 @@ function exportGeoJson(file: string) {
 }
 
 async function main() {
-  const base = spotSpacing(db, args.base)
-  if (args.mode === 'status') return status(base)
+  if (args.mode === 'status') return status(storedSpacing(db))
   if (args.mode === 'export') return exportGeoJson(args.exportPath ?? path.join(STORE, 'export.geojson'))
-  const endpoint = ollamaEndpoint(process.env.PADDLESNITCH_OLLAMA, args.allowRemote)
-  scan(args.folders.length ? args.folders : [path.join(os.homedir(), 'Movies')], base)
-  if (args.mode === 'scan' || stopping) return
-  await lookLoop(endpoint)
+  // Check Ollama before scanning, so a look run that can't look fails at once.
+  let endpoint = ''
+  if (args.mode === 'look') {
+    endpoint = ollamaEndpoint(process.env.PADDLESNITCH_OLLAMA, args.allowRemote)
+    assertLocalModel(args.model)
+    await checkOllama(endpoint, args.model)
+  }
+  releaseLock = takeLock()
+  try {
+    const base = spotSpacing(db, args.base)
+    await scan(args.folders.length ? args.folders : [path.join(os.homedir(), 'Movies')], base)
+    if (args.mode === 'look' && !stopping) await lookLoop(endpoint)
+  } finally {
+    releaseLock()
+  }
 }
 
 main()

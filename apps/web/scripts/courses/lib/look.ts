@@ -133,10 +133,15 @@ function dedupe(items: Item[]): Item[] {
  * faces the stern. Null until at least 3 views agree with 3 in 4 of the votes.
  */
 export function decideCameraYaw(seen: Array<{ viewYaw: number; person: Look['own']['person']; propulsion: Look['own']['propulsion'] }>): number | null {
+  // The model often sees the paddler but not what they hold. Those sightings
+  // count as whatever the clip shows most (a paddle unless oars are seen more).
+  const oars = seen.filter((s) => s.propulsion === 'oars').length
+  const paddles = seen.filter((s) => s.propulsion === 'paddle').length
+  const usual = oars > paddles ? 'oars' : 'paddle'
   const votes = new Map<number, number>()
   for (const s of seen) {
-    if (s.person === 'none' || s.propulsion === 'none') continue
-    const towardsBow = (s.person === 'back') === (s.propulsion === 'paddle')
+    if (s.person === 'none') continue
+    const towardsBow = (s.person === 'back') === ((s.propulsion === 'none' ? usual : s.propulsion) === 'paddle')
     const bow = (((s.viewYaw + (towardsBow ? 0 : 180)) % 360) + 360) % 360
     votes.set(bow, (votes.get(bow) ?? 0) + 1)
   }

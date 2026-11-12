@@ -47,9 +47,9 @@ const { toXZ } = projection(river.origin)
 const VIEWS = { ahead: 0, left: -90, right: 90, behind: 180 } as const
 const equirect = (cam: number) => `[e0]v360=eac:e:yaw=${wrapYaw(cam)}:w=2048:h=1024[eq];`
 const flat = (name: string, i: number, yaw: number) => flatView(i, name, { yaw, pitch: 5, hFov: 90, vFov: 56, w: 800, h: 500 })
-const layouts = new Map<string, Layout>()
+const layouts = new Map<string, Promise<Layout>>()
 const layoutOf = (video: string) => {
-  if (!layouts.has(video)) { const { width, height } = probeVideo(video); layouts.set(video, eacLayout(width, height)) }
+  if (!layouts.has(video)) layouts.set(video, probeVideo(video).then(({ width, height }) => eacLayout(width, height)))
   return layouts.get(video)!
 }
 
@@ -74,7 +74,7 @@ for (const rec of config.recordings) {
 
 async function extract(fr: Frame) {
   if (fs.existsSync(path.join(FRAMES, `${fr.name}-behind.jpg`))) return
-  const graph = eacGraph(layoutOf(fr.video), 5) + equirect(fr.cameraYaw) + Object.entries(VIEWS).map(([v, yaw], i) => flat(v, i + 1, fr.cameraYaw + yaw)).join(';')
+  const graph = eacGraph(await layoutOf(fr.video), 5) + equirect(fr.cameraYaw) + Object.entries(VIEWS).map(([v, yaw], i) => flat(v, i + 1, fr.cameraYaw + yaw)).join(';')
   await run('ffmpeg', ['-v', 'error', '-y', '-ss', fr.ft.toFixed(2), '-i', fr.video, '-filter_complex', graph,
     '-map', '[eq]', '-frames:v', '1', '-q:v', '3', path.join(FRAMES, `${fr.name}.jpg`),
     ...Object.keys(VIEWS).flatMap((v) => ['-map', `[${v}]`, '-frames:v', '1', '-q:v', '4', path.join(FRAMES, `${fr.name}-${v}.jpg`)])])

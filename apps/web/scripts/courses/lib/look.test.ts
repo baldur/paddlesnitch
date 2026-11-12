@@ -54,6 +54,12 @@ describe('decideCameraYaw', () => {
     const rower = { viewYaw: 0, person: 'back' as const, propulsion: 'oars' as const }
     expect(decideCameraYaw([rower, rower, rower])).toBe(180)
   })
+  it('counts the paddler seen without the paddle as the clip usually is', () => {
+    const backOnly = { viewYaw: 180, person: 'back' as const, propulsion: 'none' as const }
+    expect(decideCameraYaw([backOnly, backOnly, backOnly])).toBe(180) // kayak by default
+    const rower = { viewYaw: 0, person: 'back' as const, propulsion: 'oars' as const }
+    expect(decideCameraYaw([rower, { ...rower, propulsion: 'none' as const }, { ...rower, propulsion: 'none' as const }])).toBe(180)
+  })
   it('waits for enough agreement', () => {
     expect(decideCameraYaw([kayak(180, 'back'), kayak(180, 'back')])).toBeNull()
     expect(decideCameraYaw([kayak(180, 'back'), kayak(180, 'back'), kayak(180, 'back'), kayak(90, 'back'), kayak(0, 'back')])).toBeNull()

@@ -29,6 +29,9 @@ describe('parseLookArgs', () => {
     expect(() => parse('--status --export')).toThrow(/together/)
     expect(() => parse('--status Paddling')).toThrow(/doesn't take folders/)
   })
+  it("ignores pnpm's -- separator", () => {
+    expect(parse('-- --status').mode).toBe('status')
+  })
   it('--base is only set when given (the store keeps its own)', () => {
     expect(parse('').base).toBeUndefined()
     expect(parse('--base 50').base).toBe(50)
