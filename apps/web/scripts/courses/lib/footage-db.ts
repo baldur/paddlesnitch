@@ -11,7 +11,10 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+// Loaded through Node rather than imported: vitest on Node 22 can't bundle the
+// node:sqlite built-in (it isn't in that version's builtin list).
+const sqlite = process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite')
 import { stationsAt, travelled, type Fix } from './stations'
 
 export const STORE = process.env.PADDLESNITCH_FOOTAGE ?? path.join(os.homedir(), '.paddlesnitch', 'footage')
@@ -32,7 +35,7 @@ export function assertOutsideRepo(p: string) {
 export function openStore(dir = STORE): DatabaseSync {
   assertOutsideRepo(dir)
   fs.mkdirSync(dir, { recursive: true })
-  const db = new DatabaseSync(path.join(dir, 'footage.db'))
+  const db = new sqlite.DatabaseSync(path.join(dir, 'footage.db'))
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA busy_timeout = 30000;
