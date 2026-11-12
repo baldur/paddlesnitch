@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bearing, destination, haversine, stationsAt, travelled, type Fix } from './stations'
+import { bearing, destination, haversine, headingAt, stationsAt, travelled, type Fix } from './stations'
 
 // A straight run due east at 2 m/s, a fix a second, from a point on the Thames.
 const ORIGIN = { lat: 51.4676, lng: -0.9822 }
@@ -50,5 +50,33 @@ describe('stationsAt', () => {
 
   it('gives nothing for a clip without a usable track', () => {
     expect(stationsAt([], [], 100, 0)).toEqual([])
+  })
+})
+
+describe('headingAt', () => {
+  // 200 m east, a 60 s stop, then 200 m north.
+  const corner = destination(ORIGIN, 90, 200)
+  const fixes: Fix[] = [
+    ...east(100),
+    ...Array.from({ length: 60 }, (_, k) => ({ ft: 101 + k, lat: corner.lat, lng: corner.lng, speed: 0 })),
+    ...Array.from({ length: 100 }, (_, k) => ({ ft: 161 + k, ...destination(corner, 0, 2 * (k + 1)), speed: 2 })),
+  ]
+  const cum = travelled(fixes)
+
+  it('follows the boat either side of a turn', () => {
+    expect(headingAt(fixes, cum, 50)).toBeCloseTo(90, 0)
+    expect(headingAt(fixes, cum, 220)).toBeCloseTo(0, 0)
+  })
+  it('during a stop it looks across the corner, not along GPS scatter', () => {
+    const h = headingAt(fixes, cum, 130)
+    expect(h).toBeGreaterThan(20)
+    expect(h).toBeLessThan(70)
+  })
+  it('works at the first and last fix', () => {
+    expect(headingAt(fixes, cum, 0)).toBeCloseTo(90, 0)
+    expect(headingAt(fixes, cum, fixes.length - 1)).toBeCloseTo(0, 0)
+  })
+  it('a single fix has no heading (0)', () => {
+    expect(headingAt([fixes[0]], [0], 0)).toBe(0)
   })
 })

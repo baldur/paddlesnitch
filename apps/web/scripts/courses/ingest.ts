@@ -37,7 +37,7 @@ for (const [id, chapters] of recordings) {
   for (const file of chapters) {
     const { duration } = probeVideo(file)
     const { fixes, total } = readChapterFixes(file, duration)
-    for (const f of fixes) track.push({ t: +(offset + f.ft).toFixed(2), lat: f.lat, lng: f.lng, speed: f.speed, dop: f.dop, utc: f.utc, file: path.basename(file), ft: f.ft })
+    for (const f of fixes) track.push({ t: +(offset + f.ft).toFixed(2), lat: f.lat, lng: f.lng, speed: f.speed, dop: f.dop, utc: f.utc, file: path.basename(file), ft: +f.ft.toFixed(2) })
     sources.push({ file, offset, duration })
     console.log(`${path.basename(file)}: ${duration.toFixed(0)} s, ${total} fixes, ${fixes.length} kept`)
     offset += duration

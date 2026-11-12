@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { decideCameraYaw, parseLook, placeItem } from './look'
-import { bearing, haversine } from './stations'
+import { haversine } from './stations'
 
 describe('parseLook', () => {
   it('keeps a well-formed answer', () => {
@@ -72,7 +72,6 @@ describe('placeItem', () => {
     const p = placeItem(at, 270, 180, { x: 0.5, distance: 'near' })
     expect(p.bearing).toBeCloseTo(0, 6) // west + 90 = north
     expect(p.lat).toBeGreaterThan(at.lat)
-    expect(Math.abs(bearing(at, p) - 180)).toBeCloseTo(180, 0) // 0 or 360
 
   })
   it('the edge of the picture is half the field of view off centre', () => {

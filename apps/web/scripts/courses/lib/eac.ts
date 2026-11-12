@@ -3,8 +3,8 @@
 // The camera stores its 360 as two video streams, each three equi-angular cube
 // faces side by side (left/front/right, then down/back/up). Each face is as wide
 // as the stream is tall, and the outer faces carry some overlap: 4096x1344 has
-// 32 px between faces (the original MAX at 5.6K), 3008x960 has 64 px (the newer
-// clips in ~/Movies/Paddling/_inbox). Cropped and stacked 3x2 that's YouTube's
+// 32 px between faces (the original MAX at 5.6K), 3008x960 has 64 px (clips
+// shot at the lower resolution). Cropped and stacked 3x2 that's YouTube's
 // EAC, which ffmpeg's v360=eac reads directly.
 
 export type Layout = { face: number; step: number }
