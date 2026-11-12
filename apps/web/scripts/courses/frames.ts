@@ -19,6 +19,8 @@ import path from 'path'
 import { promisify } from 'util'
 import { cumulative, locate, projection, type LatLng, type XZ } from './lib/river'
 import { passes, stations } from './lib/passes'
+import { eacGraph, eacLayout, flatView, wrapYaw, type Layout } from './lib/eac'
+import { probeVideo } from './lib/telemetry'
 
 const run = promisify(execFile)
 const id = process.argv[2]
@@ -39,18 +41,17 @@ const line: XZ[] = river.samples.map((p) => [p.x, p.z])
 const cum = cumulative(line)
 const { toXZ } = projection(river.origin)
 
-// The GoPro MAX stores its 360 as two streams of three equi-angular cube faces
-// (left/front/right, then down/back/up), each 1344 px plus 32 px of overlap on
-// the outer faces. Laid out 3x2 that's YouTube's EAC, which v360 reads directly.
-const FACES = '[0:0]crop=1344:1344:0:0[l];[0:0]crop=1344:1344:1376:0[f];[0:0]crop=1344:1344:2752:0[r];'
-  + '[0:4]crop=1344:1344:0:0[d];[0:4]crop=1344:1344:1376:0[b];[0:4]crop=1344:1344:2752:0[u];'
-  + '[l][f][r]hstack=3[top];[d][b][u]hstack=3[bot];[top][bot]vstack,split=5[e0][e1][e2][e3][e4];'
-// Every output is turned so the bow is straight ahead: the 360's centre, and the
-// views at their angle from the bow.
+// The 360's layout depends on the clip's resolution (lib/eac.ts), so each video
+// is probed once. Every output is turned so the bow is straight ahead: the 360's
+// centre, and the views at their angle from the bow.
 const VIEWS = { ahead: 0, left: -90, right: 90, behind: 180 } as const
-const wrap = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180 // v360 takes -180..180
-const equirect = (cam: number) => `[e0]v360=eac:e:yaw=${wrap(cam)}:w=2048:h=1024[eq];`
-const flat = (name: string, i: number, yaw: number) => `[e${i}]v360=eac:flat:yaw=${wrap(yaw)}:pitch=5:h_fov=90:v_fov=56:w=800:h=500[${name}]`
+const equirect = (cam: number) => `[e0]v360=eac:e:yaw=${wrapYaw(cam)}:w=2048:h=1024[eq];`
+const flat = (name: string, i: number, yaw: number) => flatView(i, name, { yaw, pitch: 5, hFov: 90, vFov: 56, w: 800, h: 500 })
+const layouts = new Map<string, Layout>()
+const layoutOf = (video: string) => {
+  if (!layouts.has(video)) { const { width, height } = probeVideo(video); layouts.set(video, eacLayout(width, height)) }
+  return layouts.get(video)!
+}
 
 type Fix = { t: number; lat: number; lng: number; file: string; ft: number }
 type Frame = { s: number; recording: string; cameraYaw: number; pass: number; dir: 1 | -1; t: number; lat: number; lng: number; video: string; ft: number; name: string }
@@ -73,7 +74,7 @@ for (const rec of config.recordings) {
 
 async function extract(fr: Frame) {
   if (fs.existsSync(path.join(FRAMES, `${fr.name}-behind.jpg`))) return
-  const graph = FACES + equirect(fr.cameraYaw) + Object.entries(VIEWS).map(([v, yaw], i) => flat(v, i + 1, fr.cameraYaw + yaw)).join(';')
+  const graph = eacGraph(layoutOf(fr.video), 5) + equirect(fr.cameraYaw) + Object.entries(VIEWS).map(([v, yaw], i) => flat(v, i + 1, fr.cameraYaw + yaw)).join(';')
   await run('ffmpeg', ['-v', 'error', '-y', '-ss', fr.ft.toFixed(2), '-i', fr.video, '-filter_complex', graph,
     '-map', '[eq]', '-frames:v', '1', '-q:v', '3', path.join(FRAMES, `${fr.name}.jpg`),
     ...Object.keys(VIEWS).flatMap((v) => ['-map', `[${v}]`, '-frames:v', '1', '-q:v', '4', path.join(FRAMES, `${fr.name}-${v}.jpg`)])])

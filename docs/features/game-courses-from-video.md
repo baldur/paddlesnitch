@@ -17,7 +17,7 @@ All steps live in `apps/web/scripts/courses/`, run with `pnpm --filter web <step
 | 1. Telemetry | `course:ingest <folder or files>` | GoPro chapters (`GSccNNNN.360`, `GX…mp4`) | `.cache/courses/<NNNN>/track.json` per recording: every usable fix on the recording's clock |
 | 2. River | `course:river <id>` | `data/<id>/course.json`, the tracks, OSM (Overpass, cached) | `.cache/courses/<id>/river.json` (centreline every 10 m, bank distances, everything mapped beside it) + `river.svg` map |
 | 3. Frames | `course:frames <id> [--step 50]` | tracks, river line, the videos | a 360 frame and ahead/left/right/behind views every 50 m of every pass, `frames.json`, contact sheets |
-| 4. Observations | by hand (for now) | the frames | `data/<id>/observations.json` (committed) |
+| 4. Observations | by hand (for now); `course:look` is gathering material for it | the frames | `data/<id>/observations.json` (committed) |
 | 5. Course file | `course:build <id>` | river + observations | `games/reading-thames/courses/<id>.json` (committed, shipped with the game) |
 | 6. Review | `course:compare <id>` | course file + frames | `.cache/courses/<id>/compare.html`: the game's view next to the camera every 250 m |
 
@@ -87,6 +87,26 @@ The file carries `credit` and `licence`. **It's derived from OSM, so it is an OD
 ### 6. Review (`compare.ts`)
 
 Serves `games/`, plays the course in Chrome with `#debug`, puts the boat at each spot, and screenshots it next to the real frame. This is how the tree density and size were tuned: the first version's banks were thin and low, while the real Thames is lined with 10–20 m trees and scrub over the water.
+
+### Looking with a local model (`look.ts`, pure parts in `lib/look.ts`, `lib/stations.ts`, `lib/eac.ts`, tested)
+
+Started 2026-11-12 (owner: "lots and lots of details", stop and resume, data always available). A vision model on this laptop (Ollama, `qwen2.5vl:32b` by default) looks at **all** the 360 footage it can find and writes down what's along the river, place by place. It's independent of any course: it works per clip, and everything it records has a place, so any course (or the river planner) can use it later.
+
+```
+pnpm --filter web course:look [folders…]   # find *.360 under the folders (default ~/Movies), then look until stopped
+pnpm --filter web course:look --status     # progress per clip and level, time left
+pnpm --filter web course:look --export     # everything seen, placed, as GeoJSON
+```
+
+- **Finding footage:** every `*.360` under the folders. A clip is known by its file name plus the time of its first GPS fix, so moving or renaming folders doesn't redo it. Clips without GPS are listed and skipped. Each clip's own size gives its cube-face layout (`eacLayout`): the 2026-08 Reading clips are 4096×1344 (32 px overlap), the newer ones 3008×960 (64 px). `course:frames` uses the same layout code.
+- **Coarse to fine:** spots are every 100 m *travelled* (moves under 3 m from the last counted point are GPS scatter and don't count), then the 50, 25 and 12.5 m points between them (`--base`, `--levels`). All footage is done at one level before the next, so the whole river is covered early and detail grows as long as it runs.
+- **Each spot:** four 100°-wide views round the lens (they overlap), each asked the same questions (`PROMPT`) with the answer held to a JSON schema (`SCHEMA`): a sentence on the scene, water and light, whether the boat's own paddler is in view (back or face, paddle or oars), and up to 30 items, each a `kind` from a fixed list that matches the observation kinds, a short `detail`, where it is across the picture, a distance band and a count. Items it says it didn't see are dropped, and repeats are merged (`parseLook`).
+- **Which way the camera faced** isn't needed to look, only to place. Answers are stored against the lens angle. The camera's direction comes from the answers (`decideCameraYaw`: a paddler faces the bow, a rower the stern; 3 views agreeing, 3 in 4 of the votes) or from `cameras.json` in the store, and is applied when exporting, so a wrong guess wastes no model time.
+- **Placing:** an item's bearing is the boat's heading (GPS, over 10 m either side) plus its angle from the bow (its position across the view); it's put 8, 30 or 80 m out for near, mid and far (`placeItem`). Rough on purpose: the banks' true positions still come from OSM.
+- **Stopping and resuming:** Ctrl+C finishes the spot and stops (twice: at once; that spot is redone). Each view's answer is saved as it comes. Run it again and it carries on. A reply that isn't a look is kept (`ok = 0`) and not retried. Changing the prompt or schema bumps `PROMPT_VERSION`; looks are kept per model and version, so a new model or prompt starts afresh beside the old ones.
+- **Speed (M5 Max, 128 GB):** about 30 s a view, 2–3 minutes a spot.
+- **The store** is a SQLite file outside the repo: `~/.paddlesnitch/footage/footage.db` (`PADDLESNITCH_FOOTAGE` moves it), tables `chapters` (with each clip's track), `stations`, `looks` (with the raw reply) and `items`. Open it with `sqlite3` or anything else. **It holds the owner's tracks and times: it stays on this machine, never in the repo or an issue.** Frames aren't kept; any spot can be cut again from the clip.
+- **Into the game (next):** a separate step will merge items across passes and clips (something seen on most passes at a place is scenery; something seen sometimes is a spawn rate) into `observations.json` and the course files. That step decides what's committed: categories, counts and places on the river, never the tracks, times or text read off boats.
 
 ## In the game
 
