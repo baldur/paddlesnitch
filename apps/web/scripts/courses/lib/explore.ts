@@ -27,17 +27,29 @@ export function stripOrder(cameraYaw: number | null): Array<{ viewYaw: number; f
 
 /** How far down the picture a thing of each distance usually sits (the horizon is a little above the middle). */
 const BAND_Y: Record<Distance, number> = { far: 0.42, mid: 0.52, near: 0.68 }
+const ROW = 0.07
+const BOTTOM = 0.94
+
+/** A pin's label is its kind (and "×n"): about this share of a view's width. */
+export const labelWidth = (label: string, viewPx = 520) => (label.length * 7 + 22) / viewPx
 
 /**
- * Pins for one view: across at the item's x, down by its distance, and nudged
- * down a row when they'd sit on top of an earlier pin.
+ * Pins for one view, as label boxes that stay inside the picture and don't
+ * overlap: across at the item's x (anchored left or right near an edge), down by
+ * its distance, and moved to the next free row below, then above, when taken.
+ * `px` is the label's left edge, `py` its centre, both 0–1.
  */
-export function layoutPins<T extends { x: number; distance: Distance }>(items: T[], minGap = 0.07, row = 0.07): Array<T & { px: number; py: number }> {
-  const placed: Array<T & { px: number; py: number }> = []
+export function layoutPins<T extends { x: number; distance: Distance; label: string }>(items: T[], viewPx = 520): Array<T & { px: number; py: number; w: number }> {
+  const placed: Array<T & { px: number; py: number; w: number }> = []
   for (const it of items) {
-    let py = BAND_Y[it.distance] ?? BAND_Y.mid
-    while (placed.some((p) => Math.abs(p.px - it.x) < minGap && Math.abs(p.py - py) < row / 2)) py += row
-    placed.push({ ...it, px: it.x, py: Math.min(py, 0.96) })
+    const w = Math.min(labelWidth(it.label, viewPx), 1)
+    const px = Math.min(Math.max(it.x - w / 2, 0), 1 - w)
+    const band = BAND_Y[it.distance] ?? BAND_Y.mid
+    const rows: number[] = []
+    for (let y = band; y <= BOTTOM + 1e-9; y += ROW) rows.push(y)
+    for (let y = band - ROW; y >= 0.06; y -= ROW) rows.push(y)
+    const free = (y: number) => !placed.some((p) => px < p.px + p.w && p.px < px + w && Math.abs(p.py - y) < ROW - 1e-9)
+    placed.push({ ...it, w, px, py: rows.find(free) ?? band })
   }
   return placed
 }
@@ -63,11 +75,16 @@ export function scoreOf(reviews: Array<{ kind: string; verdict: Verdict }>, miss
   }
 }
 
-/** The closest spot from each other clip within `metres`: the same place on other days. */
-export function otherPasses<T extends { id: number; chapterId: number; lat: number; lng: number }>(spots: T[], at: T, metres = 30): Array<T & { metres: number }> {
+/**
+ * The closest spot from each clip filmed on another day, within `metres`: the
+ * same place on other days. A recording's next chapter (or the way back on the
+ * same paddle) is the same day, so it isn't one.
+ */
+export function otherPasses<T extends { id: number; chapterId: number; startUtc: string | null; lat: number; lng: number }>(spots: T[], at: T, metres = 30): Array<T & { metres: number }> {
+  const day = (s: T) => s.startUtc?.slice(0, 10) ?? `clip ${s.chapterId}`
   const best = new Map<number, T & { metres: number }>()
   for (const s of spots) {
-    if (s.chapterId === at.chapterId) continue
+    if (day(s) === day(at)) continue
     const m = haversine(s, at)
     if (m > metres) continue
     const b = best.get(s.chapterId)
@@ -88,6 +105,16 @@ export function hostAllowed(host: string | undefined, port: number): boolean {
 export function originAllowed(origin: string | undefined, port: number): boolean {
   return origin === `http://localhost:${port}` || origin === `http://127.0.0.1:${port}`
 }
+/**
+ * Browsers say where a request came from (Sec-Fetch-Site). Another site's page
+ * could otherwise load our pictures in an <img> and set ffmpeg cutting; only our
+ * own page, or the address typed in, gets an answer. Tools that don't send it
+ * (curl) are still bound by the Host check.
+ */
+export function fetchSiteAllowed(site: string | undefined): boolean {
+  return site === undefined || site === 'same-origin' || site === 'none'
+}
+export const isJson = (contentType: string | undefined) => /^application\/json(\s*;|$)/i.test(contentType ?? '')
 
 export type Route =
   | { kind: 'page' } | { kind: 'spots' } | { kind: 'score' }

@@ -51,15 +51,17 @@ export function openStore(dir = STORE): DatabaseSync {
       track TEXT,                        -- JSON [[ft, lat, lng, speed], …] every usable fix
       scanned_at TEXT
     );
+    -- AUTOINCREMENT: an id is never reused after a delete, so a verdict, a cached
+    -- view or an open page can't end up on a different spot, look or item.
     CREATE TABLE IF NOT EXISTS stations (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       chapter_id INTEGER NOT NULL REFERENCES chapters(id),
       level INTEGER NOT NULL, n INTEGER NOT NULL,
       ft REAL, lat REAL, lng REAL, heading REAL, speed REAL,
       UNIQUE (chapter_id, level, n)
     );
     CREATE TABLE IF NOT EXISTS looks (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       station_id INTEGER NOT NULL REFERENCES stations(id),
       view_yaw REAL NOT NULL,            -- degrees from the lens
       model TEXT NOT NULL, prompt_version INTEGER NOT NULL,
@@ -69,7 +71,7 @@ export function openStore(dir = STORE): DatabaseSync {
       UNIQUE (station_id, view_yaw, model, prompt_version)
     );
     CREATE TABLE IF NOT EXISTS items (
-      id INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       look_id INTEGER NOT NULL REFERENCES looks(id),
       kind TEXT, detail TEXT, x REAL, distance TEXT, count INTEGER
     );
@@ -79,13 +81,15 @@ export function openStore(dir = STORE): DatabaseSync {
       verdict TEXT NOT NULL, at TEXT
     );
     CREATE TABLE IF NOT EXISTS missed (
-      id INTEGER PRIMARY KEY,
-      look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, at TEXT
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, y REAL, at TEXT
     );
     CREATE INDEX IF NOT EXISTS items_look ON items(look_id);
     CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
     CREATE INDEX IF NOT EXISTS looks_station ON looks(station_id);
   `)
+  // Stores made before missed kept y.
+  try { db.exec('ALTER TABLE missed ADD COLUMN y REAL') } catch { /* already there */ }
   return db
 }
 
@@ -241,7 +245,10 @@ export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, m
   })
 }
 
-/** The owner's verdict on one thing the model saw; null takes it back. Unknown items are refused. */
+/**
+ * The owner's verdict on one thing the model saw; null takes it back. Refused for
+ * an item that isn't there any more (its look was redone while the page was open).
+ */
 export function saveReview(db: DatabaseSync, itemId: number, verdict: 'right' | 'wrong' | null): boolean {
   if (!db.prepare('SELECT 1 FROM items WHERE id = ?').get(itemId)) return false
   if (verdict === null) db.prepare('DELETE FROM reviews WHERE item_id = ?').run(itemId)
@@ -251,10 +258,10 @@ export function saveReview(db: DatabaseSync, itemId: number, verdict: 'right' | 
 }
 
 /** Something in the picture the model didn't list; `remove` takes one back. Unknown looks are refused. */
-export function saveMissed(db: DatabaseSync, m: { lookId: number; kind: string; x: number } | { remove: number }): number | null {
+export function saveMissed(db: DatabaseSync, m: { lookId: number; kind: string; x: number; y: number } | { remove: number }): number | null {
   if ('remove' in m) { db.prepare('DELETE FROM missed WHERE id = ?').run(m.remove); return m.remove }
   if (!db.prepare('SELECT 1 FROM looks WHERE id = ?').get(m.lookId)) return null
-  return Number(db.prepare('INSERT INTO missed (look_id, kind, x, at) VALUES (?, ?, ?, ?)').run(m.lookId, m.kind, m.x, new Date().toISOString()).lastInsertRowid)
+  return Number(db.prepare('INSERT INTO missed (look_id, kind, x, y, at) VALUES (?, ?, ?, ?, ?)').run(m.lookId, m.kind, m.x, m.y, new Date().toISOString()).lastInsertRowid)
 }
 
 /**

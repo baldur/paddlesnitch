@@ -172,9 +172,9 @@ describe('checking the answers (course:explore)', () => {
 
   it('a missed thing is kept against its view, and refused for a view that does not exist', () => {
     lookedAt()
-    const m = saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3 })
+    const m = saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3, y: 0.6 })
     expect(m).not.toBeNull()
-    expect(saveMissed(db, { lookId: 9999, kind: 'swan', x: 0.3 })).toBeNull()
+    expect(saveMissed(db, { lookId: 9999, kind: 'swan', x: 0.3, y: 0.6 })).toBeNull()
     saveMissed(db, { remove: m! })
     expect(count('SELECT count(*) n FROM missed')).toBe(0)
   })
@@ -182,7 +182,7 @@ describe('checking the answers (course:explore)', () => {
   it('redoing a look drops the verdicts on its old answer, so they never score a different answer', () => {
     const s = lookedAt()
     for (const id of itemIds()) saveReview(db, id, 'right')
-    saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3 })
+    saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3, y: 0.6 })
     look(s, 0, 1)
     expect(count('SELECT count(*) n FROM reviews')).toBe(0)
     expect(count('SELECT count(*) n FROM missed')).toBe(0)
@@ -191,8 +191,28 @@ describe('checking the answers (course:explore)', () => {
   it('a clip that changed drops its verdicts with its spots', () => {
     lookedAt()
     saveReview(db, itemIds()[0], 'wrong')
+    saveMissed(db, { lookId: lookId(), kind: 'swan', x: 0.3, y: 0.6 })
     saveClip(db, clip({ track: TRACK.slice(0, 200) }), null)
     expect(count('SELECT count(*) n FROM reviews')).toBe(0)
+    expect(count('SELECT count(*) n FROM missed')).toBe(0)
+  })
+
+  it('a verdict sent for an old answer never lands on the new one: ids are not reused', () => {
+    const s = lookedAt()
+    const old = itemIds()
+    look(s, 0, 2) // course:look redid this view while the page was open
+    for (const id of old) expect(saveReview(db, id, 'wrong')).toBe(false)
+    expect(itemIds().some((id) => old.includes(id))).toBe(false)
+  })
+
+  it('a clip that changed gets new spot ids, so cached pictures of the old spots are never shown for them', () => {
+    const { id } = saveClip(db, clip(), null)
+    ensureStations(db, id, 100, 1)
+    const before = (db.prepare('SELECT id FROM stations').all() as Array<{ id: number }>).map((r) => r.id)
+    saveClip(db, clip({ track: TRACK.slice(0, 200) }), null)
+    ensureStations(db, id, 100, 1)
+    const after = (db.prepare('SELECT id FROM stations').all() as Array<{ id: number }>).map((r) => r.id)
+    expect(after.some((x) => before.includes(x))).toBe(false)
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hostAllowed, layoutPins, originAllowed, otherPasses, route, scoreOf, stripOrder } from './explore'
+import { fetchSiteAllowed, hostAllowed, isJson, layoutPins, originAllowed, otherPasses, route, scoreOf, stripOrder } from './explore'
 
 describe('stripOrder', () => {
   it('puts the bow in the middle: left, ahead, right, behind', () => {
@@ -16,19 +16,29 @@ describe('stripOrder', () => {
 })
 
 describe('layoutPins', () => {
+  const pin = (x: number, distance: 'near' | 'mid' | 'far', label = 'trees') => ({ x, distance, label })
+  const overlap = (a: { px: number; py: number; w: number }, b: { px: number; py: number; w: number }) =>
+    a.px < b.px + b.w && b.px < a.px + a.w && Math.abs(a.py - b.py) < 0.069
+
   it('places pins across by x and down by distance, far higher than near', () => {
-    const [far, near] = layoutPins([{ x: 0.2, distance: 'far' as const }, { x: 0.8, distance: 'near' as const }])
-    expect(far.px).toBe(0.2)
+    const [far, near] = layoutPins([pin(0.2, 'far'), pin(0.8, 'near')])
+    expect(far.px + far.w / 2).toBeCloseTo(0.2)
     expect(far.py).toBeLessThan(near.py)
   })
-  it('moves a pin down a row instead of on top of another', () => {
-    const [a, b, c] = layoutPins([{ x: 0.5, distance: 'mid' as const }, { x: 0.52, distance: 'mid' as const }, { x: 0.9, distance: 'mid' as const }])
-    expect(b.py).toBeGreaterThan(a.py)
-    expect(c.py).toBe(a.py)
+  it('labels never overlap, even long ones close together', () => {
+    const pins = layoutPins([pin(0.5, 'mid', 'moored-narrowboat ×2'), pin(0.6, 'mid', 'moored-cruiser'), pin(0.55, 'mid'), pin(0.9, 'mid')])
+    for (let i = 0; i < pins.length; i++) for (let j = i + 1; j < pins.length; j++) expect(overlap(pins[i], pins[j])).toBe(false)
   })
-  it('keeps every pin on the picture however many pile up', () => {
-    const pins = layoutPins(Array.from({ length: 30 }, () => ({ x: 0.5, distance: 'near' as const })))
-    expect(Math.max(...pins.map((p) => p.py))).toBeLessThanOrEqual(0.96)
+  it('labels at the edges stay inside the picture', () => {
+    for (const p of layoutPins([pin(0, 'mid', 'moored-narrowboat'), pin(1, 'far', 'pub-restaurant')])) {
+      expect(p.px).toBeGreaterThanOrEqual(0)
+      expect(p.px + p.w).toBeLessThanOrEqual(1)
+    }
+  })
+  it('a pile of pins at one place spreads up the picture instead of stacking at the bottom', () => {
+    const pins = layoutPins(Array.from({ length: 8 }, () => pin(0.5, 'near')))
+    expect(new Set(pins.map((p) => p.py.toFixed(3))).size).toBe(8)
+    expect(Math.max(...pins.map((p) => p.py))).toBeLessThanOrEqual(0.94 + 1e-9)
   })
 })
 
@@ -46,11 +56,19 @@ describe('scoreOf', () => {
 })
 
 describe('otherPasses', () => {
-  const spot = (id: number, chapterId: number, dLat: number) => ({ id, chapterId, lat: 51.46 + dLat, lng: -0.97 })
-  it('finds the closest spot from each other clip, not this one, within range', () => {
-    const at = spot(1, 1, 0)
-    const spots = [at, spot(2, 1, 0.0001), spot(3, 2, 0.0002), spot(4, 2, 0.0001), spot(5, 3, 0.01)]
+  const spot = (id: number, chapterId: number, day: string | null, dLat: number) => ({ id, chapterId, startUtc: day && `${day}T09:00:00Z`, lat: 51.46 + dLat, lng: -0.97 })
+  it('finds the closest spot from each clip filmed on another day, within range', () => {
+    const at = spot(1, 1, '2026-11-08', 0)
+    const spots = [at, spot(2, 1, '2026-11-08', 0.0001), spot(3, 2, '2026-11-01', 0.0002), spot(4, 2, '2026-11-01', 0.0001), spot(5, 3, '2026-10-01', 0.01)]
     expect(otherPasses(spots, at).map((s) => s.id)).toEqual([4])
+  })
+  it("the recording's next chapter, or the way back on the same paddle, is not another day", () => {
+    const at = spot(1, 1, '2026-11-08', 0)
+    expect(otherPasses([at, spot(2, 2, '2026-11-08', 0.0001)], at)).toEqual([])
+  })
+  it('clips without a date count as their own day', () => {
+    const at = spot(1, 1, null, 0)
+    expect(otherPasses([at, spot(2, 2, null, 0.0001)], at).map((s) => s.id)).toEqual([2])
   })
 })
 
@@ -60,6 +78,20 @@ describe('who the server answers', () => {
     expect(hostAllowed('127.0.0.1:3201', 3201)).toBe(true)
     expect(hostAllowed('evil.example:3201', 3201)).toBe(false)
     expect(hostAllowed(undefined, 3201)).toBe(false)
+  })
+  it("refuses another site's page, even through an <img>, but not its own page or the typed address", () => {
+    expect(fetchSiteAllowed('cross-site')).toBe(false)
+    expect(fetchSiteAllowed('same-site')).toBe(false)
+    expect(fetchSiteAllowed('same-origin')).toBe(true)
+    expect(fetchSiteAllowed('none')).toBe(true)
+    expect(fetchSiteAllowed(undefined)).toBe(true)
+  })
+  it('takes JSON with or without a charset, nothing else', () => {
+    expect(isJson('application/json')).toBe(true)
+    expect(isJson('application/json; charset=utf-8')).toBe(true)
+    expect(isJson('text/plain')).toBe(false)
+    expect(isJson('application/jsonp')).toBe(false)
+    expect(isJson(undefined)).toBe(false)
   })
   it('changes only from its own page', () => {
     expect(originAllowed('http://localhost:3201', 3201)).toBe(true)
