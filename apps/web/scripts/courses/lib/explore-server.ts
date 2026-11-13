@@ -25,7 +25,7 @@ export type ExplorerOptions = {
 const page = PAGE.replace('__KINDS__', JSON.stringify(KINDS))
 // The page's one script, allowed by its hash: no other script can run on it.
 const scriptHash = crypto.createHash('sha256').update(/<script>([\s\S]*)<\/script>/.exec(page)![1]).digest('base64')
-const CSP = `default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
+const CSP = `default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src 'self' https://server.arcgisonline.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 
 export const viewFile = (dir: string, id: number, yaw: number, careful = false) => path.join(dir, `${id}-${careful ? 'l' : ''}${yaw}.jpg`)
 

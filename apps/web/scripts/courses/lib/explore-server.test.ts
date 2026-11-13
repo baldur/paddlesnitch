@@ -7,6 +7,7 @@ import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
 import { createExplorer, viewFile } from './explore-server'
+import { PAGE } from './explore-page'
 import { ensureStations, nextStation, openStore, saveArea, saveClip, saveLook } from './footage-db'
 import { LANDMARK_VERSION, LANDMARK_VIEWS } from './landmarks'
 import { PROMPT_VERSION, VIEWS } from './look'
@@ -198,6 +199,26 @@ describe('areas', () => {
     expect((await post('/api/area', { ...a, east: 181 })).status).toBe(400)
     expect((await post('/api/area', { remove: 1.5 })).status).toBe(400)
     expect((await post('/api/area', { remove: 0 })).status).toBe(400)
+  })
+  it('lets the page show satellite imagery from Esri, and pictures from nowhere else', async () => {
+    const csp = (await request('GET', '/', { headers: { 'sec-fetch-site': 'none' } })).headers['content-security-policy'] as string
+    expect(csp).toMatch(/img-src 'self' https:\/\/server\.arcgisonline\.com;/)
+    expect(csp).toMatch(/connect-src 'self';/)
+  })
+  it('covers the map in view with imagery tiles that fit the screen, and never too many', () => {
+    const src = /function tilesFor[\s\S]*?\n}\n/.exec(PAGE)![0]
+    const tilesFor = new Function(`${src}; return tilesFor`)() as (b: object, w: number) => Array<{ z: number; x: number; y: number; north: number; south: number; west: number; east: number }>
+    // About 550 m of Reading seen 900 px wide: zoom 18 (tiles no coarser than the screen), covering the box.
+    const box = { north: 51.4700, south: 51.4650, west: -0.9850, east: -0.9770 }
+    const t = tilesFor(box, 900)
+    expect(t[0].z).toBe(18)
+    expect(t.length).toBeLessThanOrEqual(80)
+    expect(Math.min(...t.map((x) => x.west))).toBeLessThanOrEqual(box.west)
+    expect(Math.max(...t.map((x) => x.east))).toBeGreaterThanOrEqual(box.east)
+    expect(Math.max(...t.map((x) => x.north))).toBeGreaterThanOrEqual(box.north)
+    expect(Math.min(...t.map((x) => x.south))).toBeLessThanOrEqual(box.south)
+    // A whole country on a big screen falls back to coarser tiles rather than hundreds.
+    expect(tilesFor({ north: 56, south: 50, west: -6, east: 2 }, 4000).length).toBeLessThanOrEqual(80)
   })
   it("the page's script parses, so a broken page can't ship", async () => {
     const page = (await request('GET', '/', { headers: { 'sec-fetch-site': 'none' } })).body

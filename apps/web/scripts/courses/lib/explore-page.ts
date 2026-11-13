@@ -98,7 +98,8 @@ button:hover:not(:disabled){border-color:var(--primary)}button:disabled{opacity:
   <aside>
     <div class="card"><h2>Where</h2><svg id="map" viewBox="0 0 300 300" role="img" aria-label="Map of the spots looked at"></svg>
       <p class="help"><span style="color:var(--green)">●</span> all marked &nbsp;<span style="color:var(--primary)">●</span> some unmarked &nbsp;<span style="color:var(--muted)">●</span> nothing to mark</p>
-      <div class="maptools"><button type="button" id="bigger">Bigger map</button><button type="button" id="unzoom" disabled>Zoom out</button></div>
+      <div class="maptools"><button type="button" id="bigger">Bigger map</button><button type="button" id="unzoom" disabled>Zoom out</button><button type="button" id="satellite" aria-pressed="true">Satellite</button></div>
+      <p class="help" id="imagery">Imagery © Esri, Maxar, Earthstar Geographics. The map's pictures come from Esri, so Esri sees which part of the map you look at; nothing else leaves this machine.</p>
       <p class="help"><span style="color:var(--violet)">Drag on the map</span> to draw an area to look at carefully. Scroll to zoom in first, and keep it to 100–300 m of river: each pass through it takes 20–60 min. Shift-drag moves a zoomed map.</p>
       <div id="areaform"></div></div>
     <div class="card" id="areas"></div>
@@ -146,6 +147,29 @@ function drawScore(s) {
   }
 }
 
+const IMAGERY = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'
+
+/**
+ * The web-map tiles covering a box of the earth seen \`widthPx\` wide: sharp enough for
+ * the screen, at most 80 of them. Each with its zoom, column, row and corners.
+ */
+function tilesFor(b, widthPx) {
+  const lat2y = (lat, n) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n) }
+  const y2lat = (y, n) => 180 / Math.PI * Math.atan(Math.sinh(Math.PI - 2 * Math.PI * y / n))
+  const lng2x = (lng, n) => Math.floor((lng + 180) / 360 * n)
+  for (let z = Math.max(1, Math.min(19, Math.ceil(Math.log2(360 * widthPx / (Math.max(b.east - b.west, 1e-9) * 256))))); z >= 1; z--) {
+    const n = 2 ** z, x0 = lng2x(b.west, n), x1 = lng2x(b.east, n), y0 = lat2y(b.north, n), y1 = lat2y(b.south, n)
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 80) continue
+    const tiles = []
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) tiles.push({ z, x, y, west: x / n * 360 - 180, east: (x + 1) / n * 360 - 180, north: y2lat(y, n), south: y2lat(y + 1, n) })
+    return tiles
+  }
+  return []
+}
+
+let satellite = true
+try { satellite = localStorage.getItem('explore.satellite') !== '0' } catch {}
+
 function drawMap() {
   const svg = document.getElementById('map'); svg.replaceChildren()
   // The tracks alone are enough to draw an area on, before the general look has any spots.
@@ -169,7 +193,16 @@ function drawMap() {
   // And back, for an area drawn on the map.
   mapProj = { P, toLatLng: (X, Y) => ({ lat: -((Y - 10) / scale + y0), lng: ((X - 10) / scale + x0) / k }) }
   const ns = 'http://www.w3.org/2000/svg', mk = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const a in attrs) e.setAttribute(a, attrs[a]); return e }
-  for (const t of tracks) svg.append(mk('polyline', { points: t.map(([la, ln]) => P(la, ln).join(',')).join(' '), fill: 'none', stroke: 'var(--track)', 'stroke-width': 1.5 }))
+  if (satellite) {
+    // The part of the map in view, and the imagery tiles that cover it, each placed by its own corners.
+    const vx = z === 1 ? 0 : mapZoom.x, vy = z === 1 ? 0 : mapZoom.y
+    const nw = mapProj.toLatLng(vx, vy), se = mapProj.toLatLng(vx + 300 / z, vy + h / z)
+    for (const t of tilesFor({ north: nw.lat, west: nw.lng, south: se.lat, east: se.lng }, svg.clientWidth || 260)) {
+      const [ax, ay] = P(t.north, t.west), [bx, by] = P(t.south, t.east)
+      svg.append(mk('image', { href: IMAGERY + t.z + '/' + t.y + '/' + t.x, x: ax, y: ay, width: bx - ax + u, height: by - ay + u, preserveAspectRatio: 'none' })) // a pixel over, so no seams
+    }
+  }
+  for (const t of tracks) svg.append(mk('polyline', { points: t.map(([la, ln]) => P(la, ln).join(',')).join(' '), fill: 'none', stroke: satellite ? 'rgba(255,255,255,.8)' : 'var(--track)', 'stroke-width': 1.5 }))
   for (const a of areas) {
     const [ax, ay] = P(a.north, a.west), [bx, by] = P(a.south, a.east)
     const r = mk('rect', { x: ax, y: ay, width: Math.max(bx - ax, 1), height: Math.max(by - ay, 1), class: 'area' + (openArea && openArea.id === a.id ? ' open' : '') })
@@ -599,6 +632,15 @@ const setBigMap = (on) => {
 }
 setBigMap(bigMap)
 document.getElementById('bigger').addEventListener('click', () => setBigMap(!bigMap))
+const setSatellite = (on) => {
+  satellite = on
+  const b = document.getElementById('satellite'); b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Satellite' : 'Satellite off'
+  document.getElementById('imagery').hidden = !on
+  try { localStorage.setItem('explore.satellite', on ? '1' : '0') } catch {}
+  drawMap()
+}
+setSatellite(satellite)
+document.getElementById('satellite').addEventListener('click', () => setSatellite(!satellite))
 
 let resizing
 // Lay the pins out again when the pictures change size.
