@@ -313,3 +313,53 @@ test('upstream of Mapledurham: the dead tree, the white river sign and the sand 
   }
   assert.ok(reading.features.some((f) => f.style === 'beach' && Math.hypot(f.at[0] + 4711, f.at[1] + 2438) < 10), 'the beach at r1');
 });
+
+test('both renderers mirror the banks with the same treeline(), line for line', async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  // WGSL's select(f, t, c) as GLSL's c ? t : f, then without types, brackets or spaces.
+  const args = (inner) => {
+    const out = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < inner.length; i++) {
+      if ('(['.includes(inner[i])) depth++;
+      else if (')]'.includes(inner[i])) depth--;
+      else if (inner[i] === ',' && depth === 0) { out.push(inner.slice(start, i)); start = i + 1; }
+    }
+    return [...out, inner.slice(start)].map((a) => a.trim());
+  };
+  const unselect = (line) => {
+    const at = line.indexOf('select(');
+    if (at < 0) return line;
+    let depth = 0, end = at + 6;
+    for (; end < line.length; end++) {
+      if (line[end] === '(') depth++;
+      else if (line[end] === ')' && --depth === 0) break;
+    }
+    const [f, t, c] = args(line.slice(at + 7, end));
+    return unselect(`${line.slice(0, at)}${c} ? ${t} : ${f}${line.slice(end + 1)}`);
+  };
+  const body = (src, head) => {
+    const from = src.indexOf(head);
+    return src.slice(from, src.indexOf('\n}', from)).split('\n').slice(1)
+      .map((l) => l.trim()).filter((l) => l && !l.startsWith('//'))
+      .map((l) => unselect(l.replace(/^(let|float|vec[23]|var) /, '').replace(/vec([23])f/g, 'vec$1').replace(/[{};]/g, '').replace(/^if (.*) return/, 'if $1 return')))
+      .map((l) => l.replace(/[()\s]/g, ''));
+  };
+  const gpu = body(await read('shaders.js'), 'fn treeline(');
+  const gl = body(await read('shaders-gl.js'), 'vec2 treeline(');
+  assert.ok(gpu.length >= 10, `${gpu.length} lines`);
+  assert.deepEqual(gl, gpu);
+});
+
+test("the dead tree, the river sign and the beach stand on their banks, not out in the river", async () => {
+  const reading = await data('reading');
+  const land = waterMap(reading.water);
+  for (const style of ['dead-tree', 'river-sign', 'beach']) {
+    const near = reading.features.filter((f) => f.style === style && f.at[1] < -2000);
+    assert.ok(near.length, `${style} upstream of Mapledurham`);
+    for (const { at } of near) {
+      const dry = Array.from({ length: 16 }, (_, k) => [at[0] + 3 * Math.cos(k * 0.39), at[1] + 3 * Math.sin(k * 0.39)]).some(([x, z]) => !land.inside(x, z));
+      assert.ok(dry, `${style} at ${at}: the bank is within 3 m`);
+    }
+  }
+});
