@@ -5,6 +5,7 @@
 import { haversine } from './stations'
 import { VIEWS, type Distance } from './look'
 import { LANDMARK_VIEWS } from './landmarks'
+import { HERE_NAMES, type HereDir } from './here'
 
 /** Every clip so far was shot from the back deck looking back (look.ts, ASSUMED_YAW). */
 export const ASSUMED_YAW = 180
@@ -136,6 +137,7 @@ export type Route =
   | { kind: 'page' } | { kind: 'spots' } | { kind: 'score' }
   | { kind: 'spot'; id: number } | { kind: 'view'; id: number; yaw: number; careful: boolean }
   | { kind: 'areas' } | { kind: 'area'; id: number } | { kind: 'areaSpots' }
+  | { kind: 'near' } | { kind: 'here'; chapterId: number; ft10: number; name: HereDir }
   | { kind: 'review' } | { kind: 'missed' } | { kind: 'saveArea' } | { kind: 'none' }
 
 const YAWS = new Set<number>(VIEWS.map((v) => v.yaw))
@@ -155,6 +157,9 @@ export function route(method: string, pathname: string): Route {
     if (pathname === '/api/area-spots') return { kind: 'areaSpots' }
     m = /^\/api\/area\/(\d{1,9})$/.exec(pathname)
     if (m) return { kind: 'area', id: Number(m[1]) }
+    if (pathname === '/api/near') return { kind: 'near' }
+    m = /^\/here\/(\d{1,9})\/(\d{1,7})\/([a-z0-9]{3,6})\.jpg$/.exec(pathname)
+    if (m && (HERE_NAMES as readonly string[]).includes(m[3])) return { kind: 'here', chapterId: Number(m[1]), ft10: Number(m[2]), name: m[3] as HereDir }
   }
   if (method === 'POST' && pathname === '/api/review') return { kind: 'review' }
   if (method === 'POST' && pathname === '/api/missed') return { kind: 'missed' }

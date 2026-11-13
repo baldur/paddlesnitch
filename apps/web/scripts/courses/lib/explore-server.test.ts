@@ -6,7 +6,8 @@ import http from 'http'
 import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
-import { createExplorer, viewFile } from './explore-server'
+import { createExplorer, hereFile, viewFile } from './explore-server'
+import { HERE_NAMES } from './here'
 import { PAGE } from './explore-page'
 import { ensureStations, nextStation, openStore, saveArea, saveClip, saveLook } from './footage-db'
 import { LANDMARK_VERSION, LANDMARK_VIEWS } from './landmarks'
@@ -22,6 +23,7 @@ let db: DatabaseSync
 let server: http.Server
 let port: number
 let cuts: number[]
+let hereCuts: Array<{ ft: number; cameraYaw: number; yaws: Record<string, number> }>
 let video: string
 
 beforeEach(async () => {
@@ -30,6 +32,7 @@ beforeEach(async () => {
   video = path.join(dir, 'GS010101.360')
   fs.writeFileSync(video, 'x')
   cuts = []
+  hereCuts = []
   const viewDir = path.join(dir, 'views')
   fs.mkdirSync(viewDir)
   server = createExplorer(db, {
@@ -38,6 +41,11 @@ beforeEach(async () => {
       cuts.push(st.id)
       await new Promise((r) => setTimeout(r, 20))
       for (const v of careful ? LANDMARK_VIEWS : VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw, careful), careful ? 'careful' : 'jpeg')
+    },
+    cutHere: async (f, file) => {
+      hereCuts.push({ ft: f.ft, cameraYaw: f.cameraYaw, yaws: f.yaws })
+      await new Promise((r) => setTimeout(r, 20))
+      for (const n of HERE_NAMES) fs.writeFileSync(file(n), n)
     },
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
@@ -286,6 +294,7 @@ describe('spots and pictures', () => {
         if (st.id === ids[0]) throw new Error('ffmpeg exited 1: /secret/path.360: Invalid data')
         for (const v of VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw), 'jpeg')
       },
+      cutHere: async () => {},
     })
     await new Promise<void>((r) => busy.listen(0, '127.0.0.1', r))
     const p2 = (busy.address() as { port: number }).port
@@ -308,5 +317,52 @@ describe('spots and pictures', () => {
     expect(r.status).toBe(404)
     expect(r.body).not.toContain(dir)
     expect(cuts).toEqual([])
+  })
+})
+
+describe('footage here', () => {
+  /** The test clip: east from ORIGIN at 2 m/s for 500 s, so ORIGIN + 100 m east is passed at 50 s. */
+  const clip = () => saveClip(db, { path: video, size: 1, mtime: 1, recording: '0101', chapter: '01', duration: 500, width: 3008, height: 960, track: TRACK, startUtc: '2026-11-08T09:00:00.000Z' }, null).id
+  const at = destination(destination(ORIGIN, 90, 100), 0, 6)
+
+  it('lists each pass near a point with its closest moment, day and time, without the model having looked', async () => {
+    const id = clip()
+    const r = await request('GET', `/api/near?lat=${at.lat}&lng=${at.lng}&r=20`)
+    expect(r.status).toBe(200)
+    const d = r.json()
+    expect(d).toMatchObject({ total: 1, days: 1 })
+    expect(d.passes[0]).toMatchObject({ chapterId: id, clip: 'GS010101.360', ft: 50, metres: 6, day: expect.any(String), time: '09:00', cameraKnown: false, duration: 500 })
+    expect(JSON.stringify(d)).not.toContain(dir)
+  })
+  it('finds nothing further than the radius, and takes only the radii the page offers', async () => {
+    clip()
+    const far = destination(at, 0, 30)
+    expect((await request('GET', `/api/near?lat=${far.lat}&lng=${far.lng}&r=20`)).json().total).toBe(0)
+    for (const q of ['r=25', 'r=1000', 'lat=x&lng=1&r=20', 'lat=91&lng=0&r=20', '']) {
+      expect((await request('GET', `/api/near?${q.startsWith('lat') || !q ? q : `lat=${at.lat}&lng=${at.lng}&${q}`}`)).status).toBe(400)
+    }
+  })
+  it('cuts a moment once for all five pictures, facing from the bow for the way the camera was mounted', async () => {
+    const id = clip()
+    const rs = await Promise.all(['ahead', 'left', '360'].map((n) => request('GET', `/here/${id}/500/${n}.jpg`)))
+    expect(rs.map((r) => r.status)).toEqual([200, 200, 200])
+    expect(rs.map((r) => r.body)).toEqual(['ahead', 'left', '360'])
+    expect(rs[0].headers['content-type']).toBe('image/jpeg')
+    expect(hereCuts).toEqual([{ ft: 50, cameraYaw: 180, yaws: { left: 90, ahead: 180, right: 270, behind: 0 } }])
+    expect(fs.existsSync(hereFile(path.join(dir, 'views'), id, 500, 'behind'))).toBe(true)
+    await request('GET', `/here/${id}/500/right.jpg`)
+    expect(hereCuts).toHaveLength(1)
+  })
+  it("won't cut past the clip's end, an unknown clip, a missing file, or for another site", async () => {
+    const id = clip()
+    expect((await request('GET', `/here/${id}/5001/ahead.jpg`)).status).toBe(404)
+    expect((await request('GET', `/here/${id + 1}/10/ahead.jpg`)).status).toBe(404)
+    expect((await request('GET', `/here/${id}/10/ahead.jpg`, { headers: { 'sec-fetch-site': 'cross-site' } })).status).toBe(403)
+    expect((await request('GET', `/api/near?lat=${at.lat}&lng=${at.lng}&r=20`, { headers: { 'sec-fetch-site': 'cross-site' } })).status).toBe(403)
+    fs.rmSync(video)
+    const r = await request('GET', `/here/${id}/10/ahead.jpg`)
+    expect(r.status).toBe(404)
+    expect(r.body).not.toContain(dir)
+    expect(hereCuts).toEqual([])
   })
 })
