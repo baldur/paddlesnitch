@@ -10,7 +10,7 @@
 // DOM; main.js draws the shots and the doors.
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt } from './course.js';
-import { groundAt, bridgeBay, BRIDGE } from './world.js';
+import { groundAt, bridgeBay, BRIDGE, landmarkFrame } from './world.js';
 import { HIRE_BOATS } from './outing.js';
 
 // Where each place's doors lead. `up` is where Back goes: the rooms and the
@@ -132,7 +132,18 @@ export function clubShots(course) {
   const rowing = building('rowing-club');
   if (!canoe || !rowing) return null;
   const at = (x, z, up) => [x, groundAt(course, x, z) + up, z];
+  // Each club as world.js builds it (squared to its bank), so the shots and
+  // the doors' labels sit on the model; from the river line where there's no
+  // mapped water.
   const frame = (b) => {
+    const f = course.scenery.water?.length ? landmarkFrame(course, b.style) : null;
+    if (f) {
+      const [x, , z] = f.origin;
+      const toWater = [f.fwd[0], 0, f.fwd[1]];
+      const edge = f.at(0, -f.origin[1], f.edge);
+      const [rx, rz] = centre(b.shape); // (the rooms keep their place under the footprint)
+      return { x, z, rx, rz, toWater, along: [f.right[0], 0, f.right[1]], edge, height: b.height ?? 6, toEdge: f.edge };
+    }
     const [x, z] = centre(b.shape);
     const l = locate(river, x, z);
     const p = pointAt(river, l.s);
@@ -147,7 +158,7 @@ export function clubShots(course) {
   const r = frame(rowing);
   const roomAt = (name) => {
     const home = ROOMS[name].club === 'rowing' ? r : c;
-    return [home.x + ROOMS[name].at * 40, UNDER, home.z];
+    return [(home.rx ?? home.x) + ROOMS[name].at * 40, UNDER, home.rz ?? home.z];
   };
   const p = (name, x, y, z) => inRoom(roomAt(name), x, y, z);
   // Inside a room: stand by the wall you came in at, look across to the far one.
@@ -159,7 +170,7 @@ export function clubShots(course) {
   const stand = p('changing', -1.2, HIPS, 0.4);
   // The way out: a door at the far end of the right-hand wall.
   const out = (name) => p(name, ROOMS[name].width / 2 - 0.2, 2.5, -ROOMS[name].depth / 2 + 1.8);
-  const pontoon = add(c.edge, c.toWater, -1.5);
+  const pontoon = add(c.edge, c.toWater, 0.7); // on the pontoon's deck, at the foot of the steps
   // The opening shot: on Caversham Bridge's deck, looking up the river at both clubs.
   const deck = course.scenery.bridges?.find((b) => b.name === 'Caversham Bridge');
   const ds = deck ? deck.s : locate(river, (c.x + r.x) / 2, (c.z + r.z) / 2).s - 200;
@@ -209,7 +220,7 @@ export function clubShots(course) {
       // water: the canoe club near, the rowing club across the river beyond it.
       path: bridge,
       club: { eye: entrance, look: at(c.x, c.z, 2.6) },
-      pontoon: { eye: [pontoon[0], 1.6, pontoon[2]], look: [across[0], 0.6, across[2]] },
+      pontoon: { eye: [pontoon[0], 1.75, pontoon[2]], look: [across[0], 0.6, across[2]] },
       // Face to face with your paddler, who stands on the left of the screen: the picker sheet covers the right.
       changing: { eye: p('changing', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('changing', -1.2 + 1.85, HIPS + 0.3, 0.4) },
       boathouse: room('boathouse', 1.5),

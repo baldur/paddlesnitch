@@ -147,3 +147,80 @@ test("no bank lies over the water like a sheet: down Fry's Island's back channel
   }
   assert.deepEqual([...new Set(cliffs)], []);
 });
+
+test("a club's name reads left to right from the water, not mirrored", async () => {
+  const { sign } = await import('../reading-thames/world.js');
+  // A front facing the water to the south (+z): you look north at it, west (-x) on your left.
+  const fwd = [0, 1];
+  const right = [-fwd[1], fwd[0]];
+  const boxes = [];
+  const f = { box: (m, [x0, x1], yr, zr, color) => boxes.push({ x: right[0] * (x0 + x1) / 2, color }) };
+  sign(null, f, 'RI', 0, 0, 0, null, [1, 1, 1]);
+  // R's first column (3 pixels lit, at its left edge) against I's middle stroke.
+  const xs = boxes.map((b) => b.x).sort((a, b) => a - b);
+  const [first, last] = [xs[0], xs.at(-1)];
+  const rPixels = 10; // R is '110101110101101': 10 pixels lit
+  const rXs = boxes.slice(0, rPixels).map((b) => b.x);
+  const iXs = boxes.slice(rPixels).map((b) => b.x);
+  assert.ok(Math.max(...rXs) < Math.min(...iXs), 'R is on your left of I');
+  assert.ok(first < last);
+});
+
+test("both clubs' fronts as the footage shows them: the rowing club's green pontoon and timber balcony, the canoe club's tube pontoon and buff brick", async () => {
+  const { ROWING, CANOE } = await import('../reading-thames/world.js');
+  const tris = await world();
+  const near = (x, z, r) => tris.filter(({ p }) => Math.hypot(p[0][0] - x, p[0][2] - z) < r);
+  const has = (list, rgb) => list.some(({ color }) => color.every((c, i) => Math.abs(c - rgb[i]) < 0.01));
+  const rowing = near(-686, -506, 45);
+  assert.ok(has(rowing, ROWING.pontoon), 'the green pontoon');
+  assert.ok(has(rowing, ROWING.float), 'its yellow floats');
+  assert.ok(has(rowing, ROWING.timber), 'the timber balcony');
+  assert.ok(has(rowing, ROWING.banner) && has(rowing, ROWING.navy), 'the name on its banner');
+  assert.ok(!has(rowing, [0.74, 0.72, 0.67]), "no concrete hard (the old model's CLUB.hard): there is none");
+  const canoe = near(-881, -690, 50);
+  assert.ok(has(canoe, CANOE.tube), 'the tube pontoon');
+  assert.ok(has(canoe, CANOE.buff), 'buff brick bands');
+});
+
+test('each club stands square to its mapped bank, its pontoon on the water', async () => {
+  const { landmarkFrame } = await import('../reading-thames/world.js');
+  const course = courseFromFile(await data('reading'));
+  const land = waterMap((await data('reading')).water);
+  for (const style of ['rowing-club', 'canoe-club']) {
+    const f = landmarkFrame(course, style);
+    const out = (x) => {
+      let d = 0;
+      while (d < 80 && !land.inside(...[0, 2].map((i) => f.at(x, 0, d)[i]))) d += 0.25;
+      return d;
+    };
+    assert.ok(Math.abs(out(-15) - out(15)) < 1, `${style}: the bank is ${out(-15)} m out at one end, ${out(15)} m at the other`);
+    assert.ok(Math.abs(out(0) - f.edge) < 0.3, `${style}: edge`);
+    const p = f.at(0, 0, f.edge + 2);
+    assert.ok(land.inside(p[0], p[2]), `${style}: 2 m out from the edge is water`);
+  }
+  // And as built: the rowing club's pontoon lies on the water all along it.
+  const { ROWING } = await import('../reading-thames/world.js');
+  const floats = (await world()).filter(({ color }) => color.every((c, i) => Math.abs(c - ROWING.pontoon[i]) < 1e-3));
+  assert.ok(floats.length > 4, 'the pontoon is built');
+  // Its top: both ends' middles are on the water, not under the bank.
+  const top = floats.filter(({ p }) => Math.abs(p[0][1] - p[1][1]) < 1e-3 && Math.abs(p[0][1] - p[2][1]) < 1e-3).flatMap(({ p }) => p);
+  const ymax = Math.max(...top.map((q) => q[1]));
+  const corners = top.filter((q) => Math.abs(q[1] - ymax) < 1e-3);
+  const [a] = corners;
+  const far = corners.reduce((b, q) => (Math.hypot(q[0] - a[0], q[2] - a[2]) > Math.hypot(b[0] - a[0], b[2] - a[2]) ? q : b), a);
+  const dir = [far[0] - a[0], far[2] - a[2]];
+  const ends = [0, 1].map((e) => corners.filter((q) => ((q[0] - a[0]) * dir[0] + (q[2] - a[2]) * dir[1]) / Math.hypot(...dir) ** 2 > 0.5 === !!e));
+  for (const end of ends) {
+    const mid = [0, 2].map((i) => end.reduce((t, q) => t + q[i], 0) / end.length);
+    assert.ok(land.inside(mid[0], mid[1]), `the pontoon's end at ${mid.map((v) => v.toFixed(1))} is on the water`);
+  }
+});
+
+test("both renderers light the world the same way (the fill light and the lit sum)", async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|float|vec3) (fill|lit) =/.test(l))
+    .map((l) => l.replace(/^(let|float|vec3) /, '').replace(/vec3f/g, 'vec3').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
+  const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
+  assert.ok(gpu.some((l) => l.startsWith('fill =')), 'WebGPU has the fill light');
+  assert.deepEqual(gl, gpu);
+});

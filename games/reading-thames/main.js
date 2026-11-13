@@ -2469,6 +2469,10 @@ function placeRacers() {
 
 let reflected = null; // the river line the water's reflections are taken from, eased
 let viewProj = null; // the last frame's camera, for placing the club's door labels
+// A camera held still at { eye, look, wide } (#debug only: for putting it where
+// a footage frame was taken by hand or from a script, to compare the scenery
+// with the real thing).
+let fixedShot = null;
 function render(time) {
   placeRacers();
   placeTraffic();
@@ -2509,7 +2513,7 @@ function render(time) {
     up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
   }
   // On the walk to the club, the place's camera instead.
-  const shot = club && state === 'menu' ? clubCamera() : null;
+  const shot = fixedShot ?? (club && state === 'menu' ? clubCamera() : null);
   if (shot) {
     eye = shot.eye;
     fwd = normalize(shot.look.map((v, i) => v - eye[i]));
@@ -3048,6 +3052,7 @@ if (HASH.has('debug')) {
     get mode() { return mode; },
     get format() { return formatOf(mode); },
     clubAt: (place) => arrive(place),
+    shoot: (shot) => { fixedShot = shot; }, // { eye, look, wide } or null to let go
     finish, // the finish dialog (tests check it fits a phone)
     submitResult, // the finish's leaderboard line (tests check it signed out)
     show, // a message, as the race would show it (tests check where it lands)

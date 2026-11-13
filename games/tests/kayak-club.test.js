@@ -182,8 +182,11 @@ test('the shots are on the real Reading river: the bridge view from Caversham Br
   // The club from the road: standing on dry land, eye at a person's height.
   assert.ok(!land.inside(club.eye[0], club.eye[2]), 'on land');
   assert.ok(Math.abs(club.eye[1] - groundAt(course, club.eye[0], club.eye[2]) - 1.7) < 0.01);
-  // The pontoon: at the water's edge, looking out over it.
-  assert.ok(!land.inside(pontoon.eye[0], pontoon.eye[2]));
+  // The pontoon: on its deck, just out over the water from the foot of the
+  // steps (dry land 2 m back towards the club), looking out over the river.
+  assert.ok(land.inside(pontoon.eye[0], pontoon.eye[2]), 'on the floating pontoon');
+  const round = Array.from({ length: 16 }, (_, k) => [pontoon.eye[0] + 2 * Math.cos(k * 0.39), pontoon.eye[2] + 2 * Math.sin(k * 0.39)]);
+  assert.ok(round.some(([x, z]) => !land.inside(x, z)), 'the bank is within 2 m');
   assert.ok(land.inside(pontoon.look[0], pontoon.look[2]), 'looking at the water');
 });
 

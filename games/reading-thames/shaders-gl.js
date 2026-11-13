@@ -124,7 +124,9 @@ void main() {
   vec3 n = normalize(vNormal);
   float sun = max(dot(n, frame.sunDir.xyz), 0.0);
   vec3 ambient = mix(vec3(0.3, 0.27, 0.24), frame.skyTop.rgb * 0.7 + 0.25, 0.5 + 0.5 * n.y);
-  vec3 lit = vColor * (vec3(1.0, 0.94, 0.82) * sun * 0.8 + ambient * 0.62);
+  // Light off the sky opposite the sun, so the shaded side of a building isn't near black.
+  float fill = max(dot(n, normalize(vec3(-frame.sunDir.x, 0.25, -frame.sunDir.z))), 0.0);
+  vec3 lit = vColor * (vec3(1.0, 0.94, 0.82) * sun * 0.8 + ambient * 0.62 + vec3(0.85, 0.88, 0.95) * fill * 0.3);
   outColor = vec4(fog(lit, distance(vWorld, frame.camPos.xyz)), 1.0);
 }
 `,
