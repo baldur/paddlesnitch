@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { loadCourse, riverView } from './course.js';
+import { loadCourse, riverView, locate } from './course.js';
 import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
@@ -2553,11 +2553,14 @@ function render(time) {
   for (let i = 0; i < 16; i++) frameData.set(wakes[i] ?? [0, 0, 0, 0], 48 + i * 4);
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
-  reflected = riverView(race.course, race.player.loc.s, reflected, time - (reflected?.time ?? time));
+  // (A held camera mirrors the banks where it is, not where your boat is.)
+  const mirrorAt = fixedShot ? locate(race.course, fixedShot.eye[0], fixedShot.eye[2]).s : race.player.loc.s;
+  reflected = riverView(race.course, mirrorAt, fixedShot ? null : reflected, time - (reflected?.time ?? time));
   reflected.time = time;
   const { half } = reflected;
   frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
-  frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
+  // A real river's banks: trees about 13 m tall, as the footage shows them mirrored (6 m left the far water sky-pale).
+  frameData.set(race.course.scenery ? [half + 1, half + 1, 13, 1] : [half + 9, half + 4, 7, 1], 116);
   const spots = state === 'racing' ? washMarks(race, race.player) : [];
   for (let i = 0; i < 3; i++) frameData.set(spots[i] ?? [0, 0, 0, 0], 120 + i * 4);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];

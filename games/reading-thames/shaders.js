@@ -217,17 +217,23 @@ fn spots(p: vec2f, dist: f32) -> f32 {
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
 const TREES = vec3f(0.14, 0.2, 0.1);
-fn treeline(p: vec2f, refl: vec3f) -> f32 {
-  if (frame.banks.w < 0.5) { return 0.0; }
+fn treeline(p: vec2f, refl: vec3f) -> vec2f {
+  if (frame.banks.w < 0.5) { return vec2f(0.0); }
   let along = frame.river.zw;
   let across = vec2f(-along.y, along.x);
-  let l = clamp(dot(p - frame.river.xy, across), -frame.banks.x, frame.banks.y);
+  let l = dot(p - frame.river.xy, across);
   let rl = dot(refl.xz, across);
   let bank = select(-frame.banks.x, frame.banks.y, rl > 0.0);
-  let reach = min(abs(bank - l) / max(abs(rl), 0.0001), 900.0);
+  // Past that bank already (near it, or up a side channel), the ray goes on to the next bend.
+  let d = (bank - l) / select(min(rl, -0.0001), max(rl, 0.0001), rl > 0.0);
+  // (A ray turned sharply towards it meets its trees close by; a shallow one runs on.)
+  let reach = select(min(d, 260.0), mix(260.0, 12.0, smoothstep(0.05, 0.5, abs(rl))), d < 0.0);
+  // (Looking along it, the next bend's trees: the reaches here bend within a few hundred metres.)
   let a = dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
   let top = frame.banks.z * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3));
-  return 0.8 * (1.0 - smoothstep(top * 0.4, top * 1.6, reach * refl.y));
+  // A crisp edge, as calm water mirrors a tree line.
+  // (y: how light the leaves are there, crown by crown along the bank)
+  return vec2f(0.92 * (1.0 - smoothstep(top * 0.8, top * 1.15, reach * refl.y)), 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6));
 }
 
 @fragment fn fs(in: Out) -> @location(0) vec4f {
@@ -252,7 +258,11 @@ fn treeline(p: vec2f, refl: vec3f) -> f32 {
   let v = toEye / dist;
   let fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
   let refl = reflect(-v, n);
-  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES, treeline(p, refl));
+  // The banks are mirrored off a calmer surface than the ripples: real river
+  // water holds the tree line's reflection whole until a wash breaks it.
+  let still = reflect(-v, normalize(vec3f(-dx * 0.35 - r.x * 0.2, 1.0, -dz * 0.35 - r.y * 0.2)));
+  let tl = treeline(p, still);
+  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x);
   var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15, 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles.
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;

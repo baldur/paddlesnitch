@@ -217,10 +217,10 @@ test('each club stands square to its mapped bank, its pontoon on the water', asy
   }
 });
 
-test("both renderers light the world the same way (the fill light and the lit sum)", async () => {
+test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water)", async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
-  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|float|vec3) (fill|lit) =/.test(l))
-    .map((l) => l.replace(/^(let|float|vec3) /, '').replace(/vec3f/g, 'vec3').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
+  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|float|vec[23]) (fill|lit|still|tl|sky) =/.test(l))
+    .map((l) => l.replace(/^(let|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
   assert.ok(gpu.some((l) => l.startsWith('fill =')), 'WebGPU has the fill light');
   assert.deepEqual(gl, gpu);
@@ -298,4 +298,18 @@ test('the boatyard stands on land on its quay, and the timber boathouse on its o
   const villa = reading.buildings.find((b) => b.style === 'riverside-villa').shape;
   const gap = Math.min(...villa.map(([x, z]) => Math.hypot(x - spot.at[0], z - spot.at[1])));
   assert.ok(gap > 8, `${gap.toFixed(1)} m from the villa`);
+});
+
+test('upstream of Mapledurham: the dead tree, the white river sign and the sand beach are built on their banks', async () => {
+  const reading = await data('reading');
+  const tris = await world();
+  const is = (rgb) => ({ color }) => color.every((v, i) => Math.abs(v - rgb[i]) < 1e-3);
+  const mid = ({ p }) => [0, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+  for (const [style, rgb, min] of [['dead-tree', [0.42, 0.4, 0.37], 60], ['river-sign', [0.15, 0.2, 0.45], 6]]) {
+    const at = reading.features.find((f) => f.style === style)?.at;
+    assert.ok(at, `${style} is in the course`);
+    const built = tris.filter(is(rgb)).filter((t) => Math.hypot(mid(t)[0] - at[0], mid(t)[1] - at[1]) < 15);
+    assert.ok(built.length >= min, `${style}: ${built.length} triangles`);
+  }
+  assert.ok(reading.features.some((f) => f.style === 'beach' && Math.hypot(f.at[0] + 4711, f.at[1] + 2438) < 10), 'the beach at r1');
 });

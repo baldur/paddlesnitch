@@ -780,8 +780,10 @@ function embankment(m, course, { side, from, to, style }, rand) {
   }
 }
 
-// A tall red-brick retaining wall straight out of the water (under the
-// railway): weathered brick, darker at the waterline, a stone coping.
+// A tall brick retaining wall straight out of the water (under the railway):
+// dark weathered brick over a pale rubble apron at the waterline, a coping,
+// and the railway's shrubs hanging over the top.
+const RAIL_BRICK = [0.5, 0.42, 0.35];
 function brickWall(m, course, { side, from, to }, rand) {
   for (let s = from; s < to; s += 4) {
     const e = Math.min(to, s + 4);
@@ -793,10 +795,20 @@ function brickWall(m, course, { side, from, to }, rand) {
       m.triFacing(p(a, wa, 0, y0), p(b, wb, 0, y0), p(b, wb, 0, y1), color, water);
       m.triFacing(p(a, wa, 0, y0), p(b, wb, 0, y1), p(a, wa, 0, y1), color, water);
     };
-    face(-0.5, 0.6, [0.36, 0.3, 0.24]);
-    face(0.6, 3.4, shade(COLORS.brick, rand, 0.06));
+    // From the footage: a pale apron of rubble at the foot, dark weathered brick above.
+    face(-0.5, 0.6, [0.58, 0.55, 0.5]);
+    face(0.6, 3.4, shade(RAIL_BRICK, rand, 0.06));
     m.triFacing(p(a, wa, -0.05, 3.4), p(b, wb, -0.05, 3.4), p(b, wb, 1.5, 3.4), COLORS.coping, [0, 1, 0]);
     m.triFacing(p(a, wa, -0.05, 3.4), p(b, wb, 1.5, 3.4), p(a, wa, 1.5, 3.4), COLORS.coping, [0, 1, 0]);
+    // Shrubs along the top, leaning out over the wall (every other stretch).
+    const k = Math.round((s - from) / 4);
+    if (k % 2 === 0) m.sphere(p(a, wa, 1.6, 4.3 + (k % 3) * 0.4), 1.7 + (k % 5) * 0.2, LEAVES[(k % 3) + 1], 3, 6);
+    // Ivy hanging down the face from the top, in patches.
+    if (k % 3 !== 1) {
+      const drop = 3.4 - (1.2 + (k % 4) * 0.5);
+      m.triFacing(p(a, wa, -0.06, drop), p(b, wb, -0.06, drop + 0.4), p(b, wb, -0.06, 3.5), LEAVES[4 - (k % 2)], water);
+      m.triFacing(p(a, wa, -0.06, drop), p(b, wb, -0.06, 3.5), p(a, wa, -0.06, 3.5), LEAVES[4 - (k % 2)], water);
+    }
   }
 }
 
@@ -1736,7 +1748,7 @@ function spot(course, [x, z]) {
 }
 
 // How far round each feature other trees keep off (metres).
-const CLEAR = { 'boat-shed': 7, 'ivy-boathouse': 6, quay: 4, truss: 8, wharf: 8, jetty: 3, beach: 21, landing: 7, marina: 45, willow: 7, 'sculling-club': 14, 'glass-restaurant': 14, 'ferry-landing': 8, sandbags: 8, gazebo: 5, boardwalk: 23, 'deck-boathouse': 23 };
+const CLEAR = { 'boat-shed': 7, 'ivy-boathouse': 6, quay: 4, truss: 8, wharf: 8, jetty: 3, beach: 21, landing: 7, marina: 45, willow: 7, 'sculling-club': 14, 'glass-restaurant': 14, 'ferry-landing': 8, sandbags: 8, gazebo: 5, boardwalk: 23, 'deck-boathouse': 23, 'dead-tree': 8 };
 
 const FEAT = {
   sand: [0.82, 0.73, 0.54], wetSand: [0.62, 0.55, 0.42], bag: [0.74, 0.65, 0.48], bagDark: [0.66, 0.57, 0.42], pipe: [0.15, 0.15, 0.16],
@@ -1978,6 +1990,34 @@ function deckBoathouse(m, course, f) {
   }
 }
 
+// A big dead tree at the water's edge (above Mapledurham, from the footage):
+// a pale grey trunk forking into bare branches, some reaching out over the water.
+function deadTree(m, course, f) {
+  const bark = [0.42, 0.4, 0.37];
+  const y = Math.max(0.2, f.ground(0, -1.5));
+  const base = f.at(0, y - 0.3, -1.5);
+  const fork = f.at(0.3, y + 4.5, -1.2);
+  beam(m, base, fork, 0.55, bark);
+  // Thick limbs spreading wide and low, then forks and twigs (fixed, not the
+  // world's random draws), one leaning out over the water.
+  const limbs = [[-6, 9.5, -1, 0.32], [5, 10, 2.5, 0.3], [0.5, 12.5, -2.5, 0.26], [7.5, 7, 5, 0.24], [-4, 7.5, 3.5, 0.22]];
+  for (const [x, h, z, r] of limbs) {
+    const mid = f.at(0.3 + x * 0.55, y + h * 0.75, -1.2 + z * 0.55);
+    const end = f.at(0.3 + x, y + h, -1.2 + z);
+    beam(m, fork, mid, r, bark);
+    beam(m, mid, end, r * 0.7, bark);
+    for (const [dx, dh, dz] of [[x * 0.35 + 1.4, 2.2, 1], [x * 0.3 - 1.4, 1.7, -1.1], [x * 0.2, 2.8, 0.2]]) beam(m, end, f.at(0.3 + x + dx, y + h + dh, -1.2 + z + dz), r * 0.35, bark);
+  }
+}
+
+// A white sign board on a white post at the water's edge.
+function riverSign(m, course, f) {
+  m.cylinder(f.at(0, -0.6, 0.4), 0.06, 2.6, 4, COLORS.white);
+  f.box(m, [-0.45, 0.45], [1.4, 1.9], [0.32, 0.38], COLORS.white);
+  f.box(m, [-0.38, 0.38], [1.48, 1.82], [0.38, 0.4], [0.15, 0.2, 0.45]);
+  f.box(m, [-0.3, 0.3], [1.6, 1.7], [0.4, 0.41], COLORS.white);
+}
+
 // An old brick boathouse at the water, mostly under ivy.
 function ivyBoathouse(m, course, f) {
   const y = Math.max(0.4, f.ground(0, -4));
@@ -2031,7 +2071,7 @@ function boardwalk(m, course, f) {
 
 const FEATURES = {
   'boat-shed': boatShed, 'ivy-boathouse': ivyBoathouse, quay, truss, wharf, jetty, beach, landing: (m, course, f) => beach(m, course, f, 6, 7), sandbags, 'channel-sign': channelSign, mailbox, gazebo, 'sculling-club': scullingClub,
-  'glass-restaurant': glassRestaurant, 'ferry-landing': ferryLanding, marina, willow, boardwalk, 'deck-boathouse': deckBoathouse,
+  'glass-restaurant': glassRestaurant, 'ferry-landing': ferryLanding, marina, willow, boardwalk, 'deck-boathouse': deckBoathouse, 'dead-tree': deadTree, 'river-sign': riverSign,
 };
 export const FEATURE_STYLES = Object.keys(FEATURES);
 export const LANDMARK_STYLES = Object.keys(LANDMARKS);
