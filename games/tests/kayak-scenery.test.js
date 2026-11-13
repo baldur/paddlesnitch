@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES } from '../reading-thames/world.js';
@@ -53,7 +54,7 @@ test('every feature and styled building on the river has a model of its own, and
   const river = await data('reading');
   assert.ok(river.features.length >= 10);
   for (const f of river.features) assert.ok(FEATURE_STYLES.includes(f.style), `${f.style}: no model`);
-  for (const b of river.buildings.filter((b) => b.style)) assert.ok(LANDMARK_STYLES.includes(b.style) || ['clapboard', 'stilts'].includes(b.style), `${b.style}: no model`);
+  for (const b of river.buildings.filter((b) => b.style)) assert.ok(LANDMARK_STYLES.includes(b.style) || ['clapboard', 'stilts', 'balcony-terrace'].includes(b.style), `${b.style}: no model`);
   assert.ok((await world()).every((t) => t.p.flat().every(Number.isFinite)));
 });
 
@@ -223,4 +224,50 @@ test("both renderers light the world the same way (the fill light and the lit su
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
   assert.ok(gpu.some((l) => l.startsWith('fill =')), 'WebGPU has the fill light');
   assert.deepEqual(gl, gpu);
+});
+
+test('Christchurch Bridge: its arched deck clears the water by at least 4 m all the way across', async () => {
+  const course = courseFromFile(await data('reading'));
+  const bridge = course.scenery.bridges.find((b) => b.style === 'cable-stayed');
+  const c = pointAt(course.scenery.river, bridge.s);
+  const half = widthAt(course.scenery.river, bridge.s).half;
+  // The deck's steel (dark grey) within 3 m of the crossing, over the water.
+  const steel = (await world()).filter(({ color, p }) => color.every((v, i) => Math.abs(v - [0.32, 0.34, 0.37][i]) < 1e-3)
+    && p.every((q) => Math.abs((q[0] - c.x) * c.tx + (q[2] - c.z) * c.tz) < 3 && Math.abs((q[0] - c.x) * -c.tz + (q[2] - c.z) * c.tx) < half));
+  assert.ok(steel.length > 10, 'the deck is built');
+  assert.ok(Math.min(...steel.flatMap(({ p }) => p.map((q) => q[1]))) >= 4, 'clear of a kayak and a cruiser');
+});
+
+test('the riverside terraces are drawn as terraces (red balconies), and the boardwalk is built below Christchurch Bridge', async () => {
+  const { TERRACE } = await import('../reading-thames/world.js');
+  const tris = await world();
+  const reading = await data('reading');
+  const terraces = reading.buildings.filter((b) => b.style === 'balcony-terrace');
+  assert.ok(terraces.length > 20);
+  assert.ok(tris.filter(({ color }) => color.every((v, i) => Math.abs(v - TERRACE.red[i]) < 1e-3)).length > 50, 'red balconies');
+  const walk = reading.features.find((f) => f.style === 'boardwalk');
+  assert.ok(walk, 'the boardwalk is in the course');
+  // Its timber in its shades (deck, piles, fence, slats), there and only there.
+  const shades = [1, 0.85, 0.75, 0.6].map((k) => [0.48, 0.3, 0.22].map((v) => v * k));
+  const timber = tris.filter(({ color, p }) => shades.some((c) => color.every((v, i) => Math.abs(v - c[i]) < 1e-3)) && Math.hypot(p[0][0] - walk.at[0], p[0][2] - walk.at[1]) < 25);
+  assert.ok(timber.length > 200, `its deck, piles and fence: ${timber.length} triangles`);
+});
+
+test('every club and landmark sign has a glyph for each of its letters', async () => {
+  // sign() throws on a missing letter; building the world draws them all.
+  assert.doesNotThrow(() => buildWorld(courseFromFile(JSON.parse(readFileSync(new URL('../reading-thames/courses/reading.json', import.meta.url), 'utf8'))), 1, 'river'));
+});
+
+test('a row of styled houses (balcony-terrace) keeps the trees between them, as plain houses do', async () => {
+  // The 30 m clearing round a styled building is for landmarks; given to 56
+  // riverside houses it took the willows off that bank.
+  const reading = await data('reading');
+  const plain = { ...reading, buildings: reading.buildings.map(({ style, ...b }) => (style === 'balcony-terrace' ? b : { ...b, style })) };
+  const trunks = (course) => {
+    const { vertices: v } = buildWorld(courseFromFile(course), 1, 'river');
+    let n = 0;
+    for (let i = 0; i < v.length; i += 27) if (Math.abs(v[i + 6] - 0.35) < 1e-3 && Math.abs(v[i + 7] - 0.25) < 1e-3 && Math.abs(v[i + 8] - 0.17) < 1e-3) n++;
+    return n;
+  };
+  assert.equal(trunks(reading), trunks(plain));
 });
