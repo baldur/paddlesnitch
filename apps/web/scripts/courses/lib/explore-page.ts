@@ -27,7 +27,7 @@ svg#map{width:100%;height:auto;display:block}
 #map{cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none}
 #map *{vector-effect:non-scaling-stroke}
 #map .hit{cursor:pointer;fill:transparent}
-.maptools{display:flex;gap:6px;margin-top:6px}
+.maptools{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .maptools button{min-height:28px;padding:2px 8px;font-size:12px}
 @media (max-width:900px){#bigger{display:none}}
 .areaform{flex-wrap:wrap}.areaform .est{flex-basis:100%;font-size:12px;color:var(--muted)}.areaform .est.big{color:var(--amber)}
@@ -37,6 +37,19 @@ svg#map{width:100%;height:auto;display:block}
 #map .area.open{stroke-width:2.5;stroke-dasharray:none}
 #map .area-name{fill:var(--violet);font-family:"IBM Plex Mono",ui-monospace,monospace}
 #map .find{fill:var(--violet);stroke:var(--bg);stroke-width:1}
+#map.picking{cursor:cell}#map.picking .hit{pointer-events:none}
+#map .here{fill:rgba(251,191,36,.15);stroke:var(--amber);stroke-width:2}
+#map .pass{fill:var(--amber);stroke:var(--bg);stroke-width:1}
+.maptools button[aria-pressed=true]#herebtn{border-color:var(--amber);color:var(--amber)}
+.passes{display:flex;flex-direction:column;gap:20px}
+.pass h3{font-size:13px;margin:0 0 6px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-weight:500}
+.pass h3 button,.pass h3 a{min-height:28px;padding:2px 8px;font-size:12px}
+.pass h3 a{color:var(--fg);background:var(--surface2);border:1px solid var(--border);border-radius:6px;text-decoration:none;display:inline-flex;align-items:center}
+.pass h3 a:hover{border-color:var(--primary)}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+@media (max-width:1100px){.strip{grid-template-columns:repeat(2,1fr)}}
+.strip a{display:block;color:var(--muted);text-decoration:none;font-size:12px}
+.strip .pic{aspect-ratio:1536/960}
 .areaform{display:flex;gap:4px;margin-top:8px}
 .areaform input{font:inherit;flex:1;min-width:0;background:var(--surface2);color:var(--fg);border:1px solid var(--violet);border-radius:6px;min-height:32px;padding:0 8px}
 .areaform button{min-height:32px;padding:4px 10px}
@@ -98,9 +111,10 @@ button:hover:not(:disabled){border-color:var(--primary)}button:disabled{opacity:
   <aside>
     <div class="card"><h2>Where</h2><svg id="map" viewBox="0 0 300 300" role="img" aria-label="Map of the spots looked at"></svg>
       <p class="help"><span style="color:var(--green)">●</span> all marked &nbsp;<span style="color:var(--primary)">●</span> some unmarked &nbsp;<span style="color:var(--muted)">●</span> nothing to mark</p>
-      <div class="maptools"><button type="button" id="bigger">Bigger map</button><button type="button" id="unzoom" disabled>Zoom out</button><button type="button" id="satellite" aria-pressed="true">Satellite</button></div>
+      <div class="maptools"><button type="button" id="bigger">Bigger map</button><button type="button" id="unzoom" disabled>Zoom out</button><button type="button" id="satellite" aria-pressed="true">Satellite</button><button type="button" id="herebtn" aria-pressed="false">Footage here</button></div>
       <p class="help" id="imagery">Imagery © Esri, Maxar, Earthstar Geographics. The map's pictures come from Esri, so Esri sees which part of the map you look at; nothing else leaves this machine.</p>
       <p class="help"><span style="color:var(--violet)">Drag on the map</span> to draw an area to look at carefully. Scroll to zoom in first, and keep it to 100–300 m of river: each pass through it takes 20–60 min. Shift-drag moves a zoomed map.</p>
+      <p class="help"><span style="color:var(--amber)">Footage here:</span> press it, then click the river. You see every pass the camera made there, from all four sides and as a whole 360. Esc stops picking.</p>
       <div id="areaform"></div></div>
     <div class="card" id="areas"></div>
     <div class="card help">
@@ -116,6 +130,7 @@ button:hover:not(:disabled){border-color:var(--primary)}button:disabled{opacity:
 <script>
 const KINDS = __KINDS__
 let mapZoom = { z: 1, x: 0, y: 0 }, mapH = 300, lastSpot = null
+let here = null, picking = false
 let all = [], tracks = [], areas = [], openArea = null, drawingArea = null, mapProj = null, current = null, adding = null, seq = 0, busy = false, scoreSeq = 0, picW = 520
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); for (const k of kids) if (k != null && k !== false) e.append(k); return e }
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many)
@@ -226,14 +241,20 @@ function drawMap() {
     hit.addEventListener('click', () => go(s.id))
     svg.append(hit)
   }
+  // Over the spots, so the passes found show.
+  if (here) {
+    const [cx, cy] = P(here.lat, here.lng), r = Math.abs(P(here.lat + here.r / 111320, here.lng)[1] - cy)
+    svg.append(mk('circle', { cx, cy, r: Math.max(r, 4 * u), class: 'here' }))
+    for (const p of here.passes || []) { const [px, py] = P(p.lat, p.lng); svg.append(mk('circle', { cx: px, cy: py, r: 2.5 * u, class: 'pass' })) }
+  }
 }
 
 /** Show a spot. Only the latest call draws, however fast the keys are pressed. */
 async function go(id) {
   if (id == null) return
   const mine = ++seq
-  closeAdd()
-  openArea = null
+  closeAdd(); setPicking(false)
+  openArea = null; here = null
   say('')
   let s
   try { s = await api('/api/spot/' + id + '?w=' + Math.round(measurePic())) } catch (e) { if (mine === seq) say(e.message, true); return }
@@ -509,7 +530,7 @@ function mapDrawing() {
     if (pan) { pan = null; return }
     if (!start) return
     const a = start; start = null
-    if (!drew) return
+    if (!drew) { if (picking) { const q = snapToTrack(a); showHere(mapProj.toLatLng(q.x, q.y), here ? here.r : 20) } return }
     const b = at(e)
     if (cancelled || Math.abs(b.x - a.x) < 4 || Math.abs(b.y - a.y) < 4) { drawingArea.remove(); drawingArea = null; return }
     nameArea(mapProj.toLatLng(a.x, a.y), mapProj.toLatLng(b.x, b.y))
@@ -518,6 +539,22 @@ function mapDrawing() {
   svg.addEventListener('pointercancel', (e) => end(e, true))
   // The click that ends a drag isn't a click on a spot.
   svg.addEventListener('click', (e) => { if (drew) { e.stopPropagation(); drew = false } }, true)
+}
+
+/** A click within 10 px of a track lands on it: zoomed out, a pixel is tens of metres of river. */
+function snapToTrack(a) {
+  const svg = document.getElementById('map'), u = (300 / mapZoom.z) / (svg.clientWidth || 260)
+  let best = null, bestD = 10 * u
+  for (const t of tracks) {
+    for (let i = 1; i < t.length; i++) {
+      const [x1, y1] = mapProj.P(t[i - 1][0], t[i - 1][1]), [x2, y2] = mapProj.P(t[i][0], t[i][1])
+      const dx = x2 - x1, dy = y2 - y1, len = dx * dx + dy * dy
+      const k = len ? Math.min(Math.max(((a.x - x1) * dx + (a.y - y1) * dy) / len, 0), 1) : 0
+      const x = x1 + k * dx, y = y1 + k * dy, d = Math.hypot(a.x - x, a.y - y)
+      if (d < bestD) { bestD = d; best = { x, y } }
+    }
+  }
+  return best || a
 }
 
 function closeAreaForm() {
@@ -557,13 +594,13 @@ function nameArea(p, q) {
 /** What the careful look found in an area: each thing on the closer view it was seen in, boxed. */
 async function showArea(id) {
   const mine = ++seq
-  closeAdd(); say('')
+  closeAdd(); setPicking(false); say('')
   let a
   try { a = await api('/api/area/' + id) } catch (e) { if (mine === seq) say(e.message, true); return }
   if (mine !== seq) return
   if (current) lastSpot = current.id
   const back = lastSpot ?? all[0]?.id
-  openArea = a; current = null
+  openArea = a; current = null; here = null
   // The list's progress too, so it agrees with this area.
   api('/api/areas').then((r) => { areas = r.areas; MIN_A_SPOT = r.minutesASpot; drawAreas() }).catch(() => {})
   history.replaceState(null, '', '#area-' + id)
@@ -601,6 +638,88 @@ async function showArea(id) {
   }
   box.append(grid)
 }
+
+// ---------- footage here: every pass near a point, as sharp pictures, no model ----------
+
+const HERE_DIRS = ['left', 'ahead', 'right', 'behind']
+const STEP = 2 // seconds a press moves a pass along its clip
+
+/** Every pass within r metres of a point on the map, each as four sharp views and a 360. */
+async function showHere(p, r) {
+  const mine = ++seq
+  closeAdd(); say('Finding footage…')
+  let d
+  try { d = await api('/api/near?lat=' + p.lat.toFixed(6) + '&lng=' + p.lng.toFixed(6) + '&r=' + r) } catch (e) { if (mine === seq) say(e.message, true); return }
+  if (mine !== seq) return
+  say('')
+  if (current) lastSpot = current.id
+  const back = lastSpot ?? all[0]?.id
+  here = { ...p, r, passes: d.passes }; openArea = null; current = null
+  // Close enough in to see the circle and the passes in it (not for a miss: that would only lose the way).
+  if (d.passes.length && mapZoom.z < 12 && mapProj) {
+    const z = 12, [cx, cy] = mapProj.P(p.lat, p.lng)
+    mapZoom = { z, x: Math.min(Math.max(cx - 150 / z, 0), 300 - 300 / z), y: Math.min(Math.max(cy - mapH / 2 / z, 0), mapH - mapH / z) }
+  }
+  drawMap()
+  const box = document.getElementById('spot'); box.replaceChildren()
+  const toSpots = el('button', { textContent: '← All spots', disabled: back == null })
+  toSpots.addEventListener('click', () => go(back))
+  const radius = el('select', { ariaLabel: 'How far from the point' }, ...[10, 20, 30].map((m) => el('option', { value: m, textContent: 'within ' + m + ' m', selected: m === r })))
+  radius.addEventListener('change', () => showHere(p, Number(radius.value)))
+  radius.style.cssText = 'font:inherit;background:var(--surface2);color:var(--fg);border:1px solid var(--border);border-radius:6px;min-height:36px;padding:0 6px'
+  const count = d.total > d.passes.length ? d.passes.length + ' closest of ' + d.total + ' passes' : plural(d.total, 'pass', 'passes')
+  box.append(el('div', { className: 'spothead' }, el('strong', { textContent: 'Footage here' }),
+    d.total > 0 && el('span', { className: 'chip num', textContent: count + ' · ' + plural(d.days, 'day', 'days') }), radius, toSpots))
+  // On a narrow screen the map is below: bring the answer into view.
+  if (box.getBoundingClientRect().top < 0) box.scrollIntoView({ block: 'start' })
+  if (!d.passes.length) {
+    box.append(el('div', { className: 'empty', textContent: 'No footage within ' + r + ' m of that point. Click nearer a track' + (r < 30 ? ', or choose within 30 m.' : '.') }))
+    return
+  }
+  box.append(el('p', { className: 'help', style: 'margin:0 0 12px', textContent: 'Click a picture to open it full size and save it. Each pass starts at its closest moment to the point. Use ‹ ' + STEP + ' s and ' + STEP + ' s › to look a little before or after.' }))
+  const list = el('div', { className: 'passes' })
+  for (const ps of d.passes) list.append(passCard(ps))
+  box.append(list)
+}
+
+function passCard(ps) {
+  const card = el('div', { className: 'pass' })
+  const last = Math.floor(ps.duration * 10) / 10 // the server cuts up to the clip's length, not past it
+  const draw = (focus) => {
+    const ft10 = Math.round(ps.ft * 10), url = (n) => '/here/' + ps.chapterId + '/' + ft10 + '/' + n + '.jpg'
+    const earlier = el('button', { textContent: '‹ ' + STEP + ' s', disabled: ps.ft - STEP < 0, ariaLabel: STEP + ' seconds earlier' })
+    const later = el('button', { textContent: STEP + ' s ›', disabled: ps.ft >= last, ariaLabel: STEP + ' seconds later' })
+    earlier.addEventListener('click', () => { ps.ft = Math.max(0, ps.ft - STEP); ps.moved = true; draw('earlier') })
+    later.addEventListener('click', () => { ps.ft = Math.min(last, ps.ft + STEP); ps.moved = true; draw('later') })
+    const strip = el('div', { className: 'strip' })
+    for (const n of HERE_DIRS) {
+      const pic = el('div', { className: 'pic' }, el('div', { className: 'wait', textContent: 'Cutting the picture…' }))
+      const img = el('img', { alt: n + ' of the boat', loading: 'lazy', draggable: false, src: url(n) })
+      img.addEventListener('load', () => pic.querySelector('.wait')?.remove())
+      img.addEventListener('error', () => { const w = pic.querySelector('.wait'); if (w) w.textContent = "Couldn't cut this picture. Check the clip is still on this machine, or see the terminal." })
+      pic.prepend(img)
+      strip.append(el('a', { href: url(n), target: '_blank', rel: 'noopener' }, el('span', { textContent: n[0].toUpperCase() + n.slice(1) }), pic))
+    }
+    card.replaceChildren(el('h3', {},
+      el('strong', { textContent: [ps.day, ps.time].filter(Boolean).join(', ') || ps.clip }),
+      el('span', { className: 'muted num', textContent: ps.clip + ' at ' + clock(ps.ft) + (ps.moved ? '' : ' · ' + ps.metres + ' m away') }),
+      !ps.cameraKnown && el('span', { className: 'chip', title: "The camera direction isn't known for this clip yet, so ahead and behind may be swapped.", textContent: 'camera direction assumed' }),
+      earlier, later, el('a', { href: url('360'), target: '_blank', rel: 'noopener', textContent: 'Whole 360 ↗' })), strip)
+    // The button pressed was replaced: keep the keyboard where it was (or on the other one, at an end).
+    if (focus) { const b = focus === 'earlier' ? earlier : later; (b.disabled ? (b === earlier ? later : earlier) : b).focus() }
+  }
+  draw()
+  return card
+}
+
+const setPicking = (on) => {
+  picking = on
+  const b = document.getElementById('herebtn'); b.setAttribute('aria-pressed', String(on))
+  document.getElementById('map').classList.toggle('picking', on)
+}
+document.getElementById('herebtn').addEventListener('click', () => setPicking(!picking))
+// Esc stops picking wherever the page is (the spot keys above only listen on a spot).
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && picking && !e.target.closest?.('select,input,.add')) setPicking(false) })
 
 mapDrawing()
 

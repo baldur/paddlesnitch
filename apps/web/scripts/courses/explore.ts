@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // River Explorer: walk the river spot by spot and see what the local model saw,
-// pinned on the pictures, and mark whether it was right.
+// pinned on the pictures, and mark whether it was right. Or pick any point on
+// the map for every pass's sharp pictures there ("Footage here").
 //
 //   pnpm --filter web course:explore [--port 3201] [--model qwen2.5vl:32b]   then open http://localhost:3201
 //
@@ -11,7 +12,8 @@
 // See docs/features/game-courses-from-video.md, "Checking what it saw".
 import fs from 'fs'
 import path from 'path'
-import { eacGraph, eacLayout, flatView } from './lib/eac'
+import { eacGraph, eacLayout, flatView, wrapYaw } from './lib/eac'
+import { HERE_DIRS, HERE_PANO, HERE_VIEW } from './lib/here'
 import { createExplorer, viewFile } from './lib/explore-server'
 import { openStore, STORE } from './lib/footage-db'
 import { PROMPT_VERSION, VIEW, VIEWS } from './lib/look'
@@ -38,6 +40,21 @@ const server = createExplorer(db, {
     await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', st.ft.toFixed(2), '-i', st.path, '-filter_complex', graph,
       ...views.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', `${file(v.yaw)}.part.jpg`])])
     for (const v of views) fs.renameSync(`${file(v.yaw)}.part.jpg`, file(v.yaw))
+  },
+  // "Footage here": four sharp views from the bow and the whole 360 with ahead in the middle, best JPEG quality.
+  cutHere: async (f, file) => {
+    const graph = eacGraph(eacLayout(f.width, f.height), HERE_DIRS.length + 1)
+      + HERE_DIRS.map((d, i) => flatView(i, d.name, { ...HERE_VIEW, yaw: f.yaws[d.name] })).join(';')
+      + `;[e${HERE_DIRS.length}]v360=eac:e:yaw=${wrapYaw(f.cameraYaw)}:w=${HERE_PANO.w}:h=${HERE_PANO.h}[pano]`
+    const outs = [...HERE_DIRS.map((d) => [d.name, d.name] as const), ['pano', '360'] as const]
+    try {
+      await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', f.ft.toFixed(2), '-i', f.path, '-filter_complex', graph,
+        ...outs.flatMap(([label, name]) => ['-map', `[${label}]`, '-frames:v', '1', '-q:v', '2', `${file(name)}.part.jpg`])])
+    } catch (e) {
+      for (const [, name] of outs) fs.rmSync(`${file(name)}.part.jpg`, { force: true })
+      throw e
+    }
+    for (const [, name] of outs) fs.renameSync(`${file(name)}.part.jpg`, file(name))
   },
 })
 

@@ -11,6 +11,7 @@ import { areaName, ASSUMED_YAW, fetchSiteAllowed, hostAllowed, isJson, layoutPin
 import { KINDS, placeItem, PROMPT_VERSION, VIEWS, type Distance } from './look'
 import { AREA_LEVELS, inArea, LANDMARK_VERSION, LANDMARK_VIEW, LANDMARK_VIEWS, type Area } from './landmarks'
 import { PAGE } from './explore-page'
+import { HERE_DIRS, HERE_NAMES, HERE_RADII, lensYaw, MAX_PASSES, oneAcrossChapters, passesNear, type HereDir } from './here'
 
 export type SpotRow = { id: number; chapterId: number; lat: number; lng: number; heading: number; ft: number; level: number; clip: string; cameraYaw: number | null; startUtc: string | null; things: number; checked: number; ok: number }
 
@@ -19,6 +20,8 @@ export type ExplorerOptions = {
   viewDir: string
   /** Cut a spot's views into viewDir (explore.ts uses ffmpeg): the general look's four, or a careful look's eight. */
   cut: (spot: { id: number; ft: number; path: string; width: number; height: number }, careful: boolean) => Promise<void>
+  /** Cut one moment of a clip for "footage here": the four views from the bow (lens yaw for each) and the whole 360, to `file(name)`. */
+  cutHere: (frame: { ft: number; path: string; width: number; height: number; cameraYaw: number; yaws: Record<string, number> }, file: (name: HereDir) => string) => Promise<void>
   log?: (line: string) => void
 }
 
@@ -28,6 +31,14 @@ const scriptHash = crypto.createHash('sha256').update(/<script>([\s\S]*)<\/scrip
 const CSP = `default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src 'self' https://server.arcgisonline.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 
 export const viewFile = (dir: string, id: number, yaw: number, careful = false) => path.join(dir, `${id}-${careful ? 'l' : ''}${yaw}.jpg`)
+/**
+ * A "footage here" picture: which clip as it is now, the time in tenths of a second, which view.
+ * `stamp` (hereStamp) changes when the clip is replaced or its camera direction is learned,
+ * so a picture cut before is never shown for what it no longer is.
+ */
+export const hereFile = (dir: string, stamp: string, ft10: number, name: HereDir) => path.join(dir, 'here', `${stamp}-${ft10}-${name}.jpg`)
+export const hereStamp = (c: { id: number; key: string; cameraYaw: number | null }) =>
+  `${c.id}-${crypto.createHash('sha256').update(`${c.key}|${c.cameraYaw ?? ASSUMED_YAW}`).digest('hex').slice(0, 10)}`
 
 export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Server {
   const { model, viewDir } = opts
@@ -47,6 +58,40 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
       let last = -Infinity
       return (JSON.parse(r.track) as number[][]).filter(([ft]) => (ft - last >= 10 ? ((last = ft), true) : false)).map(([, lat, lng]) => [+lat.toFixed(5), +lng.toFixed(5)])
     })
+
+  // Every fix of every clip, parsed once and kept while the clip's scan stays the same.
+  const parsed = new Map<number, { at: string | null; track: number[][] }>()
+  type Clip = { id: number; key: string; path: string; recording: string | null; startUtc: string | null; duration: number; cameraYaw: number | null; width: number; height: number; scannedAt: string | null }
+  const clips = () => db.prepare("SELECT id, key, path, recording, start_utc AS startUtc, duration, camera_yaw AS cameraYaw, width, height, scanned_at AS scannedAt FROM chapters WHERE status = 'ok' AND track IS NOT NULL ORDER BY start_utc, path").all() as Clip[]
+  const trackOf = (c: Clip) => {
+    const had = parsed.get(c.id)
+    if (had && had.at === c.scannedAt) return had.track
+    const track = JSON.parse((db.prepare('SELECT track FROM chapters WHERE id = ?').get(c.id) as { track: string }).track) as number[][]
+    parsed.set(c.id, { at: c.scannedAt, track })
+    return track
+  }
+
+  /** Every pass within `metres` of a point, the closest first, at most MAX_PASSES; then in the order they were filmed. */
+  function near(at: { lat: number; lng: number }, metres: number) {
+    const found = oneAcrossChapters(clips().flatMap((c) => passesNear(trackOf(c), at, metres).map((p) => ({
+      c, p, metres: p.metres, recording: `${path.dirname(c.path)}|${c.recording ?? c.id}`, t: c.startUtc ? Date.parse(c.startUtc) + p.ft * 1000 : c.id * 1e13 + p.ft * 1000,
+    }))))
+    const total = found.length
+    const kept = found.sort((a, b) => a.p.metres - b.p.metres).slice(0, MAX_PASSES)
+      .sort((a, b) => (a.c.startUtc ?? '').localeCompare(b.c.startUtc ?? '') || a.c.path.localeCompare(b.c.path) || a.p.ft - b.p.ft)
+    return {
+      total, days: new Set(found.map(({ c }) => c.startUtc?.slice(0, 10) ?? c.path)).size,
+      passes: kept.map(({ c, p }) => {
+        const when = c.startUtc ? new Date(Date.parse(c.startUtc) + p.ft * 1000) : null
+        return {
+          chapterId: c.id, clip: path.basename(c.path), ft: +p.ft.toFixed(1), duration: c.duration, metres: Math.round(p.metres),
+          lat: +p.lat.toFixed(6), lng: +p.lng.toFixed(6), cameraKnown: c.cameraYaw != null,
+          day: when ? fmtDay(when.toISOString()) : null,
+          time: when ? when.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }) : null,
+        }
+      }),
+    }
+  }
 
   function spot(id: number, viewPx: number) {
     const all = spots()
@@ -148,6 +193,29 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
     return cutting.get(key)!
   }
 
+  /** Cut one moment's five pictures if they aren't already; resolves to the stamp they're filed under. */
+  async function cutHereFrame(chapterId: number, ft10: number): Promise<string> {
+    const c = clips().find((x) => x.id === chapterId)
+    if (!c || ft10 / 10 > c.duration) throw new Error('missing')
+    const stamp = hereStamp(c)
+    if (HERE_NAMES.every((n) => fs.existsSync(hereFile(viewDir, stamp, ft10, n)))) return stamp
+    const key = `h${stamp}-${ft10}`
+    if (!cutting.has(key)) {
+      cutting.set(key, (async () => {
+        if (!fs.existsSync(c.path)) throw new Error('missing')
+        fs.mkdirSync(path.join(viewDir, 'here'), { recursive: true })
+        const cameraYaw = c.cameraYaw ?? ASSUMED_YAW
+        await slot()
+        try {
+          await opts.cutHere({ ft: ft10 / 10, path: c.path, width: c.width, height: c.height, cameraYaw, yaws: Object.fromEntries(HERE_DIRS.map((d) => [d.name, lensYaw(d.fromBow, cameraYaw)])) },
+            (n) => hereFile(viewDir, stamp, ft10, n))
+        } finally { free() }
+      })().finally(() => cutting.delete(key)))
+    }
+    await cutting.get(key)
+    return stamp
+  }
+
   const HEADERS = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cross-origin-resource-policy': 'same-origin' }
   function send(res: http.ServerResponse, status: number, body: unknown) {
     res.writeHead(status, { ...HEADERS, 'content-type': 'application/json' })
@@ -192,6 +260,21 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           // Not kept by the browser: deleting views/ is then enough to remove the pictures.
           res.writeHead(200, { ...HEADERS, 'content-type': 'image/jpeg' })
           return res.end(fs.readFileSync(viewFile(viewDir, r.id, r.yaw, r.careful)))
+        }
+        case 'near': {
+          // A missing number would read as 0: ask for each.
+          const [lat, lng, r] = ['lat', 'lng', 'r'].map((k) => { const v = url.searchParams.get(k); return v === null || v.trim() === '' ? NaN : Number(v) })
+          if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) || !(HERE_RADII as readonly number[]).includes(r)) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
+          return send(res, 200, near({ lat, lng }, r))
+        }
+        case 'here': {
+          let stamp: string
+          try { stamp = await cutHereFrame(r.chapterId, r.ft10) } catch (e) {
+            if ((e as Error).message !== 'missing') log(`couldn't cut clip ${r.chapterId} at ${r.ft10 / 10} s: ${(e as Error).message.split('\n')[0]}`)
+            return send(res, 404, { error: "Couldn't cut this picture." })
+          }
+          res.writeHead(200, { ...HEADERS, 'content-type': 'image/jpeg' })
+          return res.end(fs.readFileSync(hereFile(viewDir, stamp, r.ft10, r.name)))
         }
         case 'review': {
           // { itemId, verdict } or { itemIds: [...], verdict } for "mark the rest right".
