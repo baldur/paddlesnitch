@@ -144,20 +144,26 @@ async function play(c, page, errors) {
       window.fullScreenAsks = [];
       window.screenLocks = [];
       let shown = null;
-      Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true });
-      Object.defineProperty(Document.prototype, 'fullscreenElement', { get: () => shown, configurable: true });
-      Element.prototype.requestFullscreen = function (o) {
-        window.fullScreenAsks.push(o?.navigationUI ?? '');
-        setTimeout(() => { shown = document.documentElement; document.dispatchEvent(new Event('fullscreenchange')); }, 300);
-        return Promise.resolve();
+      const stub = () => {
+        Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true, configurable: true });
+        Object.defineProperty(Document.prototype, 'fullscreenElement', { get: () => shown, configurable: true });
+        Element.prototype.requestFullscreen = function (o) {
+          window.fullScreenAsks.push(o?.navigationUI ?? '');
+          setTimeout(() => { shown = document.documentElement; document.dispatchEvent(new Event('fullscreenchange')); }, 300);
+          return Promise.resolve();
+        };
+        // (On the prototype: WebKit hands out a new screen.orientation after the page loads.)
+        if (window.ScreenOrientation) {
+          ScreenOrientation.prototype.lock = (o) => { window.screenLocks.push(o); return Promise.resolve(); };
+          ScreenOrientation.prototype.unlock = () => window.screenLocks.push('unlock');
+        }
       };
+      stub();
+      // WebKit 27 (Playwright 1.65, #924) takes the full screen calls off an
+      // emulated iPhone again once the document is parsed, so put them back then.
+      document.addEventListener('DOMContentLoaded', stub, { capture: true, once: true });
       // The back gesture on Android: out of full screen.
       window.leaveFullScreen = () => { shown = null; document.dispatchEvent(new Event('fullscreenchange')); };
-      // (On the prototype: WebKit hands out a new screen.orientation after the page loads.)
-      if (window.ScreenOrientation) {
-        ScreenOrientation.prototype.lock = (o) => { window.screenLocks.push(o); return Promise.resolve(); };
-        ScreenOrientation.prototype.unlock = () => window.screenLocks.push('unlock');
-      }
     });
   }
   // One course's board fails until Try again; the others answer with no times.
