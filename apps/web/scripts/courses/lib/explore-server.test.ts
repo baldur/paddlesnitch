@@ -7,7 +7,9 @@ import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
 import { createExplorer, viewFile } from './explore-server'
-import { ensureStations, nextStation, openStore, saveClip, saveLook } from './footage-db'
+import { PAGE } from './explore-page'
+import { ensureStations, nextStation, openStore, saveArea, saveClip, saveLook } from './footage-db'
+import { LANDMARK_VERSION, LANDMARK_VIEWS } from './landmarks'
 import { PROMPT_VERSION, VIEWS } from './look'
 import { destination } from './stations'
 
@@ -32,10 +34,10 @@ beforeEach(async () => {
   fs.mkdirSync(viewDir)
   server = createExplorer(db, {
     model: MODEL, viewDir, log: () => {},
-    cut: async (st) => {
+    cut: async (st, careful) => {
       cuts.push(st.id)
       await new Promise((r) => setTimeout(r, 20))
-      for (const v of VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw), 'jpeg')
+      for (const v of careful ? LANDMARK_VIEWS : VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw, careful), careful ? 'careful' : 'jpeg')
     },
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
@@ -147,6 +149,101 @@ describe('marking', () => {
     const added = (await post('/api/missed', { lookId, kind: 'swan', x: 0.5, y: 0.5 })).json()
     expect(added.score.missed).toBe(1)
     expect((await post('/api/missed', { remove: added.id })).json().score.missed).toBe(0)
+  })
+})
+
+describe('areas', () => {
+  const around = (p: { lat: number; lng: number }) => ({ south: p.lat - 0.0005, north: p.lat + 0.0005, west: p.lng - 0.0005, east: p.lng + 0.0005 })
+  it('an area needs a name and corners the right way round; it can be removed', async () => {
+    const a = { name: "Fry's Island", ...around(ORIGIN) }
+    expect((await post('/api/area', { ...a, north: a.south - 1 })).status).toBe(400)
+    expect((await post('/api/area', { ...a, west: 'x' })).status).toBe(400)
+    expect((await post('/api/area', { ...a, name: '' })).json().error).toMatch(/name/)
+    const added = (await post('/api/area', a)).json()
+    expect(added.areas).toEqual([expect.objectContaining({ id: added.id, name: "Fry's Island" })])
+    expect((await post('/api/area', { remove: added.id })).json().areas).toEqual([])
+    expect((await request('GET', `/api/area/${added.id}`)).status).toBe(404)
+  })
+  it('lists what the careful look found in an area, placed on the map, sure ones first; nothing from outside it', async () => {
+    const { spotId } = lookedAt()
+    const st = db.prepare('SELECT lat, lng FROM stations WHERE id = ?').get(spotId) as { lat: number; lng: number }
+    const lm = { name: 'white boathouse', kind: 'boathouse', detail: 'green doors', x0: 0.4, y0: 0.2, x1: 0.6, y1: 0.5, distance: 'mid', sure: false }
+    saveLook(db, spotId, 45, MODEL, LANDMARK_VERSION, { ok: true, raw: '{}', ms: 1, landmarks: [lm, { ...lm, name: 'red pub', sure: true }] })
+    const far = db.prepare('SELECT id FROM stations WHERE id != ? ORDER BY id DESC').get(spotId) as { id: number }
+    saveLook(db, far.id, 0, MODEL, LANDMARK_VERSION, { ok: true, raw: '{}', ms: 1, landmarks: [{ ...lm, name: 'somewhere else' }] })
+    const id = saveArea(db, { name: 'here', ...around(st) })
+    const a = (await request('GET', `/api/area/${id}`)).json()
+    expect(a).toMatchObject({ name: 'here', found: 2 })
+    expect(a.things.map((t: { name: string }) => t.name)).toEqual(['red pub', 'white boathouse'])
+    expect(a.things[0]).toMatchObject({ stationId: spotId, viewYaw: 45, clip: 'GS010101.360', box: { x0: 0.4, y0: 0.2, x1: 0.6, y1: 0.5 } })
+    // Centred in the view at 45° on the lens: placed off the track, not on it.
+    expect(a.things[0].lat).not.toBeCloseTo(st.lat, 6)
+  })
+  it("counts an area's spots and those looked at, and only this model's finds at this prompt version", async () => {
+    const { spotId } = lookedAt()
+    const st = db.prepare('SELECT lat, lng FROM stations WHERE id = ?').get(spotId) as { lat: number; lng: number }
+    const id = saveArea(db, { name: 'here', ...around(st) })
+    const lm = { name: 'white boathouse', kind: 'boathouse', detail: 'green doors', x0: 0.4, y0: 0.2, x1: 0.6, y1: 0.5, distance: 'mid', sure: true }
+    saveLook(db, spotId, 0, 'another-model', LANDMARK_VERSION, { ok: true, raw: '{}', ms: 1, landmarks: [lm] })
+    saveLook(db, spotId, 0, MODEL, LANDMARK_VERSION - 1, { ok: true, raw: '{}', ms: 1, landmarks: [lm] })
+    expect((await request('GET', `/api/area/${id}`)).json()).toMatchObject({ spots: 1, looked: 0, found: 0, things: [] })
+    for (const v of LANDMARK_VIEWS) saveLook(db, spotId, v.yaw, MODEL, LANDMARK_VERSION, { ok: true, raw: '{}', ms: 240_000 / 8 * 8, landmarks: v.yaw === 0 ? [lm] : [] })
+    const all = (await request('GET', '/api/areas')).json()
+    expect(all.areas[0]).toMatchObject({ spots: 1, looked: 1, found: 1 })
+    // Measured: 8 views of 240 s is 32 min a spot.
+    expect(all.minutesASpot).toBe(32)
+  })
+  it('an area must lie on the earth, and only a whole-number id can be removed', async () => {
+    const a = { name: 'x', ...around(ORIGIN) }
+    expect((await post('/api/area', { ...a, south: -91 })).status).toBe(400)
+    expect((await post('/api/area', { ...a, east: 181 })).status).toBe(400)
+    expect((await post('/api/area', { remove: 1.5 })).status).toBe(400)
+    expect((await post('/api/area', { remove: 0 })).status).toBe(400)
+  })
+  it('lets the page show satellite imagery from Esri, and pictures from nowhere else', async () => {
+    const csp = (await request('GET', '/', { headers: { 'sec-fetch-site': 'none' } })).headers['content-security-policy'] as string
+    expect(csp).toMatch(/img-src 'self' https:\/\/server\.arcgisonline\.com;/)
+    expect(csp).toMatch(/connect-src 'self';/)
+  })
+  it('covers the map in view with imagery tiles that fit the screen, and never too many', () => {
+    const src = /function tilesFor[\s\S]*?\n}\n/.exec(PAGE)![0]
+    const tilesFor = new Function(`${src}; return tilesFor`)() as (b: object, w: number) => Array<{ z: number; x: number; y: number; north: number; south: number; west: number; east: number }>
+    // About 550 m of Reading seen 900 px wide: zoom 18 (tiles no coarser than the screen), covering the box.
+    const box = { north: 51.4700, south: 51.4650, west: -0.9850, east: -0.9770 }
+    const t = tilesFor(box, 900)
+    expect(t[0].z).toBe(18)
+    expect(t.length).toBeLessThanOrEqual(80)
+    expect(Math.min(...t.map((x) => x.west))).toBeLessThanOrEqual(box.west)
+    expect(Math.max(...t.map((x) => x.east))).toBeGreaterThanOrEqual(box.east)
+    expect(Math.max(...t.map((x) => x.north))).toBeGreaterThanOrEqual(box.north)
+    expect(Math.min(...t.map((x) => x.south))).toBeLessThanOrEqual(box.south)
+    // A whole country on a big screen falls back to coarser tiles rather than hundreds.
+    expect(tilesFor({ north: 56, south: 50, west: -6, east: 2 }, 4000).length).toBeLessThanOrEqual(80)
+  })
+  it("the page's script parses, so a broken page can't ship", async () => {
+    const page = (await request('GET', '/', { headers: { 'sec-fetch-site': 'none' } })).body
+    const script = /<script>([\s\S]*)<\/script>/.exec(page)![1]
+    expect(() => new Function(script)).not.toThrow()
+  })
+  it('counts the spots a rectangle holds before it is saved, and refuses one without numbers', async () => {
+    lookedAt()
+    const a = around(ORIGIN)
+    expect((await request('GET', `/api/area-spots?s=${a.south}&w=${a.west}&n=${a.north}&e=${a.east}`)).json()).toEqual({ spots: 1 })
+    expect((await request('GET', '/api/area-spots?s=1&w=x&n=2&e=3')).status).toBe(400)
+  })
+  it("refuses another site's page on the area routes, as on every other", async () => {
+    const id = saveArea(db, { name: 'here', ...around(ORIGIN) })
+    expect((await request('GET', `/api/area/${id}`, { headers: { 'sec-fetch-site': 'cross-site' } })).status).toBe(403)
+    expect((await post('/api/area', { remove: id }, { origin: 'https://evil.example' })).status).toBe(403)
+    expect((await request('GET', '/api/areas')).json().areas).toHaveLength(1)
+  })
+  it("cuts a careful look's closer views on their own, without touching the general ones", async () => {
+    const { spotId } = lookedAt()
+    const r = await request('GET', `/view/${spotId}/l45.jpg`)
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('careful')
+    expect((await request('GET', `/view/${spotId}/0.jpg`)).body).toBe('jpeg')
+    expect(cuts).toEqual([spotId, spotId])
   })
 })
 

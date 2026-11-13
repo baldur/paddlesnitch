@@ -6,9 +6,10 @@ import http from 'http'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
 import { fmtDay } from '@paddlesnitch/core/format'
-import { saveMissed, saveReview } from './footage-db'
-import { fetchSiteAllowed, hostAllowed, isJson, layoutPins, originAllowed, otherPasses, route, scoreOf, stripOrder, type Verdict } from './explore'
-import { KINDS, PROMPT_VERSION, VIEWS, type Distance } from './look'
+import { saveArea, saveMissed, saveReview } from './footage-db'
+import { areaName, ASSUMED_YAW, fetchSiteAllowed, hostAllowed, isJson, layoutPins, originAllowed, otherPasses, route, scoreOf, stripOrder, type Verdict } from './explore'
+import { KINDS, placeItem, PROMPT_VERSION, VIEWS, type Distance } from './look'
+import { AREA_LEVELS, inArea, LANDMARK_VERSION, LANDMARK_VIEW, LANDMARK_VIEWS, type Area } from './landmarks'
 import { PAGE } from './explore-page'
 
 export type SpotRow = { id: number; chapterId: number; lat: number; lng: number; heading: number; ft: number; level: number; clip: string; cameraYaw: number | null; startUtc: string | null; things: number; checked: number; ok: number }
@@ -16,17 +17,17 @@ export type SpotRow = { id: number; chapterId: number; lat: number; lng: number;
 export type ExplorerOptions = {
   model: string
   viewDir: string
-  /** Cut the four views of a spot into viewDir (explore.ts uses ffmpeg). */
-  cut: (spot: { id: number; ft: number; path: string; width: number; height: number }) => Promise<void>
+  /** Cut a spot's views into viewDir (explore.ts uses ffmpeg): the general look's four, or a careful look's eight. */
+  cut: (spot: { id: number; ft: number; path: string; width: number; height: number }, careful: boolean) => Promise<void>
   log?: (line: string) => void
 }
 
 const page = PAGE.replace('__KINDS__', JSON.stringify(KINDS))
 // The page's one script, allowed by its hash: no other script can run on it.
 const scriptHash = crypto.createHash('sha256').update(/<script>([\s\S]*)<\/script>/.exec(page)![1]).digest('base64')
-const CSP = `default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
+const CSP = `default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src 'self' https://server.arcgisonline.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 
-export const viewFile = (dir: string, id: number, yaw: number) => path.join(dir, `${id}-${yaw}.jpg`)
+export const viewFile = (dir: string, id: number, yaw: number, careful = false) => path.join(dir, `${id}-${careful ? 'l' : ''}${yaw}.jpg`)
 
 export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Server {
   const { model, viewDir } = opts
@@ -71,6 +72,53 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
     }
   }
 
+  type AreaRow = Area & { id: number; name: string }
+  const areaRows = () => db.prepare('SELECT id, name, south, west, north, east FROM areas ORDER BY id').all() as AreaRow[]
+
+  /** Spots a careful look would visit (every pass), and what it has done there. Same filter as course:look --status --areas. */
+  const carefulSpots = () => db.prepare(`SELECT s.lat, s.lng,
+        (SELECT count(*) FROM looks l WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS looked,
+        (SELECT count(*) FROM landmarks m JOIN looks l ON l.id = m.look_id WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS found
+      FROM stations s JOIN chapters c ON c.id = s.chapter_id WHERE c.status = 'ok' AND s.level < ?`)
+      .all(model, LANDMARK_VERSION, model, LANDMARK_VERSION, AREA_LEVELS) as Array<{ lat: number; lng: number; looked: number; found: number }>
+
+  /** How long a careful look takes a spot with this model, measured once there are some; 5 min until then. */
+  const minutesASpot = () => {
+    const r = db.prepare('SELECT avg(ms) AS ms, count(*) AS n FROM looks WHERE model = ? AND prompt_version = ?').get(model, LANDMARK_VERSION) as { ms: number | null; n: number }
+    return r.ms && r.n >= LANDMARK_VIEWS.length ? +(r.ms * LANDMARK_VIEWS.length / 60_000).toFixed(1) : 5
+  }
+
+  /** Each area with how far the careful look has got in it. */
+  function areas() {
+    const st = carefulSpots()
+    return areaRows().map((a) => {
+      const inside = st.filter((s) => inArea(s, a))
+      return { ...a, spots: inside.length, looked: inside.filter((s) => s.looked >= LANDMARK_VIEWS.length).length, found: inside.reduce((n, s) => n + s.found, 0) }
+    })
+  }
+
+  /** What the careful look found in one area, each placed on the map; sure ones first. */
+  function area(id: number) {
+    const a = areaRows().find((x) => x.id === id)
+    if (!a) return null
+    const rows = db.prepare(`SELECT m.id, m.name, m.kind, m.detail, m.x0, m.y0, m.x1, m.y1, m.distance, m.sure,
+        l.view_yaw AS viewYaw, s.id AS stationId, s.lat, s.lng, s.heading, s.ft, c.path AS clip, c.start_utc AS startUtc, c.camera_yaw AS cameraYaw
+      FROM landmarks m JOIN looks l ON l.id = m.look_id JOIN stations s ON s.id = l.station_id JOIN chapters c ON c.id = s.chapter_id
+      WHERE l.model = ? AND l.prompt_version = ? AND c.status = 'ok' AND s.level < ? AND s.lat BETWEEN ? AND ? AND s.lng BETWEEN ? AND ?
+      ORDER BY m.sure DESC, c.start_utc, s.ft, l.view_yaw`).all(model, LANDMARK_VERSION, AREA_LEVELS, a.south, a.north, a.west, a.east) as Array<Record<string, number | string | null>>
+    const things = rows.map((r) => {
+      const at = placeItem({ lat: r.lat as number, lng: r.lng as number, heading: r.heading as number }, r.viewYaw as number, (r.cameraYaw as number | null) ?? ASSUMED_YAW,
+        { x: ((r.x0 as number) + (r.x1 as number)) / 2, distance: r.distance as Distance }, LANDMARK_VIEW.hFov)
+      return {
+        id: r.id, name: r.name, kind: r.kind, detail: r.detail, distance: r.distance, sure: !!r.sure,
+        box: { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }, stationId: r.stationId, viewYaw: r.viewYaw,
+        clip: path.basename(r.clip as string), day: r.startUtc ? fmtDay(r.startUtc as string) : null, ft: r.ft,
+        lat: +at.lat.toFixed(6), lng: +at.lng.toFixed(6),
+      }
+    })
+    return { ...areas().find((x) => x.id === id)!, things }
+  }
+
   const score = () => {
     const reviews = db.prepare(`SELECT i.kind, r.verdict FROM reviews r JOIN items i ON i.id = r.item_id JOIN looks l ON l.id = i.look_id
       WHERE l.model = ? AND l.prompt_version = ?`).all(model, PROMPT_VERSION) as Array<{ kind: string; verdict: Verdict }>
@@ -81,22 +129,23 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
   // Cutting a 360 frame is heavy: at most two at once, and one job per spot however
   // many views are asked for. The newest request goes first, so the spot the owner
   // stops on isn't stuck behind ones skipped past.
-  const cutting = new Map<number, Promise<void>>()
+  const cutting = new Map<string, Promise<void>>()
   const queue: Array<() => void> = []
   let running = 0
   const slot = () => new Promise<void>((go) => { if (running < 2) { running++; go() } else queue.push(go) })
   const free = () => { const next = queue.pop(); if (next) next(); else running-- }
-  function cut(id: number): Promise<void> {
-    if (VIEWS.every((v) => fs.existsSync(viewFile(viewDir, id, v.yaw)))) return Promise.resolve()
-    if (!cutting.has(id)) {
+  function cut(id: number, careful: boolean): Promise<void> {
+    if ((careful ? LANDMARK_VIEWS : VIEWS).every((v) => fs.existsSync(viewFile(viewDir, id, v.yaw, careful)))) return Promise.resolve()
+    const key = `${careful ? 'l' : ''}${id}`
+    if (!cutting.has(key)) {
       const st = db.prepare('SELECT s.id, s.ft, c.path, c.width, c.height FROM stations s JOIN chapters c ON c.id = s.chapter_id WHERE s.id = ?').get(id) as { id: number; ft: number; path: string; width: number; height: number } | undefined
-      cutting.set(id, (async () => {
+      cutting.set(key, (async () => {
         if (!st || !fs.existsSync(st.path)) throw new Error('missing')
         await slot()
-        try { await opts.cut(st) } finally { free() }
-      })().finally(() => cutting.delete(id)))
+        try { await opts.cut(st, careful) } finally { free() }
+      })().finally(() => cutting.delete(key)))
     }
-    return cutting.get(id)!
+    return cutting.get(key)!
   }
 
   const HEADERS = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cross-origin-resource-policy': 'same-origin' }
@@ -136,13 +185,13 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           const s = spot(r.id, Number.isFinite(w) && w >= 150 && w <= 2000 ? w : 520)
           return s ? send(res, 200, s) : send(res, 404, { error: 'No such spot.' }) }
         case 'view': {
-          try { await cut(r.id) } catch (e) {
+          try { await cut(r.id, r.careful) } catch (e) {
             if ((e as Error).message !== 'missing') log(`couldn't cut spot ${r.id}: ${(e as Error).message.split('\n')[0]}`)
             return send(res, 404, { error: "Couldn't cut this picture." })
           }
           // Not kept by the browser: deleting views/ is then enough to remove the pictures.
           res.writeHead(200, { ...HEADERS, 'content-type': 'image/jpeg' })
-          return res.end(fs.readFileSync(viewFile(viewDir, r.id, r.yaw)))
+          return res.end(fs.readFileSync(viewFile(viewDir, r.id, r.yaw, r.careful)))
         }
         case 'review': {
           // { itemId, verdict } or { itemIds: [...], verdict } for "mark the rest right".
@@ -165,6 +214,29 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           if (lookId === null || x === null || y === null || kind === null) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
           const id = saveMissed(db, { lookId, kind, x, y })
           return id === null ? send(res, 404, { error: 'The model has looked here again since. Reload the page.' }) : send(res, 200, { id, score: score() })
+        }
+        case 'areas': return send(res, 200, { areas: areas(), minutesASpot: minutesASpot() })
+        case 'areaSpots': {
+          // How many spots a rectangle being drawn holds, before it's saved.
+          const [south, west, north, east] = ['s', 'w', 'n', 'e'].map((k) => Number(url.searchParams.get(k)))
+          if (![south, west, north, east].every(Number.isFinite)) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
+          return send(res, 200, { spots: carefulSpots().filter((p) => inArea(p, { south, west, north, east })).length })
+        }
+        case 'area': { const a = area(r.id); return a ? send(res, 200, a) : send(res, 404, { error: 'That area has been removed. Reload the page.' }) }
+        case 'saveArea': {
+          // { name, south, west, north, east } or { remove }.
+          const b = await readJson(req)
+          if (!b) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
+          const remove = whole(b.remove)
+          if (remove !== null) { saveArea(db, { remove }); return send(res, 200, { areas: areas() }) }
+          const [south, west, north, east] = [b.south, b.west, b.north, b.east].map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null))
+          if (south === null || west === null || north === null || east === null || south < -90 || north > 90 || west < -180 || east > 180 || north <= south || east <= west) {
+            return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
+          }
+          const name = areaName(b.name)
+          if (name === null) return send(res, 400, { error: 'Give the area a name of up to 60 characters.' })
+          const id = saveArea(db, { name, south, west, north, east })
+          return send(res, 200, { id, areas: areas() })
         }
         default: return send(res, 404, { error: 'Not found.' })
       }

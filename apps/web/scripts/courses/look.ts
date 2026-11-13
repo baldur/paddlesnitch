@@ -8,7 +8,9 @@
 //       --levels 4              a look every 100 m, then 50, 25, 12.5 m (--base sets 100 for a new store)
 //       --minutes 60            stop after this long
 //       --scan                  only find and index the footage
-//   pnpm --filter web course:look --status       how far it has got
+//       --areas                 look carefully, only inside the areas drawn on River Explorer's map
+//                               (every 25 m on every pass, 8 closer views, only things that identify the place)
+//   pnpm --filter web course:look --status [--areas]   how far it has got
 //   pnpm --filter web course:look --export [f]   everything seen, placed, as GeoJSON (outside any repo)
 //
 // Ctrl+C finishes the spot it's on and stops; twice stops at once (that spot is
@@ -22,6 +24,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { eacGraph, eacLayout, flatView } from './lib/eac'
 import { assertOutsideRepo, cameraOverrides, ensureStations, knownByPath, nextStation, openStore, refreshPresence, saveClip, saveLook, setCameraYaw, STORE, storedSpacing, takeLock, spotSpacing, type Next } from './lib/footage-db'
 import { decideCameraYaw, KINDS, parseLook, placeItem, PROMPT, PROMPT_VERSION, SCHEMA, VIEW, VIEWS, type Look } from './lib/look'
+import { AREA_LEVELS, inArea, LANDMARK_PROMPT, LANDMARK_SCHEMA, LANDMARK_VERSION, LANDMARK_VIEW, LANDMARK_VIEWS, parseLandmarks, type Area, type Landmark } from './lib/landmarks'
 import { parseLookArgs } from './lib/look-args'
 import { assertLocalModel, chat, checkOllama, ollamaEndpoint, OllamaDown } from './lib/ollama'
 import { killRunning, runDetached } from './lib/proc'
@@ -38,6 +41,11 @@ const ASSUMED_YAW = 180 // every clip so far was shot from the back deck looking
 const MAX_TOKENS = 2000
 
 const db = (() => { try { return openStore() } catch (e) { fail(e) } })()
+
+// A general look (every view of every spot) or a careful one (--areas): which views, how close, which prompt.
+const MODE = args.areas
+  ? { views: LANDMARK_VIEWS, view: LANDMARK_VIEW, version: LANDMARK_VERSION, levels: args.levelsGiven ? args.levels : AREA_LEVELS }
+  : { views: [...VIEWS] as Array<{ name: string; yaw: number }>, view: VIEW, version: PROMPT_VERSION, levels: args.levels }
 
 // Ctrl+C: the first lets the current spot (or clip, while scanning) finish; the
 // second stops at once. ffmpeg and ffprobe run in their own process group
@@ -121,11 +129,11 @@ async function scan(roots: string[], base: number) {
 
 // ---------- looking ----------
 
-async function cutViews(st: Next, views: Array<(typeof VIEWS)[number]>): Promise<Map<number, string>> {
+async function cutViews(st: Next, views: Array<{ name: string; yaw: number }>): Promise<Map<number, string>> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'look-'))
   frameDir = dir
   try {
-    const graph = eacGraph(eacLayout(st.width, st.height), views.length) + views.map((v, i) => flatView(i, v.name, { ...VIEW, yaw: v.yaw })).join(';')
+    const graph = eacGraph(eacLayout(st.width, st.height), views.length) + views.map((v, i) => flatView(i, v.name, { ...MODE.view, yaw: v.yaw })).join(';')
     await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', st.ft.toFixed(2), '-i', st.path, '-filter_complex', graph,
       ...views.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', path.join(dir, `${v.name}.jpg`)])])
     return new Map(views.map((v) => [v.yaw, fs.readFileSync(path.join(dir, `${v.name}.jpg`)).toString('base64')]))
@@ -133,6 +141,20 @@ async function cutViews(st: Next, views: Array<(typeof VIEWS)[number]>): Promise
     fs.rmSync(dir, { recursive: true, force: true })
     frameDir = null
   }
+}
+
+/** A careful look's landmarks, or null with the reply that wasn't an answer. */
+async function askLandmarks(endpoint: string, image: string): Promise<{ landmarks: Landmark[] | null; raw: string }> {
+  let raw = ''
+  for (let attempt = 0; attempt < 2; attempt++) {
+    raw = await chat(endpoint, {
+      model: args.model, format: LANDMARK_SCHEMA, keep_alive: '30m', options: { temperature: 0, num_predict: MAX_TOKENS },
+      messages: [{ role: 'user', content: LANDMARK_PROMPT, images: [image] }],
+    })
+    const landmarks = parseLandmarks(raw)
+    if (landmarks) return { landmarks, raw }
+  }
+  return { landmarks: null, raw }
 }
 
 /** A look, or null with the reply that wasn't one. OllamaDown (Ollama itself failing) is thrown, never saved. */
@@ -162,15 +184,18 @@ function updateCameraYaw(chapterId: number) {
 }
 
 async function lookLoop(endpoint: string) {
-  console.log(`looking with ${args.model} at ${endpoint}`)
+  if (args.areas && !(db.prepare('SELECT count(*) AS n FROM areas').get() as { n: number }).n) {
+    return console.log('no areas yet: draw one on the map in River Explorer (pnpm --filter web course:explore), then run this again')
+  }
+  console.log(`looking ${args.areas ? 'carefully inside the drawn areas ' : ''}with ${args.model} at ${endpoint}`)
   const until = args.minutes > 0 ? Date.now() + args.minutes * 60_000 : Infinity
   const uncuttable: number[] = []
   const started = Date.now()
   let spots = 0
-  for (let st = nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length, uncuttable); st && !stopping && Date.now() < until;
-    st = nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length, uncuttable)) {
+  const next = (skip: number[] = []) => nextStation(db, args.model, MODE.version, MODE.levels, MODE.views.length, skip, args.areas)
+  for (let st = next(uncuttable); st && !stopping && Date.now() < until; st = next(uncuttable)) {
     if (!fs.existsSync(st.path)) { refreshPresence(db); continue }
-    const todo = VIEWS.filter((v) => !st!.done.includes(v.yaw))
+    const todo = MODE.views.filter((v) => !st!.done.includes(v.yaw))
     let images: Map<number, string>
     try { images = await cutViews(st, todo) } catch (e) {
       if (stopping) break
@@ -181,20 +206,46 @@ async function lookLoop(endpoint: string) {
     }
     for (const v of todo) {
       const t0 = Date.now()
+      if (args.areas) {
+        const { landmarks, raw } = await askLandmarks(endpoint, images.get(v.yaw)!)
+        saveLook(db, st.id, v.yaw, args.model, LANDMARK_VERSION, { ok: !!landmarks, landmarks: landmarks ?? [], raw, ms: Date.now() - t0 })
+        continue
+      }
       const { look, raw } = await ask(endpoint, images.get(v.yaw)!)
       saveLook(db, st.id, v.yaw, args.model, PROMPT_VERSION, {
         ok: !!look, scene: look?.scene, water: look?.water, light: look?.light, ownPerson: look?.own.person, ownPropulsion: look?.own.propulsion,
         items: look?.items, raw, ms: Date.now() - t0,
       })
     }
-    updateCameraYaw(st.chapter_id)
+    if (!args.areas) updateCameraYaw(st.chapter_id)
     spots++
     console.log(`${path.basename(st.path)} ${st.ft.toFixed(0)} s, level ${st.level}: ${spots} spots this run, ${((Date.now() - started) / spots / 1000).toFixed(0)} s each`)
   }
-  if (!stopping && !nextStation(db, args.model, PROMPT_VERSION, args.levels, VIEWS.length)) console.log('every spot has been looked at; raise --levels to go finer')
+  if (!stopping && !next()) console.log(`every spot ${args.areas ? 'in the areas ' : ''}has been looked at; raise --levels to go finer`)
 }
 
 // ---------- reporting ----------
+
+/** How far the careful look has got in each area. */
+function areaStatus(base: number) {
+  const areas = db.prepare('SELECT id, name, south, west, north, east FROM areas ORDER BY id').all() as Array<Area & { id: number; name: string }>
+  if (!areas.length) return console.log('no areas yet: draw one on the map in River Explorer (pnpm --filter web course:explore)')
+  const looks = db.prepare('SELECT avg(ms) AS ms FROM looks WHERE model = ? AND prompt_version = ?').get(args.model, LANDMARK_VERSION) as { ms: number | null }
+  const spots = db.prepare(`SELECT s.id, s.lat, s.lng, s.chapter_id AS chapterId,
+      (SELECT count(*) FROM looks l WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS looked,
+      (SELECT count(*) FROM landmarks m JOIN looks l ON l.id = m.look_id WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS found
+    FROM stations s JOIN chapters c ON c.id = s.chapter_id WHERE c.status = 'ok' AND s.level < ?`)
+    .all(args.model, LANDMARK_VERSION, args.model, LANDMARK_VERSION, MODE.levels) as Array<{ id: number; lat: number; lng: number; chapterId: number; looked: number; found: number }>
+  for (const a of areas) {
+    const inside = spots.filter((s) => inArea(s, a))
+    const done = inside.filter((s) => s.looked >= LANDMARK_VIEWS.length).length
+    const passes = new Set(inside.map((s) => s.chapterId)).size
+    const left = looks.ms ? ((inside.length - done) * LANDMARK_VIEWS.length * looks.ms) / 3_600_000 : null
+    console.log(`${a.name}: ${done}/${inside.length} spots (every ${base / 2 ** (MODE.levels - 1)} m, ${passes} clips), ${inside.reduce((n, s) => n + s.found, 0)} things found` +
+      (left !== null && done < inside.length ? `, about ${left < 1 ? `${Math.ceil(left * 60)} min` : `${left.toFixed(1)} h`} to go` : ''))
+  }
+  if (!looks.ms) console.log(`(about ${LANDMARK_VIEWS.length} × 36 s a spot with ${args.model}, so roughly 5 min a spot)`)
+}
 
 function status(base: number) {
   const rows = db.prepare(`
@@ -247,7 +298,7 @@ function exportGeoJson(file: string) {
 }
 
 async function main() {
-  if (args.mode === 'status') return status(storedSpacing(db))
+  if (args.mode === 'status') return args.areas ? areaStatus(storedSpacing(db)) : status(storedSpacing(db))
   if (args.mode === 'export') return exportGeoJson(args.exportPath ?? path.join(STORE, 'export.geojson'))
   // Check Ollama before scanning, so a look run that can't look fails at once.
   let endpoint = ''

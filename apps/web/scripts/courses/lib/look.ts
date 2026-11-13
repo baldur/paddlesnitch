@@ -156,10 +156,10 @@ export const BAND_M: Record<Distance, number> = { near: 8, mid: 30, far: 80 }
 /**
  * Where an item is: its compass bearing from the camera and a point that far
  * along it. `cameraYaw` follows course.json: the view at lens angle
- * `cameraYaw + a` looks `a` degrees from the bow.
+ * `cameraYaw + a` looks `a` degrees from the bow. `hFov` is the view's width (60 for a careful look).
  */
-export function placeItem(at: { lat: number; lng: number; heading: number }, viewYaw: number, cameraYaw: number, item: Pick<Item, 'x' | 'distance'>) {
-  const half = (VIEW.hFov / 2) * (Math.PI / 180)
+export function placeItem(at: { lat: number; lng: number; heading: number }, viewYaw: number, cameraYaw: number, item: Pick<Item, 'x' | 'distance'>, hFov: number = VIEW.hFov) {
+  const half = (hFov / 2) * (Math.PI / 180)
   const offset = (Math.atan((item.x - 0.5) * 2 * Math.tan(half)) * 180) / Math.PI
   const fromBow = viewYaw - cameraYaw + offset
   const compass = (((at.heading + fromBow) % 360) + 360) % 360

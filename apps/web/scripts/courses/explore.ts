@@ -15,6 +15,7 @@ import { eacGraph, eacLayout, flatView } from './lib/eac'
 import { createExplorer, viewFile } from './lib/explore-server'
 import { openStore, STORE } from './lib/footage-db'
 import { PROMPT_VERSION, VIEW, VIEWS } from './lib/look'
+import { LANDMARK_VIEW, LANDMARK_VIEWS } from './lib/landmarks'
 import { runDetached } from './lib/proc'
 
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined }
@@ -29,11 +30,14 @@ fs.mkdirSync(viewDir, { recursive: true })
 const server = createExplorer(db, {
   model: MODEL, viewDir,
   // The same views the model was shown (look.ts), written beside their final names and moved in when complete.
-  cut: async (st) => {
-    const graph = eacGraph(eacLayout(st.width, st.height), VIEWS.length) + VIEWS.map((v, i) => flatView(i, v.name, { ...VIEW, yaw: v.yaw })).join(';')
+  // A careful look's views are the eight closer ones (landmarks.ts).
+  cut: async (st, careful) => {
+    const [views, view] = careful ? [LANDMARK_VIEWS, LANDMARK_VIEW] : [VIEWS, VIEW]
+    const graph = eacGraph(eacLayout(st.width, st.height), views.length) + views.map((v, i) => flatView(i, v.name, { ...view, yaw: v.yaw })).join(';')
+    const file = (yaw: number) => viewFile(viewDir, st.id, yaw, careful)
     await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', st.ft.toFixed(2), '-i', st.path, '-filter_complex', graph,
-      ...VIEWS.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', `${viewFile(viewDir, st.id, v.yaw)}.part.jpg`])])
-    for (const v of VIEWS) fs.renameSync(`${viewFile(viewDir, st.id, v.yaw)}.part.jpg`, viewFile(viewDir, st.id, v.yaw))
+      ...views.flatMap((v) => ['-map', `[${v.name}]`, '-frames:v', '1', '-q:v', '4', `${file(v.yaw)}.part.jpg`])])
+    for (const v of views) fs.renameSync(`${file(v.yaw)}.part.jpg`, file(v.yaw))
   },
 })
 
