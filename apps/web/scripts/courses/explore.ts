@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // River Explorer: walk the river spot by spot and see what the local model saw,
-// pick any point for every pass's sharp pictures ("Footage here"),
-// pinned on the pictures, and mark whether it was right.
+// pinned on the pictures, and mark whether it was right. Or pick any point on
+// the map for every pass's sharp pictures there ("Footage here").
 //
 //   pnpm --filter web course:explore [--port 3201] [--model qwen2.5vl:32b]   then open http://localhost:3201
 //
