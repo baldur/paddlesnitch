@@ -21,6 +21,12 @@ describe('parseLandmarks', () => {
   it('puts a box drawn backwards the right way round and clamps it to the picture', () => {
     expect(parseLandmarks(one({ box: { x0: 0.6, y0: 1.4, x1: 0.1, y1: 0.2 } }))![0]).toMatchObject({ x0: 0.1, y0: 0.2, x1: 0.6, y1: 1 })
   })
+  it('a box given in pixels of the 1024×640 picture is scaled, not thrown away', () => {
+    expect(parseLandmarks(one({ box: { x0: 410, y0: 200, x1: 614.4, y1: 320 } }))![0]).toMatchObject({ x0: 410 / 1024, y0: 200 / 640, x1: 0.6, y1: 0.5 })
+  })
+  it('keeps a real thing whose name or detail starts with "No"', () => {
+    expect(parseLandmarks(one({ name: 'No 1 Boathouse', detail: 'No readable sign; red brick with arched doors' }))).toHaveLength(1)
+  })
   it('drops things without a usable box, a name, or that the model says it did not see', () => {
     expect(parseLandmarks(one({ box: { x0: 0.2, y0: 0.2, x1: 0.2, y1: 0.5 } }))).toEqual([])
     expect(parseLandmarks(one({ box: { x0: 'a' } }))).toEqual([])

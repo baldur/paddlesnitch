@@ -121,6 +121,7 @@ describe('route', () => {
     expect(route('GET', '/api/area/3')).toEqual({ kind: 'area', id: 3 })
     expect(route('POST', '/api/area').kind).toBe('saveArea')
     expect(route('GET', '/api/area-spots').kind).toBe('areaSpots')
+    expect(route('GET', '/api/areas').kind).toBe('areas')
   })
 })
 

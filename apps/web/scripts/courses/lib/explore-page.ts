@@ -148,8 +148,10 @@ function drawScore(s) {
 
 function drawMap() {
   const svg = document.getElementById('map'); svg.replaceChildren()
-  if (!all.length) return
-  const lat0 = all.reduce((a, s) => a + s.lat, 0) / all.length, k = Math.cos(lat0 * Math.PI / 180)
+  // The tracks alone are enough to draw an area on, before the general look has any spots.
+  const pts = all.length ? all : tracks.flat().map(([lat, lng]) => ({ lat, lng }))
+  if (!pts.length) return
+  const lat0 = pts.reduce((a, s) => a + s.lat, 0) / pts.length, k = Math.cos(lat0 * Math.PI / 180)
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
   const see = (lat, lng) => { const x = lng * k, y = -lat; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
   for (const s of all) see(s.lat, s.lng)
@@ -195,6 +197,7 @@ function drawMap() {
 
 /** Show a spot. Only the latest call draws, however fast the keys are pressed. */
 async function go(id) {
+  if (id == null) return
   const mine = ++seq
   closeAdd()
   openArea = null
@@ -396,7 +399,7 @@ document.addEventListener('keydown', (e) => {
 // ---------- areas: drawn on the map, looked at carefully by course:look --areas ----------
 
 const LOOK_AREAS = 'pnpm --filter web course:look --areas'
-const MIN_A_SPOT = 5 // a careful look is 8 views at about 36 s each
+let MIN_A_SPOT = 5 // a careful look is 8 views at about 36 s each; measured once there are some (/api/areas)
 
 function drawAreas() {
   const card = document.getElementById('areas'); card.replaceChildren(el('h2', { textContent: 'Areas to look at carefully' }))
@@ -453,6 +456,8 @@ function mapDrawing() {
     start = at(e); from = [e.clientX, e.clientY]; drew = false
   })
   svg.addEventListener('pointermove', (e) => {
+    // A press that left the map before it became a drag, released outside: forget it.
+    if (!(e.buttons & 1)) { if (start && !drew) start = null; if (!pan) return }
     if (pan) {
       const per = (300 / pan.z.z) / svg.clientWidth
       mapZoom = { ...pan.z, x: Math.min(Math.max(pan.z.x - (e.clientX - pan.x) * per, 0), 300 - 300 / pan.z.z), y: Math.min(Math.max(pan.z.y - (e.clientY - pan.y) * per, 0), mapH - mapH / pan.z.z) }
@@ -527,7 +532,7 @@ async function showArea(id) {
   const back = lastSpot ?? all[0]?.id
   openArea = a; current = null
   // The list's progress too, so it agrees with this area.
-  api('/api/areas').then((r) => { areas = r.areas; drawAreas() }).catch(() => {})
+  api('/api/areas').then((r) => { areas = r.areas; MIN_A_SPOT = r.minutesASpot; drawAreas() }).catch(() => {})
   history.replaceState(null, '', '#area-' + id)
   drawMap()
   const box = document.getElementById('spot'); box.replaceChildren()
@@ -602,13 +607,14 @@ addEventListener('resize', () => { clearTimeout(resizing); resizing = setTimeout
 ;(async () => {
   const d = await api('/api/spots')
   all = d.spots; tracks = d.tracks
-  areas = (await api('/api/areas')).areas
+  const ar = await api('/api/areas')
+  areas = ar.areas; MIN_A_SPOT = ar.minutesASpot
   drawAreas()
   document.getElementById('model').textContent = '· ' + d.model + ' · ' + plural(all.length, 'spot', 'spots')
   drawScore(await api('/api/score'))
-  if (!all.length) { document.getElementById('spot').replaceChildren(el('div', { className: 'empty', textContent: 'Nothing to explore yet for this model. Run pnpm --filter web course:look first, or start course:explore with the --model it used.' })); return }
   const areaHash = /^#area-([0-9]+)$/.exec(location.hash)
   if (areaHash && areas.some((a) => a.id === Number(areaHash[1]))) return showArea(Number(areaHash[1]))
+  if (!all.length) { drawMap(); document.getElementById('spot').replaceChildren(el('div', { className: 'empty', textContent: 'Nothing to explore yet for this model. Run pnpm --filter web course:look first, start course:explore with the --model it used, or draw an area on the map to look at carefully.' })); return }
   const fromHash = Number(location.hash.slice(1))
   await go(all.some((s) => s.id === fromHash) ? fromHash : all[0].id)
 })().catch((e) => { document.getElementById('spot').replaceChildren(el('div', { className: 'empty', textContent: "Couldn't load the spots. " + e.message })) })

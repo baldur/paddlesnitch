@@ -82,6 +82,12 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
       FROM stations s JOIN chapters c ON c.id = s.chapter_id WHERE c.status = 'ok' AND s.level < ?`)
       .all(model, LANDMARK_VERSION, model, LANDMARK_VERSION, AREA_LEVELS) as Array<{ lat: number; lng: number; looked: number; found: number }>
 
+  /** How long a careful look takes a spot with this model, measured once there are some; 5 min until then. */
+  const minutesASpot = () => {
+    const r = db.prepare('SELECT avg(ms) AS ms, count(*) AS n FROM looks WHERE model = ? AND prompt_version = ?').get(model, LANDMARK_VERSION) as { ms: number | null; n: number }
+    return r.ms && r.n >= LANDMARK_VIEWS.length ? +(r.ms * LANDMARK_VIEWS.length / 60_000).toFixed(1) : 5
+  }
+
   /** Each area with how far the careful look has got in it. */
   function areas() {
     const st = carefulSpots()
@@ -98,8 +104,8 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
     const rows = db.prepare(`SELECT m.id, m.name, m.kind, m.detail, m.x0, m.y0, m.x1, m.y1, m.distance, m.sure,
         l.view_yaw AS viewYaw, s.id AS stationId, s.lat, s.lng, s.heading, s.ft, c.path AS clip, c.start_utc AS startUtc, c.camera_yaw AS cameraYaw
       FROM landmarks m JOIN looks l ON l.id = m.look_id JOIN stations s ON s.id = l.station_id JOIN chapters c ON c.id = s.chapter_id
-      WHERE l.model = ? AND l.prompt_version = ? AND s.lat BETWEEN ? AND ? AND s.lng BETWEEN ? AND ?
-      ORDER BY m.sure DESC, c.start_utc, s.ft, l.view_yaw`).all(model, LANDMARK_VERSION, a.south, a.north, a.west, a.east) as Array<Record<string, number | string | null>>
+      WHERE l.model = ? AND l.prompt_version = ? AND c.status = 'ok' AND s.level < ? AND s.lat BETWEEN ? AND ? AND s.lng BETWEEN ? AND ?
+      ORDER BY m.sure DESC, c.start_utc, s.ft, l.view_yaw`).all(model, LANDMARK_VERSION, AREA_LEVELS, a.south, a.north, a.west, a.east) as Array<Record<string, number | string | null>>
     const things = rows.map((r) => {
       const at = placeItem({ lat: r.lat as number, lng: r.lng as number, heading: r.heading as number }, r.viewYaw as number, (r.cameraYaw as number | null) ?? ASSUMED_YAW,
         { x: ((r.x0 as number) + (r.x1 as number)) / 2, distance: r.distance as Distance }, LANDMARK_VIEW.hFov)
@@ -209,7 +215,7 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           const id = saveMissed(db, { lookId, kind, x, y })
           return id === null ? send(res, 404, { error: 'The model has looked here again since. Reload the page.' }) : send(res, 200, { id, score: score() })
         }
-        case 'areas': return send(res, 200, { areas: areas() })
+        case 'areas': return send(res, 200, { areas: areas(), minutesASpot: minutesASpot() })
         case 'areaSpots': {
           // How many spots a rectangle being drawn holds, before it's saved.
           const [south, west, north, east] = ['s', 'w', 'n', 'e'].map((k) => Number(url.searchParams.get(k)))

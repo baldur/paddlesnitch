@@ -178,6 +178,32 @@ describe('areas', () => {
     // Centred in the view at 45° on the lens: placed off the track, not on it.
     expect(a.things[0].lat).not.toBeCloseTo(st.lat, 6)
   })
+  it("counts an area's spots and those looked at, and only this model's finds at this prompt version", async () => {
+    const { spotId } = lookedAt()
+    const st = db.prepare('SELECT lat, lng FROM stations WHERE id = ?').get(spotId) as { lat: number; lng: number }
+    const id = saveArea(db, { name: 'here', ...around(st) })
+    const lm = { name: 'white boathouse', kind: 'boathouse', detail: 'green doors', x0: 0.4, y0: 0.2, x1: 0.6, y1: 0.5, distance: 'mid', sure: true }
+    saveLook(db, spotId, 0, 'another-model', LANDMARK_VERSION, { ok: true, raw: '{}', ms: 1, landmarks: [lm] })
+    saveLook(db, spotId, 0, MODEL, LANDMARK_VERSION - 1, { ok: true, raw: '{}', ms: 1, landmarks: [lm] })
+    expect((await request('GET', `/api/area/${id}`)).json()).toMatchObject({ spots: 1, looked: 0, found: 0, things: [] })
+    for (const v of LANDMARK_VIEWS) saveLook(db, spotId, v.yaw, MODEL, LANDMARK_VERSION, { ok: true, raw: '{}', ms: 240_000 / 8 * 8, landmarks: v.yaw === 0 ? [lm] : [] })
+    const all = (await request('GET', '/api/areas')).json()
+    expect(all.areas[0]).toMatchObject({ spots: 1, looked: 1, found: 1 })
+    // Measured: 8 views of 240 s is 32 min a spot.
+    expect(all.minutesASpot).toBe(32)
+  })
+  it('an area must lie on the earth, and only a whole-number id can be removed', async () => {
+    const a = { name: 'x', ...around(ORIGIN) }
+    expect((await post('/api/area', { ...a, south: -91 })).status).toBe(400)
+    expect((await post('/api/area', { ...a, east: 181 })).status).toBe(400)
+    expect((await post('/api/area', { remove: 1.5 })).status).toBe(400)
+    expect((await post('/api/area', { remove: 0 })).status).toBe(400)
+  })
+  it("the page's script parses, so a broken page can't ship", async () => {
+    const page = (await request('GET', '/', { headers: { 'sec-fetch-site': 'none' } })).body
+    const script = /<script>([\s\S]*)<\/script>/.exec(page)![1]
+    expect(() => new Function(script)).not.toThrow()
+  })
   it('counts the spots a rectangle holds before it is saved, and refuses one without numbers', async () => {
     lookedAt()
     const a = around(ORIGIN)

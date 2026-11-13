@@ -8,10 +8,12 @@ import type { Distance } from './look'
  * stored as a look with this version, so neither run ever redoes the other's.
  * Bump when the prompt or schema changes.
  */
-export const LANDMARK_VERSION = 102
+export const LANDMARK_VERSION = 103
 
 /** Eight views of 60°, overlapping by 15°: twice the detail of the general look's 100° views. */
 export const LANDMARK_VIEWS = [0, 45, 90, 135, 180, 225, 270, 315].map((yaw) => ({ name: `l${yaw}`, yaw }))
+const VIEW_W = 1024
+const VIEW_H = 640
 export const LANDMARK_VIEW = { hFov: 60, vFov: 2 * Math.atan(Math.tan((30 * Math.PI) / 180) * (640 / 1024)) * (180 / Math.PI), w: 1024, h: 640, pitch: 5 }
 
 /** By default an area is looked at every 25 m (levels 0–2) on every pass through it. */
@@ -71,8 +73,10 @@ Never write a boat's name or anything that identifies a person.`
 export type Landmark = { name: string; kind: LandmarkKind; detail: string; x0: number; y0: number; x1: number; y1: number; distance: Distance; sure: boolean }
 
 const text = (s: unknown, n: number) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, n) : '')
-const unit = (v: unknown) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v as number)) : null)
-const NOT_SEEN = /^(none|no |not (visible|present|seen)|n\/a|nothing)/i
+const num = (v: unknown) => (Number.isFinite(v) ? (v as number) : null)
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+// The model sometimes fills a slot with something it didn't see. Only the whole name, so "No 1 Boathouse" stays.
+const NOT_SEEN = /^(none|nothing|n\/a|not (visible|present|seen)|none visible|no (landmarks?|distinctive \w+))\.?$/i
 
 /** The model's reply as landmarks, or null if it isn't an answer. Boxes are put the right way round; empty or unusable ones are dropped. */
 export function parseLandmarks(raw: string): Landmark[] | null {
@@ -85,10 +89,13 @@ export function parseLandmarks(raw: string): Landmark[] | null {
     if (!i || typeof i !== 'object') continue
     const name = text(i.name, 60)
     const detail = text(i.detail, 200)
-    if (!name || NOT_SEEN.test(name) || NOT_SEEN.test(detail)) continue
+    if (!name || NOT_SEEN.test(name)) continue
     const b = (i.box ?? {}) as Record<string, unknown>
-    const [ax, ay, bx, by] = [unit(b.x0), unit(b.y0), unit(b.x1), unit(b.y1)]
+    let [ax, ay, bx, by] = [num(b.x0), num(b.y0), num(b.x1), num(b.y1)]
     if (ax === null || ay === null || bx === null || by === null) continue
+    // Qwen2.5-VL often answers in pixels of the 1024×640 picture, whatever it's asked.
+    if (Math.max(ax, bx, ay, by) > 1.5) { ax /= VIEW_W; bx /= VIEW_W; ay /= VIEW_H; by /= VIEW_H }
+    ;[ax, ay, bx, by] = [ax, ay, bx, by].map(clamp01)
     const box = { x0: Math.min(ax, bx), y0: Math.min(ay, by), x1: Math.max(ax, bx), y1: Math.max(ay, by) }
     if (box.x1 - box.x0 < 0.005 || box.y1 - box.y0 < 0.005) continue
     const key = `${name.toLowerCase()}|${box.x0.toFixed(2)}`
