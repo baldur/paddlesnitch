@@ -178,6 +178,18 @@ describe('areas', () => {
     // Centred in the view at 45° on the lens: placed off the track, not on it.
     expect(a.things[0].lat).not.toBeCloseTo(st.lat, 6)
   })
+  it('counts the spots a rectangle holds before it is saved, and refuses one without numbers', async () => {
+    lookedAt()
+    const a = around(ORIGIN)
+    expect((await request('GET', `/api/area-spots?s=${a.south}&w=${a.west}&n=${a.north}&e=${a.east}`)).json()).toEqual({ spots: 1 })
+    expect((await request('GET', '/api/area-spots?s=1&w=x&n=2&e=3')).status).toBe(400)
+  })
+  it("refuses another site's page on the area routes, as on every other", async () => {
+    const id = saveArea(db, { name: 'here', ...around(ORIGIN) })
+    expect((await request('GET', `/api/area/${id}`, { headers: { 'sec-fetch-site': 'cross-site' } })).status).toBe(403)
+    expect((await post('/api/area', { remove: id }, { origin: 'https://evil.example' })).status).toBe(403)
+    expect((await request('GET', '/api/areas')).json().areas).toHaveLength(1)
+  })
   it("cuts a careful look's closer views on their own, without touching the general ones", async () => {
     const { spotId } = lookedAt()
     const r = await request('GET', `/view/${spotId}/l45.jpg`)

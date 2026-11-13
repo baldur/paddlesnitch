@@ -123,10 +123,10 @@ export function fetchSiteAllowed(site: string | undefined, isPage: boolean): boo
   if (isPage) return true
   return site === 'same-origin'
 }
-/** An area's name as the owner typed it: one line, 1–60 characters, or null. */
+/** An area's name as the owner typed it: one line, 1–60 characters, or null. No control characters: course:look prints it. */
 export function areaName(v: unknown): string | null {
   if (typeof v !== 'string') return null
-  const s = v.replace(/\s+/g, ' ').trim()
+  const s = v.replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f]/g, '').trim()
   return s.length >= 1 && s.length <= 60 ? s : null
 }
 
@@ -135,7 +135,7 @@ export const isJson = (contentType: string | undefined) => /^application\/json(\
 export type Route =
   | { kind: 'page' } | { kind: 'spots' } | { kind: 'score' }
   | { kind: 'spot'; id: number } | { kind: 'view'; id: number; yaw: number; careful: boolean }
-  | { kind: 'areas' } | { kind: 'area'; id: number }
+  | { kind: 'areas' } | { kind: 'area'; id: number } | { kind: 'areaSpots' }
   | { kind: 'review' } | { kind: 'missed' } | { kind: 'saveArea' } | { kind: 'none' }
 
 const YAWS = new Set<number>(VIEWS.map((v) => v.yaw))
@@ -152,6 +152,7 @@ export function route(method: string, pathname: string): Route {
     m = /^\/view\/(\d{1,9})\/(l?)(\d{1,3})\.jpg$/.exec(pathname)
     if (m && (m[2] ? CAREFUL_YAWS : YAWS).has(Number(m[3]))) return { kind: 'view', id: Number(m[1]), yaw: Number(m[3]), careful: !!m[2] }
     if (pathname === '/api/areas') return { kind: 'areas' }
+    if (pathname === '/api/area-spots') return { kind: 'areaSpots' }
     m = /^\/api\/area\/(\d{1,9})$/.exec(pathname)
     if (m) return { kind: 'area', id: Number(m[1]) }
   }

@@ -75,13 +75,16 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
   type AreaRow = Area & { id: number; name: string }
   const areaRows = () => db.prepare('SELECT id, name, south, west, north, east FROM areas ORDER BY id').all() as AreaRow[]
 
-  /** Each area with how far the careful look has got in it. */
-  function areas() {
-    const st = db.prepare(`SELECT s.lat, s.lng,
+  /** Spots a careful look would visit (every pass), and what it has done there. Same filter as course:look --status --areas. */
+  const carefulSpots = () => db.prepare(`SELECT s.lat, s.lng,
         (SELECT count(*) FROM looks l WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS looked,
         (SELECT count(*) FROM landmarks m JOIN looks l ON l.id = m.look_id WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS found
-      FROM stations s JOIN chapters c ON c.id = s.chapter_id WHERE c.status != 'no-gps' AND s.level < ?`)
+      FROM stations s JOIN chapters c ON c.id = s.chapter_id WHERE c.status = 'ok' AND s.level < ?`)
       .all(model, LANDMARK_VERSION, model, LANDMARK_VERSION, AREA_LEVELS) as Array<{ lat: number; lng: number; looked: number; found: number }>
+
+  /** Each area with how far the careful look has got in it. */
+  function areas() {
+    const st = carefulSpots()
     return areaRows().map((a) => {
       const inside = st.filter((s) => inArea(s, a))
       return { ...a, spots: inside.length, looked: inside.filter((s) => s.looked >= LANDMARK_VIEWS.length).length, found: inside.reduce((n, s) => n + s.found, 0) }
@@ -207,6 +210,12 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           return id === null ? send(res, 404, { error: 'The model has looked here again since. Reload the page.' }) : send(res, 200, { id, score: score() })
         }
         case 'areas': return send(res, 200, { areas: areas() })
+        case 'areaSpots': {
+          // How many spots a rectangle being drawn holds, before it's saved.
+          const [south, west, north, east] = ['s', 'w', 'n', 'e'].map((k) => Number(url.searchParams.get(k)))
+          if (![south, west, north, east].every(Number.isFinite)) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
+          return send(res, 200, { spots: carefulSpots().filter((p) => inArea(p, { south, west, north, east })).length })
+        }
         case 'area': { const a = area(r.id); return a ? send(res, 200, a) : send(res, 404, { error: 'That area has been removed. Reload the page.' }) }
         case 'saveArea': {
           // { name, south, west, north, east } or { remove }.

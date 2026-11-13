@@ -29,6 +29,9 @@ svg#map{width:100%;height:auto;display:block}
 #map .hit{cursor:pointer;fill:transparent}
 .maptools{display:flex;gap:6px;margin-top:6px}
 .maptools button{min-height:28px;padding:2px 8px;font-size:12px}
+@media (max-width:900px){#bigger{display:none}}
+.areaform{flex-wrap:wrap}.areaform .est{flex-basis:100%;font-size:12px;color:var(--muted)}.areaform .est.big{color:var(--amber)}
+#status button{min-height:0;padding:0 8px;margin-left:8px;font-size:12px}
 @media (min-width:901px){.bigmap main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 #map .area{fill:rgba(167,139,250,.1);stroke:var(--violet);stroke-width:1.5;stroke-dasharray:4 3}
 #map .area.open{stroke-width:2.5;stroke-dasharray:none}
@@ -96,7 +99,7 @@ button:hover:not(:disabled){border-color:var(--primary)}button:disabled{opacity:
     <div class="card"><h2>Where</h2><svg id="map" viewBox="0 0 300 300" role="img" aria-label="Map of the spots looked at"></svg>
       <p class="help"><span style="color:var(--green)">●</span> all marked &nbsp;<span style="color:var(--primary)">●</span> some unmarked &nbsp;<span style="color:var(--muted)">●</span> nothing to mark</p>
       <div class="maptools"><button type="button" id="bigger">Bigger map</button><button type="button" id="unzoom" disabled>Zoom out</button></div>
-      <p class="help"><span style="color:var(--violet)">Drag on the map</span> to draw an area for the model to look at carefully. Scroll to zoom in first: a stretch of 100 to 300 m takes an hour or a few.</p>
+      <p class="help"><span style="color:var(--violet)">Drag on the map</span> to draw an area to look at carefully. Scroll to zoom in first, and keep it to 100–300 m of river: each pass through it takes 20–60 min. Shift-drag moves a zoomed map.</p>
       <div id="areaform"></div></div>
     <div class="card" id="areas"></div>
     <div class="card help">
@@ -111,7 +114,7 @@ button:hover:not(:disabled){border-color:var(--primary)}button:disabled{opacity:
 </main>
 <script>
 const KINDS = __KINDS__
-let mapZoom = { z: 1, x: 0, y: 0 }, mapH = 300
+let mapZoom = { z: 1, x: 0, y: 0 }, mapH = 300, lastSpot = null
 let all = [], tracks = [], areas = [], openArea = null, drawingArea = null, mapProj = null, current = null, adding = null, seq = 0, busy = false, scoreSeq = 0, picW = 520
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); for (const k of kids) if (k != null && k !== false) e.append(k); return e }
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many)
@@ -398,7 +401,7 @@ const MIN_A_SPOT = 5 // a careful look is 8 views at about 36 s each
 function drawAreas() {
   const card = document.getElementById('areas'); card.replaceChildren(el('h2', { textContent: 'Areas to look at carefully' }))
   if (!areas.length) {
-    card.append(el('p', { className: 'help', textContent: 'Drag on the map to draw an area round a stretch you know. The model then looks closely at every frame inside it, on every day you paddled there, for things that identify the place.' }))
+    card.append(el('p', { className: 'help', textContent: 'None yet. The model looks closely every 25 m inside an area, on every day you paddled there, for things that identify the place.' }))
     return
   }
   const list = el('div', { className: 'arealist' })
@@ -408,27 +411,53 @@ function drawAreas() {
     open.addEventListener('click', () => showArea(a.id))
     const rm = el('button', { textContent: '×', ariaLabel: 'Remove the area ' + a.name, title: 'Remove this area (what was found stays in the store)' })
     rm.addEventListener('click', async () => {
-      try { areas = (await api('/api/area', { remove: a.id })).areas; if (openArea && openArea.id === a.id) go(all[0]?.id); drawAreas(); drawMap() }
-      catch (e) { say("Couldn't remove that area. " + e.message, true) }
+      try {
+        areas = (await api('/api/area', { remove: a.id })).areas
+        if (openArea && openArea.id === a.id) go(lastSpot ?? all[0]?.id)
+        drawAreas(); drawMap()
+        // What it found stays with its spots, so drawing it again brings it all back.
+        sayUndo('Removed ' + a.name + '.', async () => {
+          try { const r = await api('/api/area', { name: a.name, south: a.south, west: a.west, north: a.north, east: a.east }); areas = r.areas; drawAreas(); drawMap(); say('') }
+          catch (e) { say("Couldn't put it back. " + e.message, true) }
+        })
+      } catch (e) { say("Couldn't remove that area. " + e.message, true) }
     })
     list.append(el('div', { className: 'row' }, open, rm))
   }
   card.append(list)
   const left = areas.reduce((n, a) => n + a.spots - a.looked, 0)
-  if (left) card.append(el('p', { className: 'help', style: 'margin-top:8px', textContent: 'To look at ' + plural(left, 'spot', 'spots') + ' still to do (about ' + hours(left * MIN_A_SPOT) + '), run this in a terminal. This page can stay open: reload an area to see more.' }), el('code', { className: 'cmd', textContent: LOOK_AREAS }))
+  if (left) card.append(el('p', { className: 'help', style: 'margin-top:8px', textContent: plural(left, 'spot', 'spots') + ' still to look at (about ' + hours(left * MIN_A_SPOT) + '), in the order the areas were drawn. Run this in a terminal; this page can stay open. Press Reload on an area to see new finds.' }), el('code', { className: 'cmd', textContent: LOOK_AREAS }))
 }
 
 const areaSize = (a) => Math.round((a.east - a.west) * Math.cos(a.south * Math.PI / 180) * 111320) + ' × ' + Math.round((a.north - a.south) * 111320) + ' m'
-const hours = (min) => min < 90 ? Math.round(min) + ' min' : (min / 60).toFixed(1) + ' h'
+const hours = (min) => min < 90 ? Math.round(min) + ' min' : min < 48 * 60 ? (min / 60).toFixed(1) + ' h' : Math.round(min / 1440) + ' days'
+
+/** A status line with an Undo button. */
+function sayUndo(text, undo) {
+  say(text)
+  const b = el('button', { textContent: 'Undo' })
+  b.addEventListener('click', undo, { once: true })
+  document.getElementById('status').append(b)
+}
 
 /** Press and drag on the map to draw an area; a press that hardly moves is still a click on a spot. */
 function mapDrawing() {
   const svg = document.getElementById('map')
-  let start = null, from = null, drew = false
+  let start = null, from = null, drew = false, pan = null
   const at = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()) }
   const place = (a, b) => { for (const [k, v] of Object.entries({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) })) drawingArea.setAttribute(k, v) }
-  svg.addEventListener('pointerdown', (e) => { if (e.button === 0 && mapProj) { start = at(e); from = [e.clientX, e.clientY]; drew = false } })
+  svg.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !mapProj) return
+    // Shift-drag moves a zoomed map instead of drawing.
+    if (e.shiftKey && mapZoom.z > 1) { pan = { x: e.clientX, y: e.clientY, z: { ...mapZoom } }; svg.setPointerCapture(e.pointerId); drew = true; return }
+    start = at(e); from = [e.clientX, e.clientY]; drew = false
+  })
   svg.addEventListener('pointermove', (e) => {
+    if (pan) {
+      const per = (300 / pan.z.z) / svg.clientWidth
+      mapZoom = { ...pan.z, x: Math.min(Math.max(pan.z.x - (e.clientX - pan.x) * per, 0), 300 - 300 / pan.z.z), y: Math.min(Math.max(pan.z.y - (e.clientY - pan.y) * per, 0), mapH - mapH / pan.z.z) }
+      return drawMap()
+    }
     if (!start) return
     if (!drew) {
       if (Math.hypot(e.clientX - from[0], e.clientY - from[1]) < 6) return
@@ -439,6 +468,7 @@ function mapDrawing() {
     place(start, at(e))
   })
   const end = (e, cancelled) => {
+    if (pan) { pan = null; return }
     if (!start) return
     const a = start; start = null
     if (!drew) return
@@ -459,9 +489,17 @@ function closeAreaForm() {
 
 function nameArea(p, q) {
   const box = document.getElementById('areaform')
+  const corners = { south: Math.min(p.lat, q.lat), north: Math.max(p.lat, q.lat), west: Math.min(p.lng, q.lng), east: Math.max(p.lng, q.lng) }
   const input = el('input', { type: 'text', maxLength: 60, placeholder: "Name it, e.g. Fry's Island", ariaLabel: 'Name of the area' })
-  const form = el('form', { className: 'areaform' }, input, el('button', { type: 'submit', textContent: 'Save' }), el('button', { type: 'button', textContent: '×', ariaLabel: 'Cancel' }))
-  form.lastChild.addEventListener('click', closeAreaForm)
+  const est = el('span', { className: 'est', textContent: areaSize(corners) + ' · counting spots…' })
+  const form = el('form', { className: 'areaform' }, input, el('button', { type: 'submit', textContent: 'Save' }), el('button', { type: 'button', textContent: '×', ariaLabel: 'Cancel' }), est)
+  form.querySelector('button[type=button]').addEventListener('click', closeAreaForm)
+  // What it would take, before it's saved: a big area holds up every area drawn after it.
+  api('/api/area-spots?s=' + corners.south + '&w=' + corners.west + '&n=' + corners.north + '&e=' + corners.east).then((r) => {
+    const min = r.spots * MIN_A_SPOT
+    est.textContent = areaSize(corners) + ' · ' + (r.spots ? plural(r.spots, 'spot', 'spots') + ' on all your passes, about ' + hours(min) : 'no footage passes through it')
+    if (min > 10 * 60) { est.classList.add('big'); est.textContent += ". That's a lot: zoom in and draw a smaller one?" }
+  }).catch(() => { est.textContent = areaSize(corners) })
   form.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeAreaForm() } })
   let saving = false
   form.addEventListener('submit', async (e) => {
@@ -471,7 +509,7 @@ function nameArea(p, q) {
     if (saving) return
     saving = true
     try {
-      const r = await api('/api/area', { name, south: Math.min(p.lat, q.lat), north: Math.max(p.lat, q.lat), west: Math.min(p.lng, q.lng), east: Math.max(p.lng, q.lng) })
+      const r = await api('/api/area', { name, ...corners })
       areas = r.areas; closeAreaForm(); drawAreas(); showArea(r.id)
     } catch (err) { saving = false; say("Couldn't save that area. " + err.message, true) }
   })
@@ -485,17 +523,21 @@ async function showArea(id) {
   let a
   try { a = await api('/api/area/' + id) } catch (e) { if (mine === seq) say(e.message, true); return }
   if (mine !== seq) return
-  const back = current?.id ?? all[0]?.id
+  if (current) lastSpot = current.id
+  const back = lastSpot ?? all[0]?.id
   openArea = a; current = null
+  // The list's progress too, so it agrees with this area.
+  api('/api/areas').then((r) => { areas = r.areas; drawAreas() }).catch(() => {})
   history.replaceState(null, '', '#area-' + id)
   drawMap()
   const box = document.getElementById('spot'); box.replaceChildren()
-  const toSpots = el('button', { textContent: '← Back to the spots', disabled: back == null })
+  const toSpots = el('button', { textContent: '← All spots', disabled: back == null })
   toSpots.addEventListener('click', () => go(back))
   const again = el('button', { textContent: 'Reload' }); again.addEventListener('click', () => showArea(id))
   box.append(el('div', { className: 'spothead' }, el('strong', { textContent: a.name }),
     el('span', { className: 'chip num', textContent: a.looked + ' of ' + plural(a.spots, 'spot', 'spots') + ' looked at' }),
     el('span', { className: 'chip num', textContent: plural(a.things.length, 'thing', 'things') + ' found' }), toSpots, again))
+  if (document.activeElement === document.body) toSpots.focus({ preventScroll: true })
   if (!a.things.length) {
     const why = !a.spots ? 'No footage passes through this area. Draw it over the river on the map.'
       : !a.looked ? 'Nothing looked at here yet. It takes about ' + hours(a.spots * MIN_A_SPOT) + ' for this area. Run this in a terminal, then reload:'
@@ -514,6 +556,7 @@ async function showArea(id) {
     pic.prepend(img); pic.append(b)
     const meta = el('div', { className: 'meta' }, el('span', { className: 'num', textContent: t.clip + (t.day ? ' · ' + t.day : '') + ' · ' + clock(t.ft) }))
     if (all.some((s) => s.id === t.stationId)) { const o = el('button', { textContent: 'Open spot' }); o.addEventListener('click', () => go(t.stationId)); meta.append(o) }
+    else meta.append(el('span', { textContent: '· between the spots of the general look' }))
     grid.append(el('div', { className: 'find' }, pic,
       el('h3', {}, el('span', { textContent: t.name }), el('span', { className: 'chip', textContent: t.kind }), el('span', { className: t.sure ? 'sure' : 'maybe', textContent: t.sure ? 'sure' : 'not sure' })),
       el('p', { textContent: t.detail }), meta))
@@ -526,13 +569,14 @@ mapDrawing()
 /** Scroll on the map to zoom in and out round the pointer. */
 document.getElementById('map').addEventListener('wheel', (e) => {
   if (!mapProj) return
-  e.preventDefault()
   const svg = e.currentTarget, p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY
   const at = p.matrixTransform(svg.getScreenCTM().inverse())
     // By how far it was scrolled: a wheel click or a trackpad's many small steps.
   const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1)
   const was = mapZoom.z, z = Math.min(Math.max(was * Math.exp(-dy * 0.002), 1), 80)
+  // Fully out or fully in: let the page scroll.
   if (z === was) return
+  e.preventDefault()
   const vx = mapZoom.z === 1 ? 0 : mapZoom.x, vy = mapZoom.z === 1 ? 0 : mapZoom.y
   // Keep the point under the pointer where it is, and the view inside the map.
   const x = Math.min(Math.max(at.x - (at.x - vx) * was / z, 0), 300 - 300 / z), y = Math.min(Math.max(at.y - (at.y - vy) * was / z, 0), mapH - mapH / z)

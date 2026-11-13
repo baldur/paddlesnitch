@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { areaFrom, inArea, LANDMARK_VIEW, parseLandmarks } from './landmarks'
+import { areaFrom, inArea, LANDMARK_KINDS, LANDMARK_PROMPT, LANDMARK_VIEW, parseLandmarks } from './landmarks'
 import { placeItem } from './look'
 import { haversine } from './stations'
 
@@ -29,10 +29,19 @@ describe('parseLandmarks', () => {
   })
   it('maps unknown words to safe values, and sure only when it says true', () => {
     expect(parseLandmarks(one({ kind: 'castle', distance: 'miles', sure: 'yes' }))![0]).toMatchObject({ kind: 'other', distance: 'mid', sure: false })
+    // A kind for a boat or a person isn't a landmark kind.
+    expect(parseLandmarks(one({ kind: 'moored-narrowboat' }))![0].kind).toBe('other')
   })
   it('the same thing written twice counts once', () => {
     const twice = JSON.stringify({ items: [JSON.parse(one()).items[0], JSON.parse(one()).items[0]] })
     expect(parseLandmarks(twice)).toHaveLength(1)
+  })
+})
+
+describe('the prompt', () => {
+  it('names every kind the schema allows, and no boat, person or animal kind', () => {
+    for (const k of LANDMARK_KINDS) expect(LANDMARK_PROMPT).toContain(k)
+    for (const k of ['person', 'angler', 'swan', 'duck', 'moored-narrowboat', 'moored-cruiser', 'moving-narrowboat', 'rowing-boat', 'trees', 'grass-bank']) expect(LANDMARK_KINDS).not.toContain(k)
   })
 })
 

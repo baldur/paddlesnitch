@@ -274,6 +274,17 @@ describe('looking carefully inside areas', () => {
     expect(order).toEqual([...Array(11).fill(`${first}:0`), ...Array(10).fill(`${first}:1`), ...Array(11).fill(`${second}:0`), ...Array(10).fill(`${second}:1`)])
   })
 
+  it('finishes the area drawn first before starting the next, whatever the order along the river', () => {
+    const { id } = saveClip(db, clip(), null)
+    ensureStations(db, id, 100, 1)
+    const box = (from: number, to: number) => { const a = destination(ORIGIN, 90, from), b = destination(ORIGIN, 90, to); return { south: a.lat - 0.001, north: a.lat + 0.001, west: a.lng, east: b.lng } }
+    saveArea(db, { name: 'far end, drawn first', ...box(750, 950) })
+    saveArea(db, { name: 'near end', ...box(50, 250) })
+    const seen: number[] = []
+    for (let s = nextStation(db, 'm', 101, 1, 1, [], true); s; s = nextStation(db, 'm', 101, 1, 1, [], true)) { seen.push(Math.round(s.ft / 50) * 50); saveLook(db, s.id, 0, 'm', 101, { ok: true, raw: '{}', ms: 1, landmarks: [] }) }
+    expect(seen).toEqual([400, 450, 50, 100])
+  })
+
   it('a careful look keeps its landmarks, and looking again replaces them', () => {
     const { id } = saveClip(db, clip(), null)
     ensureStations(db, id, 100, 1)

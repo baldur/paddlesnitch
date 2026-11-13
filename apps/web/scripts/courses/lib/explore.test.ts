@@ -111,7 +111,7 @@ describe('who the server answers', () => {
 describe('route', () => {
   it('knows its paths and takes only whole-number ids and real view angles', () => {
     expect(route('GET', '/api/spot/12')).toEqual({ kind: 'spot', id: 12 })
-        expect(route('GET', '/view/12/45.jpg').kind).toBe('none')
+    expect(route('GET', '/view/12/45.jpg').kind).toBe('none')
     expect(route('GET', '/view/../../etc/passwd').kind).toBe('none')
     expect(route('GET', '/api/review').kind).toBe('none')
     expect(route('POST', '/api/review').kind).toBe('review')
@@ -120,6 +120,7 @@ describe('route', () => {
     expect(route('GET', '/view/12/l50.jpg').kind).toBe('none')
     expect(route('GET', '/api/area/3')).toEqual({ kind: 'area', id: 3 })
     expect(route('POST', '/api/area').kind).toBe('saveArea')
+    expect(route('GET', '/api/area-spots').kind).toBe('areaSpots')
   })
 })
 
@@ -129,5 +130,6 @@ describe('areaName', () => {
     expect(areaName('')).toBeNull()
     expect(areaName('x'.repeat(61))).toBeNull()
     expect(areaName(null)).toBeNull()
+    expect(areaName('Fry\u001b[2Js')).toBe('Fry[2Js')
   })
 })

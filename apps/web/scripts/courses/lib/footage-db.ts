@@ -248,8 +248,8 @@ export function refreshPresence(db: DatabaseSync, exists = fs.existsSync) {
 
 export type Next = { id: number; chapter_id: number; level: number; ft: number; path: string; width: number; height: number; done: number[] }
 
-/** The next spot with views left to look at: level by level over all the footage, in time order (for a careful look: only inside the drawn areas, one whole pass
- * through them at a time, so each pass is finished before the next starts). */
+/** The next spot with views left to look at: level by level over all the footage, in time order (for a careful look: only inside the drawn areas, area by area in the
+ * order they were drawn, and one whole pass through an area at a time). */
 export function nextStation(db: DatabaseSync, model: string, version: number, levels: number, views: number, skip: number[] = [], onlyAreas = false): Next | undefined {
   const r = db.prepare(`
     SELECT s.id, s.chapter_id, s.level, s.ft, c.path, c.width, c.height,
@@ -258,7 +258,7 @@ export function nextStation(db: DatabaseSync, model: string, version: number, le
     WHERE c.status = 'ok' AND s.level < ? AND s.id NOT IN (SELECT value FROM json_each(?))${onlyAreas ? `
       AND EXISTS (SELECT 1 FROM areas a WHERE s.lat BETWEEN a.south AND a.north AND s.lng BETWEEN a.west AND a.east)` : ''}
       AND (SELECT count(*) FROM looks l WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) < ?
-    ORDER BY ${onlyAreas ? 'c.start_utc, c.path, s.level, s.n' : 's.level, c.start_utc, s.n'} LIMIT 1`).get(model, version, levels, JSON.stringify(skip), model, version, views) as (Omit<Next, 'done'> & { done: string | null }) | undefined
+    ORDER BY ${onlyAreas ? `(SELECT min(a.id) FROM areas a WHERE s.lat BETWEEN a.south AND a.north AND s.lng BETWEEN a.west AND a.east), c.start_utc, c.path, s.level, s.n` : 's.level, c.start_utc, s.n'} LIMIT 1`).get(model, version, levels, JSON.stringify(skip), model, version, views) as (Omit<Next, 'done'> & { done: string | null }) | undefined
   return r && { ...r, done: (r.done ?? '').split(',').filter(Boolean).map(Number) }
 }
 
