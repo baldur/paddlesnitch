@@ -7,7 +7,8 @@ import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
 import { createExplorer, viewFile } from './explore-server'
-import { ensureStations, nextStation, openStore, saveClip, saveLook } from './footage-db'
+import { ensureStations, nextStation, openStore, saveArea, saveClip, saveLook } from './footage-db'
+import { LANDMARK_VERSION, LANDMARK_VIEWS } from './landmarks'
 import { PROMPT_VERSION, VIEWS } from './look'
 import { destination } from './stations'
 
@@ -32,10 +33,10 @@ beforeEach(async () => {
   fs.mkdirSync(viewDir)
   server = createExplorer(db, {
     model: MODEL, viewDir, log: () => {},
-    cut: async (st) => {
+    cut: async (st, careful) => {
       cuts.push(st.id)
       await new Promise((r) => setTimeout(r, 20))
-      for (const v of VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw), 'jpeg')
+      for (const v of careful ? LANDMARK_VIEWS : VIEWS) fs.writeFileSync(viewFile(viewDir, st.id, v.yaw, careful), careful ? 'careful' : 'jpeg')
     },
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
@@ -147,6 +148,43 @@ describe('marking', () => {
     const added = (await post('/api/missed', { lookId, kind: 'swan', x: 0.5, y: 0.5 })).json()
     expect(added.score.missed).toBe(1)
     expect((await post('/api/missed', { remove: added.id })).json().score.missed).toBe(0)
+  })
+})
+
+describe('areas', () => {
+  const around = (p: { lat: number; lng: number }) => ({ south: p.lat - 0.0005, north: p.lat + 0.0005, west: p.lng - 0.0005, east: p.lng + 0.0005 })
+  it('an area needs a name and corners the right way round; it can be removed', async () => {
+    const a = { name: "Fry's Island", ...around(ORIGIN) }
+    expect((await post('/api/area', { ...a, north: a.south - 1 })).status).toBe(400)
+    expect((await post('/api/area', { ...a, west: 'x' })).status).toBe(400)
+    expect((await post('/api/area', { ...a, name: '' })).json().error).toMatch(/name/)
+    const added = (await post('/api/area', a)).json()
+    expect(added.areas).toEqual([expect.objectContaining({ id: added.id, name: "Fry's Island" })])
+    expect((await post('/api/area', { remove: added.id })).json().areas).toEqual([])
+    expect((await request('GET', `/api/area/${added.id}`)).status).toBe(404)
+  })
+  it('lists what the careful look found in an area, placed on the map, sure ones first; nothing from outside it', async () => {
+    const { spotId } = lookedAt()
+    const st = db.prepare('SELECT lat, lng FROM stations WHERE id = ?').get(spotId) as { lat: number; lng: number }
+    const lm = { name: 'white boathouse', kind: 'boathouse', detail: 'green doors', x0: 0.4, y0: 0.2, x1: 0.6, y1: 0.5, distance: 'mid', sure: false }
+    saveLook(db, spotId, 45, MODEL, LANDMARK_VERSION, { ok: true, raw: '{}', ms: 1, landmarks: [lm, { ...lm, name: 'red pub', sure: true }] })
+    const far = db.prepare('SELECT id FROM stations WHERE id != ? ORDER BY id DESC').get(spotId) as { id: number }
+    saveLook(db, far.id, 0, MODEL, LANDMARK_VERSION, { ok: true, raw: '{}', ms: 1, landmarks: [{ ...lm, name: 'somewhere else' }] })
+    const id = saveArea(db, { name: 'here', ...around(st) })
+    const a = (await request('GET', `/api/area/${id}`)).json()
+    expect(a).toMatchObject({ name: 'here', found: 2 })
+    expect(a.things.map((t: { name: string }) => t.name)).toEqual(['red pub', 'white boathouse'])
+    expect(a.things[0]).toMatchObject({ stationId: spotId, viewYaw: 45, clip: 'GS010101.360', box: { x0: 0.4, y0: 0.2, x1: 0.6, y1: 0.5 } })
+    // Centred in the view at 45° on the lens: placed off the track, not on it.
+    expect(a.things[0].lat).not.toBeCloseTo(st.lat, 6)
+  })
+  it("cuts a careful look's closer views on their own, without touching the general ones", async () => {
+    const { spotId } = lookedAt()
+    const r = await request('GET', `/view/${spotId}/l45.jpg`)
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('careful')
+    expect((await request('GET', `/view/${spotId}/0.jpg`)).body).toBe('jpeg')
+    expect(cuts).toEqual([spotId, spotId])
   })
 })
 

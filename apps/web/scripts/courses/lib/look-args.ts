@@ -7,16 +7,18 @@ export type LookArgs = {
   model: string
   base?: number          // undefined: whatever the store already uses (100 for a new one)
   levels: number
+  levelsGiven: boolean   // --areas looks every 25 m unless --levels says otherwise
+  areas: boolean         // look carefully, only inside the areas drawn on River Explorer's map
   minutes: number        // 0: until stopped
   exportPath: string | null
   allowRemote: boolean
 }
 
 const VALUE_FLAGS = new Set(['model', 'base', 'levels', 'minutes'])
-const BARE_FLAGS = new Set(['scan', 'status', 'export', 'allow-remote'])
+const BARE_FLAGS = new Set(['scan', 'status', 'export', 'allow-remote', 'areas'])
 
 export function parseLookArgs(argv: string[], resolve: (p: string) => string): LookArgs {
-  const out: LookArgs = { mode: 'look', folders: [], model: 'qwen2.5vl:32b', levels: 4, minutes: 0, exportPath: null, allowRemote: false }
+  const out: LookArgs = { mode: 'look', folders: [], model: 'qwen2.5vl:32b', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false }
   const num = (name: string, v: string, ok: (n: number) => boolean) => {
     const n = Number(v)
     if (!Number.isFinite(n) || !ok(n)) throw new Error(`--${name} ${v}: not a valid value`)
@@ -33,10 +35,11 @@ export function parseLookArgs(argv: string[], resolve: (p: string) => string): L
       if (v === undefined || v.startsWith('--')) throw new Error(`--${name} needs a value`)
       if (name === 'model') out.model = v
       if (name === 'base') out.base = num(name, v, (n) => n >= 5)
-      if (name === 'levels') out.levels = num(name, v, (n) => Number.isInteger(n) && n >= 1 && n <= 8)
+      if (name === 'levels') { out.levels = num(name, v, (n) => Number.isInteger(n) && n >= 1 && n <= 8); out.levelsGiven = true }
       if (name === 'minutes') out.minutes = num(name, v, (n) => n > 0)
     } else if (BARE_FLAGS.has(name) && eq < 0) {
       if (name === 'allow-remote') out.allowRemote = true
+      else if (name === 'areas') out.areas = true
       else if (out.mode !== 'look') throw new Error(`--${name} and --${out.mode} can't be used together`)
       else out.mode = name as LookArgs['mode']
       if (name === 'export' && argv[i + 1] && !argv[i + 1].startsWith('--')) out.exportPath = resolve(argv[++i])
@@ -45,5 +48,6 @@ export function parseLookArgs(argv: string[], resolve: (p: string) => string): L
     }
   }
   if (out.folders.length && (out.mode === 'status' || out.mode === 'export')) throw new Error(`--${out.mode} doesn't take folders`)
+  if (out.areas && (out.mode === 'scan' || out.mode === 'export')) throw new Error(`--areas and --${out.mode} can't be used together`)
   return out
 }

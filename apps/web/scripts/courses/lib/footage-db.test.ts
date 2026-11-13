@@ -4,7 +4,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
-import { assertOutsideRepo, ensureStations, nextStation, openStore, refreshPresence, saveClip, saveLook, saveMissed, saveReview, setCameraYaw, takeLock, spotSpacing, type Clip } from './footage-db'
+import { assertOutsideRepo, ensureStations, nextStation, openStore, refreshPresence, saveArea, saveClip, saveLook, saveMissed, saveReview, setCameraYaw, takeLock, spotSpacing, type Clip } from './footage-db'
 import { destination, type Fix } from './stations'
 
 const ORIGIN = { lat: 51.4676, lng: -0.9822 }
@@ -243,6 +243,54 @@ describe('checking the answers (course:explore)', () => {
     ensureStations(db, id, 100, 1)
     const after = (db.prepare('SELECT id FROM stations').all() as Array<{ id: number }>).map((r) => r.id)
     expect(after.some((x) => before.includes(x))).toBe(false)
+  })
+})
+
+describe('looking carefully inside areas', () => {
+  it('only spots inside an area are next, and none at all without an area', () => {
+    const { id } = saveClip(db, clip(), null)
+    ensureStations(db, id, 100, 1)
+    expect(nextStation(db, 'm', 101, 1, 8, [], true)).toBeUndefined()
+    // The track runs 1 km east from ORIGIN: an area round 400–600 m along holds spots 4, 5 and 6.
+    const a = destination(ORIGIN, 90, 350), b = destination(ORIGIN, 90, 650)
+    saveArea(db, { name: 'the boathouses', south: a.lat - 0.001, north: a.lat + 0.001, west: a.lng, east: b.lng })
+    const seen: number[] = []
+    for (let s = nextStation(db, 'm', 101, 1, 1, [], true); s; s = nextStation(db, 'm', 101, 1, 1, [], true)) { seen.push(Math.round(s.ft)); saveLook(db, s.id, 0, 'm', 101, { ok: true, raw: '{}', ms: 1, landmarks: [] }) }
+    expect(seen).toEqual([200, 250, 300])
+    // The general look still sees every spot.
+    expect(nextStation(db, 'm', 2, 1, 4)).toBeDefined()
+  })
+
+  it('finishes one pass through an area, coarse to fine, before starting the next', () => {
+    const first = saveClip(db, clip(), null).id
+    const other = path.join(dir, 'GS010102.360'); fs.writeFileSync(other, 'x')
+    const second = saveClip(db, clip({ path: other, size: 6_000_000_000, startUtc: '2026-11-09T09:00:00.000Z' }), null).id
+    for (const id of [first, second]) ensureStations(db, id, 100, 2)
+    saveArea(db, { name: 'all of it', south: ORIGIN.lat - 0.01, north: ORIGIN.lat + 0.01, west: ORIGIN.lng - 0.01, east: ORIGIN.lng + 0.02 })
+    const order: string[] = []
+    for (let s = nextStation(db, 'm', 101, 2, 1, [], true); s; s = nextStation(db, 'm', 101, 2, 1, [], true)) {
+      order.push(`${s.chapter_id}:${s.level}`); saveLook(db, s.id, 0, 'm', 101, { ok: true, raw: '{}', ms: 1, landmarks: [] })
+    }
+    expect(order).toEqual([...Array(11).fill(`${first}:0`), ...Array(10).fill(`${first}:1`), ...Array(11).fill(`${second}:0`), ...Array(10).fill(`${second}:1`)])
+  })
+
+  it('a careful look keeps its landmarks, and looking again replaces them', () => {
+    const { id } = saveClip(db, clip(), null)
+    ensureStations(db, id, 100, 1)
+    const s = nextStation(db, 'm', 2, 1, 4)!
+    const lm = { name: 'white boathouse', kind: 'boathouse', detail: 'green doors', x0: 0.1, y0: 0.2, x1: 0.3, y1: 0.5, distance: 'mid', sure: true }
+    saveLook(db, s.id, 45, 'm', 101, { ok: true, raw: '{}', ms: 1, landmarks: [lm, { ...lm, name: 'red pub' }] })
+    expect(count('SELECT count(*) n FROM landmarks')).toBe(2)
+    saveLook(db, s.id, 45, 'm', 101, { ok: true, raw: '{}', ms: 1, landmarks: [lm] })
+    expect(db.prepare('SELECT name, sure FROM landmarks').all()).toEqual([{ name: 'white boathouse', sure: 1 }])
+    saveClip(db, clip({ track: TRACK.slice(0, 200) }), null)
+    expect(count('SELECT count(*) n FROM landmarks')).toBe(0)
+  })
+
+  it('an area can be removed', () => {
+    const a = saveArea(db, { name: 'x', south: 1, west: 1, north: 2, east: 2 })
+    saveArea(db, { remove: a })
+    expect(count('SELECT count(*) n FROM areas')).toBe(0)
   })
 })
 

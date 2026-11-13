@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fetchSiteAllowed, hostAllowed, isJson, layoutPins, originAllowed, otherPasses, route, scoreOf, stripOrder } from './explore'
+import { areaName, fetchSiteAllowed, hostAllowed, isJson, layoutPins, originAllowed, otherPasses, route, scoreOf, stripOrder } from './explore'
 
 describe('stripOrder', () => {
   it('puts the bow in the middle: left, ahead, right, behind', () => {
@@ -111,10 +111,23 @@ describe('who the server answers', () => {
 describe('route', () => {
   it('knows its paths and takes only whole-number ids and real view angles', () => {
     expect(route('GET', '/api/spot/12')).toEqual({ kind: 'spot', id: 12 })
-    expect(route('GET', '/view/12/90.jpg')).toEqual({ kind: 'view', id: 12, yaw: 90 })
-    expect(route('GET', '/view/12/45.jpg').kind).toBe('none')
+        expect(route('GET', '/view/12/45.jpg').kind).toBe('none')
     expect(route('GET', '/view/../../etc/passwd').kind).toBe('none')
     expect(route('GET', '/api/review').kind).toBe('none')
     expect(route('POST', '/api/review').kind).toBe('review')
+    expect(route('GET', '/view/12/90.jpg')).toEqual({ kind: 'view', id: 12, yaw: 90, careful: false })
+    expect(route('GET', '/view/12/l45.jpg')).toEqual({ kind: 'view', id: 12, yaw: 45, careful: true })
+    expect(route('GET', '/view/12/l50.jpg').kind).toBe('none')
+    expect(route('GET', '/api/area/3')).toEqual({ kind: 'area', id: 3 })
+    expect(route('POST', '/api/area').kind).toBe('saveArea')
+  })
+})
+
+describe('areaName', () => {
+  it('keeps one line of 1–60 characters, and nothing else', () => {
+    expect(areaName('  Fry\'s Island\n boathouses ')).toBe("Fry's Island boathouses")
+    expect(areaName('')).toBeNull()
+    expect(areaName('x'.repeat(61))).toBeNull()
+    expect(areaName(null)).toBeNull()
   })
 })

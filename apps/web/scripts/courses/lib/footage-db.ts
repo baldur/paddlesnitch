@@ -84,6 +84,17 @@ export function openStore(dir = STORE): DatabaseSync {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       look_id INTEGER NOT NULL, kind TEXT NOT NULL, x REAL, y REAL, at TEXT
     );
+    -- Areas the owner drew on River Explorer's map, for course:look --areas.
+    CREATE TABLE IF NOT EXISTS areas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL, south REAL NOT NULL, west REAL NOT NULL, north REAL NOT NULL, east REAL NOT NULL, at TEXT
+    );
+    -- What a careful look (landmarks.ts) found: the things a place is recognised by.
+    CREATE TABLE IF NOT EXISTS landmarks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      look_id INTEGER NOT NULL REFERENCES looks(id),
+      name TEXT, kind TEXT, detail TEXT, x0 REAL, y0 REAL, x1 REAL, y1 REAL, distance TEXT, sure INTEGER
+    );
   `)
   // Stores made before missed kept y.
   try { db.exec('ALTER TABLE missed ADD COLUMN y REAL') } catch { /* already there */ }
@@ -92,6 +103,7 @@ export function openStore(dir = STORE): DatabaseSync {
     CREATE INDEX IF NOT EXISTS items_look ON items(look_id);
     CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
     CREATE INDEX IF NOT EXISTS looks_station ON looks(station_id);
+    CREATE INDEX IF NOT EXISTS landmarks_look ON landmarks(look_id);
   `)
   return db
 }
@@ -194,6 +206,7 @@ function dropSpots(db: DatabaseSync, chapterId: number) {
   db.prepare(`DELETE FROM reviews WHERE item_id IN (SELECT id FROM items WHERE look_id IN (${looks}))`).run(chapterId)
   db.prepare(`DELETE FROM missed WHERE look_id IN (${looks})`).run(chapterId)
   db.prepare('DELETE FROM items WHERE look_id IN (SELECT l.id FROM looks l JOIN stations s ON s.id = l.station_id WHERE s.chapter_id = ?)').run(chapterId)
+  db.prepare(`DELETE FROM landmarks WHERE look_id IN (${looks})`).run(chapterId)
   db.prepare('DELETE FROM looks WHERE station_id IN (SELECT id FROM stations WHERE chapter_id = ?)').run(chapterId)
   db.prepare('DELETE FROM stations WHERE chapter_id = ?').run(chapterId)
 }
@@ -235,21 +248,24 @@ export function refreshPresence(db: DatabaseSync, exists = fs.existsSync) {
 
 export type Next = { id: number; chapter_id: number; level: number; ft: number; path: string; width: number; height: number; done: number[] }
 
-/** The next spot with views left to look at: level by level over all the footage, in time order. */
-export function nextStation(db: DatabaseSync, model: string, version: number, levels: number, views: number, skip: number[] = []): Next | undefined {
+/** The next spot with views left to look at: level by level over all the footage, in time order (for a careful look: only inside the drawn areas, one whole pass
+ * through them at a time, so each pass is finished before the next starts). */
+export function nextStation(db: DatabaseSync, model: string, version: number, levels: number, views: number, skip: number[] = [], onlyAreas = false): Next | undefined {
   const r = db.prepare(`
     SELECT s.id, s.chapter_id, s.level, s.ft, c.path, c.width, c.height,
       (SELECT group_concat(l.view_yaw) FROM looks l WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) AS done
     FROM stations s JOIN chapters c ON c.id = s.chapter_id
-    WHERE c.status = 'ok' AND s.level < ? AND s.id NOT IN (SELECT value FROM json_each(?))
+    WHERE c.status = 'ok' AND s.level < ? AND s.id NOT IN (SELECT value FROM json_each(?))${onlyAreas ? `
+      AND EXISTS (SELECT 1 FROM areas a WHERE s.lat BETWEEN a.south AND a.north AND s.lng BETWEEN a.west AND a.east)` : ''}
       AND (SELECT count(*) FROM looks l WHERE l.station_id = s.id AND l.model = ? AND l.prompt_version = ?) < ?
-    ORDER BY s.level, c.start_utc, s.n LIMIT 1`).get(model, version, levels, JSON.stringify(skip), model, version, views) as (Omit<Next, 'done'> & { done: string | null }) | undefined
+    ORDER BY ${onlyAreas ? 'c.start_utc, c.path, s.level, s.n' : 's.level, c.start_utc, s.n'} LIMIT 1`).get(model, version, levels, JSON.stringify(skip), model, version, views) as (Omit<Next, 'done'> & { done: string | null }) | undefined
   return r && { ...r, done: (r.done ?? '').split(',').filter(Boolean).map(Number) }
 }
 
 export type SavedLook = {
   ok: boolean; scene?: string; water?: string; light?: string; ownPerson?: string; ownPropulsion?: string
   items?: Array<{ kind: string; detail: string; x: number; distance: string; count: number }>
+  landmarks?: Array<{ name: string; kind: string; detail: string; x0: number; y0: number; x1: number; y1: number; distance: string; sure: boolean }>
   raw: string; ms: number
 }
 
@@ -259,6 +275,7 @@ export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, m
     const old = 'SELECT id FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?'
     db.prepare(`DELETE FROM reviews WHERE item_id IN (SELECT id FROM items WHERE look_id IN (${old}))`).run(stationId, viewYaw, model, version)
     db.prepare(`DELETE FROM missed WHERE look_id IN (${old})`).run(stationId, viewYaw, model, version)
+    db.prepare(`DELETE FROM landmarks WHERE look_id IN (${old})`).run(stationId, viewYaw, model, version)
     db.prepare('DELETE FROM items WHERE look_id IN (SELECT id FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?)').run(stationId, viewYaw, model, version)
     db.prepare('DELETE FROM looks WHERE station_id = ? AND view_yaw = ? AND model = ? AND prompt_version = ?').run(stationId, viewYaw, model, version)
     const r = db.prepare(`INSERT INTO looks (station_id, view_yaw, model, prompt_version, ok, scene, water, light, own_person, own_propulsion, raw, ms, created_at)
@@ -266,6 +283,8 @@ export function saveLook(db: DatabaseSync, stationId: number, viewYaw: number, m
       look.scene ?? null, look.water ?? null, look.light ?? null, look.ownPerson ?? null, look.ownPropulsion ?? null, look.raw, look.ms, new Date().toISOString())
     const ins = db.prepare('INSERT INTO items (look_id, kind, detail, x, distance, count) VALUES (?, ?, ?, ?, ?, ?)')
     for (const i of look.items ?? []) ins.run(r.lastInsertRowid, i.kind, i.detail, i.x, i.distance, i.count)
+    const lm = db.prepare('INSERT INTO landmarks (look_id, name, kind, detail, x0, y0, x1, y1, distance, sure) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    for (const l of look.landmarks ?? []) lm.run(r.lastInsertRowid, l.name, l.kind, l.detail, l.x0, l.y0, l.x1, l.y1, l.distance, l.sure ? 1 : 0)
   })
 }
 
@@ -286,6 +305,13 @@ export function saveMissed(db: DatabaseSync, m: { lookId: number; kind: string; 
   if ('remove' in m) { db.prepare('DELETE FROM missed WHERE id = ?').run(m.remove); return m.remove }
   if (!db.prepare('SELECT 1 FROM looks WHERE id = ?').get(m.lookId)) return null
   return Number(db.prepare('INSERT INTO missed (look_id, kind, x, y, at) VALUES (?, ?, ?, ?, ?)').run(m.lookId, m.kind, m.x, m.y, new Date().toISOString()).lastInsertRowid)
+}
+
+/** An area drawn on the map; `remove` takes one back. What was found in it stays with its spots. */
+export function saveArea(db: DatabaseSync, a: { name: string; south: number; west: number; north: number; east: number } | { remove: number }): number {
+  if ('remove' in a) { db.prepare('DELETE FROM areas WHERE id = ?').run(a.remove); return a.remove }
+  return Number(db.prepare('INSERT INTO areas (name, south, west, north, east, at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(a.name, a.south, a.west, a.north, a.east, new Date().toISOString()).lastInsertRowid)
 }
 
 /**

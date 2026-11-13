@@ -4,6 +4,7 @@
 
 import { haversine } from './stations'
 import { VIEWS, type Distance } from './look'
+import { LANDMARK_VIEWS } from './landmarks'
 
 /** Every clip so far was shot from the back deck looking back (look.ts, ASSUMED_YAW). */
 export const ASSUMED_YAW = 180
@@ -122,14 +123,23 @@ export function fetchSiteAllowed(site: string | undefined, isPage: boolean): boo
   if (isPage) return true
   return site === 'same-origin'
 }
+/** An area's name as the owner typed it: one line, 1–60 characters, or null. */
+export function areaName(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const s = v.replace(/\s+/g, ' ').trim()
+  return s.length >= 1 && s.length <= 60 ? s : null
+}
+
 export const isJson = (contentType: string | undefined) => /^application\/json(\s*;|$)/i.test(contentType ?? '')
 
 export type Route =
   | { kind: 'page' } | { kind: 'spots' } | { kind: 'score' }
-  | { kind: 'spot'; id: number } | { kind: 'view'; id: number; yaw: number }
-  | { kind: 'review' } | { kind: 'missed' } | { kind: 'none' }
+  | { kind: 'spot'; id: number } | { kind: 'view'; id: number; yaw: number; careful: boolean }
+  | { kind: 'areas' } | { kind: 'area'; id: number }
+  | { kind: 'review' } | { kind: 'missed' } | { kind: 'saveArea' } | { kind: 'none' }
 
 const YAWS = new Set<number>(VIEWS.map((v) => v.yaw))
+const CAREFUL_YAWS = new Set<number>(LANDMARK_VIEWS.map((v) => v.yaw))
 
 /** Only these paths exist; ids are whole numbers, never paths. */
 export function route(method: string, pathname: string): Route {
@@ -139,10 +149,14 @@ export function route(method: string, pathname: string): Route {
     if (pathname === '/api/score') return { kind: 'score' }
     let m = /^\/api\/spot\/(\d{1,9})$/.exec(pathname)
     if (m) return { kind: 'spot', id: Number(m[1]) }
-    m = /^\/view\/(\d{1,9})\/(\d{1,3})\.jpg$/.exec(pathname)
-    if (m && YAWS.has(Number(m[2]))) return { kind: 'view', id: Number(m[1]), yaw: Number(m[2]) }
+    m = /^\/view\/(\d{1,9})\/(l?)(\d{1,3})\.jpg$/.exec(pathname)
+    if (m && (m[2] ? CAREFUL_YAWS : YAWS).has(Number(m[3]))) return { kind: 'view', id: Number(m[1]), yaw: Number(m[3]), careful: !!m[2] }
+    if (pathname === '/api/areas') return { kind: 'areas' }
+    m = /^\/api\/area\/(\d{1,9})$/.exec(pathname)
+    if (m) return { kind: 'area', id: Number(m[1]) }
   }
   if (method === 'POST' && pathname === '/api/review') return { kind: 'review' }
   if (method === 'POST' && pathname === '/api/missed') return { kind: 'missed' }
+  if (method === 'POST' && pathname === '/api/area') return { kind: 'saveArea' }
   return { kind: 'none' }
 }

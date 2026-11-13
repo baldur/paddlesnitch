@@ -5,7 +5,7 @@ const parse = (s: string) => parseLookArgs(s ? s.split(' ') : [], (p) => `/abs/$
 
 describe('parseLookArgs', () => {
   it('defaults: look, no folders (the caller uses ~/Movies), qwen2.5vl:32b, four levels', () => {
-    expect(parse('')).toEqual({ mode: 'look', folders: [], model: 'qwen2.5vl:32b', levels: 4, minutes: 0, exportPath: null, allowRemote: false })
+    expect(parse('')).toEqual({ mode: 'look', folders: [], model: 'qwen2.5vl:32b', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false })
   })
   it('folders are what is not a flag or a flag value, in either flag form', () => {
     const a = parse('--model qwen2.5vl:7b Paddling --levels=5 Fotage --minutes 60')
@@ -35,5 +35,12 @@ describe('parseLookArgs', () => {
   it('--base is only set when given (the store keeps its own)', () => {
     expect(parse('').base).toBeUndefined()
     expect(parse('--base 50').base).toBe(50)
+  })
+
+  it('--areas looks carefully, alone or with --status, and says whether --levels was given', () => {
+    expect(parse('--areas')).toMatchObject({ mode: 'look', areas: true, levelsGiven: false })
+    expect(parse('--status --areas')).toMatchObject({ mode: 'status', areas: true })
+    expect(parse('--areas --levels 4')).toMatchObject({ levels: 4, levelsGiven: true })
+    expect(() => parse('--areas --scan')).toThrow(/can't be used together/)
   })
 })
