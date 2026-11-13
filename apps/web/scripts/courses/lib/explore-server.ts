@@ -31,8 +31,14 @@ const scriptHash = crypto.createHash('sha256').update(/<script>([\s\S]*)<\/scrip
 const CSP = `default-src 'none'; script-src 'sha256-${scriptHash}'; style-src 'unsafe-inline'; img-src 'self' https://server.arcgisonline.com; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
 
 export const viewFile = (dir: string, id: number, yaw: number, careful = false) => path.join(dir, `${id}-${careful ? 'l' : ''}${yaw}.jpg`)
-/** A "footage here" picture: clip, time in tenths of a second, which view. */
-export const hereFile = (dir: string, chapterId: number, ft10: number, name: HereDir) => path.join(dir, 'here', `${chapterId}-${ft10}-${name}.jpg`)
+/**
+ * A "footage here" picture: which clip as it is now, the time in tenths of a second, which view.
+ * `stamp` (hereStamp) changes when the clip is replaced or its camera direction is learned,
+ * so a picture cut before is never shown for what it no longer is.
+ */
+export const hereFile = (dir: string, stamp: string, ft10: number, name: HereDir) => path.join(dir, 'here', `${stamp}-${ft10}-${name}.jpg`)
+export const hereStamp = (c: { id: number; key: string; cameraYaw: number | null }) =>
+  `${c.id}-${crypto.createHash('sha256').update(`${c.key}|${c.cameraYaw ?? ASSUMED_YAW}`).digest('hex').slice(0, 10)}`
 
 export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Server {
   const { model, viewDir } = opts
@@ -55,8 +61,8 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
 
   // Every fix of every clip, parsed once and kept while the clip's scan stays the same.
   const parsed = new Map<number, { at: string | null; track: number[][] }>()
-  type Clip = { id: number; path: string; recording: string | null; startUtc: string | null; duration: number; cameraYaw: number | null; width: number; height: number; scannedAt: string | null }
-  const clips = () => db.prepare("SELECT id, path, recording, start_utc AS startUtc, duration, camera_yaw AS cameraYaw, width, height, scanned_at AS scannedAt FROM chapters WHERE status = 'ok' AND track IS NOT NULL ORDER BY start_utc, path").all() as Clip[]
+  type Clip = { id: number; key: string; path: string; recording: string | null; startUtc: string | null; duration: number; cameraYaw: number | null; width: number; height: number; scannedAt: string | null }
+  const clips = () => db.prepare("SELECT id, key, path, recording, start_utc AS startUtc, duration, camera_yaw AS cameraYaw, width, height, scanned_at AS scannedAt FROM chapters WHERE status = 'ok' AND track IS NOT NULL ORDER BY start_utc, path").all() as Clip[]
   const trackOf = (c: Clip) => {
     const had = parsed.get(c.id)
     if (had && had.at === c.scannedAt) return had.track
@@ -187,23 +193,27 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
     return cutting.get(key)!
   }
 
-  function cutHereFrame(chapterId: number, ft10: number): Promise<void> {
-    if (HERE_NAMES.every((n) => fs.existsSync(hereFile(viewDir, chapterId, ft10, n)))) return Promise.resolve()
-    const key = `h${chapterId}-${ft10}`
+  /** Cut one moment's five pictures if they aren't already; resolves to the stamp they're filed under. */
+  async function cutHereFrame(chapterId: number, ft10: number): Promise<string> {
+    const c = clips().find((x) => x.id === chapterId)
+    if (!c || ft10 / 10 > c.duration) throw new Error('missing')
+    const stamp = hereStamp(c)
+    if (HERE_NAMES.every((n) => fs.existsSync(hereFile(viewDir, stamp, ft10, n)))) return stamp
+    const key = `h${stamp}-${ft10}`
     if (!cutting.has(key)) {
-      const c = clips().find((x) => x.id === chapterId)
       cutting.set(key, (async () => {
-        if (!c || ft10 / 10 > c.duration || !fs.existsSync(c.path)) throw new Error('missing')
+        if (!fs.existsSync(c.path)) throw new Error('missing')
         fs.mkdirSync(path.join(viewDir, 'here'), { recursive: true })
         const cameraYaw = c.cameraYaw ?? ASSUMED_YAW
         await slot()
         try {
           await opts.cutHere({ ft: ft10 / 10, path: c.path, width: c.width, height: c.height, cameraYaw, yaws: Object.fromEntries(HERE_DIRS.map((d) => [d.name, lensYaw(d.fromBow, cameraYaw)])) },
-            (n) => hereFile(viewDir, chapterId, ft10, n))
+            (n) => hereFile(viewDir, stamp, ft10, n))
         } finally { free() }
       })().finally(() => cutting.delete(key)))
     }
-    return cutting.get(key)!
+    await cutting.get(key)
+    return stamp
   }
 
   const HEADERS = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cross-origin-resource-policy': 'same-origin' }
@@ -252,17 +262,19 @@ export function createExplorer(db: DatabaseSync, opts: ExplorerOptions): http.Se
           return res.end(fs.readFileSync(viewFile(viewDir, r.id, r.yaw, r.careful)))
         }
         case 'near': {
-          const lat = Number(url.searchParams.get('lat')), lng = Number(url.searchParams.get('lng')), r = Number(url.searchParams.get('r'))
+          // A missing number would read as 0: ask for each.
+          const [lat, lng, r] = ['lat', 'lng', 'r'].map((k) => { const v = url.searchParams.get(k); return v === null || v.trim() === '' ? NaN : Number(v) })
           if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) || !(HERE_RADII as readonly number[]).includes(r)) return send(res, 400, { error: 'The page sent something unexpected. Reload the page.' })
           return send(res, 200, near({ lat, lng }, r))
         }
         case 'here': {
-          try { await cutHereFrame(r.chapterId, r.ft10) } catch (e) {
+          let stamp: string
+          try { stamp = await cutHereFrame(r.chapterId, r.ft10) } catch (e) {
             if ((e as Error).message !== 'missing') log(`couldn't cut clip ${r.chapterId} at ${r.ft10 / 10} s: ${(e as Error).message.split('\n')[0]}`)
             return send(res, 404, { error: "Couldn't cut this picture." })
           }
           res.writeHead(200, { ...HEADERS, 'content-type': 'image/jpeg' })
-          return res.end(fs.readFileSync(hereFile(viewDir, r.chapterId, r.ft10, r.name)))
+          return res.end(fs.readFileSync(hereFile(viewDir, stamp, r.ft10, r.name)))
         }
         case 'review': {
           // { itemId, verdict } or { itemIds: [...], verdict } for "mark the rest right".

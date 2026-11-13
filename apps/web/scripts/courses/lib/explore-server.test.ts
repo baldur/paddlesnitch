@@ -6,7 +6,7 @@ import http from 'http'
 import os from 'os'
 import path from 'path'
 import type { DatabaseSync } from 'node:sqlite'
-import { createExplorer, hereFile, viewFile } from './explore-server'
+import { createExplorer, hereFile, hereStamp, viewFile } from './explore-server'
 import { HERE_NAMES } from './here'
 import { PAGE } from './explore-page'
 import { ensureStations, nextStation, openStore, saveArea, saveClip, saveLook } from './footage-db'
@@ -338,6 +338,8 @@ describe('footage here', () => {
     clip()
     const far = destination(at, 0, 30)
     expect((await request('GET', `/api/near?lat=${far.lat}&lng=${far.lng}&r=20`)).json().total).toBe(0)
+    expect((await request('GET', '/api/near?r=20')).status).toBe(400)
+    expect((await request('GET', `/api/near?lat=${at.lat}&lng=&r=20`)).status).toBe(400)
     for (const q of ['r=25', 'r=1000', 'lat=x&lng=1&r=20', 'lat=91&lng=0&r=20', '']) {
       expect((await request('GET', `/api/near?${q.startsWith('lat') || !q ? q : `lat=${at.lat}&lng=${at.lng}&${q}`}`)).status).toBe(400)
     }
@@ -349,9 +351,37 @@ describe('footage here', () => {
     expect(rs.map((r) => r.body)).toEqual(['ahead', 'left', '360'])
     expect(rs[0].headers['content-type']).toBe('image/jpeg')
     expect(hereCuts).toEqual([{ ft: 50, cameraYaw: 180, yaws: { left: 90, ahead: 180, right: 270, behind: 0 } }])
-    expect(fs.existsSync(hereFile(path.join(dir, 'views'), id, 500, 'behind'))).toBe(true)
+    const key = (db.prepare('SELECT key FROM chapters WHERE id = ?').get(id) as { key: string }).key
+    expect(fs.existsSync(hereFile(path.join(dir, 'views'), hereStamp({ id, key, cameraYaw: null }), 500, 'behind'))).toBe(true)
     await request('GET', `/here/${id}/500/right.jpg`)
     expect(hereCuts).toHaveLength(1)
+  })
+  it('cuts again once the camera direction is learned, so ahead and behind are never stale', async () => {
+    const id = clip()
+    await request('GET', `/here/${id}/500/ahead.jpg`)
+    db.prepare('UPDATE chapters SET camera_yaw = 0 WHERE id = ?').run(id)
+    expect((await request('GET', `/here/${id}/500/ahead.jpg`)).status).toBe(200)
+    expect(hereCuts.map((c) => c.yaws.ahead)).toEqual([180, 0])
+  })
+  it("doesn't show a replaced clip another clip's pictures, even under the same id", async () => {
+    const id = clip()
+    await request('GET', `/here/${id}/500/ahead.jpg`)
+    db.prepare("UPDATE chapters SET key = 'replaced' WHERE id = ?").run(id)
+    await request('GET', `/here/${id}/500/ahead.jpg`)
+    expect(hereCuts).toHaveLength(2)
+  })
+  it('lists a pass across the end of one chapter and the start of the next once, and tells passes apart by day', async () => {
+    const first = TRACK.slice(0, 51)
+    const second = TRACK.slice(50).map((f) => ({ ...f, ft: f.ft - 50 }))
+    const save = (chapter: string, track: typeof TRACK, startUtc: string, size: number) => saveClip(db, { path: path.join(dir, `GS${chapter}0101.360`), size, mtime: 1, recording: '0101', chapter, duration: 500, width: 3008, height: 960, track, startUtc }, null)
+    save('01', first, '2026-11-08T09:00:00.000Z', 1)
+    save('02', second, '2026-11-08T09:00:50.000Z', 2)
+    let d = (await request('GET', `/api/near?lat=${at.lat}&lng=${at.lng}&r=20`)).json()
+    expect(d).toMatchObject({ total: 1, days: 1 })
+    saveClip(db, { path: path.join(dir, 'GS010202.360'), size: 3, mtime: 1, recording: '0202', chapter: '01', duration: 500, width: 3008, height: 960, track: TRACK, startUtc: '2026-11-09T09:00:00.000Z' }, null)
+    d = (await request('GET', `/api/near?lat=${at.lat}&lng=${at.lng}&r=20`)).json()
+    expect(d).toMatchObject({ total: 2, days: 2 })
+    expect(d.passes.map((p: { day: string }) => p.day)).toEqual([expect.stringContaining('8 Nov'), expect.stringContaining('9 Nov')])
   })
   it("won't cut past the clip's end, an unknown clip, a missing file, or for another site", async () => {
     const id = clip()

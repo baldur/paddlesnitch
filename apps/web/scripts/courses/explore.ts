@@ -47,8 +47,13 @@ const server = createExplorer(db, {
       + HERE_DIRS.map((d, i) => flatView(i, d.name, { ...HERE_VIEW, yaw: f.yaws[d.name] })).join(';')
       + `;[e${HERE_DIRS.length}]v360=eac:e:yaw=${wrapYaw(f.cameraYaw)}:w=${HERE_PANO.w}:h=${HERE_PANO.h}[pano]`
     const outs = [...HERE_DIRS.map((d) => [d.name, d.name] as const), ['pano', '360'] as const]
-    await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', f.ft.toFixed(2), '-i', f.path, '-filter_complex', graph,
-      ...outs.flatMap(([label, name]) => ['-map', `[${label}]`, '-frames:v', '1', '-q:v', '2', `${file(name)}.part.jpg`])])
+    try {
+      await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', f.ft.toFixed(2), '-i', f.path, '-filter_complex', graph,
+        ...outs.flatMap(([label, name]) => ['-map', `[${label}]`, '-frames:v', '1', '-q:v', '2', `${file(name)}.part.jpg`])])
+    } catch (e) {
+      for (const [, name] of outs) fs.rmSync(`${file(name)}.part.jpg`, { force: true })
+      throw e
+    }
     for (const [, name] of outs) fs.renameSync(`${file(name)}.part.jpg`, file(name))
   },
 })
