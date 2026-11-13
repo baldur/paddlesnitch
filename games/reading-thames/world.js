@@ -348,7 +348,7 @@ function bridge(m, course, s) {
 function tree(m, x, y, z, rand, real = false, far = false) {
   const pine = !real && rand() < 0.2; // mostly broadleaf: oaks, willows, alders
   const h = pine ? 7 + rand() * 9 : real ? 9 + rand() * 9 : 5 + rand() * 6;
-  m.cylinder([x, y - 0.3, z], 0.2 + h * 0.015, h * 0.35, 5, COLORS.trunk);
+  m.cylinder([x, y - 0.3, z], 0.2 + h * 0.015, h * 0.35, far ? 3 : 4, COLORS.trunk); // a trunk shows a few pixels wide: four sides, three far off
   if (pine) {
     for (let k = 0; k < 3; k++) {
       m.cone([x, y + h * (0.25 + k * 0.22), z], h * (0.32 - k * 0.07), h * 0.42, 7, shade(COLORS.pine, rand, 0.1));
@@ -595,6 +595,8 @@ const PLANTING = {
   gardens: { chance: 0.45, again: 0.2, near: 5, far: 45, willow: 0.35, bushes: 0.15, stages: 0.15 },
 };
 
+// Styles for whole rows of houses: trees grow between them as between any others.
+const ORDINARY = new Set(['balcony-terrace']);
 function realScenery(m, course, real, rand) {
   // Building footprints, binned so trees can keep out of them (and well clear
   // of a landmark, so it can be seen from the water).
@@ -603,7 +605,7 @@ function realScenery(m, course, real, rand) {
   for (const b of real.buildings) {
     const xs = b.shape.map((p) => p[0]);
     const zs = b.shape.map((p) => p[1]);
-    const margin = b.style ? 30 : 2;
+    const margin = b.style && !ORDINARY.has(b.style) ? 30 : 2;
     const box = [Math.min(...xs) - margin, Math.min(...zs) - margin, Math.max(...xs) + margin, Math.max(...zs) + margin];
     for (let x = box[0]; x <= box[2] + 20; x += 20) {
       for (let z = box[1]; z <= box[3] + 20; z += 20) {
@@ -827,6 +829,7 @@ function building(m, course, b, rand) {
   const top = g.y + b.height;
   const clap = b.style === 'clapboard';
   if (b.style === 'stilts') return onStilts(m, course, b, ring, cx, cz, g, rand);
+  if (b.style === 'balcony-terrace') return balconyTerrace(m, course, b, ring, cx, cz, g, rand);
   const wall = clap ? CLAP.walls[Math.floor(rand() * CLAP.walls.length)]
     : b.kind === 'boathouse' ? (rand() < 0.5 ? COLORS.white : [0.3, 0.42, 0.33]) : WALLS[Math.floor(rand() * WALLS.length)];
   for (let i = 0; i < ring.length; i++) {
@@ -843,7 +846,8 @@ function building(m, course, b, rand) {
     const len = Math.hypot(p.x - cx, p.z - cz) || 1;
     return [(p.x - cx) / len, (p.z - cz) / len];
   })();
-  if (fromRiver(course, cx, cz) < 150 && b.kind !== 'boathouse') {
+  // (Only within 80 m: further back they're a few pixels behind the bank's trees.)
+  if (fromRiver(course, cx, cz) < 80 && b.kind !== 'boathouse') {
     let count = 0;
     for (let i = 0; i < ring.length && count < 60; i++) {
       const [ax, az] = ring[i];
@@ -1493,28 +1497,110 @@ function victorian(m, course, f) {
   f.box(m, [-half, half], [sea + 2.2, sea + 2.5], [front, f.edge], VICTORIAN.render);
 }
 
-// The bar on Piper's Island: a low white building with a long glass front to
-// the main channel, a shallow grey roof, and a timber deck down to the water.
+// The bar on Piper's Island, from the footage (the main channel's side, below
+// Caversham Bridge): a white two-storey building glazed all round, a deck in
+// front behind glass panels, a first-floor balcony behind more glass, a white
+// gable over the middle with ISLAND on it, a low grey roof, and a bank of
+// timber piling under it.
+const ISLAND = {
+  white: [0.93, 0.93, 0.9], glass: [0.45, 0.57, 0.65], panel: [0.72, 0.8, 0.83], roof: [0.36, 0.38, 0.42],
+  deck: [0.55, 0.47, 0.38], pile: [0.42, 0.36, 0.3], letter: [0.25, 0.27, 0.3],
+};
 function islandBar(m, course, f) {
-  const half = Math.min(10, Math.max(6, (f.along[1] - f.along[0]) / 2));
-  const front = Math.min(f.depth[1], f.edge - 4);
-  const back = Math.max(f.depth[0], front - 8);
-  f.box(m, [-half, half], [-1, 4], [back, front - 1.5], COLORS.white);
-  f.box(m, [-half + 0.5, half - 0.5], [0.2, 3.6], [front - 1.5, front], [0.55, 0.7, 0.78]);
-  for (let x = -half + 0.5; x <= half - 0.5; x += 1.6) f.box(m, [x - 0.06, x + 0.06], [0.2, 3.6], [front - 0.05, front + 0.02], COLORS.white);
-  f.box(m, [-half + 0.5, half - 0.5], [3.6, 4.1], [front - 1.6, front + 0.1], COLORS.white);
-  roof(m, f, half + 0.4, [back - 0.4, front + 0.4], 4.1, 1.4, [0.42, 0.43, 0.45]);
+  const C = ISLAND;
+  const half = Math.min(15, Math.max(8, (f.along[1] - f.along[0]) / 2));
+  const front = Math.min(f.depth[1], f.edge - 3.5); // the deck between it and the water
+  const back = Math.max(f.depth[0], front - 14);
   const sea = -f.origin[1];
-  f.box(m, [-half - 2, half + 2], [sea + 0.4, sea + 0.65], [front, f.edge + 1.5], COLORS.timber);
+  const floor = Math.max(sea + 1.4, -1); // its deck stands over the water on piling
+  const [g1, eave] = [floor + 3.3, floor + 6.6];
+  // The ground floor: glass between white posts, set back under the balcony.
+  f.box(m, [-half, half], [floor - 2, g1], [back, front - 2], C.white);
+  f.box(m, [-half + 0.3, half - 0.3], [floor + 0.2, g1 - 0.3], [front - 2, front - 1.95], C.glass);
+  for (let x = -half + 0.3; x <= half - 0.2; x += 2.2) f.box(m, [x - 0.08, x + 0.08], [floor, g1], [front - 2, front - 1.9], C.white);
+  // The first floor: the balcony slab, glass behind glass panels, white over.
+  f.box(m, [-half, half], [g1 - 0.25, g1], [front - 2, front], C.white);
+  f.box(m, [-half, half], [g1, eave], [back, front - 3], C.white);
+  f.box(m, [-half + 0.3, half - 0.3], [g1 + 0.2, eave - 0.6], [front - 3, front - 2.95], C.glass);
+  for (let x = -half + 0.3; x <= half - 0.2; x += 1.8) f.box(m, [x - 0.06, x + 0.06], [g1, eave - 0.6], [front - 3, front - 2.9], C.white);
+  f.box(m, [-half, half], [g1, g1 + 1.05], [front - 0.08, front], C.panel);
+  f.box(m, [-half, half], [g1 + 1.05, g1 + 1.12], [front - 0.1, front + 0.02], C.white);
+  // The gable over the middle, ISLAND on it, and the low roof either side.
+  const g = 6;
+  f.box(m, [-g, g], [eave - 0.6, eave + 0.4], [front - 3.2, front - 2.6], C.white);
+  m.triFacing(f.at(-g - 0.3, eave + 0.4, front - 2.6), f.at(g + 0.3, eave + 0.4, front - 2.6), f.at(0, eave + 2.6, front - 2.6), C.white, [f.fwd[0], 0, f.fwd[1]]);
+  sign(m, f, 'ISLAND', 0, eave + 0.6, front - 2.58, null, C.letter, 0.16);
+  roof(m, f, half + 0.3, [back - 0.3, front - 2.6], eave, 1.6, C.roof);
+  for (const e of [-1, 1]) {
+    const run = [f.at(e * (g + 0.4), eave + 0.3, front - 2.4), f.at(0, eave + 2.75, front - 2.4), f.at(0, eave + 2.75, back + 2), f.at(e * (g + 0.4), eave + 0.3, back + 2)];
+    m.tri(run[0], run[1], run[2], C.roof);
+    m.tri(run[0], run[2], run[3], C.roof);
+  }
+  // The deck in front behind glass panels, on a bank of timber piling.
+  f.box(m, [-half - 1, half + 1], [floor - 0.2, floor], [front - 2, f.edge], C.deck);
+  f.box(m, [-half - 1, half + 1], [floor, floor + 1], [f.edge - 0.08, f.edge], C.panel);
+  f.box(m, [-half - 1, half + 1], [sea - 0.6, floor - 0.2], [f.edge - 0.3, f.edge], C.pile);
+  for (let x = -half - 1; x < half + 1; x += 0.5) f.box(m, [x, x + 0.06], [sea - 0.3, floor - 0.2], [f.edge, f.edge + 0.04], C.pile.map((v) => v * 0.8));
+  // Behind, on the north channel: an overgrown bank of shrubs and young trees against its walls.
+  // (Spacing and sizes from fixed offsets, not the world's random draws.)
+  const jit = [0.3, -0.5, 0.8, -0.2, 0.5, -0.7, 0.1];
+  for (let x = -half, k = 0; x <= half; x += 2.4 + jit[k % 7], k++) {
+    const r = 0.9 + ((k * 5) % 7) * 0.12;
+    m.sphere(f.at(x, sea + r * 0.6, back + 0.6 + jit[(k + 3) % 7]), r, LEAVES[2 + (k % 3)], 4, 7);
+  }
 }
 
 const LANDMARKS = { 'island-bar': islandBar, victorian, 'tudor-boathouse': tudorBoathouse, 'rowing-club': rowingClub, 'canoe-club': canoeClub, 'spiral-boathouse': spiralBoathouse, 'grey-boathouse': greyBoathouse, 'riverside-villa': riversideVilla, 'glass-house': glassHouse };
+
+// Riverside town houses and flats across the open river below Piper's Island
+// (from the footage): three and four storeys, steep gables to the river, red
+// brick with red-painted balconies, or cream render with white trim.
+export const TERRACE = {
+  brick: [0.6, 0.33, 0.25], cream: [0.9, 0.86, 0.76], red: [0.72, 0.14, 0.12], roof: [0.3, 0.29, 0.3],
+  trim: [0.95, 0.95, 0.93], window: [0.22, 0.26, 0.3],
+};
+function balconyTerrace(m, course, b, ring, cx, cz, g, rand) {
+  const f = facing(course, ring, cx, cz, g);
+  const cream = rand() < 0.35;
+  // As many random draws as a plain building takes (its wall, and a roof on a
+  // house), so everything drawn after it stays where it was.
+  if (b.kind === 'house' || b.kind === 'boathouse') rand();
+  const wall = cream ? TERRACE.cream : TERRACE.brick;
+  const [x0, x1] = f.along;
+  const [z0, z1] = f.depth;
+  const h = Math.max(b.height, 10);
+  f.box(m, [x0, x1], [-1, h], [z0, z1], wall);
+  // A gable to the river (its ridge runs back from the water).
+  const mid = (x0 + x1) / 2;
+  const apex = h + Math.min(3.5, (x1 - x0) * 0.35);
+  for (const x of [x0 - 0.3, x1 + 0.3]) {
+    const run = [f.at(x, h - 0.2, z0 - 0.3), f.at(x, h - 0.2, z1 + 0.3), f.at(mid, apex, z1 + 0.3), f.at(mid, apex, z0 - 0.3)];
+    m.tri(run[0], run[1], run[2], TERRACE.roof);
+    m.tri(run[0], run[2], run[3], TERRACE.roof);
+  }
+  for (const [z, e] of [[z1, 1], [z0, -1]]) m.triFacing(f.at(x0, h, z), f.at(x1, h, z), f.at(mid, apex - 0.2, z), cream ? TERRACE.trim : wall, [f.fwd[0] * e, 0, f.fwd[1] * e]);
+  // The river front: windows floor by floor, and red balconies on the brick
+  // ones (only on the row along the water: the rest are behind it).
+  if (fromRiver(course, cx, cz) > 90) return;
+  const w = x1 - x0;
+  const bays = Math.max(1, Math.round(w / 4));
+  for (let y = 0.8; y + 1.6 < h; y += 3) {
+    for (let k = 0; k < bays; k++) {
+      const x = x0 + (w * (k + 0.5)) / bays;
+      f.box(m, [x - 0.7, x + 0.7], [y, y + 1.6], [z1, z1 + 0.05], TERRACE.window);
+    }
+    if (!cream && y > 2) {
+      f.box(m, [x0 + w * 0.15, x1 - w * 0.15], [y - 0.25, y - 0.1], [z1, z1 + 1.2], TERRACE.red);
+      f.box(m, [x0 + w * 0.15, x1 - w * 0.15], [y - 0.1, y + 0.9], [z1 + 1.15, z1 + 1.22], TERRACE.red);
+    }
+  }
+}
 
 // Brick flats on concrete stilts over the water's edge (the north channel at
 // Piper's Island, from the owner's photo): an open floor of pillars in shadow,
 // brick floors above with white balcony rails to the river, and a saw-tooth of
 // little gables along the roof.
-const STILTS = { brick: [0.52, 0.3, 0.22], pillar: [0.72, 0.71, 0.68], shade: [0.12, 0.12, 0.12], rail: [0.92, 0.92, 0.9], roof: [0.4, 0.24, 0.18] };
+const STILTS = { brick: [0.45, 0.29, 0.22], pillar: [0.72, 0.71, 0.68], shade: [0.12, 0.12, 0.12], rail: [0.78, 0.79, 0.8], roof: [0.4, 0.24, 0.18], slab: [0.8, 0.79, 0.75] };
 function onStilts(m, course, b, ring, cx, cz, g, rand) {
   const lift = 3;
   const base = Math.max(0.3, g.y);
@@ -1551,6 +1637,8 @@ function onStilts(m, course, b, ring, cx, cz, g, rand) {
       const p = (t, h, d) => [ax + (bx - ax) * t + n[0] * d, h, az + (bz - az) * t + n[1] * d];
       m.quad(p(0.05, y, 0.9), p(0.95, y, 0.9), p(0.95, y + 0.12, 0.9), p(0.05, y + 0.12, 0.9), STILTS.rail);
       m.quad(p(0.05, y - 0.9, 0.9), p(0.95, y - 0.9, 0.9), p(0.95, y - 0.9, 0.05), p(0.05, y - 0.9, 0.05), STILTS.pillar);
+      // The slab's pale edge, a band along the brick at each floor.
+      m.quad(p(0.05, y - 1.15, 0.92), p(0.95, y - 1.15, 0.92), p(0.95, y - 0.9, 0.92), p(0.05, y - 0.9, 0.92), STILTS.slab);
     }
     // The saw-tooth: a little gable every 5 m along this wall.
     for (let t = 0; t + 5 / len <= 1.001; t += 5 / len) {
@@ -1623,7 +1711,7 @@ function spot(course, [x, z]) {
 }
 
 // How far round each feature other trees keep off (metres).
-const CLEAR = { 'boat-shed': 7, 'ivy-boathouse': 6, quay: 4, truss: 8, wharf: 8, jetty: 3, beach: 21, landing: 7, marina: 45, willow: 7, 'sculling-club': 14, 'glass-restaurant': 14, 'ferry-landing': 8, sandbags: 8, gazebo: 5 };
+const CLEAR = { 'boat-shed': 7, 'ivy-boathouse': 6, quay: 4, truss: 8, wharf: 8, jetty: 3, beach: 21, landing: 7, marina: 45, willow: 7, 'sculling-club': 14, 'glass-restaurant': 14, 'ferry-landing': 8, sandbags: 8, gazebo: 5, boardwalk: 23 };
 
 const FEAT = {
   sand: [0.82, 0.73, 0.54], wetSand: [0.62, 0.55, 0.42], bag: [0.74, 0.65, 0.48], bagDark: [0.66, 0.57, 0.42], pipe: [0.15, 0.15, 0.16],
@@ -1873,9 +1961,22 @@ function jetty(m, course, f) {
   for (const x of [-0.3, 0.3]) beam(m, f.at(x, 0.65, 2.2), f.at(x, -0.6, 2.5), 0.03, COLORS.steel);
 }
 
+// A timber boardwalk on piles out over the water along the bank (below
+// Christchurch Bridge, from the footage): a deck, its piles, and a red-brown
+// slatted fence on the water side.
+function boardwalk(m, course, f) {
+  const [x0, x1] = [-22, 22];
+  const deck = 1.6;
+  const timber = [0.48, 0.3, 0.22];
+  f.box(m, [x0, x1], [deck - 0.15, deck], [-1, 2.2], timber.map((v) => v * 0.85));
+  for (let x = x0; x <= x1; x += 2.75) for (const z of [-0.8, 2]) f.box(m, [x - 0.12, x + 0.12], [-1, deck - 0.15], [z - 0.12, z + 0.12], timber.map((v) => v * 0.6));
+  f.box(m, [x0, x1], [deck, deck + 1.1], [2.1, 2.2], timber);
+  for (let x = x0; x <= x1; x += 1.375) f.box(m, [x - 0.05, x + 0.05], [deck, deck + 1.2], [2.08, 2.24], timber.map((v) => v * 0.75));
+}
+
 const FEATURES = {
   'boat-shed': boatShed, 'ivy-boathouse': ivyBoathouse, quay, truss, wharf, jetty, beach, landing: (m, course, f) => beach(m, course, f, 6, 7), sandbags, 'channel-sign': channelSign, mailbox, gazebo, 'sculling-club': scullingClub,
-  'glass-restaurant': glassRestaurant, 'ferry-landing': ferryLanding, marina, willow,
+  'glass-restaurant': glassRestaurant, 'ferry-landing': ferryLanding, marina, willow, boardwalk,
 };
 export const FEATURE_STYLES = Object.keys(FEATURES);
 export const LANDMARK_STYLES = Object.keys(LANDMARKS);
@@ -1898,7 +1999,7 @@ function roof(m, f, half, [z0, z1], y, rise, color, cx = 0) {
 const GLYPHS = {
   A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111',
   G: '011100101101011', H: '101101111101101', I: '111010010010111', L: '100100100100111', N: '101111111111101', O: '010101101101010',
-  R: '110101110101101', U: '101101101101111', W: '101101111111101', ' ': '000000000000000',
+  R: '110101110101101', S: '011100010001110', U: '101101101101111', W: '101101111111101', ' ': '000000000000000',
 };
 
 // `text` centred at x, its bottom at y, on the face at depth z, facing the
@@ -1907,7 +2008,9 @@ export function sign(m, f, text, x, y, z, board, color, px = 0.12) {
   const width = text.length * 4 * px - px;
   if (board) f.box(m, [x - width / 2 - px, x + width / 2 + px], [y - px, y + 6 * px], [z - 0.02, z], board);
   [...text].forEach((ch, i) => {
-    const glyph = GLYPHS[ch] ?? GLYPHS[' '];
+    // A letter with no glyph would show as a gap ("I LAND"): add it to GLYPHS.
+    if (!GLYPHS[ch]) throw new Error(`sign: no glyph for ${JSON.stringify(ch)} in ${JSON.stringify(text)}`);
+    const glyph = GLYPHS[ch];
     for (let k = 0; k < 15; k++) {
       if (glyph[k] !== '1') continue;
       // Laid out towards -x: facing's x runs to the left as you look at the front.
@@ -2109,8 +2212,10 @@ function tattyCruiser(m, course, boat, rand) {
   }
 }
 
-// A cable-stayed foot bridge: a slim white deck from bank to bank, hung from
-// one tall leaning mast on one bank by a fan of cables.
+// A cable-stayed foot bridge (Christchurch Bridge, from the footage): a slim
+// deck rising in a gentle arch from bank to bank, dark grey steel underneath,
+// white railings on posts, hung from one tall leaning white mast on one bank
+// by a fan of cables.
 function cableStayedBridge(m, course, { s, mast = -1 }) {
   const c = pointAt(course, s);
   const right = [-c.tz, c.tx];
@@ -2118,15 +2223,34 @@ function cableStayedBridge(m, course, { s, mast = -1 }) {
   const origin = [c.x, 0, c.z];
   const span = widthAt(course, s).half + 12;
   const deck = 5.5;
-  orientedBox(m, origin, right, fwd, [-span, span], [deck - 0.6, deck], [-2.2, 2.2], COLORS.steel);
-  for (const e of [-1, 1]) orientedBox(m, origin, right, fwd, [-span, span], [deck, deck + 1.1], e < 0 ? [-2.2, -2.1] : [2.1, 2.2], COLORS.steel);
-  const at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
+  const rise = 2.6;
+  const y = (x) => deck - 0.6 + rise * (1 - (x / span) ** 2); // the deck's top
+  const at = (x, h, z) => [origin[0] + right[0] * x + fwd[0] * z, h, origin[2] + right[1] * x + fwd[1] * z];
+  const n = 10;
+  for (let k = 0; k < n; k++) {
+    const [x0, x1] = [-span + (2 * span * k) / n, -span + (2 * span * (k + 1)) / n];
+    const [y0, y1] = [y(x0), y(x1)];
+    // The steel box under, sloping with the deck, and the walkway on top.
+    const steel = [0.32, 0.34, 0.37];
+    for (const z of [-2.2, 2.2]) {
+      const out = [fwd[0] * Math.sign(z), 0, fwd[1] * Math.sign(z)];
+      m.triFacing(at(x0, y0 - 0.7, z), at(x1, y1 - 0.7, z), at(x1, y1, z), steel, out);
+      m.triFacing(at(x0, y0 - 0.7, z), at(x1, y1, z), at(x0, y0, z), steel, out);
+    }
+    m.quad(at(x0, y0 - 0.7, -2.2), at(x1, y1 - 0.7, -2.2), at(x1, y1 - 0.7, 2.2), at(x0, y0 - 0.7, 2.2), steel);
+    m.quad(at(x0, y0, -2.2), at(x1, y1, -2.2), at(x1, y1, 2.2), at(x0, y0, 2.2), [0.62, 0.62, 0.6]);
+    // The railings: a top rail and a post at each end of the bay.
+    for (const z of [-2.15, 2.15]) {
+      beam(m, at(x0, y0 + 1.1, z), at(x1, y1 + 1.1, z), 0.04, COLORS.white);
+      for (const t of [0, 0.5]) beam(m, at(x0 + (x1 - x0) * t, y(x0 + (x1 - x0) * t), z), at(x0 + (x1 - x0) * t, y(x0 + (x1 - x0) * t) + 1.1, z), 0.035, COLORS.white);
+    }
+  }
   const foot = at(mast * (span - 6), 0, 0);
   const tip = at(mast * (span - 14), 39, 0);
   beam(m, foot, tip, 0.6, COLORS.white);
   for (let k = 1; k <= 7; k++) {
     const x = mast * (span - 6) - mast * k * ((2 * span - 10) / 8);
-    for (const z of [-2, 2]) beam(m, at(mast * (span - 13.5), 37 - k * 1.5, z * 0.15), at(x, deck, z), 0.05, COLORS.steel);
+    for (const z of [-2, 2]) beam(m, at(mast * (span - 13.5), 37 - k * 1.5, z * 0.15), at(x, y(x), z), 0.05, COLORS.steel);
   }
 }
 

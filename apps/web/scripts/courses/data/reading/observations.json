@@ -1488,6 +1488,36 @@
       "heading": 315,
       "frame": "0095-p1-00600-left",
       "note": "the Caversham Lady and the trip boats moored along Piper's Island, main channel"
+    },
+    {
+      "kind": "buildings",
+      "style": "balcony-terrace",
+      "side": "left",
+      "from": {
+        "at": [
+          51.463694,
+          -0.973738
+        ],
+        "heading": 320
+      },
+      "to": {
+        "at": [
+          51.464422,
+          -0.974671
+        ],
+        "heading": 315
+      },
+      "note": "town houses and flats across the open river below Piper's Island: three and four storeys, steep gables to the river, red brick with red balconies or cream render (footage 2026-08-20)"
+    },
+    {
+      "kind": "feature",
+      "style": "boardwalk",
+      "at": [
+        51.461948,
+        -0.970509
+      ],
+      "heading": 120,
+      "note": "a timber boardwalk on piles along the south bank just below Christchurch Bridge, red-brown slatted fence on the water side, new flats behind (footage 2026-08-20)"
     }
   ]
 }
