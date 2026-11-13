@@ -940,7 +940,7 @@ export function landmarkFrame(course, style) {
 function landmarkFacing(river, style, ring, cx, cz, g) {
   return facing(river, ring, cx, cz, g, BANKED.has(style));
 }
-const BANKED = new Set(['rowing-club', 'canoe-club']); // landmarks squared to their bank (see facing)
+const BANKED = new Set(['rowing-club', 'canoe-club', 'boatyard']); // landmarks squared to their bank (see facing)
 
 const CLUB = {
   render: [0.94, 0.93, 0.89],
@@ -1554,7 +1554,7 @@ function islandBar(m, course, f) {
 // two-storey building end on along its quay, pale walls with big windows and
 // a roller door below, a band of windows above, a dark grey pitched roof, and
 // a lower shed at one end.
-const BOATYARD = { wall: [0.74, 0.73, 0.69], upper: [0.62, 0.62, 0.6], roof: [0.24, 0.25, 0.27], window: [0.22, 0.26, 0.3], door: [0.55, 0.56, 0.56], quay: [0.6, 0.58, 0.54] };
+export const BOATYARD = { wall: [0.74, 0.73, 0.69], upper: [0.62, 0.62, 0.6], roof: [0.24, 0.25, 0.27], window: [0.22, 0.26, 0.3], door: [0.74, 0.75, 0.74], quay: [0.6, 0.58, 0.54] };
 function boatyard(m, course, f) {
   const C = BOATYARD;
   const half = Math.min(20, (f.along[1] - f.along[0]) / 2);
@@ -1563,8 +1563,10 @@ function boatyard(m, course, f) {
   const [g1, eave] = [3.2, 6.2];
   f.box(m, [-half, half], [-1, g1], [back, front], C.wall);
   f.box(m, [-half + 6, half], [g1, eave], [back, front - 0.2], C.upper);
-  for (let x = -half + 1; x < half - 7; x += 3.2) f.box(m, [x, x + 2.4], [0.7, 2.6], [front, front + 0.05], C.window);
-  f.box(m, [half - 6, half - 1.5], [0, 2.9], [front, front + 0.05], C.door);
+  // The roller door at the shed end, big and pale enough to read across the river.
+  for (let x = -half + 8; x < half - 1; x += 3.2) f.box(m, [x, x + 2.4], [0.7, 2.6], [front, front + 0.05], C.window);
+  f.box(m, [-half + 1, -half + 6.5], [0, 3], [front, front + 0.05], C.door);
+  for (let y = 0.3; y < 3; y += 0.35) f.box(m, [-half + 1, -half + 6.5], [y, y + 0.04], [front + 0.05, front + 0.06], C.door.map((v) => v * 0.8));
   for (let x = -half + 7; x < half - 1; x += 2.4) f.box(m, [x, x + 1.6], [g1 + 0.7, eave - 0.6], [front - 0.2, front - 0.15], C.window);
   roof(m, f, (2 * half - 6) / 2 + 0.4, [back - 0.4, front + 0.2], eave, 3.4, C.roof, 3);
   roof(m, f, 3.4, [back - 0.4, front + 0.4], g1, 1.4, C.roof, -half + 3);
@@ -1956,11 +1958,19 @@ function deckBoathouse(m, course, f) {
   for (let x = -3; x <= 3; x += 0.5) f.box(m, [x - 0.03, x + 0.03], [-0.4, y + 2.6], [-0.3, -0.26], grey.map((v) => v * 0.8));
   f.box(m, [-1.8, 1.8], [-0.4, y + 1.4], [-0.3, -0.24], [0.13, 0.12, 0.11]);
   f.box(m, [-3.2, 3.2], [y + 2.6, y + 2.8], [-6.2, -0.1], grey.map((v) => v * 0.9));
+  // The roof deck's railing, round its three open sides.
   f.box(m, [-3.2, 3.2], [y + 3.7, y + 3.8], [-0.2, -0.1], grey.map((v) => v * 0.75));
+  for (const x of [-3.2, 3.1]) f.box(m, [x, x + 0.1], [y + 3.7, y + 3.8], [-6.2, -0.1], grey.map((v) => v * 0.75));
   for (let x = -3.2; x <= 3.2; x += 1.6) f.box(m, [x - 0.05, x + 0.05], [y + 2.8, y + 3.8], [-0.2, -0.1], grey.map((v) => v * 0.75));
   f.box(m, [-6, 3], [0.2, 0.45], [-0.3, 1.2], COLORS.timber);
   // A tall bank of shrubs along the water, and trees over it.
-  for (let x = 4, k = 0; x < 24; x += 1.8, k++) m.sphere(f.at(x, y + 1.3 + (k % 3) * 0.4, -1.4 - (k % 2) * 0.8), 2 + (k % 3) * 0.35, LEAVES[(k % 3) + 1], 4, 7);
+  // (Each wholly on land: a shrub whose spot is water, where the bank curves away, is left out.)
+  for (let x = 4, k = 0; x < 24; x += 1.6, k++) {
+    const r = 1.4 + (k % 3) * 0.2;
+    const z = -(r + 0.3) - (k % 2) * 0.7;
+    if (f.ground(x, z) < 0 || f.ground(x, z + r) < 0) continue;
+    m.sphere(f.at(x, f.ground(x, z) + r * 0.75, z), r, LEAVES[(k % 3) + 1], 4, 7);
+  }
   for (const [x, h] of [[8, 13], [16, 15], [-6, 14]]) {
     const at = f.at(x, y, -7);
     m.cylinder([at[0], at[1] - 0.3, at[2]], 0.35, h * 0.5, 4, COLORS.trunk);

@@ -350,9 +350,13 @@ test('a real river from a course file: true size, and boats cover it speedup tim
   assert.equal(fast.speed.toFixed(6), slow.speed.toFixed(6));
   assert.ok(Math.abs(-fast.z / -slow.z - course.speedup) < 1e-6);
 
-  // Its scenery builds, and stays within what a phone can draw.
-  const world = buildWorld(course);
-  assert.ok(world.count / 3 < 400_000, `${world.count / 3} triangles`);
+  // Its scenery builds, and stays within what a phone can draw: every course
+  // (each adds its own buoys and boards to the shared world).
+  for (const id of ['reading', 'loop', 'hasler16', 'hasler79', 'practice']) {
+    const file = JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
+    const world = buildWorld(courseFromFile(file));
+    assert.ok(world.count / 3 < 400_000, `${id}: ${world.count / 3} triangles`);
+  }
 });
 
 test('a real course: moored boats narrow the open water by their own beam', async () => {

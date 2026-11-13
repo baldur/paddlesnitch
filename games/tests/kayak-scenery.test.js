@@ -271,3 +271,31 @@ test('a row of styled houses (balcony-terrace) keeps the trees between them, as 
   };
   assert.equal(trunks(reading), trunks(plain));
 });
+
+test('the boatyard stands on land on its quay, and the timber boathouse on its own bank clear of the riverside villa', async () => {
+  const { BOATYARD, landmarkFrame } = await import('../reading-thames/world.js');
+  const reading = await data('reading');
+  const land = waterMap(reading.water);
+  const course = courseFromFile(reading);
+  const tris = await world();
+  const is = (rgb) => ({ color }) => color.every((v, i) => Math.abs(v - rgb[i]) < 1e-3);
+  const mid = ({ p }) => [0, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+  // The boatyard: its walls built, and on land; its quay reaching the water.
+  const yard = landmarkFrame(course, 'boatyard');
+  const near = (t) => Math.hypot(mid(t)[0] - yard.origin[0], mid(t)[1] - yard.origin[2]) < 40;
+  const walls = tris.filter(is(BOATYARD.wall)).filter(near);
+  assert.ok(walls.length >= 12, `its walls: ${walls.length}`);
+  assert.ok(walls.every((t) => !land.inside(...mid(t))), 'the building is on land');
+  const quay = tris.filter(is(BOATYARD.quay)).filter(near);
+  assert.ok(quay.length > 6, 'its quay');
+  const edge = yard.at(0, 0, yard.edge + 0.5);
+  assert.ok(land.inside(edge[0], edge[2]), 'water just off the quay');
+  // The timber boathouse: grey boarding near its spot, all on land, and 8 m clear of the villa's footprint.
+  const spot = reading.features.find((f) => f.style === 'deck-boathouse');
+  const grey = tris.filter(is([0.5, 0.47, 0.43])).filter((t) => Math.hypot(mid(t)[0] - spot.at[0], mid(t)[1] - spot.at[1]) < 12);
+  assert.ok(grey.length >= 12, `its boarding: ${grey.length}`);
+  assert.ok(grey.every((t) => !land.inside(...mid(t))), 'on land, not in the river');
+  const villa = reading.buildings.find((b) => b.style === 'riverside-villa').shape;
+  const gap = Math.min(...villa.map(([x, z]) => Math.hypot(x - spot.at[0], z - spot.at[1])));
+  assert.ok(gap > 8, `${gap.toFixed(1)} m from the villa`);
+});
