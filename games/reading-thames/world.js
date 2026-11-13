@@ -822,7 +822,7 @@ function building(m, course, b, rand) {
   const cz = ring.reduce((a, p) => a + p[1], 0) / ring.length;
   const g = ground(course, cx, cz);
   if (g.d < 0) return; // on an island or a pontoon the river line doesn't know about
-  if (LANDMARKS[b.style]) return LANDMARKS[b.style](m, course, facing(course, ring, cx, cz, g));
+  if (LANDMARKS[b.style]) return LANDMARKS[b.style](m, course, landmarkFacing(course, b.style, ring, cx, cz, g));
   const y0 = g.y - 1;
   const top = g.y + b.height;
   const clap = b.style === 'clapboard';
@@ -883,11 +883,27 @@ function building(m, course, b, rand) {
 // A footprint squared up to face the river: `at(x, y, z)` is x metres along
 // the bank, y up from the ground and z towards the water, from the middle of
 // the footprint; `along` and `depth` are its extents ([min, max]).
-function facing(course, ring, cx, cz, g) {
+// With `bank`, it's turned square to the mapped bank in front (its line 15 m
+// either side), as the clubs are, instead of to the river line, and `edge` is
+// straight out to that bank.
+function facing(course, ring, cx, cz, g, bank = false) {
   const p = pointAt(course, locate(course, cx, cz).s);
   const len = Math.hypot(p.x - cx, p.z - cz) || 1;
-  const fwd = [(p.x - cx) / len, (p.z - cz) / len];
-  const right = [-fwd[1], fwd[0]];
+  let fwd = [(p.x - cx) / len, (p.z - cz) / len];
+  let right = [-fwd[1], fwd[0]];
+  const out = (x) => {
+    let d = 0;
+    while (d < 80 && !course.land.inside(cx + right[0] * x + fwd[0] * d, cz + right[1] * x + fwd[1] * d)) d += 0.25;
+    return d;
+  };
+  let straight = null;
+  if (bank && course.land?.rings) {
+    const [e0, e1] = [out(-15), out(15)];
+    const k = Math.hypot(30, e1 - e0);
+    right = [0, 1].map((i) => (right[i] * 30 + fwd[i] * (e1 - e0)) / k);
+    fwd = [right[1], -right[0]];
+    straight = out(0);
+  }
   const xs = ring.map(([x, z]) => (x - cx) * right[0] + (z - cz) * right[1]);
   const zs = ring.map(([x, z]) => (x - cx) * fwd[0] + (z - cz) * fwd[1]);
   const origin = [cx, g.y, cz];
@@ -895,12 +911,32 @@ function facing(course, ring, cx, cz, g) {
   return {
     origin, right, fwd, toWater,
     // Where the water starts in front: the mapped bank where there is one.
-    edge: course.land?.rings ? Math.min(toWater, course.land.shore(cx, cz)) : toWater,
+    edge: straight ?? (course.land?.rings ? Math.min(toWater, course.land.shore(cx, cz)) : toWater),
     along: [Math.min(...xs), Math.max(...xs)], depth: [Math.min(...zs), Math.max(...zs)],
     at: (x, y, z) => [cx + right[0] * x + fwd[0] * z, g.y + y, cz + right[1] * x + fwd[1] * z],
     box: (m, xr, yr, zr, color) => orientedBox(m, origin, right, fwd, xr, yr, zr, color),
   };
 }
+
+const xz = (p) => [p[0], p[2]];
+
+// The frame a landmark is built in (facing's), for tests and for putting a
+// camera in front of it.
+export function landmarkFrame(course, style) {
+  const river = course.scenery?.river ?? course;
+  river.land ??= waterMap(course.scenery?.water ?? []);
+  const b = course.scenery?.buildings?.find((x) => x.style === style);
+  if (!b) return null;
+  const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+  const cx = ring.reduce((a, q) => a + q[0], 0) / ring.length;
+  const cz = ring.reduce((a, q) => a + q[1], 0) / ring.length;
+  return landmarkFacing(river, style, ring, cx, cz, ground(river, cx, cz));
+}
+// The one place a landmark's frame is made, for building it and for landmarkFrame.
+function landmarkFacing(river, style, ring, cx, cz, g) {
+  return facing(river, ring, cx, cz, g, BANKED.has(style));
+}
+const BANKED = new Set(['rowing-club', 'canoe-club']); // landmarks squared to their bank (see facing)
 
 const CLUB = {
   render: [0.94, 0.93, 0.89],
@@ -938,92 +974,333 @@ const VILLA = {
   urn: [0.8, 0.76, 0.68], plant: [0.72, 0.62, 0.25], window: [0.55, 0.65, 0.72],
 };
 
-// Reading Rowing Club: a long white clubhouse under a big red hipped roof with
-// a cupola, a first-floor balcony with stairs down at each end, a flagpole,
-// and a concrete hard down to the water.
+// Reading Rowing Club, as the footage shows it from the water (x runs
+// downstream): a long boathouse under a brown hipped roof with a white cupola,
+// the brick ground floor's boat bays under a weathered timber balcony with
+// X-braced railings, its stair coming down the front at the balcony's upstream
+// end, a white upper storey with a band of windows over a blue door, and a
+// white cross-wing upstream with its gable to the river. In front, a tarmac
+// path along a low stone-faced bank, and a modular plastic pontoon, green with
+// yellow floats on its bank side.
+// Colours measured from the frames (overcast ones, scaled so the white walls are white).
+export const ROWING = {
+  brick: [0.52, 0.31, 0.25], band: [0.5, 0.42, 0.37], plinth: [0.36, 0.26, 0.23], render: [0.93, 0.93, 0.9],
+  roof: [0.45, 0.29, 0.24], trim: [0.12, 0.27, 0.6], timber: [0.52, 0.5, 0.46], post: [0.45, 0.42, 0.38],
+  beam: [0.24, 0.22, 0.2], window: [0.3, 0.36, 0.4], door: [0.1, 0.27, 0.5], path: [0.47, 0.45, 0.42],
+  stone: [0.66, 0.62, 0.54], pontoon: [0.2, 0.38, 0.33], float: [0.8, 0.68, 0.3], hedge: [0.17, 0.27, 0.1],
+  banner: [0.96, 0.95, 0.92], red: [0.75, 0.12, 0.15], navy: [0.14, 0.14, 0.42], rail: [0.15, 0.3, 0.65], gantry: [0.2, 0.45, 0.25],
+  yellow: [0.88, 0.75, 0.2],
+};
 function rowingClub(m, course, f) {
-  const half = Math.min(14, (f.along[1] - f.along[0]) / 2);
-  const [back, front] = [Math.max(f.depth[0], -6), Math.min(f.depth[1], 5)];
-  f.box(m, [-half, half], [-1, 7], [back, front], CLUB.render);
-  f.box(m, [-half + 1, half - 1], [0.3, 2.7], [front, front + 0.05], CLUB.dark);
-  for (let x = -half + 1.5; x < half - 1.5; x += 2.4) f.box(m, [x, x + 1.5], [4, 5.7], [front, front + 0.05], CLUB.dark);
-  // The balcony, its railing, and stairs down at both ends.
-  f.box(m, [-half, half], [3.1, 3.35], [front, front + 2], CLUB.render);
-  f.box(m, [-half, half], [4.2, 4.35], [front + 1.9, front + 2], CLUB.rail);
-  for (let x = -half; x <= half; x += 1.5) f.box(m, [x, x + 0.1], [3.35, 4.2], [front + 1.9, front + 2], CLUB.rail);
-  for (const e of [-1, 1]) {
-    for (let k = 0; k < 8; k++) {
-      const x = e * (half - 0.4 - k * 0.45);
-      f.box(m, e < 0 ? [x, x + 1.2] : [x - 1.2, x], [3.1 - (k + 1) * 0.39, 3.1 - k * 0.39], [front + 2, front + 3.2], CLUB.rail);
-    }
+  const C = ROWING;
+  const [west, east] = [Math.max(f.along[0], -19), Math.min(f.along[1], 19)];
+  const wall = Math.min(f.depth[1] - 2.4, f.edge - 8); // the front wall; the balcony stands out over the path
+  const back = Math.max(f.depth[0], wall - 13);
+  const sea = -f.origin[1];
+  const floor = ground(course, ...xz(f.at(0, 0, wall))).y - f.origin[1]; // the path in front, at the wall
+  const top = sea + 0.65; // the bank's edge, a little over the pontoon
+  const [wing, stair] = [west + (east - west) * 0.3, east - (east - west) * 0.38]; // the cross-wing's downstream side; the stair's top
+  const [g1, eave] = [floor + 3.1, floor + 5.2]; // first floor, eaves: just over the balcony's railing
+  // The long block: brick below, white above.
+  // Dark red brick, a band of greyer brick low down, a darker plinth.
+  f.box(m, [wing, east], [floor - 1, floor + 0.7], [back + 0.2, wall], C.plinth);
+  f.box(m, [wing, east], [floor + 0.7, floor + 1.3], [back + 0.2, wall], C.band);
+  f.box(m, [wing, east], [floor + 1.3, g1], [back + 0.2, wall], C.brick);
+  f.box(m, [wing, east], [g1, eave], [back, wall + 0.1], C.render);
+  // The eaves: a deep white board, coved out, with a blue line along its top.
+  f.box(m, [wing, east + 0.4], [eave - 0.3, eave], [back - 0.4, wall + 0.4], C.render);
+  f.box(m, [wing, east + 0.7], [eave, eave + 0.55], [back - 0.7, wall + 0.75], C.render);
+  f.box(m, [wing, east + 0.72], [eave + 0.55, eave + 0.65], [back - 0.72, wall + 0.77], C.trim);
+  // Upstairs windows: behind the balcony, and a band over the door.
+  const pane = (x0, x1, y0, y1) => {
+    f.box(m, [x0 - 0.08, x1 + 0.08], [y0 - 0.08, y1 + 0.08], [wall + 0.1, wall + 0.13], COLORS.white);
+    f.box(m, [x0, x1], [y0, y1], [wall + 0.13, wall + 0.15], C.window);
+  };
+  for (let x = stair + 0.8; x < east - 1.2; x += 1.6) pane(x, x + 1.3, g1 + 0.4, eave - 0.35);
+  for (let k = 0; k < 4; k++) pane(wing + 2.5 + k * 1.6, wing + 3.9 + k * 1.6, g1 + 0.8, eave - 0.35);
+  f.box(m, [stair - 2.6, stair - 1.4], [floor, floor + 2.2], [wall, wall + 0.05], COLORS.white);
+  f.box(m, [stair - 2.5, stair - 1.5], [floor, floor + 2.1], [wall + 0.05, wall + 0.08], C.door);
+  // The balcony: a deck on timber posts, X-braced railing panels between them.
+  const out = wall + 2.4;
+  f.box(m, [stair, east], [g1 - 0.1, g1], [wall, out], C.timber);
+  f.box(m, [stair, east], [g1 - 0.45, g1 - 0.1], [out - 0.3, out], C.beam); // the beam carrying it
+  for (let x = stair, k = 0; x <= east + 0.01; x += (east - stair) / 7, k++) {
+    f.box(m, [x - 0.08, x + 0.08], [floor, g1 + 1.1], [out - 0.2, out - 0.04], k % 3 === 1 ? C.post : COLORS.white);
+    for (const e of [-1, 1]) beam(m, f.at(x, g1 - 1.2, out - 0.12), f.at(x + e * 0.9, g1 - 0.45, out - 0.12), 0.06, C.post);
   }
-  roof(m, f, half + 0.6, [back - 0.6, front + 0.6], 7, 4.2, CLUB.tiles);
-  // The cupola on the ridge, and the flag.
-  f.box(m, [-0.8, 0.8], [11, 12.4], [(back + front) / 2 - 0.8, (back + front) / 2 + 0.8], CLUB.render);
-  const top = f.at(0, 12.4, (back + front) / 2);
-  m.cone(top, 1.1, 1.2, 4, CLUB.tiles);
-  const pole = f.at(half + 2, 0, front + 3);
-  m.cylinder(pole, 0.08, 11, 5, COLORS.white);
-  f.box(m, [half + 2.1, half + 4.3], [9.4, 10.8], [front + 2.97, front + 3.03], [0.75, 0.12, 0.15]);
-  // The hard, down to the water, and the club's name on the balcony.
-  const [x0, x1, edge] = [-half - 4, half + 6, front + f.toWater + 2];
-  const ramp = [f.at(x0, 0.12, front), f.at(x1, 0.12, front), f.at(x1, -f.origin[1] - 0.3, edge), f.at(x0, -f.origin[1] - 0.3, edge)];
-  m.tri(ramp[0], ramp[1], ramp[2], CLUB.hard);
-  m.tri(ramp[0], ramp[2], ramp[3], CLUB.hard);
-  sign(m, f, 'READING ROWING CLUB', 0, 3.45, front + 2.06, CLUB.rail, COLORS.white);
+  // Floodlights on the railing.
+  for (const x of [stair + 3, (stair + east) / 2 + 1.5, east - 3.5]) f.box(m, [x - 0.2, x + 0.2], [g1 + 1.12, g1 + 1.42], [out - 0.3, out + 0.1], C.beam);
+  f.box(m, [stair, east], [g1 + 1, g1 + 1.12], [out - 0.2, out], C.timber);
+  for (let x = stair; x < east - 0.5; x += 1.6) {
+    beam(m, f.at(x, g1, out - 0.1), f.at(x + 1.6, g1 + 1, out - 0.1), 0.05, C.timber);
+    beam(m, f.at(x, g1 + 1, out - 0.1), f.at(x + 1.6, g1, out - 0.1), 0.05, C.timber);
+  }
+  // The stair down the front, upstream from the balcony's end: stringers,
+  // treads, and a braced side.
+  const [foot, sz0, sz1] = [stair - 4.6, out - 1.3, out];
+  for (const z of [sz0, sz1 - 0.1]) beam(m, f.at(stair, g1, z), f.at(foot, floor, z), 0.09, C.timber);
+  for (let k = 1; k < 14; k++) {
+    const t = k / 14;
+    const x = stair + (foot - stair) * t;
+    f.box(m, [x - 0.17, x + 0.17], [g1 + (floor - g1) * t - 0.05, g1 + (floor - g1) * t], [sz0, sz1], C.timber);
+  }
+  beam(m, f.at(stair, g1 + 1, sz1 - 0.05), f.at(foot + 0.6, floor + 1, sz1 - 0.05), 0.05, C.timber);
+  for (let t = 0; t < 0.9; t += 0.3) {
+    const [xa, xb] = [stair + (foot - stair) * t, stair + (foot - stair) * (t + 0.3)];
+    const [ya, yb] = [g1 + (floor - g1) * t, g1 + (floor - g1) * (t + 0.3)];
+    beam(m, f.at(xa, ya, sz1 - 0.05), f.at(xb, yb + 1, sz1 - 0.05), 0.04, C.timber);
+    beam(m, f.at(xa, ya + 1, sz1 - 0.05), f.at(xb, yb, sz1 - 0.05), 0.04, C.timber);
+  }
+  // The roof, hipped at the downstream end, and the cupola on its ridge.
+  roof(m, f, (east - wing) / 2 + 0.6, [back - 0.6, wall + 0.7], eave + 0.65, 5.4, C.roof, (wing + east) / 2);
+  const mid = (back + wall) / 2;
+  const cx = wing + (east - wing) * 0.62;
+  f.box(m, [cx - 0.7, cx + 0.7], [eave + 5.6, eave + 7], [mid - 0.7, mid + 0.7], C.render);
+  m.cone(f.at(cx, eave + 7, mid), 1.05, 1.1, 4, C.roof);
+  // The cross-wing: white, its gable to the river, the roof sweeping low on
+  // its upstream side.
+  const [wz0, wz1] = [back, wall + 0.8];
+  const ridge = west + (wing - west) * 0.45;
+  f.box(m, [west, wing], [floor - 1, eave - 0.3], [wz0, wz1], C.render);
+  const apex = eave + 4;
+  const low = floor + 3.4;
+  for (const [x, y] of [[west - 0.6, low], [wing + 0.6, eave - 0.4]]) {
+    const run = [f.at(x, y, wz0 - 0.5), f.at(x, y, wz1 + 0.5), f.at(ridge, apex, wz1 + 0.5), f.at(ridge, apex, wz0 - 0.5)];
+    m.tri(run[0], run[1], run[2], C.roof);
+    m.tri(run[0], run[2], run[3], C.roof);
+  }
+  for (const [z, e] of [[wz1, 1], [wz0, -1]]) {
+    m.triFacing(f.at(west, low, z), f.at(wing, eave - 0.3, z), f.at(ridge, apex - 0.15, z), C.render, [f.fwd[0] * e, 0, f.fwd[1] * e]);
+  }
+  f.box(m, [west + 1, west + 1.1], [low, eave - 0.3], [wz1, wz1 + 0.02], C.render);
+  for (const [x0, x1, y0, y1] of [[ridge - 1, ridge + 1, eave + 0.4, eave + 1.5], [west + 2, west + 4.4, g1 + 0.8, g1 + 2.2], [wing - 4, wing - 1.4, g1 + 0.8, g1 + 2.2]]) {
+    f.box(m, [x0, x1], [y0, y1], [wz1, wz1 + 0.04], C.window);
+  }
+  beam(m, f.at(west - 0.6, low, wz1 + 0.5), f.at(ridge, apex, wz1 + 0.5), 0.12, C.roof.map((v) => v * 0.7));
+  beam(m, f.at(ridge, apex, wz1 + 0.5), f.at(wing + 0.6, eave - 0.4, wz1 + 0.5), 0.12, C.roof.map((v) => v * 0.7));
+  // A hedge in front of the wing.
+  hedge(m, f, [west - 4, wing - 0.5], [floor - 0.5, floor + 1.9], [wz1 + 1, wz1 + 2.6], C.hedge);
+  backDoors(m, course, f, [-12, -4, 4, 12].filter((x) => x > west + 1 && x < east - 1), floor, back, C.door);
+  // The path, down to the bank's stone face, and the pontoon along it.
+  const edge = f.edge;
+  const [px0, px1] = [west - 8, east + 8];
+  const apron = [f.at(px0, floor + 0.04, wall), f.at(px1, floor + 0.04, wall), f.at(px1, top, edge - 0.5), f.at(px0, top, edge - 0.5)];
+  m.tri(apron[0], apron[1], apron[2], C.path);
+  m.tri(apron[0], apron[2], apron[3], C.path);
+  // Rock-faced stone blocks along the edge, a little proud of the path.
+  f.box(m, [px0, px1], [sea - 0.8, top], [edge - 0.5, edge + 0.1], C.stone);
+  for (let x = px0, k = 0; x < px1; x += 0.8, k++) {
+    const lift = (k % 4) * 0.03;
+    pillow(m, f, [x + 0.03, x + 0.77], [top - 0.05, top + 0.3 + lift], [edge - 0.95, edge + 0.05], 0.13, C.stone.map((v) => v * (k % 3 === 1 ? 0.9 : k % 3 === 2 ? 1.05 : 1)));
+  }
+  // The pontoon: plastic cubes, green, the yellow ones along its bank side.
+  const [p0, p1] = [west - 2, east + 2];
+  f.box(m, [p0, p1], [sea - 0.3, sea + 0.32], [edge + 0.1, edge + 0.7], C.float);
+  f.box(m, [p0, p1], [sea - 0.3, sea + 0.4], [edge + 0.7, edge + 4.6], C.pontoon);
+  for (let x = p0 + 1; x < p1; x += 1) f.box(m, [x - 0.03, x + 0.03], [sea + 0.4, sea + 0.41], [edge + 0.7, edge + 4.6], C.pontoon.map((v) => v * 0.75));
+  for (let z = edge + 1.7; z < edge + 4.6; z += 1) f.box(m, [p0, p1], [sea + 0.4, sea + 0.41], [z - 0.03, z + 0.03], C.pontoon.map((v) => v * 0.75));
+  // Round hatches on the cubes.
+  for (let x = p0 + 1.2, k = 0; x < p1 - 0.5; x += 2.3, k++) {
+    disc(m, f.at(x, sea + 0.415, edge + 1.6 + (k % 2) * 1.8), 0.22, C.pontoon.map((v) => v * 0.55));
+  }
+  // A low blue railing of hoops along the edge downstream of the pontoon.
+  for (let x = p1 + 0.5; x < p1 + 14; x += 0.9) f.box(m, [x, x + 0.05], [top + 0.2, top + 0.85], [edge - 0.7, edge - 0.66], C.rail);
+  f.box(m, [p1 + 0.5, p1 + 14], [top + 0.82, top + 0.88], [edge - 0.72, edge - 0.64], C.rail);
+  // At its upstream end, a green frame over the path with a yellow top bar, and a sign on a post.
+  const gx = west - 1;
+  for (const z of [wall + 4, edge - 0.9]) f.box(m, [gx - 0.1, gx + 0.1], [top, floor + 3.2], [z - 0.1, z + 0.1], C.gantry);
+  f.box(m, [gx - 0.12, gx + 0.12], [floor + 3, floor + 3.12], [wall + 3.9, edge - 0.8], C.gantry);
+  f.box(m, [gx - 0.12, gx + 0.12], [floor + 3.12, floor + 3.3], [wall + 3.9, edge - 0.8], C.yellow);
+  f.box(m, [gx - 1.6, gx - 1.5], [top, top + 2.4], [edge - 1.2, edge - 1.1], C.post);
+  f.box(m, [gx - 2, gx - 1.1], [top + 1.3, top + 2.3], [edge - 1.1, edge - 1.06], COLORS.white);
+  // The club's banner on the railing at the downstream end, white with its name in red.
+  f.box(m, [east - 7.4, east - 1.2], [g1 + 0.05, g1 + 1.05], [out + 0.02, out + 0.05], C.banner);
+  sign(m, f, 'READING ROWING CLUB', east - 4.3, g1 + 0.55, out + 0.05, null, C.navy, 0.075);
+  f.box(m, [east - 6.8, east - 1.8], [g1 + 0.3, g1 + 0.38], [out + 0.05, out + 0.07], C.red);
+  f.box(m, [east - 6.8, east - 1.8], [g1 + 0.15, g1 + 0.22], [out + 0.05, out + 0.07], C.red);
 }
 
-// Reading Canoe Club: a two-storey red-brick boathouse with roller doors, a
-// glass door under its name (blue on a white board), a balcony with white
-// railings under the eaves of a dark hipped roof on brick pillars, boats racked
-// outside, a grass bank and wide concrete steps down to a grey pontoon.
+// Reading Canoe Club, as the footage shows it from the water (x runs
+// upstream): a two-storey red-brick boathouse with four roller doors. Upstream,
+// a wing with a first-floor balcony behind white railings under a low roof's
+// deep eaves; then a gable to the river with white bargeboards over another
+// balcony, the club's name (blue on a white board) over a glass door at its
+// side; downstream, a longer wing with a glazed corner room upstairs. In
+// front: wide concrete steps down to the water at the upstream end, a hedge
+// along the rest, two big trees, and a grey tube pontoon along the bank.
+export const CANOE = {
+  brick: [0.63, 0.37, 0.27], buff: [0.85, 0.72, 0.52], navy: [0.08, 0.12, 0.4], door: [0.3, 0.27, 0.24], rail: [0.95, 0.95, 0.93],
+  soffit: [0.88, 0.87, 0.84], fascia: [0.3, 0.27, 0.26], roof: [0.3, 0.27, 0.27], window: [0.33, 0.4, 0.48],
+  concrete: [0.6, 0.58, 0.54], glass: [0.5, 0.57, 0.64], cap: [0.55, 0.53, 0.5], tube: [0.86, 0.88, 0.9], deck: [0.3, 0.29, 0.27],
+  hedge: [0.17, 0.27, 0.1], leaves: [[0.27, 0.36, 0.14], [0.22, 0.31, 0.12], [0.33, 0.38, 0.16]],
+};
 function canoeClub(m, course, f) {
-  const half = Math.min(12, (f.along[1] - f.along[0]) / 2);
-  const front = Math.min(f.depth[1], f.edge - 6); // about 6 m of bank and steps in front
-  const back = Math.max(f.depth[0], front - 10);
-  f.box(m, [-half, half], [-1, 6.6], [back, front - 2.2], CLUB.brick);
-  f.box(m, [-half, half], [-1, 3.2], [front - 2.2, front], CLUB.brick);
-  f.box(m, [-half, half], [3.2, 3.5], [front - 2.2, front + 0.1], CLUB.band);
-  for (const x of [-half + 1, half / 3]) f.box(m, [x, x + half / 2 - 1], [0, 2.8], [front, front + 0.05], CLUB.door);
-  // The glass door, white-framed, under the name.
-  f.box(m, [-half / 3 + 0.5, -half / 3 + 2.7], [0, 2.4], [front, front + 0.05], COLORS.white);
-  f.box(m, [-half / 3 + 0.65, -half / 3 + 2.55], [0.1, 2.25], [front + 0.05, front + 0.08], COLORS.glass);
-  f.box(m, [-half + 1, half - 1], [4.2, 5.6], [front - 2.2, front - 2.15], CLUB.dark);
-  f.box(m, [-half, half], [4.4, 4.5], [front, front + 0.1], COLORS.white);
-  for (let x = -half; x <= half; x += 1.2) f.box(m, [x, x + 0.06], [3.5, 4.4], [front, front + 0.06], COLORS.white);
-  // Brick pillars holding the eaves over the balcony, and the roof.
-  for (const x of [-half, -0.3, half - 0.6]) f.box(m, [x, x + 0.6], [3.5, 6.6], [front - 0.6, front], CLUB.brick);
-  f.box(m, [-half - 0.4, half + 0.4], [6.6, 6.9], [back - 0.4, front + 0.4], COLORS.white);
-  roof(m, f, half + 0.6, [back - 0.6, front + 0.6], 6.9, 2.6, CLUB.slate);
-  // The name, blue on a white board over the doors.
-  f.box(m, [-6.6, 6.6], [2.85, 3.2], [front + 0.06, front + 0.1], CLUB.board);
-  sign(m, f, 'READING CANOE CLUB', 0, 2.88, front + 0.12, null, CLUB.blue, 0.06);
-  // Kayaks and canoes on a rack by the wall, in club colours.
-  const colours = [[0.9, 0.2, 0.15], [0.1, 0.45, 0.8], [0.95, 0.75, 0.1], [0.15, 0.6, 0.3], [0.9, 0.45, 0.1], [0.85, 0.85, 0.85]];
-  for (let tier = 0; tier < 3; tier++) {
-    for (let k = 0; k < 2; k++) {
-      const x = half + 1.5 + k * 0.9;
-      f.box(m, [x, x + 0.5], [0.5 + tier * 0.6, 0.8 + tier * 0.6], [front - 4.5, front + 0.5], colours[(tier * 2 + k) % colours.length]);
+  const C = CANOE;
+  const [lo, hi] = [Math.max(f.along[0], -21), Math.min(f.along[1], 14)];
+  const edge = f.edge;
+  const front = Math.min(f.depth[1], edge - 9); // a paved forecourt, then the bank and its steps
+  const back = Math.max(f.depth[0], front - 11);
+  const sea = -f.origin[1];
+  // Its forecourt stands two metres over the water, up a flight of steps.
+  const floor = Math.max(ground(course, ...xz(f.at(0, 0, front))).y - f.origin[1], sea + 2);
+  const [g1, eave] = [floor + 3.2, floor + 6.4];
+  const top = sea + 0.75; // the bank's capping
+  // The sections along the front (x upstream): the upstream wing, the gable, the downstream wing.
+  const [a, b] = [hi - 9, hi - 17];
+  // Ground floor and upstairs back walls; the balconies are set into the front.
+  f.box(m, [lo, hi], [floor - 1, g1], [back, front], C.brick);
+  f.box(m, [lo, hi], [g1, eave], [back, front - 2], C.brick);
+  // Downstream, the wing bows out towards the river: three faces, a roller
+  // door in each, a band of big white-framed windows over them, buff brick
+  // bands at the door heads and the sills.
+  const third = (b - lo) / 3;
+  const bow = [0.5, 1.2, 0.5];
+  for (let k = 0; k < 3; k++) {
+    const [x0, x1, z] = [lo + k * third, lo + (k + 1) * third, front + bow[k]];
+    f.box(m, [x0, x1], [floor - 1, eave], [front - 2, z], C.brick);
+    roller(x0 + 0.7, x1 - 0.7, z);
+    for (const [y0, y1] of [[floor + 2.85, floor + 3.05], [g1 + 0.35, g1 + 0.5], [eave - 0.25, eave - 0.1]]) f.box(m, [x0, x1], [y0, y1], [z, z + 0.03], C.buff);
+    f.box(m, [x0 + 0.2, x1 - 0.2], [g1 + 0.5, eave - 0.35], [z, z + 0.03], COLORS.white);
+    const panes = Math.round((x1 - x0 - 0.4) / 1.1);
+    for (let j = 0; j < panes; j++) {
+      const w = (x1 - x0 - 0.4) / panes;
+      f.box(m, [x0 + 0.2 + j * w + 0.07, x0 + 0.2 + (j + 1) * w - 0.07], [g1 + 0.6, eave - 0.45], [z + 0.03, z + 0.05], C.glass);
+    }
+    // Buff quoins up the corners.
+    for (let y = floor; y < eave - 0.3; y += 0.6) f.box(m, [x0, x0 + (Math.round(y * 5) % 2 ? 0.45 : 0.25)], [y, y + 0.3], [z, z + 0.035], C.buff);
+  }
+  // White downpipes at the joints of the bow.
+  for (const x of [lo + third, lo + 2 * third]) f.box(m, [x - 0.06, x + 0.06], [floor, eave], [front + 0.55, front + 0.67], COLORS.white);
+  // Roller doors: one under the gable, one upstream.
+  for (const [x0, x1] of [[b + 2, a - 2.2], [a + 3.6, hi - 0.8]]) roller(x0, x1, front);
+  // A roller door under a shallow brick arch.
+  function roller(x0, x1, z) {
+    const [head, rise] = [floor + 2.55, 0.35];
+    f.box(m, [x0, x1], [floor, head], [z, z + 0.05], C.door);
+    for (let y = floor + 0.3; y < head; y += 0.3) f.box(m, [x0, x1], [y, y + 0.03], [z + 0.05, z + 0.06], C.door.map((v) => v * 0.8));
+    const out = [f.fwd[0], 0, f.fwd[1]];
+    const arc = (t) => [x0 + (x1 - x0) * t, head + rise * Math.sin(Math.PI * t)];
+    for (let j = 0; j < 6; j++) {
+      const [[xa, ya], [xb, yb]] = [arc(j / 6), arc((j + 1) / 6)];
+      m.triFacing(f.at(xa, head, z + 0.05), f.at(xb, head, z + 0.05), f.at(xb, yb, z + 0.05), C.door, out);
+      m.triFacing(f.at(xa, head, z + 0.05), f.at(xb, yb, z + 0.05), f.at(xa, ya, z + 0.05), C.door, out);
+      // The arch: a ring of bricks on end round the head.
+      m.triFacing(f.at(xa, ya, z + 0.07), f.at(xb, yb, z + 0.07), f.at(xb, yb + 0.25, z + 0.07), C.brick.map((v) => v * 1.08), out);
+      m.triFacing(f.at(xa, ya, z + 0.07), f.at(xb, yb + 0.25, z + 0.07), f.at(xa, ya + 0.25, z + 0.07), C.brick.map((v) => v * 1.08), out);
     }
   }
-  f.box(m, [half + 1.3, half + 3.3], [0, 2.2], [front - 4.6, front - 4.4], CLUB.piling);
-  // In front: a grass bank on the left and concrete steps down to the water on
-  // the right, a piled wall along the edge, and the pontoon.
-  const water = f.edge;
-  const sea = -f.origin[1]; // the water's level, from the ground at the club
-  f.box(m, [-half - 6, half + 8], [sea - 0.6, sea + 0.5], [water - 0.4, water], CLUB.piling);
-  const bank = [f.at(-half - 6, 0.1, front), f.at(-2, 0.1, front), f.at(-2, sea + 0.5, water - 0.4), f.at(-half - 6, sea + 0.5, water - 0.4)];
-  m.tri(bank[0], bank[1], bank[2], COLORS.grass);
-  m.tri(bank[0], bank[2], bank[3], COLORS.grass);
-  for (const x of [-half - 3, -half + 1.5, -6]) m.sphere(f.at(x, (sea + 0.6) / 2, (front + water) / 2), 1.3, LEAVES[1], 3, 6);
-  const steps = 8;
-  for (let k = 0; k < steps; k++) {
-    const [z0, z1] = [k, k + 1].map((j) => front + ((water - 0.4 - front) * j) / steps);
-    const top = 0.3 + ((sea + 0.5 - 0.3) * (k + 1)) / steps;
-    f.box(m, [-2, half + 8], [sea - 0.6, top], [z0, z1], k === steps - 1 ? CLUB.stained : CLUB.hard);
+  for (const [y0, y1] of [[floor + 2.85, floor + 3.05], [eave - 0.25, eave - 0.1]]) f.box(m, [b, hi], [y0, y1], [front, front + 0.03], C.buff);
+  // The glass door and the club's name over it, between the gable and the upstream wing.
+  f.box(m, [a + 0.3, a + 2.5], [floor, floor + 2.4], [front, front + 0.05], COLORS.white);
+  f.box(m, [a + 0.45, a + 2.35], [floor + 0.1, floor + 2.25], [front + 0.05, front + 0.08], COLORS.glass);
+  f.box(m, [a - 1.3, a + 4.1], [floor + 2.5, floor + 3.12], [front + 0.05, front + 0.09], CLUB.board);
+  sign(m, f, 'READING CANOE CLUB', a + 1.4, floor + 2.61, front + 0.1, null, C.navy, 0.07);
+  // Balconies: white railings along the front of both balcony sections.
+  for (const [x0, x1] of [[b, a], [a, hi]]) {
+    f.box(m, [x0, x1], [g1 - 0.15, g1 + 0.05], [front - 2, front + 0.1], C.concrete);
+    f.box(m, [x0, x1], [g1 + 1, g1 + 1.08], [front - 0.04, front + 0.04], C.rail);
+    for (let x = x0 + 0.15; x < x1; x += 0.25) f.box(m, [x, x + 0.04], [g1 + 0.05, g1 + 1], [front - 0.02, front + 0.02], C.rail);
+    for (let x = x0 + 1; x < x1 - 1; x += 2.2) f.box(m, [x, x + 1.4], [g1 + 0.6, g1 + 2.4], [front - 2, front - 1.96], C.window);
   }
-  for (const y of [0.1, 0.5, 0.9]) f.box(m, [-half + 2, -half + 2.6], [sea + y, sea + y + 0.05], [water, water + 0.1], COLORS.white);
-  f.box(m, [-1, half + 6], [sea - 0.1, sea + 0.28], [water + 0.2, water + 2.8], CLUB.pontoon);
+  // Upstream: a low roof, its deep white soffit over the balcony.
+  f.box(m, [a, hi + 0.6], [eave, eave + 0.45], [back - 0.6, front + 0.9], C.fascia);
+  f.box(m, [a, hi + 0.6], [eave - 0.02, eave], [front - 2, front + 0.9], C.soffit);
+  roof(m, f, (hi + 0.6 - a) / 2, [back - 0.6, front + 0.9], eave + 0.45, 1.4, C.roof, (a + hi + 0.6) / 2);
+  // The gable, its ridge running back from the river, on white posts.
+  const gx = (a + b) / 2;
+  const apex = eave + 2.3;
+  for (const x of [b + 0.2, a - 0.4]) f.box(m, [x, x + 0.2], [g1, eave], [front - 0.2, front], C.rail);
+  m.triFacing(f.at(b - 0.3, eave, front), f.at(a + 0.3, eave, front), f.at(gx, apex, front), C.brick, [f.fwd[0], 0, f.fwd[1]]);
+  for (const [x, y] of [[b - 0.5, eave - 0.2], [a + 0.5, eave - 0.2]]) {
+    const run = [f.at(x, y, back), f.at(x, y, front + 0.6), f.at(gx, apex + 0.1, front + 0.6), f.at(gx, apex + 0.1, back)];
+    m.tri(run[0], run[1], run[2], C.roof);
+    m.tri(run[0], run[2], run[3], C.roof);
+    beam(m, f.at(x, y, front + 0.6), f.at(gx, apex + 0.1, front + 0.6), 0.14, COLORS.white);
+  }
+  // Paler brick laid in diamonds on the gable, and the clock.
+  for (const k of [0, 1, 2]) f.box(m, [gx - 0.5 + k * 0.1, gx + 0.5 - k * 0.1], [eave + 0.4 + k * 0.35, eave + 0.6 + k * 0.35], [front, front + 0.03], C.buff);
+  m.cylinder(f.at(gx + 2.5, g1 - 0.9, front + 0.02), 0.3, 0.05, 10, COLORS.white);
+  // Downstream: the glazed corner room, a deep white fascia and a low hipped roof.
+  f.box(m, [lo - 0.8, lo + 3], [g1 + 0.3, eave - 0.2], [front - 0.4, front + 1.4], COLORS.white);
+  f.box(m, [lo - 0.7, lo + 2.9], [g1 + 0.45, eave - 0.35], [front - 0.3, front + 1.44], COLORS.glass);
+  f.box(m, [lo - 0.9, b], [eave, eave + 0.5], [back - 0.4, front + 1.9], COLORS.white);
+  roof(m, f, (b - lo + 0.9) / 2, [back - 0.4, front + 1.9], eave + 0.5, 2, C.roof, (lo - 0.9 + b) / 2);
+  // In front: the forecourt; two flights of steps down to the water, one in
+  // front of the upstream roller door and a wider one in front of the gable,
+  // a hedge clump between them under the name; a hedge along the rest; the
+  // bank's capping and the pontoon.
+  const stepsFrom = b + 0.3;
+  const [x0, x1] = [lo - 6, hi + 26];
+  const yard = edge - 3.6;
+  f.box(m, [x0, x1], [sea - 0.6, floor + 0.04], [front, yard], C.concrete);
+  f.box(m, [x0, b - 0.4], [floor, floor + 0.07], [yard - 2.2, yard], COLORS.grass); // a strip of lawn by the bank
+  const steps = 7;
+  const flights = [[b + 0.3, a - 0.6], [a + 3.2, hi + 0.4]];
+  const stepZ = (k) => [k, k + 1].map((j) => yard + ((edge - 0.3 - yard) * j) / steps);
+  for (const [fa, fb] of flights) {
+    for (let k = 0; k < steps; k++) {
+      const y = floor + ((top - floor) * (k + 1)) / steps;
+      f.box(m, [fa, fb], [sea - 0.6, y], stepZ(k), C.concrete.map((v) => v * (k % 2 ? 0.86 : 1)));
+    }
+    // Brick cheek walls either side, stone-capped.
+    for (const x of [fa - 0.35, fb]) {
+      for (let k = 0; k < steps; k++) {
+        const y = floor + ((top - floor) * k) / steps + 0.45;
+        f.box(m, [x, x + 0.35], [sea - 0.6, y], stepZ(k), C.brick);
+        f.box(m, [x - 0.03, x + 0.38], [y, y + 0.08], stepZ(k), C.cap);
+      }
+    }
+  }
+  // Grass banks down to the water: downstream, between the flights, upstream.
+  for (const [xa, xb] of [[x0, b - 0.05], [a - 0.25, a + 2.85], [hi + 0.75, x1]]) {
+    const bank = [f.at(xa, floor, yard), f.at(xb, floor, yard), f.at(xb, top, edge - 0.3), f.at(xa, top, edge - 0.3)];
+    m.tri(bank[0], bank[1], bank[2], COLORS.grass.map((v) => v * 0.8));
+    m.tri(bank[0], bank[2], bank[3], COLORS.grass.map((v) => v * 0.8));
+  }
+  hedge(m, f, [lo + 4, b - 0.4], [top, floor + 0.35], [edge - 1.7, edge - 0.5], C.hedge);
+  hedge(m, f, [a - 0.1, a + 2.7], [floor - 0.6, floor + 0.9], [yard - 0.4, yard + 1.6], C.hedge);
+  hedge(m, f, [hi + 3.5, hi + 9], [floor - 0.3, floor + 1.6], [yard - 1, yard + 1.4], C.hedge);
+  backDoors(m, course, f, [-12, -4, 4, 12].filter((x) => x > lo + 1 && x < hi - 1), floor, back, CLUB.blue);
+  f.box(m, [x0, x1], [sea - 0.8, top], [edge - 0.3, edge], C.cap);
+  // A ladder up the bank beside the upstream flight, and its post.
+  for (const y of [0.1, 0.45, 0.8]) f.box(m, [a + 2.4, a + 3], [sea + y, sea + y + 0.05], [edge, edge + 0.1], COLORS.white);
+  f.box(m, [a + 2.3, a + 2.42], [sea - 0.3, floor + 1.2], [edge + 0.05, edge + 0.17], C.cap);
+  f.box(m, [stepsFrom - 1, x1 - 2], [sea - 0.1, sea + 0.15], [edge, edge + 1.2], C.deck);
+  tube(m, f.at(stepsFrom - 1, sea + 0.3, edge + 1.45), f.at(x1 - 2, sea + 0.3, edge + 1.45), 0.3, C.tube);
+  // The two big trees: one in front of the downstream wing, one upstream.
+  // Wide, ragged crowns: a few lumps of leaves round each, overhanging the bank.
+  for (const [x, z, h] of [[b - 6, yard - 0.6, 15], [hi + 12, yard + 0.6, 16]]) {
+    const at = f.at(x, floor, z);
+    m.cylinder([at[0], at[1] - 0.3, at[2]], 0.35, h * 0.5, 6, COLORS.trunk);
+    for (const [dx, dy, dz, r, c] of [[0, 0.68, 0, 0.26, 0], [2.6, 0.58, 1.6, 0.2, 1], [-2.8, 0.6, 0.8, 0.19, 2], [0.8, 0.8, -1.5, 0.17, 1], [-1, 0.5, 2.6, 0.16, 0]]) {
+      m.sphere(f.at(x + dx, floor + h * dy, z + dz), h * r, C.leaves[c], 3, 6);
+    }
+  }
+  // A motor launch moored along the hedge, under a blue cover.
+  const [bx0, bx1] = [lo + 2, lo + 8.5];
+  f.box(m, [bx0, bx1], [sea - 0.2, sea + 0.55], [edge + 0.3, edge + 2.3], COLORS.white);
+  f.box(m, [bx0 - 0.8, bx0], [sea - 0.1, sea + 0.5], [edge + 0.7, edge + 1.9], COLORS.white);
+  f.box(m, [bx0 + 0.6, bx1 - 0.4], [sea + 0.55, sea + 1.05], [edge + 0.45, edge + 2.15], [0.12, 0.3, 0.6]);
+  // Upstream of it the bank is overgrown: shrubs down to the water and big trees.
+  for (let x = hi + 4, k = 0; x < hi + 34; x += 2.6, k++) {
+    const z = edge - 1.6 - (k % 3) * 0.7;
+    const r = 2 + ((k * 7) % 5) * 0.3;
+    m.sphere(f.at(x, top + r * 0.7, z), r, C.leaves[k % 3].map((v) => v * 1.1), 3, 6);
+  }
+  for (const [x, h] of [[hi + 20, 14], [hi + 30, 12]]) {
+    const at = f.at(x, top, edge - 4);
+    m.cylinder([at[0], at[1] - 0.3, at[2]], 0.3, h * 0.5, 6, COLORS.trunk);
+    for (const [dx, dy, dz, r, c] of [[0, 0.7, 0, 0.27, 2], [2.4, 0.55, 1.4, 0.2, 0], [-2.2, 0.6, 1, 0.2, 1]]) {
+      m.sphere(f.at(x + dx, top + h * dy, edge - 4 + dz), h * r, C.leaves[c], 3, 6);
+    }
+  }
+  // A canoe rack on the grass at the downstream end, a few boats on it.
+  const rack = [lo - 4.5, lo - 1.5];
+  for (const x of rack) f.box(m, [x - 0.06, x + 0.06], [floor, floor + 1.6], [front + 2, front + 2.12], C.door);
+  [[0.9, 0.9, 0.88], [0.2, 0.55, 0.6], [0.85, 0.85, 0.82], [0.25, 0.45, 0.7]].forEach((c, k) => {
+    const y = floor + 0.5 + (k % 2) * 0.55;
+    f.box(m, [lo - 5.2, lo - 0.8], [y, y + 0.3], [front + 1.5 + Math.floor(k / 2) * 0.7, front + 2 + Math.floor(k / 2) * 0.7], c);
+  });
 }
 
 // A tall red-brick boathouse on the water (upstream of the canoe club, on the
@@ -1398,9 +1675,10 @@ function channelSign(m, course, f) {
   const right = [-fwd[1], fwd[0]];
   const face = { at: (x, y, z) => [f.origin[0] + right[0] * x + fwd[0] * z, y, f.origin[2] + right[1] * x + fwd[1] * z], box: (mm, xr, yr, zr, color) => orientedBox(mm, f.origin, right, fwd, xr, yr, zr, color) };
   face.box(m, [-0.9, 0.9], [2.1, 2.65], [0.02, 0.08], FEAT.blue);
-  sign(m, face, 'CHANNEL', -0.2, 2.25, 0.1, null, COLORS.white, 0.05);
-  face.box(m, [0.45, 0.75], [2.34, 2.42], [0.08, 0.1], COLORS.white);
-  m.triFacing(face.at(0.75, 2.27, 0.1), face.at(0.75, 2.49, 0.1), face.at(0.86, 2.38, 0.1), COLORS.white, [fwd[0], 0, fwd[1]]);
+  // The word, then an arrow to its right as you read it (x runs to your left).
+  sign(m, face, 'CHANNEL', 0.2, 2.25, 0.1, null, COLORS.white, 0.05);
+  face.box(m, [-0.75, -0.45], [2.34, 2.42], [0.08, 0.1], COLORS.white);
+  m.triFacing(face.at(-0.75, 2.27, 0.1), face.at(-0.75, 2.49, 0.1), face.at(-0.86, 2.38, 0.1), COLORS.white, [fwd[0], 0, fwd[1]]);
 }
 
 // The little red box on the railway wall, just above the water (the owner
@@ -1603,11 +1881,11 @@ export const FEATURE_STYLES = Object.keys(FEATURES);
 export const LANDMARK_STYLES = Object.keys(LANDMARKS);
 
 // A hipped roof over x in [-half, half], z in [z0, z1], from eaves at `y` up `rise`.
-function roof(m, f, half, [z0, z1], y, rise, color) {
+function roof(m, f, half, [z0, z1], y, rise, color, cx = 0) {
   const mid = (z0 + z1) / 2;
   const inset = Math.min(half, (z1 - z0) / 2);
-  const c = [f.at(-half, y, z0), f.at(half, y, z0), f.at(half, y, z1), f.at(-half, y, z1)];
-  const ridge = [f.at(-half + inset, y + rise, mid), f.at(half - inset, y + rise, mid)];
+  const c = [f.at(cx - half, y, z0), f.at(cx + half, y, z0), f.at(cx + half, y, z1), f.at(cx - half, y, z1)];
+  const ridge = [f.at(cx - half + inset, y + rise, mid), f.at(cx + half - inset, y + rise, mid)];
   m.tri(c[0], c[1], ridge[1], color);
   m.tri(c[0], ridge[1], ridge[0], color);
   m.tri(c[3], c[2], ridge[1], color.map((v) => v * 0.9));
@@ -1625,14 +1903,15 @@ const GLYPHS = {
 
 // `text` centred at x, its bottom at y, on the face at depth z, facing the
 // water, on an optional `board` colour behind it. `px`: pixel size, metres.
-function sign(m, f, text, x, y, z, board, color, px = 0.12) {
+export function sign(m, f, text, x, y, z, board, color, px = 0.12) {
   const width = text.length * 4 * px - px;
   if (board) f.box(m, [x - width / 2 - px, x + width / 2 + px], [y - px, y + 6 * px], [z - 0.02, z], board);
   [...text].forEach((ch, i) => {
     const glyph = GLYPHS[ch] ?? GLYPHS[' '];
     for (let k = 0; k < 15; k++) {
       if (glyph[k] !== '1') continue;
-      const gx = x - width / 2 + (i * 4 + (k % 3)) * px;
+      // Laid out towards -x: facing's x runs to the left as you look at the front.
+      const gx = x + width / 2 - (i * 4 + (k % 3) + 1) * px;
       const gy = y + (4 - Math.floor(k / 3)) * px;
       f.box(m, [gx, gx + px], [gy, gy + px], [z, z + 0.02], color);
     }
@@ -1647,6 +1926,64 @@ function area(ring) {
     a += ax * bz - bx * az;
   }
   return Math.abs(a / 2);
+}
+
+// A block with its top edges rounded off (a rock-faced stone, a sandbag):
+// the top face is `inset` in from the sides, the sides slope up to it.
+function pillow(m, f, [x0, x1], [y0, y1], [z0, z1], inset, color) {
+  const b = [f.at(x0, y0, z0), f.at(x1, y0, z0), f.at(x1, y0, z1), f.at(x0, y0, z1)];
+  const mid = y0 + (y1 - y0) * 0.55;
+  const w = [f.at(x0, mid, z0), f.at(x1, mid, z0), f.at(x1, mid, z1), f.at(x0, mid, z1)];
+  const t = [f.at(x0 + inset, y1, z0 + inset), f.at(x1 - inset, y1, z0 + inset), f.at(x1 - inset, y1, z1 - inset), f.at(x0 + inset, y1, z1 - inset)];
+  const c = f.at((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  const face = (p, q, r) => m.triFacing(p, q, r, color, [0, 1, 2].map((i) => (p[i] + q[i] + r[i]) / 3 - c[i]));
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    face(b[i], b[j], w[j]); face(b[i], w[j], w[i]);
+    face(w[i], w[j], t[j]); face(w[i], t[j], t[i]);
+  }
+  m.tri(t[0], t[1], t[2], color);
+  m.tri(t[0], t[2], t[3], color);
+}
+
+// A clipped hedge: a block, its top paler where the light catches the new growth.
+function hedge(m, f, xr, [y0, y1], zr, color) {
+  f.box(m, xr, [y0, y1 - 0.12], zr, color);
+  f.box(m, [xr[0] + 0.05, xr[1] - 0.05], [y1 - 0.12, y1], [zr[0] + 0.05, zr[1] - 0.05], color.map((v) => v * 1.45));
+}
+
+// Doors on a club's land side (the walk's labels hang over them), facing away
+// from the water, at x along its back wall `z`.
+function backDoors(m, course, f, xs, floor, z, color) {
+  for (const x of xs) {
+    const y = Math.max(floor, ground(course, ...xz(f.at(x, 0, z - 0.6))).y - f.origin[1]); // the ground at the door
+    f.box(m, [x - 0.7, x + 0.7], [y - 0.3, y + 2.3], [z - 0.08, z + 0.25], COLORS.white);
+    f.box(m, [x - 0.6, x + 0.6], [y - 0.3, y + 2.2], [z - 0.1, z + 0.25], color);
+  }
+}
+
+// A flat disc lying level (a hatch, a plate).
+function disc(m, [x, y, z], r, color, segments = 8) {
+  for (let k = 0; k < segments; k++) {
+    const [a, b] = [k, k + 1].map((j) => (j / segments) * Math.PI * 2);
+    m.tri([x, y, z], [x + Math.cos(a) * r, y, z + Math.sin(a) * r], [x + Math.cos(b) * r, y, z + Math.sin(b) * r], color);
+  }
+}
+
+// A round bar lying between two points (a floating pipe), lit as round.
+function tube(m, a, b, r, color, segments = 8) {
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(...d);
+  const u = cross3(d, [0, 1, 0]).map((v) => v / Math.hypot(...cross3(d, [0, 1, 0])));
+  const v = cross3(u, d).map((x) => x / len);
+  const ring = (k) => u.map((x, i) => (x * Math.cos((k / segments) * Math.PI * 2) + v[i] * Math.sin((k / segments) * Math.PI * 2)) * r);
+  for (let k = 0; k < segments; k++) {
+    const [p, q] = [ring(k), ring(k + 1)];
+    const out = p.map((x, i) => x + q[i]);
+    const [a0, a1, b0, b1] = [a.map((x, i) => x + p[i]), a.map((x, i) => x + q[i]), b.map((x, i) => x + p[i]), b.map((x, i) => x + q[i])];
+    m.triFacing(a0, b0, b1, color, out);
+    m.triFacing(a0, b1, a1, color, out);
+  }
 }
 
 // A square-section bar between two points: cables, struts, rails.

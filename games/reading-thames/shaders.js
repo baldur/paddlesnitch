@@ -118,7 +118,9 @@ struct Out {
   let n = normalize(in.normal);
   let sun = max(dot(n, frame.sunDir.xyz), 0.0);
   let ambient = mix(vec3f(0.3, 0.27, 0.24), frame.skyTop.rgb * 0.7 + 0.25, 0.5 + 0.5 * n.y);
-  let lit = in.color * (vec3f(1.0, 0.94, 0.82) * sun * 0.8 + ambient * 0.62);
+  // Light off the sky opposite the sun, so the shaded side of a building isn't near black.
+  let fill = max(dot(n, normalize(vec3f(-frame.sunDir.x, 0.25, -frame.sunDir.z))), 0.0);
+  let lit = in.color * (vec3f(1.0, 0.94, 0.82) * sun * 0.8 + ambient * 0.62 + vec3f(0.85, 0.88, 0.95) * fill * 0.3);
   return vec4f(fog(lit, distance(in.world, frame.camPos.xyz)), 1.0);
 }
 `;
