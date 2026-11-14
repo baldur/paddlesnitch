@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
-import { groundAt, bridgeBay, BRIDGE, bridgeTriangles, rowingEnd } from '../reading-thames/world.js';
+import { groundAt, bridgeBay, BRIDGE, bridgeTriangles, rowingEnd, ROWING_DOORS } from '../reading-thames/world.js';
 import { WIDE, PLACES, START, cutBetween, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -46,6 +46,10 @@ test("the rowing club's shots: in front of its downstream end, the landing stage
   assert.ok(Math.abs(rclub.eye[1] - groundAt(course, rclub.eye[0], rclub.eye[2]) - 1.7) < 0.01, 'standing in the car park');
   const wall = (p) => (p[0] - end[0]) * (park.at(1, 0, 0)[0] - end[0]) + (p[2] - end[2]) * (park.at(1, 0, 0)[2] - end[2]);
   for (const room of ['rchanging', 'rboathouse', 'rclubhouse', 'erg']) assert.ok(Math.abs(wall(shots.doors.rclub[room]) - 0.3) < 0.01, `${room} labelled on the end wall`);
+  // Each of the three ground-floor rooms on its own boat door, across the wall (+z the river side).
+  const across = (p) => { const z1 = park.at(0, 0, 1); return (p[0] - end[0]) * (z1[0] - end[0]) + (p[2] - end[2]) * (z1[2] - end[2]); };
+  const onDoor = ['rchanging', 'rboathouse', 'erg'].map((room) => ROWING_DOORS.at.findIndex((d) => Math.abs(across(shots.doors.rclub[room]) - d) < ROWING_DOORS.half));
+  assert.deepEqual(onDoor, [0, 1, 2], 'one label on each door');
   assert.ok(Math.hypot(rpontoon.eye[0] - cx, rpontoon.eye[2] - cz) < 60, 'its landing stage');
   assert.ok(Math.abs(rpontoon.eye[1] - 1.6) < 1e-9);
   // Underground, like the canoe club's rooms, and apart from them.
@@ -150,7 +154,8 @@ test('Back always leads to the bridge: from every place, one level up at a time,
     let at = name;
     for (let steps = 0; at !== START; steps++) {
       assert.ok(steps < 4, `${name} never gets back to the bridge`);
-      assert.ok(PLACES[at].doors.includes(PLACES[at].up), `${at}: Back goes through one of its doors`);
+      // (The rowing club's car park has Back alone: a label for it crowded the doors on a phone.)
+      assert.ok(PLACES[at].doors.includes(PLACES[at].up) || (at === 'rclub' && PLACES[at].backOnly), `${at}: Back goes through one of its doors`);
       at = PLACES[at].up;
     }
   }

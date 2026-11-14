@@ -10,7 +10,7 @@
 // DOM; main.js draws the shots and the doors.
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt } from './course.js';
-import { groundAt, bridgeBay, BRIDGE, landmarkFrame, rowingEnd } from './world.js';
+import { groundAt, bridgeBay, BRIDGE, landmarkFrame, rowingEnd, ROWING_DOORS } from './world.js';
 import { HIRE_BOATS } from './outing.js';
 
 // Where each place's doors lead. `up` is where Back goes: the rooms and the
@@ -23,7 +23,8 @@ export const PLACES = {
   clubhouse: { label: 'The clubhouse', doors: ['club'], inside: true, up: 'club' },
   kerg: { label: 'The erg room', doors: ['club'], inside: true, up: 'club' },
   pontoon: { label: 'The pontoon', doors: ['club'], up: 'club' },
-  rclub: { label: 'Reading Rowing Club', doors: ['rchanging', 'rboathouse', 'rclubhouse', 'erg', 'rpontoon', 'path'], up: 'path', club: 'rowing' },
+  // (No door back to the bridge in its car park: Back does that, and its label crowded the doors on a phone.)
+  rclub: { label: 'Reading Rowing Club', doors: ['rchanging', 'rboathouse', 'rclubhouse', 'erg', 'rpontoon'], up: 'path', backOnly: true, club: 'rowing' },
   rchanging: { label: 'The changing room', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
   rboathouse: { label: 'The boathouse', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
   rclubhouse: { label: 'The clubhouse', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
@@ -92,10 +93,10 @@ export const SWAN_WALK = 2.4;
 // downstream end wall, y up from the car park, z across from the middle, +z the
 // river side): where you stand, where you look, and each label's spot: the
 // changing room, boathouse and erg room on the three boat doors, the clubhouse
-// at the window upstairs, the water off to the right, the way back to the left.
+// at the window upstairs, the water off to the right.
 export const ROWING_FRONT = {
-  eye: [21, 1.7, 2.5], look: [0, 3.6, 1.5],
-  doors: { rchanging: [0.3, 1.5, -6.9], rboathouse: [0.3, 1.5, -0.4], erg: [0.3, 1.5, 6.2], rclubhouse: [0.3, 5.75, 0], rpontoon: [3, 0.6, 14], path: [-2, 1.4, -14] },
+  eye: [15, 1.7, 2], look: [0, 3.4, 1.2],
+  doors: { rchanging: [0.3, 1.5, ROWING_DOORS.at[0]], rboathouse: [0.3, 1.5, ROWING_DOORS.at[1]], erg: [0.3, 1.5, ROWING_DOORS.at[2]], rclubhouse: [0.3, 5.75, 0], rpontoon: [2.5, 0.3, 9.5] },
 };
 export const PATH = { height: 9.8, lean: 5.5, aside: 7, back: 11 }; // the eye on Caversham Bridge (how high, how far over the parapet); how far back from the club you stand
 export const HIPS = 0.9; // a standing paddler's hips above the floor (the paddler mesh starts at the hips)

@@ -396,3 +396,12 @@ test("the rowing club's car park is flat (the bank rises behind the club), and t
   river.pads = pads;
   assert.ok(Math.abs(heights[0] - heights[1]) > 1.5, 'the test would fail without it');
 });
+
+test("the rowing club stands at the same height, and its car park at the same place, whether or not the river was built first", async () => {
+  const { rowingEnd, landmarkFrame, buildWorld } = await import('../reading-thames/world.js');
+  const fresh = courseFromFile(await data('reading'));
+  const before = { end: rowingEnd(fresh).at(0, 0, 0), origin: landmarkFrame(fresh, 'rowing-club').origin };
+  buildWorld(fresh, 1, 'river');
+  assert.deepEqual(rowingEnd(fresh).at(0, 0, 0), before.end, "the car park where the walk's camera stands");
+  assert.deepEqual(landmarkFrame(fresh, 'rowing-club').origin, before.origin, 'the club where it is drawn');
+});

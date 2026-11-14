@@ -1083,6 +1083,8 @@ function rowingPlan(course, f) {
   return { west, east, wall, back, x0, zb, floor };
 }
 const PARK = { long: 22 }; // how far the car park runs out from the club's downstream end
+// Its three boat doors, across the end wall from its middle (+z the river side), and their half width.
+export const ROWING_DOORS = { at: [-6.9, -0.4, 6.2], half: 1.35 };
 // The rowing club's car park, where the walk starts: `at(x, y, z)` is x out
 // from the club's downstream end wall, z across it from its middle (+z towards
 // the river), y up from the car park.
@@ -1274,10 +1276,11 @@ function endBay(m, f, { east, wall, x0, zb, floor, wing, back, eave }) {
   face([zb, zf], [floor + 1.75, floor + 1.9], C.course);
   for (const z of [zm - 3.6, zm + 2.9]) face([z - 0.2, z + 0.2], [floor, floor + 1.9], C.course);
   // Three white boat doors, a blue band across and along the top.
-  for (const z of [zm - 6.9, zm - 0.4, zm + 6.2]) {
-    face([z - 1.35, z + 1.35], [floor, floor + 2.9], C.render, 0.06);
-    face([z - 1.33, z + 1.33], [floor + 1.8, floor + 2], C.trim, 0.02, 0.06);
-    face([z - 1.35, z + 1.35], [floor + 2.78, floor + 2.9], C.trim, 0.02, 0.06);
+  for (const z of ROWING_DOORS.at.map((d) => zm + d)) {
+    const h = ROWING_DOORS.half;
+    face([z - h, z + h], [floor, floor + 2.9], C.render, 0.06);
+    face([z - h + 0.02, z + h - 0.02], [floor + 1.8, floor + 2], C.trim, 0.02, 0.06);
+    face([z - h, z + h], [floor + 2.78, floor + 2.9], C.trim, 0.02, 0.06);
   }
   // The window high in the gable, vents and the alarm box beside it, the crest under it.
   face([zm - 1.85, zm + 1.85], [floor + 5.1, floor + 6.4], C.render, 0.08);
@@ -1316,6 +1319,8 @@ function endBay(m, f, { east, wall, x0, zb, floor, wing, back, eave }) {
   // The car park: tarmac, block paving along the wall.
   f.box(m, [x1, x1 + PARK.long], [floor - 0.3, floor + 0.04], [zb - 6, zf], C.tarmac);
   f.box(m, [x1, x1 + 2.5], [floor - 0.3, floor + 0.05], [zb, zf], C.paving);
+  // White bay lines along its far side, so it reads as a car park.
+  for (let z = zb - 5; z < zf - 2; z += 2.6) f.box(m, [x1 + 6, x1 + 11], [floor + 0.04, floor + 0.06], [z - 0.05, z + 0.05], COLORS.white);
 }
 
 // Reading Canoe Club, as the footage shows it from the water (x runs
