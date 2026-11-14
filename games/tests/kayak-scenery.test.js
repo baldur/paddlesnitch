@@ -342,7 +342,7 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
     const from = src.indexOf(head);
     return src.slice(from, src.indexOf('\n}', from)).split('\n').slice(1)
       .map((l) => l.trim()).filter((l) => l && !l.startsWith('//'))
-      .map((l) => unselect(l.replace(/^(let|float|vec[23]|var) /, '').replace(/vec([23])f/g, 'vec$1').replace(/[{};]/g, '').replace(/^if (.*) return/, 'if $1 return')))
+      .map((l) => unselect(l.replace(/\b(var|int) /g, '').replace(/\bf32\(/g, 'float(').replace(/^(let|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/[{};]/g, '').replace(/^if (.*) return/, 'if $1 return')))
       .map((l) => l.replace(/[()\s]/g, ''));
   };
   const gpu = body(await read('shaders.js'), 'fn treeline(');
@@ -362,4 +362,16 @@ test("the dead tree, the river sign and the beach stand on their banks, not out 
       assert.ok(dry, `${style} at ${at}: the bank is within 3 m`);
     }
   }
+});
+
+test("the water mirrors trees only where a bank is wooded: none under the town at Caversham, full above Mapledurham", async () => {
+  const { bankWoods } = await import('../reading-thames/world.js');
+  const { pointAt: at } = await import('../reading-thames/course.js');
+  const reading = courseFromFile(await data('reading'));
+  const woods = (s) => { const p = at(reading.scenery.river, s); return bankWoods(reading, p.x, p.z, p.tx, p.tz); };
+  assert.deepEqual(woods(50), [0, 0], 'the town reach by Christchurch Bridge');
+  assert.deepEqual(woods(5000), [1, 1], 'the wooded reach');
+  // Facing the other way, left and right swap.
+  const p = at(reading.scenery.river, 300);
+  assert.deepEqual(bankWoods(reading, p.x, p.z, -p.tx, -p.tz), [...woods(300)].reverse());
 });

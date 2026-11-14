@@ -462,6 +462,36 @@ function fromRiver(course, x, z) {
 
 // The height of the ground at a point beside a real river (for a paddler
 // running along the bank on a portage); 0 on a made-up river.
+// How wooded each bank of a real river is beside (x, z), [left, right] as you
+// face along (tx, tz) (left = negative lateral, as the water shader's `across`), 0 to 1: 1 with no
+// buildings within 45 m of the water's edge 60 m either way, falling to 0 with
+// three or more. The water mirrors trees in proportion (main.js packs it into
+// the frame), so a town reach mirrors its sky, not a wall of leaves under its
+// houses. Worked out once per course, every 10 m.
+export function bankWoods(course, x, z, tx, tz) {
+  const river = course.scenery?.river ?? course;
+  if (!course.scenery?.buildings) return [1, 1];
+  if (!river.woodsAlong) {
+    const step = 10;
+    const n = Math.ceil(river.length / step) + 1;
+    const near = [new Float32Array(n), new Float32Array(n)];
+    for (const b of course.scenery.buildings) {
+      const cx = b.shape.reduce((a, q) => a + q[0], 0) / b.shape.length;
+      const cz = b.shape.reduce((a, q) => a + q[1], 0) / b.shape.length;
+      const at = locate(river, cx, cz);
+      if (Math.abs(at.lateral) - widthAt(river, at.s).half > 45) continue;
+      const side = at.lateral < 0 ? 0 : 1;
+      for (let i = Math.max(0, Math.floor((at.s - 60) / step)); i <= Math.min(n - 1, Math.ceil((at.s + 60) / step)); i++) near[side][i]++;
+    }
+    river.woodsAlong = near.map((row) => Array.from(row, (c) => Math.max(0, 1 - c / 3)));
+  }
+  const at = locate(river, x, z);
+  const i = Math.max(0, Math.min(river.woodsAlong[0].length - 1, Math.round(at.s / 10)));
+  const pair = [river.woodsAlong[0][i], river.woodsAlong[1][i]];
+  // Facing down the river line (a route's leg going the other way), its left is your right.
+  return at.tx * tx + at.tz * tz < 0 ? pair.reverse() : pair;
+}
+
 export function groundAt(course, x, z) {
   if (!course.scenery) return 0;
   const river = course.scenery.river;
