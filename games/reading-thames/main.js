@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { loadCourse, riverView } from './course.js';
+import { loadCourse, riverView, locate } from './course.js';
 import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
@@ -13,7 +13,7 @@ import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, moveOldScull, boardHul
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
-import { buildWorld, groundAt } from './world.js';
+import { buildWorld, groundAt, bankWoods } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, HIRE_BOATS, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
 import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, strokeTwist, shouldersAt, legPush, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
@@ -2553,11 +2553,17 @@ function render(time) {
   for (let i = 0; i < 16; i++) frameData.set(wakes[i] ?? [0, 0, 0, 0], 48 + i * 4);
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
-  reflected = riverView(race.course, race.player.loc.s, reflected, time - (reflected?.time ?? time));
+  // (A held camera mirrors the banks where it is, not where your boat is.)
+  const mirrorAt = fixedShot ? locate(race.course, fixedShot.eye[0], fixedShot.eye[2]).s : race.player.loc.s;
+  reflected = riverView(race.course, mirrorAt, fixedShot ? null : reflected, time - (reflected?.time ?? time));
   reflected.time = time;
   const { half } = reflected;
   frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
-  frameData.set(race.course.scenery ? [half + 1, half + 1, 6, 1] : [half + 9, half + 4, 7, 1], 116);
+  // A real river's banks: trees about 10 m tall as the water mirrors them (6 m left the far water sky-pale).
+  // How wooded each bank is here (world.js bankWoods), packed into w as ninths: w = 1 + left tenths + right hundredths.
+  const [woodL, woodR] = race.course.scenery ? bankWoods(race.course, reflected.x, reflected.z, reflected.tx, reflected.tz) : [1, 1];
+  const woods = 1 + Math.round(woodL * 9) / 10 + Math.round(woodR * 9) / 100;
+  frameData.set(race.course.scenery ? [half + 1, half + 1, 10, woods] : [half + 9, half + 4, 7, woods], 116);
   const spots = state === 'racing' ? washMarks(race, race.player) : [];
   for (let i = 0; i < 3; i++) frameData.set(spots[i] ?? [0, 0, 0, 0], 120 + i * 4);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
@@ -2568,7 +2574,7 @@ function render(time) {
     if (r !== race.player && !mode.row) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
   list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle, meshes.swimmer);
-  if (shot) list.push(...placeClub());
+  if (shot && club) list.push(...placeClub()); // (a held debug shot from the menu has no club)
   renderer.draw(frameData, list);
   if (shot && clubEl.classList.contains('waiting')) {
     clubEl.classList.remove('waiting');

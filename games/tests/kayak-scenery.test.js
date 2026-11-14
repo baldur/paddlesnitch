@@ -217,10 +217,10 @@ test('each club stands square to its mapped bank, its pontoon on the water', asy
   }
 });
 
-test("both renderers light the world the same way (the fill light and the lit sum)", async () => {
+test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water)", async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
-  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|float|vec3) (fill|lit) =/.test(l))
-    .map((l) => l.replace(/^(let|float|vec3) /, '').replace(/vec3f/g, 'vec3').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
+  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|float|vec[23]) (fill|lit|still|tl|sky) =/.test(l))
+    .map((l) => l.replace(/^(let|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
   assert.ok(gpu.some((l) => l.startsWith('fill =')), 'WebGPU has the fill light');
   assert.deepEqual(gl, gpu);
@@ -298,4 +298,80 @@ test('the boatyard stands on land on its quay, and the timber boathouse on its o
   const villa = reading.buildings.find((b) => b.style === 'riverside-villa').shape;
   const gap = Math.min(...villa.map(([x, z]) => Math.hypot(x - spot.at[0], z - spot.at[1])));
   assert.ok(gap > 8, `${gap.toFixed(1)} m from the villa`);
+});
+
+test('upstream of Mapledurham: the dead tree, the white river sign and the sand beach are built on their banks', async () => {
+  const reading = await data('reading');
+  const tris = await world();
+  const is = (rgb) => ({ color }) => color.every((v, i) => Math.abs(v - rgb[i]) < 1e-3);
+  const mid = ({ p }) => [0, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+  for (const [style, rgb, min] of [['dead-tree', [0.42, 0.4, 0.37], 60], ['river-sign', [0.15, 0.2, 0.45], 6]]) {
+    const at = reading.features.find((f) => f.style === style)?.at;
+    assert.ok(at, `${style} is in the course`);
+    const built = tris.filter(is(rgb)).filter((t) => Math.hypot(mid(t)[0] - at[0], mid(t)[1] - at[1]) < 15);
+    assert.ok(built.length >= min, `${style}: ${built.length} triangles`);
+  }
+  assert.ok(reading.features.some((f) => f.style === 'beach' && Math.hypot(f.at[0] + 4711, f.at[1] + 2438) < 10), 'the beach at r1');
+});
+
+test('both renderers mirror the banks with the same treeline(), line for line', async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  // WGSL's select(f, t, c) as GLSL's c ? t : f, then without types, brackets or spaces.
+  const args = (inner) => {
+    const out = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < inner.length; i++) {
+      if ('(['.includes(inner[i])) depth++;
+      else if (')]'.includes(inner[i])) depth--;
+      else if (inner[i] === ',' && depth === 0) { out.push(inner.slice(start, i)); start = i + 1; }
+    }
+    return [...out, inner.slice(start)].map((a) => a.trim());
+  };
+  const unselect = (line) => {
+    const at = line.indexOf('select(');
+    if (at < 0) return line;
+    let depth = 0, end = at + 6;
+    for (; end < line.length; end++) {
+      if (line[end] === '(') depth++;
+      else if (line[end] === ')' && --depth === 0) break;
+    }
+    const [f, t, c] = args(line.slice(at + 7, end));
+    return unselect(`${line.slice(0, at)}${c} ? ${t} : ${f}${line.slice(end + 1)}`);
+  };
+  const body = (src, head) => {
+    const from = src.indexOf(head);
+    return src.slice(from, src.indexOf('\n}', from)).split('\n').slice(1)
+      .map((l) => l.trim()).filter((l) => l && !l.startsWith('//'))
+      .map((l) => unselect(l.replace(/\b(var|int) /g, '').replace(/\bf32\(/g, 'float(').replace(/^(let|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/[{};]/g, '').replace(/^if (.*) return/, 'if $1 return')))
+      .map((l) => l.replace(/[()\s]/g, ''));
+  };
+  const gpu = body(await read('shaders.js'), 'fn treeline(');
+  const gl = body(await read('shaders-gl.js'), 'vec2 treeline(');
+  assert.ok(gpu.length >= 10, `${gpu.length} lines`);
+  assert.deepEqual(gl, gpu);
+});
+
+test("the dead tree, the river sign and the beach stand on their banks, not out in the river", async () => {
+  const reading = await data('reading');
+  const land = waterMap(reading.water);
+  for (const style of ['dead-tree', 'river-sign', 'beach']) {
+    const near = reading.features.filter((f) => f.style === style && f.at[1] < -2000);
+    assert.ok(near.length, `${style} upstream of Mapledurham`);
+    for (const { at } of near) {
+      const dry = Array.from({ length: 16 }, (_, k) => [at[0] + 3 * Math.cos(k * 0.39), at[1] + 3 * Math.sin(k * 0.39)]).some(([x, z]) => !land.inside(x, z));
+      assert.ok(dry, `${style} at ${at}: the bank is within 3 m`);
+    }
+  }
+});
+
+test("the water mirrors trees only where a bank is wooded: none under the town at Caversham, full above Mapledurham", async () => {
+  const { bankWoods } = await import('../reading-thames/world.js');
+  const { pointAt: at } = await import('../reading-thames/course.js');
+  const reading = courseFromFile(await data('reading'));
+  const woods = (s) => { const p = at(reading.scenery.river, s); return bankWoods(reading, p.x, p.z, p.tx, p.tz); };
+  assert.deepEqual(woods(50), [0, 0], 'the town reach by Christchurch Bridge');
+  assert.deepEqual(woods(5000), [1, 1], 'the wooded reach');
+  // Facing the other way, left and right swap.
+  const p = at(reading.scenery.river, 300);
+  assert.deepEqual(bankWoods(reading, p.x, p.z, -p.tx, -p.tz), [...woods(300)].reverse());
 });

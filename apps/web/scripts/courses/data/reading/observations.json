@@ -1558,6 +1558,36 @@
       ],
       "heading": 248,
       "note": "a weathered timber boathouse with a deck on its roof at the water, a dense hedge of shrubs beside it (footage 2026-08-09) (moved off the villa's quay onto the open bank just upstream of it)"
+    },
+    {
+      "kind": "feature",
+      "style": "dead-tree",
+      "at": [
+        51.48097,
+        -1.037289
+      ],
+      "heading": 20,
+      "note": "a big dead tree, bare grey branches, at the water's edge among the green (footage 2026-08-09, 08-14, 08-20, 08-23, 09-02)"
+    },
+    {
+      "kind": "feature",
+      "style": "river-sign",
+      "at": [
+        51.483042,
+        -1.036966
+      ],
+      "heading": 191,
+      "note": "a white sign board on a white post at the water's edge, seen from both r1 and r2 (footage 2026-08-09)"
+    },
+    {
+      "kind": "feature",
+      "style": "beach",
+      "at": [
+        51.483675,
+        -1.037453
+      ],
+      "heading": 191,
+      "note": "a wide bank of pale sand and gravel down to the water under a big tree (footage 2026-08-09, 08-14, 08-20, 08-23)"
     }
   ]
 }
