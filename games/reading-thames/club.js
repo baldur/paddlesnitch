@@ -10,7 +10,7 @@
 // DOM; main.js draws the shots and the doors.
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt } from './course.js';
-import { groundAt, bridgeBay, BRIDGE, landmarkFrame } from './world.js';
+import { groundAt, bridgeBay, BRIDGE, landmarkFrame, rowingEnd, ROWING_DOORS } from './world.js';
 import { HIRE_BOATS } from './outing.js';
 
 // Where each place's doors lead. `up` is where Back goes: the rooms and the
@@ -23,7 +23,8 @@ export const PLACES = {
   clubhouse: { label: 'The clubhouse', doors: ['club'], inside: true, up: 'club' },
   kerg: { label: 'The erg room', doors: ['club'], inside: true, up: 'club' },
   pontoon: { label: 'The pontoon', doors: ['club'], up: 'club' },
-  rclub: { label: 'Reading Rowing Club', doors: ['rchanging', 'rboathouse', 'rclubhouse', 'erg', 'rpontoon', 'path'], up: 'path', club: 'rowing' },
+  // (No door back to the bridge in its car park: Back does that, and its label crowded the doors on a phone.)
+  rclub: { label: 'Reading Rowing Club', doors: ['rchanging', 'rboathouse', 'rclubhouse', 'erg', 'rpontoon'], up: 'path', backOnly: true, club: 'rowing' },
   rchanging: { label: 'The changing room', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
   rboathouse: { label: 'The boathouse', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
   rclubhouse: { label: 'The clubhouse', doors: ['rclub'], inside: true, up: 'rclub', club: 'rowing' },
@@ -88,6 +89,15 @@ const UNDER = -60;
 // swan paces the bay's paving in front of you, this far either side of its middle.
 export const STANDING = { back: 5.4, eye: 1.75 };
 export const SWAN_WALK = 2.4;
+// The rowing club's place, in its car park (world.js rowingEnd: x out from its
+// downstream end wall, y up from the car park, z across from the middle, +z the
+// river side): where you stand, where you look, and each label's spot: the
+// changing room, boathouse and erg room on the three boat doors, the clubhouse
+// at the window upstairs, the water off to the right.
+export const ROWING_FRONT = {
+  eye: [15, 1.7, 2], look: [0, 3.4, 1.2],
+  doors: { rchanging: [0.3, 1.5, ROWING_DOORS.at[0]], rboathouse: [0.3, 1.5, ROWING_DOORS.at[1]], erg: [0.3, 1.5, ROWING_DOORS.at[2]], rclubhouse: [0.3, 5.75, 0], rpontoon: [2.5, 0.3, 9.5] },
+};
 export const PATH = { height: 9.8, lean: 5.5, aside: 7, back: 11 }; // the eye on Caversham Bridge (how high, how far over the parapet); how far back from the club you stand
 export const HIPS = 0.9; // a standing paddler's hips above the floor (the paddler mesh starts at the hips)
 export const ROOMS = {
@@ -205,9 +215,11 @@ export function clubShots(course) {
   const entrance = at(...add([c.x, 0, c.z], c.toWater, -(c.toEdge + PATH.back)).filter((_, i) => i !== 1), 1.7);
   const entranceDoor = (k) => at(...add(add([c.x, 0, c.z], c.toWater, -c.toEdge * 0.6), c.along, k).filter((_, i) => i !== 1), 1.8);
   const across = add([r.x, 0, r.z], r.toWater, r.toEdge);
-  // The rowing club: from its land side too, its doors along the front.
-  const rEntrance = at(...add([r.x, 0, r.z], r.toWater, -(r.toEdge + PATH.back)).filter((_, i) => i !== 1), 1.7);
-  const rDoor = (k) => at(...add(add([r.x, 0, r.z], r.toWater, -r.toEdge * 0.6), r.along, k).filter((_, i) => i !== 1), 1.8);
+  // The rowing club: in its car park, in front of its downstream end (the side
+  // Caversham Bridge sees; owner, 2026-11-14), the rooms' labels on its doors
+  // and window, the river off to the right.
+  const park = rowingEnd(course);
+  const rFront = ROWING_FRONT;
   const stage = add(r.edge, r.toWater, -1.5);
   const canoeSide = add([c.x, 0, c.z], c.toWater, c.toEdge);
   const rStand = p('rchanging', -1.2, HIPS, 0.4);
@@ -227,7 +239,7 @@ export function clubShots(course) {
       clubhouse: room('clubhouse', 1.5),
       // Behind you on the erg and a little to the right, looking over you into your mirror: your back, and you facing you.
       kerg: { eye: p('kerg', 0.85, 1.8, KERG_Z + 2.2), look: p('kerg', -0.15, 1.05, -kd / 2) },
-      rclub: { eye: rEntrance, look: at(r.x, r.z, 2.6) },
+      rclub: { eye: park.at(...rFront.eye), look: park.at(...rFront.look) },
       rpontoon: { eye: [stage[0], 1.6, stage[2]], look: [canoeSide[0], 0.6, canoeSide[2]] },
       rchanging: { eye: p('rchanging', -1.2, HIPS + 0.3, 0.4 + 2.9), look: p('rchanging', -1.2 + 1.85, HIPS + 0.3, 0.4) },
       rboathouse: room('rboathouse', 1.4),
@@ -245,7 +257,7 @@ export function clubShots(course) {
       kerg: { club: p('kerg', 2.75, 2.35, -kd / 2 + 0.1) }, // its glass doors are beside the mirrors
       pontoon: { club: add(c.edge, c.toWater, -8).map((v, i) => (i === 1 ? 1.5 : v)) },
       path: { club: at(c.x, c.z, c.height + 3), rclub: at(r.x, r.z, r.height + 3) },
-      rclub: { rchanging: rDoor(-12), rboathouse: rDoor(-4), rclubhouse: rDoor(4), erg: rDoor(12), rpontoon: at(...add([r.x, 0, r.z], r.along, 24).filter((_, i) => i !== 1), -0.4), path: at(...add(add([r.x, 0, r.z], r.toWater, -(r.toEdge + PATH.back - 2)), r.along, -10).filter((_, i) => i !== 1), 1.4) },
+      rclub: Object.fromEntries(Object.entries(rFront.doors).map(([to, p]) => [to, park.at(...p)])),
       rchanging: { rclub: out('rchanging') },
       rboathouse: { rclub: out('rboathouse') },
       rclubhouse: { rclub: out('rclubhouse') },

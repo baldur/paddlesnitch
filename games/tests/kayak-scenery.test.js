@@ -375,3 +375,33 @@ test("the water mirrors trees only where a bank is wooded: none under the town a
   const p = at(reading.scenery.river, 300);
   assert.deepEqual(bankWoods(reading, p.x, p.z, -p.tx, -p.tz), [...woods(300)].reverse());
 });
+
+test("the rowing club's car park is flat (the bank rises behind the club), and the walk's camera stands on it", async () => {
+  const { rowingEnd, groundAt } = await import('../reading-thames/world.js');
+  const reading = courseFromFile(await data('reading'));
+  const park = rowingEnd(reading);
+  const level = park.at(0, 0, 0)[1];
+  // Across the whole tarmac, out from the end wall and across its width.
+  for (let x = 1; x <= park.long; x += 3) {
+    for (let z = -park.half - 6; z <= park.half; z += 2) {
+      const p = park.at(x, 0, z);
+      assert.ok(Math.abs(groundAt(reading, p[0], p[2]) - level) < 0.01, `ground ${groundAt(reading, p[0], p[2]).toFixed(2)} at ${x}, ${z}: not the car park's ${level.toFixed(2)}`);
+    }
+  }
+  // Without the car park this ground rose 2.5 m across it: the end wall stood in a bank of grass.
+  const river = reading.scenery.river;
+  const pads = river.pads;
+  river.pads = [];
+  const heights = [-park.half, park.half].map((z) => { const p = park.at(10, 0, z); return groundAt(reading, p[0], p[2]); });
+  river.pads = pads;
+  assert.ok(Math.abs(heights[0] - heights[1]) > 1.5, 'the test would fail without it');
+});
+
+test("the rowing club stands at the same height, and its car park at the same place, whether or not the river was built first", async () => {
+  const { rowingEnd, landmarkFrame, buildWorld } = await import('../reading-thames/world.js');
+  const fresh = courseFromFile(await data('reading'));
+  const before = { end: rowingEnd(fresh).at(0, 0, 0), origin: landmarkFrame(fresh, 'rowing-club').origin };
+  buildWorld(fresh, 1, 'river');
+  assert.deepEqual(rowingEnd(fresh).at(0, 0, 0), before.end, "the car park where the walk's camera stands");
+  assert.deepEqual(landmarkFrame(fresh, 'rowing-club').origin, before.origin, 'the club where it is drawn');
+});
