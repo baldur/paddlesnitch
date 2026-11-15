@@ -141,8 +141,11 @@ export type Building = { shape: XZ[]; height: number; kind: string; style?: stri
 /**
  * Plain buildings' heights (not the landmarks, modelled from the footage): the
  * height to the eaves that puts the game's roof where lidar's is (a pitched
- * roof's rise as world.js draws it). Only those a metre or more out.
+ * roof's rise as world.js draws it). Only those a metre or more out. A house
+ * over three storeys (eaves over HOUSE_EAVES) is a tree over it: kept as mapped.
  */
+const HOUSE_EAVES = 10
+
 export function deriveBuildings(h: Heights, buildings: Building[], [x0, z0, x1, z1]: Patch, groundAt: (x: number, z: number) => number): Array<[number, number, number]> {
   const out: Array<[number, number, number]> = []
   for (const b of buildings) {
@@ -165,6 +168,7 @@ export function deriveBuildings(h: Heights, buildings: Building[], [x0, z0, x1, 
     const pitched = b.kind === 'house' || b.kind === 'boathouse'
     const rise = pitched ? Math.min(4, 1.5 + Math.sqrt(Math.abs(area / 2)) * 0.18) : 0
     const height = Math.max(2.5, Math.round((pct(tops, pitched ? 0.95 : 0.9) - groundAt(cx, cz) - rise) * 10) / 10)
+    if (b.kind === 'house' && height > HOUSE_EAVES) continue
     if (Math.abs(height - b.height) >= 1) out.push([Math.round(cx * 10) / 10, Math.round(cz * 10) / 10, height])
   }
   return out

@@ -1311,6 +1311,24 @@ function placeDoors() {
       if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 4 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + 4) b.y = a.y + (a.h + b.h) / 2 + 4;
     }
   }
+  // Never under the note (on an upright phone the canoe club's stack ran down
+  // behind "New here?"): the labels it would cover go up above it, the stack
+  // moving up from there.
+  const tip = !clubNote.hidden && clubNote.getBoundingClientRect();
+  if (tip && placed.some((p) => p.y + p.h / 2 > tip.top - 4 && Math.abs(p.x - (tip.left + tip.right) / 2) < (p.w + tip.width) / 2)) {
+    placed.sort((a, b) => b.y - a.y);
+    for (let i = 0; i < placed.length; i++) {
+      const b = placed[i];
+      if (b.y + b.h / 2 > tip.top - 4 && Math.abs(b.x - (tip.left + tip.right) / 2) < (b.w + tip.width) / 2) b.y = tip.top - 4 - b.h / 2;
+      for (let moved = true, n = 0; moved && n < placed.length; n++) {
+        moved = false;
+        for (let j = 0; j < i; j++) {
+          const a = placed[j];
+          if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 4 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + 4) [b.y, moved] = [a.y - (a.h + b.h) / 2 - 4, true];
+        }
+      }
+    }
+  }
   // Never over Back and Start over (a boat's number sat on Back on a small phone): moved clear to their right.
   const nav = !clubBack.hidden && clubNavEl.getBoundingClientRect();
   if (nav) for (const p of placed) if (p.x - p.w / 2 < nav.right + 4 && p.y + p.h / 2 > nav.top - 4 && p.y - p.h / 2 < nav.bottom + 4) p.x = Math.max(p.x, nav.right + 4 + p.w / 2);

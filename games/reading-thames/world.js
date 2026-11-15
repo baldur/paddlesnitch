@@ -441,7 +441,7 @@ function ground(course, x, z, lineD = null) {
 // not a beach). Beyond its patch, the patch's edge carries on and is eased into
 // the made-up ground over FADE metres: Caversham hill is 30 m up at the patch's
 // north edge, and easing that inside the patch made a cliff.
-const FADE = 150;
+export const FADE = 150;
 function measured(lidar, x, z, d, y) {
   if (!lidar) return y;
   const { x0, z0, cell, w, h, dm } = lidar.ground;
@@ -490,7 +490,9 @@ function level(pads, x, z, y) {
 }
 
 // Reading Rowing Club's car park, at its downstream end (where the walk
-// starts): flat, though the bank rises behind the club. Set on the river once.
+// starts): flat, though the bank rises behind the club. And the canoe club's
+// yard behind it (the walk's shot of its back doors), cut level into Caversham
+// hill: on the slope the grass hid the doors' feet. Set on the river once.
 function carPark(course) {
   const river = course.scenery?.river ?? course;
   lidarFor(course);
@@ -500,6 +502,10 @@ function carPark(course) {
   if (!f) return;
   const p = rowingPlan(river, f);
   river.pads = [{ origin: xz(f.origin), right: f.right, fwd: f.fwd, x: [p.x0 - 2, p.east + PARK.long + 6], z: [p.zb - 8, p.wall], y: f.origin[1] + p.floor, margin: 6 }];
+  const c = landmarkFrame(course, 'canoe-club');
+  if (!c) return;
+  const { lo, hi, back } = canoePlan(c);
+  river.pads.push({ origin: xz(c.origin), right: c.right, fwd: c.fwd, x: [lo, hi], z: [back - 12, back], y: ground(river, ...xz(c.at((lo + hi) / 2, 0, back - 0.6))).y, margin: 6 });
 }
 
 // A gravel path along the bank, 2 m wide, following the ground.
@@ -1432,12 +1438,17 @@ export const CANOE = {
   concrete: [0.6, 0.58, 0.54], glass: [0.5, 0.57, 0.64], cap: [0.55, 0.53, 0.5], tube: [0.86, 0.88, 0.9], deck: [0.3, 0.29, 0.27],
   hedge: [0.17, 0.27, 0.1], leaves: [[0.27, 0.36, 0.14], [0.22, 0.31, 0.12], [0.33, 0.38, 0.16]],
 };
+// The canoe club's plan in its frame: its length along the bank, and its front
+// and back walls.
+function canoePlan(f) {
+  const front = Math.min(f.depth[1], f.edge - 9); // a paved forecourt, then the bank and its steps
+  return { lo: Math.max(f.along[0], -21), hi: Math.min(f.along[1], 14), front, back: Math.max(f.depth[0], front - 11) };
+}
+
 function canoeClub(m, course, f) {
   const C = CANOE;
-  const [lo, hi] = [Math.max(f.along[0], -21), Math.min(f.along[1], 14)];
+  const { lo, hi, front, back } = canoePlan(f);
   const edge = f.edge;
-  const front = Math.min(f.depth[1], edge - 9); // a paved forecourt, then the bank and its steps
-  const back = Math.max(f.depth[0], front - 11);
   const sea = -f.origin[1];
   // Its forecourt stands two metres over the water, up a flight of steps: the
   // ground halfway across it (at the wall, lidar's bare ground is filled in
