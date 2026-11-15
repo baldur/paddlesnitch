@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK, blockValues, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, bankCanopy, blockValues, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -156,6 +156,18 @@ describe('groundBlocks', () => {
     const kept = new Set(['-5,-2'])
     for (const [x, z] of [[-1250, -500], [-1000, -500], [-1250, -250], [-1000, -250], [-1100, -250]]) expect(inBlocks(kept, x, z)).toBe(true)
     expect(inBlocks(kept, -1251, -300)).toBe(false)
+  })
+})
+
+describe('bankCanopy', () => {
+  it("is how much of the first 14 m by the water is under canopy over 3 m, per bank, every step", () => {
+    // The left bank wooded for its first 8 m from 100 m up; the right bank open; nothing measured past 300 m.
+    const above = (s: number, side: -1 | 1, d: number) => (s > 300 ? null : side < 0 && s >= 100 && d <= 8 ? 12 : 0.5)
+    const [left, right] = bankCanopy(400, 50, above)
+    expect(left.slice(0, 2)).toEqual([0, 0])
+    expect(left[4]).toBeCloseTo(0.6, 1) // 3 of the 5 rows out from the edge
+    expect(right.slice(0, 6)).toEqual([0, 0, 0, 0, 0, 0])
+    expect(left[8]).toBeNull()
   })
 })
 

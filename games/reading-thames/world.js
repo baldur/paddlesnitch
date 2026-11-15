@@ -441,7 +441,7 @@ function ground(course, x, z, lineD = null) {
 // not a beach). Beyond its patch, the patch's edge carries on and is eased into
 // the made-up ground over FADE metres: Caversham hill is 30 m up at the patch's
 // north edge, and easing that inside the patch made a cliff.
-export const FADE = 150;
+export const FADE = 200;
 function measured(lidar, x, z, d, y) {
   const at = lidarTop(lidar, x, z);
   if (!at) return y;
@@ -611,22 +611,16 @@ export function bankWoods(course, x, z, tx, tz) {
   return at.tx * tx + at.tz * tz < 0 ? pair.reverse() : pair;
 }
 
-// Where lidar.js has the trees, how wooded a bank is comes from them instead:
-// the share of the bank 30 m either way that has a crown (of a tree over 6 m,
-// within 30 m of the water) over it, half covered counting as full.
+// Where lidar.js measured it, how wooded a bank is comes from the canopy: the
+// share of the 14 m by the water under trees and scrub over 3 m, half covered
+// counting as full (the first belt is what shows in the water).
 function measuredWoods(river, step) {
-  const trees = (river.lidar?.trees ?? []).filter(([, , h]) => h > 6).map(([x, z, h]) => {
-    const at = locate(river, x, z);
-    return { s: at.s, side: at.lateral < 0 ? 0 : 1, d: Math.abs(at.lateral) - widthAt(river, at.s).half, r: h * 0.34 };
-  }).filter((t) => t.d < 30);
+  const woods = river.lidar?.woods;
+  if (!woods) return;
   river.woodsAlong.forEach((row, side) => {
     for (let i = 0; i < row.length; i++) {
-      const c = pointAt(river, i * step);
-      const w = widthAt(river, i * step).half + 5;
-      if (!measuredTrees(river.lidar, c.x - c.tz * (side ? 1 : -1) * w, c.z + c.tx * (side ? 1 : -1) * w)) continue;
-      let covered = 0;
-      for (let k = -15; k <= 15; k++) covered += trees.some((t) => t.side === side && Math.abs(t.s - (i * step + k * 2)) < t.r) ? 1 : 0;
-      row[i] = Math.min(1, (2 * covered) / 31);
+      const v = woods.sides[side][Math.round((i * step) / woods.step)];
+      if (v !== null && v !== undefined) row[i] = Math.min(1, 2 * v);
     }
   });
 }
