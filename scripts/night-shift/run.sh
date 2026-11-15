@@ -168,6 +168,9 @@ cleanup() {
   [ -n "${RUN_PID:-}" ] && kill -TERM -- "-$RUN_PID" 2>/dev/null
   [ -n "${GATE_PID:-}" ] && kill "$GATE_PID" 2>/dev/null
   pkill -f "$CLONE" 2>/dev/null; pkill -f "$NIGHT" 2>/dev/null
+  # Its servers by the ports they hold ($! above is a subshell, not the server).
+  lsof -ti "tcp:$SERVE_PORT" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null
+  lsof -ti tcp:3600 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null
   SERVE_PID= RUN_PID= GATE_PID=
 }
 trap 'cleanup; exit 130' INT TERM
