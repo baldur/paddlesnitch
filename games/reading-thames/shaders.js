@@ -10,11 +10,12 @@ struct Frame {
   sunDir: vec4f,     // towards the sun
   skyTop: vec4f,      // w = cloud cover, 0..1
   skyHorizon: vec4f, // also the fog colour; w = fog density
-  water: vec4f,      // deep water colour
+  water: vec4f,      // deep water colour; w = how calm, 0..1 (a real river's lies still between washes)
   boats: array<vec4f, 16>, // x, z, heading, speed: for their wakes
   river: vec4f,      // the river where you are: centre x, z and direction x, z
   banks: vec4f,      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
   spots: array<vec4f, 3>, // x, z, heading, how bright: the free places in the wash ahead of you
+  woods: array<vec4f, 8>, // how wooded the left bank (first 4) and right bank are, every 20 m from 150 m behind to 150 m ahead
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -217,29 +218,33 @@ fn spots(p: vec2f, dist: f32) -> f32 {
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
 const TREES = vec3f(0.14, 0.2, 0.1);
+// How wooded bank k (0 left, 1 right) is a metres along the river from frame.river (frame.woods, every 20 m, ±150 m).
+fn woodAt(k: i32, a: f32) -> f32 {
+  let f = clamp(a / 20.0 + 7.5, 0.0, 15.0);
+  let i = min(i32(f), 14);
+  let n = k * 16 + i;
+  return mix(frame.woods[n / 4][n % 4], frame.woods[(n + 1) / 4][(n + 1) % 4], f - f32(i));
+}
 fn treeline(p: vec2f, refl: vec3f) -> vec2f {
   if (frame.banks.w < 0.5) { return vec2f(0.0); }
   let along = frame.river.zw;
   let across = vec2f(-along.y, along.x);
   let l = dot(p - frame.river.xy, across);
   let rl = dot(refl.xz, across);
-  // How wooded each bank is near you (0 to 1, ninths), packed into w's tenths and hundredths.
-  let packed = (frame.banks.w - 1.0) * 10.0 + 0.001;
-  let woods = vec2f(floor(packed) / 9.0, floor(fract(packed) * 10.0) / 9.0);
   var mirrored = vec2f(0.0);
   // Both banks, blended as the ray turns from one to the other (no seam where it's along the river).
   for (var k = 0; k < 2; k++) {
     let e = f32(k) * 2.0 - 1.0;
     let bank = select(-frame.banks.x, frame.banks.y, e > 0.0);
-    let wood = select(woods.x, woods.y, e > 0.0);
     let weight = smoothstep(-0.06, 0.06, rl * e);
     // To that bank's line, either side of it; along the river, the next bend (a few hundred metres).
     let reach = min(abs(bank - l) / max(abs(rl), 0.0001), 260.0);
     let a = dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
+    let wood = woodAt(k, a);
     let top = max(0.3, frame.banks.z * wood * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3)));
-    // (leaf: how light the leaves are, crown by crown; sky shows between the darkest.)
+    // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     let leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
-    let cover = 0.9 * smoothstep(0.05, 0.3, leaf) * (1.0 - smoothstep(top * 0.6, top * 1.35, reach * refl.y));
+    let cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.6, top * 1.35, reach * refl.y));
     mirrored += weight * vec2f(cover, leaf);
   }
   return mirrored;
@@ -253,15 +258,17 @@ fn treeline(p: vec2f, refl: vec3f) -> vec2f {
   // Slopes by forward differences. Far off, wakes are too small to see.
   let e = 0.05;
   let h = height(p, t);
-  var dx = (height(p + vec2f(e, 0.0), t) - h) / e;
-  var dz = (height(p + vec2f(0.0, e), t) - h) / e;
+  // A calm river's swell barely tilts it; wakes still break it up.
+  let calm = frame.water.w;
+  var dx = (height(p + vec2f(e, 0.0), t) - h) / e * (1.0 - 0.6 * calm);
+  var dz = (height(p + vec2f(0.0, e), t) - h) / e * (1.0 - 0.6 * calm);
   var w = vec2f(0.0);
   if (dist < 140.0) {
     w = wake(p);
     dx += (wake(p + vec2f(e, 0.0)).x - w.x) / e;
     dz += (wake(p + vec2f(0.0, e)).x - w.x) / e;
   }
-  let r = ripple(p, t);
+  let r = ripple(p, t) * (1.0 - 0.75 * calm);
   let n = normalize(vec3f(-dx - r.x, 1.0, -dz - r.y));
 
   let v = toEye / dist;
@@ -272,7 +279,8 @@ fn treeline(p: vec2f, refl: vec3f) -> vec2f {
   let still = reflect(-v, normalize(vec3f(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
   let tl = treeline(p, still);
   let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x);
-  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15, 0.0, 1.0));
+  // Still water is a mirror even looking down into it: its dark depths show little through the reflection.
+  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3, 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles.
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;
   let foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2f(13.0, 9.0)) + t * 6.0));

@@ -217,13 +217,29 @@ test('each club stands square to its mapped bank, its pontoon on the water', asy
   }
 });
 
-test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water)", async () => {
+test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water, how calm the water lies)", async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
-  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|float|vec[23]) (fill|lit|still|tl|sky) =/.test(l))
-    .map((l) => l.replace(/^(let|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
+  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|var|float|vec[23]) ((fill|lit|still|tl|sky|calm|r|dx|dz) =|c = mix\(frame\.water)/.test(l))
+    .map((l) => l.replace(/^(let|var|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
   assert.ok(gpu.some((l) => l.startsWith('fill =')), 'WebGPU has the fill light');
   assert.deepEqual(gl, gpu);
+});
+
+test("both renderers' per-frame block has the same fields, the size main.js fills, and the shader sources load (a backtick in a shader comment ended its string)", async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const gpu = await import('../reading-thames/shaders.js');
+  const gl = await import('../reading-thames/shaders-gl.js');
+  assert.ok(gpu.WATER.includes('fn woodAt(') && gl.WATER.fs.includes('float woodAt('), 'the water shaders load whole');
+  // Field names and sizes in vec4s, in order.
+  const block = (src, open) => src.slice(src.indexOf(open), src.indexOf('}', src.indexOf(open))).split('\n').slice(1)
+    .map((l) => l.trim().match(/^(?:(\w+): (\w+)(?:<vec4f, (\d+)>)?|(\w+) (\w+)(?:\[(\d+)\])?;)/)).filter(Boolean)
+    .map((m) => [m[1] ?? m[5], (m[2] ?? m[4]).startsWith('mat') ? 4 : Number(m[3] ?? m[6] ?? 1)]);
+  const wgsl = block(await read('shaders.js'), 'struct Frame {');
+  assert.deepEqual(block(await read('shaders-gl.js'), 'uniform Frame {'), wgsl);
+  const vec4s = wgsl.reduce((t, [, n]) => t + n, 0);
+  assert.match(await read('main.js'), new RegExp(`const frameData = new Float32Array\\(${vec4s * 4}\\)`));
+  for (const f of ['render.js', 'render-gl.js']) assert.match(await read(f), new RegExp(`FRAME_BYTES = 16 \\* 4 \\+ ${vec4s - 4} \\* 16`), f);
 });
 
 test('Christchurch Bridge: its arched deck clears the water by at least 4 m all the way across', async () => {
@@ -378,6 +394,26 @@ test("the water mirrors trees only where a bank is wooded (the lidar's canopy): 
   // Facing the other way, left and right swap.
   const p = at(reading.scenery.river, 300);
   assert.deepEqual(bankWoods(reading, p.x, p.z, -p.tx, -p.tz), [...woods(300)].reverse());
+});
+
+test("the water reads the woods where each reflection meets the bank, not only beside you: a strip along each bank, which changes where the town front by Christchurch Bridge begins", async () => {
+  const { bankWoods, bankWoodsAlong } = await import('../reading-thames/world.js');
+  const { pointAt: at } = await import('../reading-thames/course.js');
+  const reading = courseFromFile(await data('reading'));
+  const { river } = reading.scenery;
+  const strip = (s, sign = 1) => { const p = at(river, s); return bankWoodsAlong(reading, p.x, p.z, sign * p.tx, sign * p.tz); };
+  const woods = (s) => { const p = at(river, s); return bankWoods(reading, p.x, p.z, p.tx, p.tz); };
+  // Every 20 m from 150 m behind to 150 m ahead: sample k is at s + (k - 7.5) * 20.
+  const [left, right] = strip(3000);
+  assert.equal(left.length, 16);
+  assert.equal(left[0], woods(2850)[0]);
+  assert.equal(right[15], woods(3150)[1]);
+  // It changes along the strip where the bank does (the town front by Christchurch Bridge, s 150, is open on the left).
+  const [townSide] = strip(300);
+  assert.ok(Math.min(...townSide) < 0.2 && Math.max(...townSide) > Math.min(...townSide), `left bank along s 150–450: ${townSide}`);
+  // Facing the other way, the sides swap and the strip runs backwards.
+  const [backL, backR] = strip(300, -1);
+  assert.deepEqual([backL, backR], [[...strip(300)[1]].reverse(), [...townSide].reverse()]);
 });
 
 test("the rowing club's car park is flat (the bank rises behind the club), and the walk's camera stands on it", async () => {
