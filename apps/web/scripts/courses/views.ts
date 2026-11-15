@@ -17,12 +17,11 @@ import http from 'http'
 import os from 'os'
 import path from 'path'
 import { execSync } from 'child_process'
-import { eacGraph, eacLayout, flatView } from './lib/eac'
-import { HERE_DIRS, HERE_VIEW, lensYaw, oneAcrossChapters, passesNear, type HereDir } from './lib/here'
+import { HERE_DIRS, type HereDir } from './lib/here'
+import { cutView, loadClips, passesAt } from './lib/footage-passes'
 import { openStore } from './lib/footage-db'
 import { projection, type XZ } from './lib/river'
-import { average, cameraYawOf, choosePass, cleanScores, gameCamera, headingAt, pickPoints, viewFacing, type Scores } from './lib/views'
-import { runDetached } from './lib/proc'
+import { average, choosePass, cleanScores, gameCamera, pickPoints, viewFacing, type Scores } from './lib/views'
 import { courseFromFile, locate, pointAt } from '../../../../games/reading-thames/course.js'
 
 const DIR = path.join(os.homedir(), '.paddlesnitch', 'refviews')
@@ -51,11 +50,7 @@ function pick() {
   ].map((l) => ({ ...l, s: locate(river, ...l.at).s }))
   const points = pickPoints(river.length, (s) => { const p = pointAt(river, s); return [p.x, p.z] }, landmarks)
 
-  const db = openStore()
-  type Clip = { id: number; path: string; recording: string | null; startUtc: string | null; cameraYaw: number | null; width: number; height: number; track: string }
-  const clips = (db.prepare("SELECT id, path, recording, start_utc AS startUtc, camera_yaw AS cameraYaw, width, height, track FROM chapters WHERE status = 'ok' AND track IS NOT NULL").all() as Clip[])
-    .map((c) => ({ ...c, rows: JSON.parse(c.track) as number[][] }))
-  const hourOf = (c: Clip, ft: number) => c.startUtc ? Number(new Date(Date.parse(c.startUtc) + ft * 1000).toLocaleString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hour12: false })) : 12
+  const clips = loadClips(openStore())
   fs.mkdirSync(path.join(DIR, 'frames'), { recursive: true })
   const views: View[] = []
   return (async () => {
@@ -63,21 +58,14 @@ function pick() {
       const [lat, lng] = toLatLng(pt.at)
       let chosen = null
       for (const r of [30, 60]) {
-        const passes = oneAcrossChapters(clips.flatMap((c) => passesNear(c.rows, { lat, lng }, r).map((p) => ({
-          ...p, c, recording: `${path.dirname(c.path)}|${c.recording ?? c.id}`, t: c.startUtc ? Date.parse(c.startUtc) + p.ft * 1000 : c.id * 1e13 + p.ft * 1000,
-          cameraKnown: c.cameraYaw != null, cameraYaw: cameraYawOf(c.cameraYaw, path.basename(path.dirname(c.path))), hour: hourOf(c, p.ft), heading: headingAt(c.rows, p.ft),
-        }))))
-        chosen = choosePass(passes)
+        chosen = choosePass(passesAt(clips, { lat, lng }, r))
         if (chosen) break
       }
       if (!chosen || !fs.existsSync(chosen.c.path)) { console.log(`${pt.id}: no pass in daylight with the camera's direction known or assumed`); continue }
       const at = toXZ([chosen.lat, chosen.lng])
       const view = viewFacing(chosen.heading!, at, pt.target)
       const frame = `frames/${pt.id}.jpg`
-      const fromBow = HERE_DIRS.find((d) => d.name === view)!.fromBow
-      await runDetached('ffmpeg', ['-v', 'error', '-y', '-ss', chosen.ft.toFixed(2), '-i', chosen.c.path, '-filter_complex',
-        eacGraph(eacLayout(chosen.c.width, chosen.c.height), 1) + flatView(0, 'v', { ...HERE_VIEW, yaw: lensYaw(fromBow, chosen.cameraYaw!) }),
-        '-map', '[v]', '-frames:v', '1', '-q:v', '2', path.join(DIR, frame)])
+      await cutView(chosen.c, chosen.ft, chosen.cameraYaw!, HERE_DIRS.find((d) => d.name === view)!.fromBow, path.join(DIR, frame))
       const day = chosen.c.startUtc ? new Date(Date.parse(chosen.c.startUtc) + chosen.ft * 1000).toISOString().slice(0, 16) : ''
       views.push({ id: pt.id, name: pt.name, frame, at: [+at[0].toFixed(1), +at[1].toFixed(1)], heading: Math.round(chosen.heading!), view, ...gameCamera(at, chosen.heading!, view), clip: path.basename(chosen.c.path), ft: +chosen.ft.toFixed(1), day, metres: Math.round(chosen.metres), cameraAssumed: !chosen.cameraKnown })
       console.log(`${pt.id}: ${view} from ${path.basename(chosen.c.path)} at ${chosen.ft.toFixed(1)} s, ${Math.round(chosen.metres)} m off${chosen.cameraKnown ? '' : ', camera assumed'}`)
