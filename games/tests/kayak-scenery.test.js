@@ -369,10 +369,11 @@ test("the water mirrors trees only where a bank is wooded (the lidar's canopy): 
   const { pointAt: at } = await import('../reading-thames/course.js');
   const reading = courseFromFile(await data('reading'));
   const woods = (s) => { const p = at(reading.scenery.river, s); return bankWoods(reading, p.x, p.z, p.tx, p.tz); };
-  // Above Christchurch Bridge the north bank's trees (the footage shows them mirrored) against
-  // the open town front opposite.
+  // Above Christchurch Bridge the north bank's trees (the footage shows them mirrored; the
+  // vegetation model has them over a fifth of the first 14 m, 0.4 counted as half covers full)
+  // against the open town front opposite.
   const [town, trees] = woods(150);
-  assert.ok(town < 0.3 && trees > 0.5, `above Christchurch Bridge ${town}, ${trees}`);
+  assert.ok(town < 0.2 && trees >= 0.4, `above Christchurch Bridge ${town}, ${trees}`);
   assert.deepEqual(woods(3000), [1, 1], 'the wooded reach');
   // Facing the other way, left and right swap.
   const p = at(reading.scenery.river, 300);

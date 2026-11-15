@@ -891,6 +891,39 @@ function realScenery(m, course, real, rand) {
     tree(m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
   }
 
+  // The leaves at the water's edge (lidar.js `edge`, from the vegetation model):
+  // a line of low crowns as tall as the canopy there, every few metres, so a
+  // wooded bank is a wall of leaves down to the water, not crowns on trunks
+  // with lawn between. Their own draws.
+  const edgeRand = mulberry32(11);
+  for (const [k, row] of (course.lidar?.edge?.sides ?? []).entries()) {
+    const side = k ? 1 : -1;
+    for (const [i, h] of row.entries()) {
+      if (h === null) continue;
+      const s = i * course.lidar.edge.step;
+      if (s > course.length) continue;
+      const c = pointAt(course, s);
+      const w = widthAt(course, s).half + 2.5;
+      const [x, z] = [c.x - c.tz * side * w, c.z + c.tx * side * w];
+      // (A touch lighter than the trees behind: lit leaves at the water, not a black band.)
+      const leaf = shade(LEAVES[Math.floor(edgeRand() * LEAVES.length)], edgeRand, 0.12).map((v) => Math.min(1, v * 1.15));
+      const g = ground(course, x, z);
+      if (g.d < 0 || walled(real, side, s) || built(x, z) || onPath(x, z, 3) || cleared(x, z) || byLandmark(x, z)) continue;
+      // In front of a house (within 15 m behind it), garden shrubs: hedge-sized, so the house shows.
+      const out = [-c.tz * side, c.tx * side];
+      const house = [5, 10, 15].some((k) => built(x + out[0] * k, z + out[1] * k));
+      const r = house ? Math.min(1.8, h * 0.42) : Math.min(5.5, h * 0.42);
+      // Back from the water, so it overhangs by at most 1.5 m: the boat stops at the
+      // mapped shore, and a bank of leaves out past it was a green wall to paddle into.
+      const reach = (px, pz) => (course.land?.rings ? (course.land.inside(px, pz) ? Infinity : r - course.land.shore(px, pz)) : r - ground(course, px, pz).d);
+      let back = 0;
+      while (reach(x + out[0] * back, z + out[1] * back) > 1.5 && back < 8) back += 0.5;
+      const [cx, cz] = [x + out[0] * back, z + out[1] * back];
+      if (reach(cx, cz) > 1.5) continue;
+      m.sphere([cx, Math.max(0, ground(course, cx, cz).y) + r * 0.8, cz], r, leaf, 3, 6);
+    }
+  }
+
   for (const b of real.buildings) building(m, course, b, rand);
   for (const w of real.walls ?? []) embankment(m, course, w, rand);
   for (const line of real.railways) railway(m, course, line);

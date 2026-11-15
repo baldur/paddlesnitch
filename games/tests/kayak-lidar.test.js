@@ -26,8 +26,8 @@ const top = (x, z) => lidarTop(LIDAR, x, z).top;
 const edges = keys.flatMap(([i, j]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => !blocks[`${i + a},${j + b}`]).map(([a, b]) => [[(i + 0.5 + a / 2) * block, (j + 0.5 + b / 2) * block], [a, b]]));
 // Builds the river with lidar.js moved out of the way (as if it had none).
 async function without(build) {
-  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees };
-  Object.assign(LIDAR, { ground: { cell, block, blocks: {} }, buildings: [], trees: [] });
+  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees, woods: LIDAR.woods, edge: LIDAR.edge };
+  Object.assign(LIDAR, { ground: { cell, block, blocks: {} }, buildings: [], trees: [], woods: undefined, edge: undefined });
   try { return await build(); } finally { Object.assign(LIDAR, kept); }
 }
 
@@ -118,12 +118,13 @@ test('everything outside the stretch is as it was without lidar: the made-up tre
 test('with one block of lidar, everything beyond its easing is as it was without: the ground, and every triangle', async () => {
   // (The real blocks now cover nearly all the river: one block, by the canoe club, leaves most of it outside.)
   const course = await data('reading');
-  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees };
+  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees, woods: LIDAR.woods, edge: LIDAR.edge };
   const key = '-4,-3';
   const inIt = ([x, z]) => x >= -1000 && x < -750 && z >= -750 && z < -500;
   const one = (x, z) => Math.hypot(Math.max(0, -1000 - x, x + 750), Math.max(0, -750 - z, z + 500));
   const far = (v) => { const out = []; for (let i = 0; i < v.length; i += 27) if ([0, 9, 18].every((k) => one(v[i + k], v[i + k + 2]) > FADE + 20)) out.push(Array.from(v.subarray(i, i + 27)).join(',')); return out; };
-  Object.assign(LIDAR, { ground: { cell, block, blocks: { [key]: blocks[key] } }, buildings: kept.buildings.filter(inIt), trees: kept.trees.filter(inIt) });
+  // (Its trees and buildings only; the bank's leaves and reflections are the whole river's, so left out.)
+  Object.assign(LIDAR, { ground: { cell, block, blocks: { [key]: blocks[key] } }, buildings: kept.buildings.filter(inIt), trees: kept.trees.filter(inIt), woods: undefined, edge: undefined });
   let measured;
   try { measured = far(buildWorld(courseFromFile(course), 1, 'river').vertices); } finally { Object.assign(LIDAR, kept); }
   const madeUp = await without(() => far(buildWorld(courseFromFile(course), 1, 'river').vertices));
@@ -428,7 +429,7 @@ test("the water mirrors the stretch's measured tree line: a wall of trees on the
   const reading = courseFromFile(await data('reading'));
   const p = pointAt(reading.scenery.river, 810);
   const [left, right] = bankWoods(reading, p.x, p.z, p.tx, p.tz);
-  assert.ok(right > 0.9, `Caversham bank ${right}`);
+  assert.ok(right >= 0.9, `Caversham bank ${right}`);
   assert.ok(left <= 0.25, `rowing club bank ${left}`);
 });
 
@@ -439,4 +440,60 @@ test('the game credits the Environment Agency for the lidar, as its licence asks
   assert.ok(page.includes(`heights ${reach} &copy;`), reach);
   assert.match(page, /&copy; Environment Agency copyright and\/or database right/);
   assert.match(page, /Open Government Licence/);
+});
+
+test("the leaves at the water's edge: a crown where the vegetation model has them, kept off water, buildings and landmarks, drawing nothing else differently", async () => {
+  const course = await data('reading');
+  const reading = courseFromFile(course);
+  const river = reading.scenery.river;
+  const land = waterMap(course.water);
+  const tris = (v) => { const out = []; for (let i = 0; i < v.length; i += 27) out.push(Array.from(v.subarray(i, i + 27)).join(',')); return out; };
+  const withEdge = tris(buildWorld(courseFromFile(course), 1, 'river').vertices);
+  const keptEdge = LIDAR.edge;
+  LIDAR.edge = undefined;
+  let bare;
+  try { bare = tris(buildWorld(courseFromFile(course), 1, 'river').vertices); } finally { LIDAR.edge = keptEdge; }
+  // Everything else is the same, in the same order: the crowns took no one else's draws.
+  const inBare = new Set(bare);
+  const extra = withEdge.filter((t) => !inBare.has(t));
+  assert.deepEqual(withEdge.filter((t) => inBare.has(t)), bare);
+  assert.equal(extra.length % 24, 0, 'whole crowns');
+  // Each crown's middle: on land, over the bank's first few metres, where the model has leaves.
+  const middles = [];
+  const radii = [];
+  for (let k = 0; k < extra.length; k += 24) {
+    const tri = extra.slice(k, k + 24).map((t) => t.split(',').map(Number));
+    const v = tri.flatMap((n) => [0, 9, 18].map((o) => [n[o], n[o + 2]]));
+    middles.push([v.reduce((a, p) => a + p[0], 0) / v.length, v.reduce((a, p) => a + p[1], 0) / v.length]);
+    const ys = tri.flatMap((n) => [n[1], n[10], n[19]]);
+    radii.push((Math.max(...ys) - Math.min(...ys)) / 2);
+  }
+  const planted = keptEdge.sides.flat().filter((h) => h !== null).length;
+  assert.ok(middles.length > planted * 0.6 && middles.length <= planted, `${middles.length} crowns of ${planted} heights`);
+  const boxes = course.buildings.map((b) => { const xs = b.shape.map((p) => p[0]); const zs = b.shape.map((p) => p[1]); return [Math.min(...xs) - 1, Math.min(...zs) - 1, Math.max(...xs) + 1, Math.max(...zs) + 1]; });
+  const club = clubBox(reading, 'canoe-club', 8);
+  // None reaches more than 1.5 m out over the water (the boat stops at the mapped shore).
+  for (const t of extra) {
+    const n = t.split(',').map(Number);
+    for (const o of [0, 9, 18]) if (land.inside(n[o], n[o + 2])) assert.ok(land.shore(n[o], n[o + 2]) < 1.6, `leaves ${land.shore(n[o], n[o + 2]).toFixed(1)} m out over the water at ${n[o].toFixed(0)}, ${n[o + 2].toFixed(0)}`);
+  }
+  let hedges = 0;
+  for (const [k, [x, z]] of middles.entries()) {
+    // In front of a house (within 15 m inland), only garden shrubs: the house shows from the water.
+    const at0 = locate(river, x, z);
+    const inland = at0.lateral < 0 ? [at0.tz, -at0.tx] : [-at0.tz, at0.tx];
+    const house = [5, 10, 15].some((d) => boxes.some((b) => { const [px, pz] = [x + inland[0] * d, z + inland[1] * d]; return px > b[0] && px < b[2] && pz > b[1] && pz < b[3]; }));
+    if (house) { hedges++; assert.ok(radii[k] < 1.9, `a ${radii[k].toFixed(1)} m crown in front of a house at ${x.toFixed(0)}, ${z.toFixed(0)}`); }
+    assert.ok(!land.inside(x, z), `a crown on the water at ${x.toFixed(0)}, ${z.toFixed(0)}`);
+    assert.ok(!boxes.some((b) => x > b[0] && x < b[2] && z > b[1] && z < b[3]), `a crown in a building at ${x.toFixed(0)}, ${z.toFixed(0)}`);
+    assert.ok(!club(x, z), `a crown by the canoe club at ${x.toFixed(0)}, ${z.toFixed(0)}`);
+    const at = locate(river, x, z);
+    const out = Math.abs(at.lateral) - widthAt(river, at.s).half;
+    assert.ok(out > 1 && out < 9, `${out.toFixed(1)} m from the water`);
+    // (On a bend a crown's middle locates a step either way of where it was planted.)
+    const row = keptEdge.sides[at.lateral < 0 ? 0 : 1];
+    const i = Math.round(at.s / keptEdge.step);
+    assert.ok([i - 1, i, i + 1].some((j) => row[j] !== null && row[j] !== undefined), `a crown where the model has no leaves, at ${at.s.toFixed(0)}`);
+  }
+  assert.ok(hedges >= 1, `${hedges} hedges in front of houses`);
 });

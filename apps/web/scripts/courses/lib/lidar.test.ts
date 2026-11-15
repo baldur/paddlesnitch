@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK, bankCanopy, blockValues, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, bankCanopy, bankEdge, blockValues, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -102,6 +102,12 @@ describe('deriveTrees', () => {
     const bank = (): [number, number] => [45, -2]
     expect(deriveTrees(two, PATCH, everywhere, bank, () => 10)).toEqual([[45, -2, 12]])
   })
+  it('looks for crowns hanging over the water only in a vegetation canopy (overWater): there the first surface is boats', () => {
+    const over: Heights = { ground: (x) => (x < 0 ? 0.1 : 1), above: (x, z) => (Math.hypot(x + 3, z - 5) < 3 ? 11 - Math.hypot(x + 3, z - 5) : 0) }
+    const bank = (): [number, number] => [2, 5]
+    expect(deriveTrees(over, PATCH, everywhere, bank, () => 2)).toEqual([])
+    expect(deriveTrees(over, PATCH, everywhere, bank, () => 2, () => true, true)).toEqual([[2, 5, 11]])
+  })
   it('skips one out over the water, as the bank says', () => {
     expect(deriveTrees(place, PATCH, everywhere, () => null, () => 10)).toEqual([])
   })
@@ -183,6 +189,46 @@ describe('bankCanopy', () => {
   })
 })
 
+describe('toBank', () => {
+  // Water west of x = 0, land east of it.
+  const land = { inside: (x: number) => x < 0, nearest: (x: number, z: number) => ({ x: 0, z, d: Math.abs(x) }) }
+  it('leaves a tree on land alone, and puts one at the edge or hanging over the water 2 m up the bank', () => {
+    expect(toBank(land, 10, 5)).toEqual([10, 5])
+    expect(toBank(land, 1, 5)).toEqual([2, 5])
+    expect(toBank(land, -7, 5)).toEqual([2, 5])
+  })
+  it('drops a crown more than 8 m out: over the water, not hanging from the bank', () => {
+    expect(toBank(land, -9, 5)).toBeNull()
+  })
+})
+
+describe('bankEdge', () => {
+  it("is the leaves' height in the first 8 m by the water where most of it is canopy, else none", () => {
+    // Left: 10 m willow along the edge from 100 m up, open below; right: a 4 m hedge on one row only.
+    const above = (s: number, side: -1 | 1, d: number) => (side < 0 ? (s >= 100 ? 10 : 0) : d === 4 ? 4 : 0)
+    const [left, right] = bankEdge(300, 50, above)
+    expect(left.slice(0, 2)).toEqual([null, null])
+    expect(left[3]).toBe(10)
+    expect(right.every((h) => h === null)).toBe(true)
+    expect(bankEdge(100, 50, () => null)[0]).toEqual([null, null, null])
+  })
+  it("takes the 80th percentile of the first 8 m (not past it), over 3 m, where at least half is canopy", () => {
+    // Rows out from the edge at 0, 2, 4, 6, 8 m (and a 30 m tree at 10 m, past the strip).
+    const graded = (s: number, side: -1 | 1, d: number) => (d > 8 ? 30 : [4, 6, 8, 10, 12][d / 2])
+    expect(bankEdge(100, 50, graded)[0][1]).toBe(12)
+    const quartiles = (s: number, side: -1 | 1, d: number) => (d > 8 ? 30 : [4, 5, 6, 7, 8][d / 2] + 0.25)
+    expect(bankEdge(100, 50, quartiles)[0][1]).toBe(8.3) // rounded to 0.1
+    // Exactly half over 3 m counts; less doesn't; 3 m itself isn't canopy.
+    const rows = (over: number[], h = 5) => (s: number, side: -1 | 1, d: number) => (over.includes(d) ? h : 1)
+    expect(bankEdge(100, 50, rows([0, 2, 4]))[0][1]).not.toBeNull()
+    expect(bankEdge(100, 50, rows([0, 2]))[0][1]).toBeNull()
+    expect(bankEdge(100, 50, rows([0, 2, 4, 6, 8], 3))[0][1]).toBeNull()
+    // Unmeasured points don't count either way: half of what was measured is enough.
+    const holes = (s: number, side: -1 | 1, d: number) => (d >= 6 ? null : d === 4 ? 1 : 5)
+    expect(bankEdge(100, 50, holes)[0][1]).toBe(5)
+  })
+})
+
 describe('canopyAt', () => {
   // The river runs north (-z) up x = 0, 20 m wide; a building on the left bank 30 to 40 m up.
   const river = { length: 100 }
@@ -207,7 +253,7 @@ describe('lidarModule', () => {
   it("writes a module the game can import, with the licence's attribution", async () => {
     const n = BLOCK / 5
     const blocks = groundBlocks({ w: n + 1, h: n + 1, dm: new Array((n + 1) ** 2).fill(10) }, [0, 0, BLOCK, BLOCK], () => true)
-    const src = lidarModule(blocks, [[25, 5, 9]], [[40.5, 5.5, 12]], 'somewhere', { step: 10, sides: [[0.5, null], [1, 0]] })
+    const src = lidarModule(blocks, [[25, 5, 9]], [[40.5, 5.5, 12]], 'somewhere', { step: 10, sides: [[0.5, null], [1, 0]] }, { step: 8, sides: [[null, 9.5], [12, null]] })
     expect(src.replace(/\n\/\/ /g, ' ')).toContain('© Environment Agency copyright and/or database right')
     const { LIDAR } = await import(`data:text/javascript,${encodeURIComponent(src)}`)
     expect(LIDAR.ground).toMatchObject({ cell: 5, block: BLOCK })
@@ -215,5 +261,6 @@ describe('lidarModule', () => {
     expect(LIDAR.buildings).toEqual([[25, 5, 9]])
     expect(LIDAR.trees).toEqual([[40.5, 5.5, 12]])
     expect(LIDAR.woods).toEqual({ step: 10, sides: [[0.5, null], [1, 0]] })
+    expect(LIDAR.edge).toEqual({ step: 8, sides: [[null, 9.5], [12, null]] })
   })
 })
