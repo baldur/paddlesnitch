@@ -53,6 +53,8 @@ A game must run in current Chrome, Edge, Safari and Firefox, desktop and phone (
 
 The WebGL renderer must look the same as the WebGPU one: `shaders-gl.js` is a line-for-line port of `shaders.js` (keep them in step), with the same 4× MSAA and 24-bit depth, and WebGPU's 0..1 depth stretched to WebGL's -1..1. Without a GPU timer it sizes the resolution from frame times (`pacing.js`, tested): under ~45 fps it drops, a steady ~57+ it creeps back. A lost WebGL context (phones under memory pressure) reloads the page when it comes back.
 
+**Browser tests wait for the game, not the clock** (2026-11-15). The game's time runs slow on slow frames (each frame's step is capped at 0.1 s), and CI's software rendering swings from about 150 to 480 ms a frame from one day to the next, on the same commit. A fixed `waitForTimeout` read the look at 0.84 instead of 1. Poll for the state with a deadline (`waitForFunction`); and time anything that must keep pace with an eased motion (the tapped glance) in the game's time, not the real clock.
+
 ## Layout
 
 - `<game>/`: one folder per game, with `index.html` loading a `type="module"` entry script.
