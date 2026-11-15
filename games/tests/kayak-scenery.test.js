@@ -222,7 +222,7 @@ test("both renderers light the world and mirror the banks the same way (fill lig
   const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|var|float|vec[23]) ((fill|lit|still|tl|sky|calm|r|dx|dz) =|c = mix\(frame\.water)/.test(l))
     .map((l) => l.replace(/^(let|var|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
-  assert.ok(gpu.some((l) => l.startsWith('fill =')), 'WebGPU has the fill light');
+  for (const n of ['fill', 'calm', 'dx', 'dz', 'r', 'still', 'tl', 'sky', 'c']) assert.ok(gpu.some((l) => l.startsWith(`${n} =`)), `WebGPU has its ${n} line`);
   assert.deepEqual(gl, gpu);
 });
 
@@ -240,6 +240,18 @@ test("both renderers' per-frame block has the same fields, the size main.js fill
   const vec4s = wgsl.reduce((t, [, n]) => t + n, 0);
   assert.match(await read('main.js'), new RegExp(`const frameData = new Float32Array\\(${vec4s * 4}\\)`));
   for (const f of ['render.js', 'render-gl.js']) assert.match(await read(f), new RegExp(`FRAME_BYTES = 16 \\* 4 \\+ ${vec4s - 4} \\* 16`), f);
+  // main.js writes each field where the block has it (in floats).
+  const at = {};
+  wgsl.reduce((o, [name, n]) => { at[name] = o; return o + n * 4; }, 0);
+  const main = await read('main.js');
+  assert.ok(main.includes(`frameData.set(race.course.scenery ? THAMES : WATER, ${at.water});`), `water at ${at.water}`);
+  assert.ok(main.includes(`frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], ${at.river});`), `river at ${at.river}`);
+  assert.match(main, new RegExp(`\\[half \\+ 9, half \\+ 4, 7, 1\\], ${at.banks}\\);`), `banks at ${at.banks}`);
+  assert.ok(main.includes(`frameData.set(spots[i] ?? [0, 0, 0, 0], ${at.spots} + i * 4);`), `spots at ${at.spots}`);
+  assert.ok(main.includes(`frameData.set([...woodL, ...woodR], ${at.woods});`), `woods at ${at.woods}`);
+  // The Thames lies calm (water.w), a made-up river doesn't.
+  assert.match(main, /const THAMES = \[[^\]]*, 0\.[1-9]\d*\];/);
+  assert.match(main, /const WATER = \[[^\]]*, 0\];/);
 });
 
 test('Christchurch Bridge: its arched deck clears the water by at least 4 m all the way across', async () => {
@@ -365,6 +377,11 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
   const gl = body(await read('shaders-gl.js'), 'vec2 treeline(');
   assert.ok(gpu.length >= 10, `${gpu.length} lines`);
   assert.deepEqual(gl, gpu);
+  // And woodAt(), which reads the woods strip.
+  const i32 = (lines) => lines.map((l) => l.replace(/i32/g, 'int'));
+  const [gpuWood, glWood] = [i32(body(await read('shaders.js'), 'fn woodAt(')), i32(body(await read('shaders-gl.js'), 'float woodAt('))];
+  assert.equal(gpuWood.length, 4);
+  assert.deepEqual(glWood, gpuWood);
 });
 
 test("the dead tree, the river sign and the beach stand on their banks, not out in the river", async () => {
@@ -414,6 +431,48 @@ test("the water reads the woods where each reflection meets the bank, not only b
   // Facing the other way, the sides swap and the strip runs backwards.
   const [backL, backR] = strip(300, -1);
   assert.deepEqual([backL, backR], [[...strip(300)[1]].reverse(), [...townSide].reverse()]);
+  // Past either end of the river it holds the end's value; a made-up river is all woods.
+  const [startL] = strip(0);
+  assert.ok(startL.slice(0, 8).every((v) => v === woods(0)[0]), `${startL}`);
+  const [, endR] = strip(river.length);
+  assert.ok(endR.slice(8).every((v) => v === woods(river.length)[1]), `${endR}`);
+  assert.deepEqual(bankWoodsAlong({}, 0, 0, 1, 0), [Array(16).fill(1), Array(16).fill(1)]);
+});
+
+test("the water shaders read the woods strip where main.js puts it: 16 a bank, 20 m apart, centred on the reflections' river point", async () => {
+  const { bankWoodsAlong } = await import('../reading-thames/world.js');
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const reading = courseFromFile(await data('reading'));
+  const p = pointAt(reading.scenery.river, 3000);
+  const [left, right] = bankWoodsAlong(reading, p.x, p.z, p.tx, p.tz);
+  const n = left.length;
+  const step = 20; // bankWoodsAlong's default spacing: k sits (k - (n - 1) / 2) * step along
+  for (const f of ['shaders.js', 'shaders-gl.js']) {
+    const src = await read(f);
+    assert.ok(src.includes(`clamp(a / ${step}.0 + ${(n - 1) / 2}, 0.0, ${n - 1}.0)`), `${f}: its spacing and centre`);
+    assert.ok(src.includes(`k * ${n} + i`) && src.includes(`, ${n - 2});`), `${f}: ${n} a bank`);
+  }
+  // The shaders' woodAt, in JS, over the flat strip main.js writes.
+  const flat = [...left, ...right];
+  const woodAt = (k, a) => { const f = Math.min(n - 1, Math.max(0, a / step + (n - 1) / 2)); const i = Math.min(Math.floor(f), n - 2); const j = k * n + i; return flat[j] + (flat[j + 1] - flat[j]) * (f - i); };
+  for (let k = 0; k < n; k++) {
+    assert.ok(Math.abs(woodAt(0, (k - (n - 1) / 2) * step) - left[k]) < 1e-6, `left ${k}`);
+    assert.ok(Math.abs(woodAt(1, (k - (n - 1) / 2) * step) - right[k]) < 1e-6, `right ${k}`);
+  }
+  assert.equal(woodAt(0, -1000), left[0]);
+  assert.equal(woodAt(0, 1000), left[n - 1]);
+  assert.equal(woodAt(1, 1000), right[n - 1]);
+});
+
+test("a camera held still off the Loop's route mirrors the river where it stands, not the Loop's nearest point", async () => {
+  const { mirrorLine, locate } = await import('../reading-thames/course.js');
+  const loop = courseFromFile(await data('loop'));
+  const river = loop.scenery.river;
+  const eye = pointAt(river, 3100); // 3.1 km up, off the Loop
+  const held = locate(mirrorLine(loop, true), eye.x, eye.z);
+  assert.ok(Math.abs(held.lateral) < 5, `held camera: ${held.lateral.toFixed(1)} m off its line`);
+  assert.ok(Math.abs(locate(loop, eye.x, eye.z).lateral) > 100, "the Loop's own line is far off there");
+  assert.equal(mirrorLine(loop, false), loop);
 });
 
 test("the rowing club's car park is flat (the bank rises behind the club), and the walk's camera stands on it", async () => {

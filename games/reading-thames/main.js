@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { loadCourse, riverView, locate } from './course.js';
+import { loadCourse, riverView, mirrorLine, locate } from './course.js';
 import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
@@ -2572,8 +2572,7 @@ function render(time) {
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
   // (A held camera mirrors the banks where it is, not where your boat is.)
-  // (A held camera can stand off the course being raced, so it takes the whole river's line.)
-  const line = fixedShot ? race.course.scenery?.river ?? race.course : race.course;
+  const line = mirrorLine(race.course, !!fixedShot);
   const mirrorAt = fixedShot ? locate(line, fixedShot.eye[0], fixedShot.eye[2]).s : race.player.loc.s;
   reflected = riverView(line, mirrorAt, fixedShot ? null : reflected, time - (reflected?.time ?? time));
   reflected.time = time;
