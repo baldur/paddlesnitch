@@ -179,10 +179,13 @@ jobs:
 
   # The three browsers run side by side (one ran after another: ~25 min);
   # `games in browsers` below keeps the check's name and passes only if all do.
+  # WebKit on software rendering took 15 min on 2026-11-14 and over 30 min on
+  # 2026-11-15 for the same commit (frames ~150 ms → ~450 ms), so the runners
+  # vary ~3×; 60 min leaves room for a slow day.
   games-browser:
     name: games in ${{ matrix.engine }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
