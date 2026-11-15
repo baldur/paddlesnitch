@@ -16,7 +16,8 @@ the owner's; then score every new build.
 **Tool:** `apps/web/scripts/courses/view-score.ts` (run as
 `pnpm --filter web course:view-score <label>`). If it doesn't exist yet,
 writing it is your first run. It sends each frame and game shot to Ollama
-(`http://localhost:11434/api/chat`, model `qwen3.8-64k`, `temperature: 0`,
+through the gate (`http://127.0.0.1:11435/api/chat`, the only way to the
+model), model `qwen3.8-64k:latest`, `temperature: 0`,
 images as base64), asks for JSON `{ "score": 1-5, "differences": ["…"] }`
 with the rubric above, and writes `~/.paddlesnitch/night-shift/views/model-scores.json`
 as `{ label: { viewId: { score, differences } } }` (`refviews/` is read-only

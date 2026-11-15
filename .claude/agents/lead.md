@@ -47,7 +47,7 @@ you used and what each found.
 
 ## Night shift
 
-The local model leaves reports in `~/.paddlesnitch/night-shift/inbox/`. Triage
+The local model leaves reports in `~/.paddlesnitch/night-runner/inbox/`. Triage
 them when you start a session and whenever the owner asks what it's been
 doing: the steps are in `docs/night-shift/README.md` ("For lead: triage").
 Re-measure before you accept anything, and never let its footage, frames or

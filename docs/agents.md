@@ -41,11 +41,12 @@ hand a piece to a helper.
 A local model (qwen3.8-64k through opencode, brief in
 `.opencode/agent/night-shift.md`) works through measured jobs whenever the Mac
 is free: scoring the game against the footage, camera directions in the
-footage, mutation testing, and an accessibility and console sweep. It can't
-push or open PRs. It leaves a report in `~/.paddlesnitch/night-shift/inbox/`
+footage, mutation testing, and an accessibility and console sweep. It runs in
+a macOS sandbox (no network beyond the local model, no keys, a clone with no
+remote), so it can't push or open PRs. It leaves a report in `~/.paddlesnitch/night-runner/inbox/`
 and maybe a local branch; `lead` checks each one, opens a PR for what's good
 (with the usual reviewers) and writes down why it rejected the rest. Steer it
-through `~/.paddlesnitch/night-shift/steer.md`. Everything is in
+through `~/.paddlesnitch/night-runner/steer.md`. Everything is in
 `docs/night-shift/README.md`.
 
 ## Starting a window

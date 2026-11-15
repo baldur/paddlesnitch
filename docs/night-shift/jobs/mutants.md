@@ -21,7 +21,6 @@ it found it even if it crashes (restore in `finally`).
 2. `apps/web/src/lib/permissions.ts` (who can see what)
 3. `packages/timing/src/gpx.ts`, `csv.ts`, `tcx.ts`, `parse.ts`
 4. `packages/core/src/auth.ts`
-5. `games/reading-thames/course.js`
 
 **Metric: `mutation-score`** = killed ÷ total for the target, in percent.
 Higher is better.

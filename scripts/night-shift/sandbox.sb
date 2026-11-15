@@ -1,42 +1,65 @@
 ;; The night shift's sandbox (docs/night-shift/README.md). run.sh starts the
-;; model, and everything it runs, under this profile with sandbox-exec. The
-;; model's own permission rules are only nudges; this is the boundary.
+;; model, and everything it runs, under this profile. The model's own
+;; permission rules are only nudges; this is the boundary.
 ;;
-;; Params: HOME, CLONE (its git clone, no remote), NIGHT (~/.paddlesnitch/night-shift).
+;; Deny by default. What's allowed:
+;; - network: only the Ollama gate (ollama-gate.mjs, which refuses pull, push
+;;   and create) and the two local servers the sweep uses. No DNS, no unix
+;;   sockets (herdr, the opencode service, …), no other localhost port.
+;; - writes: only the clone and the night folder.
+;; - reads: everything except keys, tokens, shell files and session data.
+;; - no `open` or `osascript`, no Launch Services or Apple Events: nothing
+;;   that would start a process outside the sandbox.
+;;
+;; Params: HOME, CLONE (its clone, no remote), NIGHT (its writable folder), GATE_PORT.
 (version 1)
-(allow default)
+(deny default)
 
-;; Network: this machine only (Ollama, the dev server, cognito-local).
-;; NET=1 (only for run.sh's pnpm install, never while the model runs) lifts it.
-(if (not (equal? (param "NET") "1")) (deny network-outbound))
-(allow network-outbound (remote ip "localhost:*"))
-(allow network-outbound (remote unix-socket))
+(allow process-fork signal sysctl-read iokit-open ipc-posix-shm ipc-posix-sem
+       pseudo-tty system-socket file-ioctl mach-lookup mach-register user-preference-read)
+(allow process-exec)
+(deny process-exec (literal "/usr/bin/open") (literal "/usr/bin/osascript")
+                   (literal "/usr/bin/automator") (literal "/usr/bin/shortcuts"))
+(deny mach-lookup
+  (global-name "com.apple.dnssd.service")
+  (global-name "com.apple.coreservices.launchservicesd")
+  (global-name-prefix "com.apple.lsd")
+  (global-name "com.apple.coreservices.appleevents")
+  (global-name "com.apple.pasteboard.1"))
 
-;; Secrets: keys, tokens, shell profiles, keychains.
+;; Network
+(allow network-outbound (remote ip (string-append "localhost:" (param "GATE_PORT"))))
+(allow network-outbound (remote ip "localhost:3600"))   ; its own dev server (sweep)
+(allow network-outbound (remote ip "localhost:9229"))   ; cognito-local (sweep sign-ups)
+(allow network-outbound (remote ip "localhost:9230"))   ; the test suite's own cognito-local
+(allow network-outbound (remote ip "localhost:4097"))   ; its own opencode server (run.sh)
+(allow network-bind network-inbound (local ip "localhost:*"))
+
+;; Reads
+(allow file-read*)
 (deny file-read*
   (subpath (string-append (param "HOME") "/.ssh"))
   (subpath (string-append (param "HOME") "/.aws"))
-  (subpath (string-append (param "HOME") "/.config/gh"))
+  (subpath (string-append (param "HOME") "/.gnupg"))
+  (subpath (string-append (param "HOME") "/.android"))
+  (subpath (string-append (param "HOME") "/.docker"))
+  (subpath (string-append (param "HOME") "/.kube"))
+  (subpath (string-append (param "HOME") "/.config"))
   (subpath (string-append (param "HOME") "/.claude"))
+  (subpath (string-append (param "HOME") "/.local/share/opencode"))
   (subpath (string-append (param "HOME") "/Library/Keychains"))
-  (literal (string-append (param "HOME") "/.zshrc"))
-  (literal (string-append (param "HOME") "/.zsh_history"))
-  (literal (string-append (param "HOME") "/.bash_history"))
-  (literal (string-append (param "HOME") "/.zprofile"))
-  (literal (string-append (param "HOME") "/.zshenv"))
-  (literal (string-append (param "HOME") "/.bashrc"))
-  (literal (string-append (param "HOME") "/.bash_profile"))
-  (literal (string-append (param "HOME") "/.profile"))
-  (literal (string-append (param "HOME") "/.netrc"))
-  (literal (string-append (param "HOME") "/.npmrc"))
-  (literal (string-append (param "HOME") "/.gitconfig"))
-  (literal (string-append (param "HOME") "/.config/opencode/service.json")))
+  (subpath (string-append (param "HOME") "/Library/Application Support"))
+  (subpath (string-append (param "HOME") "/Library/Cookies"))
+  (subpath (string-append (param "HOME") "/Library/Mail"))
+  (subpath (string-append (param "HOME") "/Library/Messages"))
+  (regex (string-append "^" (param "HOME") "/\\.(zsh|bash)[^/]*$"))
+  (regex (string-append "^" (param "HOME") "/\\.(profile|netrc|npmrc|gitconfig|git-credentials|claude\\.json.*)$")))
+;; Its own redirected config and data live here.
+(allow file-read* (subpath (param "NIGHT")) (subpath (param "CLONE")))
 
-;; Writes: only its clone and its own folder (which also holds its opencode
-;; data and pnpm store, through XDG_* and --store-dir). Nothing else in the home
-;; folder: no other repo or .git, no shared cache the owner's tools run code
-;; from, no LaunchAgents, no opencode config, not this file or run.sh.
-(deny file-write* (subpath (param "HOME")))
+;; Writes
 (allow file-write*
   (subpath (param "CLONE"))
-  (subpath (param "NIGHT")))
+  (subpath (param "NIGHT"))
+  (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper")
+  (regex #"^/dev/tty") (regex #"^/dev/fd/"))

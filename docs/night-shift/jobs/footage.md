@@ -5,8 +5,8 @@ can be compared with the footage from the right side. 8 of 31 chapters have
 one today; the rest are guessed.
 
 **Data (all local, all private):**
-- `~/.paddlesnitch/night-shift/footage/footage.db`: a copy of the footage
-  index the runner makes before your run (the real one is read-only for you).
+- `~/.paddlesnitch/night-runner/footage.db`: a copy of the footage index the
+  runner makes before your run. Open it read-only.
   SQLite, table `chapters`: `camera_yaw`
   (degrees, where the lens's front points relative to the boat's heading),
   `yaw_source` (`set` by hand, `auto` from `decideCameraYaw`, or null), the GPS
