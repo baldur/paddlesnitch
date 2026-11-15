@@ -111,6 +111,8 @@ const CASES = [
   { name: 'iphone safari, the ergs', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, row: true, erg: true },
   // In front of the rowing club on the narrowest upright phone: its five labels on screen and apart, and the doors work.
   { name: 'iphone se upright, the rowing club', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, rfront: true },
+  // The canoe club on the narrowest upright phone: its five labels on screen, apart, and clear of the first visit's note.
+  { name: 'iphone se upright, the canoe club', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, cfront: true },
   // The canoe club's kayak erg, in front of its mirror: paddled like the boat, a side at a time.
   { name: 'webkit, desktop, the kayak erg', engine: webkit, ctx: desktop, club: true, kerg: true },
   { name: 'iphone safari, the kayak erg', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, kerg: true },
@@ -391,9 +393,10 @@ async function play(c, page, errors) {
     const steps = c.outing ? (c.boat ? [[c.outing, 'hire'], ['@hirebank', null], ['#clubBack', 'path'], ['@backtohire', null], [c.outing, 'hire'],
       [other, `hire-${HIRE_IDS[other]}`], ['@byboat', null], ['#clubBack', 'hire'], ['@backtoboat', other], [c.boat, `hire-${HIRE_IDS[c.boat]}`], ['Push off', null]] : [[c.outing, null]])
       : c.kerg ? [['Reading Canoe Club', 'club'], ['Erg room', 'kerg'], ...(c.touch ? [['Paddle a 500 m', null]] : [])]
-      : c.rfront ? [['Reading Rowing Club', 'rclub'], ['@rfront', null], ['Changing room', 'rchanging'], ['#clubBack', 'rclub'], ['Boathouse', 'rboathouse'], ['#clubBack', 'rclub'], ['@rfront', null]]
-      : c.row ? [['Reading Rowing Club', 'rclub'], ['@rfront', null], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null], ['@midpiece', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
-      : [['Reading Canoe Club', 'club'], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
+      : c.cfront ? [['Reading Canoe Club', 'club'], ['@front', null]]
+      : c.rfront ? [['Reading Rowing Club', 'rclub'], ['@front', null], ['Changing room', 'rchanging'], ['#clubBack', 'rclub'], ['Boathouse', 'rboathouse'], ['#clubBack', 'rclub'], ['@front', null]]
+      : c.row ? [['Reading Rowing Club', 'rclub'], ['@front', null], ...(c.erg ? [['Erg room', 'erg'], ['Row a 500 m', null], ['@midpiece', null]] : [['Clubhouse', 'rclubhouse'], ['Honours board', null], ['@honours', null], ['#clubBack', 'rclub'], ['Go to the water', 'rpontoon'], ['Push off', null]])]
+      : [['Reading Canoe Club', 'club'], ['@front', null], ['Changing room', 'changing'], ['Change', null], ['@backspace', 'changing'], ['#clubBack', 'club'], ['Changing room', 'changing'], ['@escape', 'club'],
         ['Boathouse', 'boathouse'], ['@clear', null], ['Paint your boat', null], ['#clubBack', 'boathouse'], ['@closed', null], ['#clubBack', 'club'],
         ['Clubhouse', 'clubhouse'], ['@practice', null], ['#clubBack', 'clubhouse'], ['@plan', null], ['#clubBack', 'club'], ['Go to the water', 'pontoon'], ['Push off', null]];
     await page.locator('#clubCards .card').first().waitFor({ state: 'visible', timeout: 60_000 });
@@ -446,8 +449,9 @@ async function play(c, page, errors) {
         if (!shown.open || !shown.home) errors.push(`Back from Practice showed ${JSON.stringify(shown)}, expected the plan`);
         continue;
       }
-      // In front of the rowing club: its rooms and the water, each label on screen, apart, and clear of Back.
-      if (label === '@rfront') {
+      // In front of either club: its rooms and the water, each label on screen, apart, and clear of Back
+      // and of the first visit's note (on an upright phone the canoe club's ran down behind it).
+      if (label === '@front') {
         await page.waitForTimeout(500);
         const front = await page.evaluate(() => {
           const labels = [...document.querySelectorAll('#clubDoors button')].filter((b) => b.offsetParent).map((b) => ({ text: b.textContent, r: b.getBoundingClientRect() }));
@@ -458,9 +462,10 @@ async function play(c, page, errors) {
             off: labels.filter(({ r }) => r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight).map((l) => l.text),
             overlap: labels.flatMap((a, i) => labels.slice(i + 1).filter((b) => hit(a.r, b.r)).map((b) => `${a.text}/${b.text}`)),
             onBack: labels.filter(({ r }) => hit(r, back)).map((l) => l.text),
+            onNote: document.getElementById('clubNote').hidden ? [] : labels.filter(({ r }) => hit(r, document.getElementById('clubNote').getBoundingClientRect())).map((l) => l.text),
           };
         });
-        if (front.texts.join() !== 'Boathouse,Changing room,Clubhouse,Erg room,Go to the water' || front.off.length || front.overlap.length || front.onBack.length) errors.push(`in front of the rowing club: ${JSON.stringify(front)}`);
+        if (front.texts.join() !== 'Boathouse,Changing room,Clubhouse,Erg room,Go to the water' || front.off.length || front.overlap.length || front.onBack.length || front.onNote.length) errors.push(`in front of ${await page.evaluate(() => window.kayak.club.place)}: ${JSON.stringify(front)}`);
         continue;
       }
       // By the hire boats: a label on each, all on screen and apart, and Back at the bottom left.
@@ -543,6 +548,7 @@ async function play(c, page, errors) {
       if (!asks.length || asks[0] !== 'hide') errors.push(`the walk's taps asked for full screen ${JSON.stringify(asks)} on a phone`);
     }
     if (!c.outing && !c.row && (await page.locator('#menu').evaluate((m) => m.open))) errors.push('the picker stayed open after leaving the room');
+    if (c.cfront) return 'the canoe club: five labels on screen, apart and clear of the note';
     if (c.rfront) return 'the rowing club: five labels on screen and apart; into the changing room and boathouse and back';
     // The kayak erg: a side at a time, left, right; the numbers at the top count
     // down the 500 m, clear of the place's name and the header's buttons, and

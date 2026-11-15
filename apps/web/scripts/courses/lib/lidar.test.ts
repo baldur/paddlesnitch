@@ -62,6 +62,12 @@ describe('deriveBuildings', () => {
     const [[, , eaves]] = deriveBuildings(place, [{ shape, height: 4, kind: 'house' }], PATCH, ground)
     expect(eaves).toBeCloseTo(9 - (1.5 + 10 * 0.18), 1)
   })
+  it("takes a house's roof over three storeys for a tree over it, and leaves the house as mapped", () => {
+    const shape: Array<[number, number]> = [[20, 0], [30, 0], [30, 10], [20, 10], [20, 0]]
+    const tree: Heights = { ...place, above: (x, z) => (x >= 20 && x <= 30 && z >= 0 && z <= 10 ? 17 : 0) }
+    expect(deriveBuildings(tree, [{ shape, height: 7, kind: 'house' }], PATCH, () => 1)).toEqual([])
+    expect(deriveBuildings(tree, [{ shape, height: 6, kind: 'other' }], PATCH, () => 1)).toEqual([[25, 5, 17]])
+  })
   it('leaves landmarks, and heights within a metre of the map', () => {
     const shape: Array<[number, number]> = [[20, 0], [30, 0], [30, 10], [20, 10]]
     expect(deriveBuildings(place, [{ shape, height: 6, kind: 'other', style: 'rowing-club' }, { shape, height: 8.5, kind: 'other' }], PATCH, ground)).toEqual([])
