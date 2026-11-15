@@ -324,6 +324,24 @@ export function bankCanopy(length: number, step: number, above: (s: number, side
 }
 
 /**
+ * Where a tree whose crown peaks at (x, z) stands: there, on land 2 m or more
+ * from the water; else 2 m up the bank from the nearest edge (a crown hanging
+ * out over the water from it, or a trunk right at the edge); none if the peak
+ * is more than 8 m out over the water (that's not hanging from a bank) or the
+ * bank point is itself water. `land` is the game's mapped water.
+ */
+export function toBank(land: { nearest: (x: number, z: number) => { x: number; z: number; d: number } | null; inside: (x: number, z: number) => boolean }, x: number, z: number): XZ | null {
+  const near = land.nearest(x, z)
+  const wet = land.inside(x, z)
+  if (!near || (!wet && near.d >= 2)) return [x, z]
+  if (wet && near.d > 8) return null
+  const [ux, uz] = [(x - near.x) / (near.d || 1), (z - near.z) / (near.d || 1)]
+  const k = wet ? -2 : 2
+  const p: XZ = [near.x + ux * k, near.z + uz * k]
+  return land.inside(...p) ? null : p
+}
+
+/**
  * The leaves at the water's edge, every `step` metres along each bank: the
  * canopy's height in the first 8 m from the edge (the 80th percentile of what's
  * there), or null where there's no canopy over 3 m on most of it, or no lidar.

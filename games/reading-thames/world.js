@@ -905,11 +905,22 @@ function realScenery(m, course, real, rand) {
       const c = pointAt(course, s);
       const w = widthAt(course, s).half + 2.5;
       const [x, z] = [c.x - c.tz * side * w, c.z + c.tx * side * w];
-      const leaf = shade(LEAVES[Math.floor(edgeRand() * LEAVES.length)], edgeRand, 0.12);
+      // (A touch lighter than the trees behind: lit leaves at the water, not a black band.)
+      const leaf = shade(LEAVES[Math.floor(edgeRand() * LEAVES.length)], edgeRand, 0.12).map((v) => Math.min(1, v * 1.15));
       const g = ground(course, x, z);
-      if (g.d < 0 || built(x, z) || onPath(x, z, 3) || cleared(x, z) || byLandmark(x, z)) continue;
-      const r = Math.min(5.5, h * 0.42);
-      m.sphere([x, Math.max(0, g.y) + r * 0.8, z], r, leaf, 3, 6);
+      if (g.d < 0 || walled(real, side, s) || built(x, z) || onPath(x, z, 3) || cleared(x, z) || byLandmark(x, z)) continue;
+      // In front of a house (within 15 m behind it), garden shrubs: hedge-sized, so the house shows.
+      const out = [-c.tz * side, c.tx * side];
+      const house = [5, 10, 15].some((k) => built(x + out[0] * k, z + out[1] * k));
+      const r = house ? Math.min(1.8, h * 0.42) : Math.min(5.5, h * 0.42);
+      // Back from the water, so it overhangs by at most 1.5 m: the boat stops at the
+      // mapped shore, and a bank of leaves out past it was a green wall to paddle into.
+      const reach = (px, pz) => (course.land?.rings ? (course.land.inside(px, pz) ? Infinity : r - course.land.shore(px, pz)) : r - ground(course, px, pz).d);
+      let back = 0;
+      while (reach(x + out[0] * back, z + out[1] * back) > 1.5 && back < 8) back += 0.5;
+      const [cx, cz] = [x + out[0] * back, z + out[1] * back];
+      if (reach(cx, cz) > 1.5) continue;
+      m.sphere([cx, Math.max(0, ground(course, cx, cz).y) + r * 0.8, cz], r, leaf, 3, 6);
     }
   }
 

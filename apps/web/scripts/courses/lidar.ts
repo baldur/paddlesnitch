@@ -16,7 +16,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { projection, type XZ } from './lib/river'
-import { BLOCK, GROUND_CELL, bankCanopy, bankEdge, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
+import { BLOCK, GROUND_CELL, bankCanopy, bankEdge, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
 import { courseFromFile, locate, pointAt, widthAt } from '../../../../games/reading-thames/course.js'
 import { waterMap } from '../../../../games/reading-thames/water.js'
 
@@ -105,16 +105,7 @@ const onBridge = (x: number, z: number) => bridges.some(([a, b]) => {
   return t > -15 && t < len + 15 && Math.abs((-(x - a[0]) * dz + (z - a[1]) * dx) / len) < 16
 })
 const keepOut = (x: number, z: number) => buildings.some((b) => inside(b.shape, x, z)) || onBridge(x, z)
-const onBank = (x: number, z: number): XZ | null => {
-  const near = land.nearest(x, z)
-  const wet = land.inside(x, z)
-  if (!near || (!wet && near.d >= 2)) return [x, z]
-  if (wet && near.d > 8) return null // (a crown that far out is over the water, not hanging from the bank)
-  const [ux, uz] = [(x - near.x) / (near.d || 1), (z - near.z) / (near.d || 1)]
-  const k = wet ? -2 : 2
-  const p: XZ = [near.x + ux * k, near.z + uz * k]
-  return land.inside(...p) ? null : p
-}
+const onBank = (x: number, z: number) => toBank(land, x, z)
 // The canopy: the vegetation model's, else the first surface over the bare ground.
 const canopy = (x: number, z: number) => (vom ? sampleGrid(vom, ...bng(x, z)) : heights.above(x, z))
 const trees = deriveTrees({ ground: heights.ground, above: canopy }, patch, keepOut, onBank, fromEdge, inKept, !!vom)
