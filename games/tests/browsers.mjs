@@ -917,7 +917,9 @@ async function play(c, page, errors) {
     else {
       await page.locator('#paused button[value="menu"]').tap();
       await page.waitForFunction(() => window.kayak.club?.place && !window.kayak.club.to, null, { timeout: 60_000 });
-      await page.waitForTimeout(500);
+      // The walk unlocks the screen when full screen comes back (asked for by End race, 300 ms
+      // later here): on CI's slow frames that can be well after the walk has opened, so wait for it.
+      await page.waitForFunction(() => window.screenLocks.at(-1) === 'unlock', null, { timeout: 15_000, polling: 50 }).catch(() => {});
       const before = await page.evaluate(() => ({ lock: window.screenLocks.at(-1), asks: window.fullScreenAsks.length }));
       if (before.lock !== 'unlock') errors.push(`back on the walk the screen stayed ${before.lock}`);
       await page.evaluate(() => window.leaveFullScreen());
