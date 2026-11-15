@@ -295,12 +295,27 @@ function narrowboat(m, course, boat, [paint, trim]) {
   m.cylinder(chimney, 0.08, 0.6, 6, COLORS.boatHull);
   if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 3.7);
   // Laid up under covers, as on the island across from the boatyard: a canvas
-  // hood over the stern well, and a cratch cover sloping down to the bow.
+  // hood with a pitched top over the stern well, proud of the cabin roof; a tarp
+  // over the back of the roof, down the sides; a cratch cover sloping from the
+  // cabin front to the bow. Grey canvas on a dark boat, navy on a light one, so
+  // it shows.
   if (crew === 'covers') {
-    const canvas = CANVAS[Math.round(length * 10) % CANVAS.length];
-    orientedBox(m, origin, right, fwd, [-0.98, 0.98], [0.55, 1.65], [-half + 0.15, -half + 1.25], canvas);
-    orientedBox(m, origin, right, fwd, [-0.9, 0.9], [0.55, 1.25], [half - 3, half - 2.35], canvas);
-    for (const e of [-1, 1]) m.triFacing(at(e * 0.9, 1.25, half - 2.35), at(e * 0.9, 0.55, half - 2.35), at(0, 0.75, half - 0.6), canvas, [right[0] * e, 0.4, right[1] * e]);
+    const canvas = CANVAS[paint[0] * 0.3 + paint[1] * 0.59 + paint[2] * 0.11 < 0.35 ? 1 : 0];
+    const seam = canvas.map((v) => v * 0.75);
+    const [s0, s1] = [-half + 0.1, -half + 1.6];
+    orientedBox(m, origin, right, fwd, [-1.0, 1.0], [0.55, 1.6], [s0, s1], canvas);
+    for (const e of [-1, 1]) m.quad(at(e * 1.0, 1.6, s0), at(e * 1.0, 1.6, s1), at(0, 2.05, s1), at(0, 2.05, s0), canvas);
+    for (const z of [s0, s1]) m.triFacing(at(-1.0, 1.6, z), at(1.0, 1.6, z), at(0, 2.05, z), seam, [fwd[0] * Math.sign(z - (s0 + s1) / 2), 0, fwd[1] * Math.sign(z - (s0 + s1) / 2)]);
+    const tarp = Math.min(length * 0.35, half);
+    orientedBox(m, origin, right, fwd, [-1.06, 1.06], [1.78, 1.84], [s1 - 0.1, s1 + tarp], canvas);
+    for (const e of [-1, 1]) orientedBox(m, origin, right, fwd, e < 0 ? [-1.08, -1.0] : [1.0, 1.08], [1.3, 1.84], [s1 - 0.1, s1 + tarp], canvas);
+    for (let z = s1 + 1.2; z < s1 + tarp; z += 1.4) orientedBox(m, origin, right, fwd, [-1.09, 1.09], [1.3, 1.86], [z, z + 0.05], seam); // the ties
+    const [c0, c1] = [half - 3, half - 0.7];
+    for (const e of [-1, 1]) {
+      m.triFacing(at(e * 0.9, 0.6, c0), at(e * 0.9, 1.7, c0), at(e * 0.2, 0.85, c1), canvas, [right[0] * e, 0.3, right[1] * e]);
+      m.triFacing(at(e * 0.9, 0.6, c0), at(e * 0.2, 0.85, c1), at(e * 0.2, 0.6, c1), canvas, [right[0] * e, 0.3, right[1] * e]);
+      m.quad(at(e * 0.9, 1.7, c0), at(0, 1.75, c0), at(0, 0.9, c1), at(e * 0.2, 0.85, c1), canvas);
+    }
   }
 }
 // Boat covers: navy and grey canvas (the footage).

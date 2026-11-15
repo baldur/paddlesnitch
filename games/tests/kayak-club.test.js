@@ -409,3 +409,15 @@ test('the narrowboats across from the boatyard are laid up under covers, as in t
   for (const m of bare.moorings) if (m.crew === 'covers') delete m.crew;
   assert.ok(count(worldOf(d)) - count(worldOf(bare)) >= covered.length * 16, 'a stern hood and a cratch cover on each');
 });
+
+test("nothing stands in Caversham Bridge's road: the glass restaurant's tower is beside it, not on it", async () => {
+  const d = await data('reading');
+  const [a, b] = d.bridges.find((x) => x.name === 'Caversham Bridge').ends;
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const [u, v] = [[(b[0] - a[0]) / len, (b[1] - a[1]) / len], [-(b[1] - a[1]) / len, (b[0] - a[0]) / len]];
+  // The carriageway between the pavements, from end to end and 12 m on (where the deck runs onto the banks).
+  const road = BRIDGE.half - BRIDGE.pavement;
+  const on = ([x, , z]) => { const t = (x - a[0]) * u[0] + (z - a[1]) * u[1]; const c = (x - a[0]) * v[0] + (z - a[1]) * v[1]; return t > -12 && t < len + 12 && Math.abs(c) < road - 0.2; };
+  const standing = worldOf(d).filter(({ p }) => p.every(on) && p.some((q) => q[1] > BRIDGE.deck + 0.3));
+  assert.equal(standing.length, 0, `${standing.length} triangles stand in the road: ${JSON.stringify(standing.slice(0, 3).map(({ p, color }) => [p.map((q) => q.map((x) => +x.toFixed(1))), color.map((x) => +x.toFixed(2))]))}`);
+});

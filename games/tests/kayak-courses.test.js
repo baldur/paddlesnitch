@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { courseFromFile, pointAt, locate } from '../reading-thames/course.js';
+import { courseFromFile, pointAt, locate, widthAt } from '../reading-thames/course.js';
 import { createRace, stepRace, standings, PORTAGE, portageTime, DIVISION_9, DIVISION_3 } from '../reading-thames/race.js';
 
 const DT = 1 / 120;
@@ -292,4 +292,29 @@ test('a mass start on a course that finishes where it starts: nobody "finishes" 
 test('a portage as shown: out, along the bank at a pace, back in', () => {
   assert.equal(portageTime({ from: 0, to: 150 }), PORTAGE.out + 150 / 3 + PORTAGE.in);
   assert.equal(portageTime({ from: 0, to: 150 }, 2.5), PORTAGE.out + 60 + PORTAGE.in);
+});
+
+test("the Caversham Lady (the black trip boat along Piper's Island) stays off every route and out of the Island Bar's view from the main river", async () => {
+  const reading = await data('reading');
+  const river = courseFromFile(reading).scenery.river;
+  const lady = reading.moorings.find((m) => m.kind === 'trip-boat' && m.paint === 'black');
+  // Her deck, as course.js moors her: against her bank, 4.6 m in the beam.
+  const c = pointAt(river, lady.s);
+  const w = widthAt(river, lady.s).half - 4.6 / 2;
+  const mid = [c.x - c.tz * lady.side * w, c.z + c.tx * lady.side * w];
+  const deck = [-1, -0.5, 0, 0.5, 1].flatMap((k) => [-2.3, 2.3].map((b) => [mid[0] + c.tx * k * lady.length / 2 - c.tz * b, mid[1] + c.tz * k * lady.length / 2 + c.tx * b]));
+  for (const id of ['loop', 'hasler79', 'hasler16']) {
+    const route = courseFromFile(await data(id));
+    const near = route.samples.filter((p) => Math.hypot(p.x - mid[0], p.z - mid[1]) < 80);
+    const gap = Math.min(...near.flatMap((p) => deck.map(([x, z]) => Math.hypot(x - p.x, z - p.z))));
+    assert.ok(!near.length || gap > 6, `${id}: ${gap.toFixed(1)} m from its racing line`);
+  }
+  // From the main river below the bar (the owner's reference view) she's beside it: at most a
+  // tenth of it behind her (its far corner), where at s 614.9 she stood in front of half of it.
+  const eye = [-495.3, -411.4];
+  const bearing = ([x, z]) => (Math.atan2(x - eye[0], -(z - eye[1])) * 180) / Math.PI;
+  const bar = reading.buildings.find((b) => b.style === 'island-bar').shape.map(bearing);
+  const her = deck.map(bearing);
+  const hidden = Math.max(0, Math.min(Math.max(...her), Math.max(...bar)) - Math.max(Math.min(...her), Math.min(...bar)));
+  assert.ok(hidden <= (Math.max(...bar) - Math.min(...bar)) / 10, `her ${Math.min(...her).toFixed(0)}–${Math.max(...her).toFixed(0)}°, the bar ${Math.min(...bar).toFixed(0)}–${Math.max(...bar).toFixed(0)}°`);
 });

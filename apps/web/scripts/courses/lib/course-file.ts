@@ -395,6 +395,10 @@ export function courseFile(input: {
       return gates.length ? [{ gates, ...(chamber ? { chamber: pts(chamber.shape!) } : {}) }] : []
     })(),
     weirs: input.things.filter((t) => t.kind === 'weir' && t.shape && t.shape.length > 1 && t.s < cumulative(input.line).at(-1)! - 1).map((t) => pts(t.shape!)),
+    // (Names and flocks stay by the map's things: a bridge moved to its measured
+    // road is still named where the map crosses it, about 12 m early at Caversham,
+    // because course:route places the swans near it by the same name, and moving
+    // them reshuffles which ones the rivals meet.)
     ...(input.route ? routeExtras(input, input.route) : {
       places: places(input.things, input.places ?? [], [input.start, input.finish]),
       birds: (input.birds ?? []).flatMap((b) => places(input.things, [b.near], [input.start, input.finish]).map((p) => ({ s: p.s, count: b.count, spread: b.spread }))),
