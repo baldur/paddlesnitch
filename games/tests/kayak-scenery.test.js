@@ -388,13 +388,18 @@ test("the rowing club's car park is flat (the bank rises behind the club), and t
       assert.ok(Math.abs(groundAt(reading, p[0], p[2]) - level) < 0.01, `ground ${groundAt(reading, p[0], p[2]).toFixed(2)} at ${x}, ${z}: not the car park's ${level.toFixed(2)}`);
     }
   }
-  // Without the car park this ground rose 2.5 m across it: the end wall stood in a bank of grass.
+  // Without the car park the made-up ground rose 2.5 m across it: the end wall
+  // stood in a bank of grass. The measured ground (lidar) is within a metre of it.
   const river = reading.scenery.river;
-  const pads = river.pads;
+  const [pads, lidar] = [river.pads, river.lidar];
   river.pads = [];
-  const heights = [-park.half, park.half].map((z) => { const p = park.at(10, 0, z); return groundAt(reading, p[0], p[2]); });
-  river.pads = pads;
-  assert.ok(Math.abs(heights[0] - heights[1]) > 1.5, 'the test would fail without it');
+  const across = () => [-park.half, park.half].map((z) => { const p = park.at(10, 0, z); return groundAt(reading, p[0], p[2]); });
+  const measured = across();
+  river.lidar = null;
+  const madeUp = across();
+  [river.pads, river.lidar] = [pads, lidar];
+  assert.ok(Math.abs(madeUp[0] - madeUp[1]) > 1.5, 'the test would fail without it');
+  for (const h of measured) assert.ok(Math.abs(h - level) < 1, `measured ground ${h.toFixed(2)}, the car park ${level.toFixed(2)}`);
 });
 
 test("the rowing club stands at the same height, and its car park at the same place, whether or not the river was built first", async () => {

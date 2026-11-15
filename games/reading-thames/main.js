@@ -2631,8 +2631,8 @@ addEventListener('blur', stopLooking);
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopLooking(); });
 // The phone's Look buttons: held, they look while held; tapped, a glance that
 // comes back on its own, so the other thumb can keep rowing.
-const GLANCE = 1.2; // seconds
-let glanceUntil = 0;
+const GLANCE = 1.2; // seconds of the game's time, as the look eases (on slow frames, a real-time glance ended before the head got round)
+let glanceLeft = 0;
 for (const [id, code] of [['lookLeft', 'LookLeft'], ['lookRight', 'LookRight']]) {
   const btn = document.getElementById(id);
   let down = 0;
@@ -2640,14 +2640,14 @@ for (const [id, code] of [['lookLeft', 'LookLeft'], ['lookRight', 'LookRight']])
     e.preventDefault();
     e.stopPropagation();
     down = clock();
-    glanceUntil = 0;
+    glanceLeft = 0;
     if (!lookKeys.includes(code)) lookKeys.push(code);
     lookWant = lookFromKeys(lookKeys);
   });
   const up = (e) => {
     e.stopPropagation();
     if (!down || !lookKeys.includes(code)) return;
-    if (clock() - down < 0.3) glanceUntil = clock() + GLANCE; // a tap: let it go later
+    if (clock() - down < 0.3) glanceLeft = GLANCE; // a tap: let it go later
     else lookKeys.splice(lookKeys.indexOf(code), 1);
     lookWant = lookFromKeys(lookKeys);
     down = 0;
@@ -2656,8 +2656,7 @@ for (const [id, code] of [['lookLeft', 'LookLeft'], ['lookRight', 'LookRight']])
 }
 function stepLook(dt) {
   // A glance from a tapped Look button is over.
-  if (glanceUntil && clock() > glanceUntil) {
-    glanceUntil = 0;
+  if (glanceLeft && (glanceLeft = Math.max(0, glanceLeft - dt)) === 0) {
     for (const code of ['LookLeft', 'LookRight']) if (lookKeys.includes(code)) lookKeys.splice(lookKeys.indexOf(code), 1);
     lookWant = lookFromKeys(lookKeys);
   }
