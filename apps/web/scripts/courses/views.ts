@@ -162,7 +162,7 @@ figure{margin:0}img{width:100%;display:block;background:#000}figcaption{color:#9
 .hint{color:#94a3b8;font-size:13px}
 </style></head><body>
 <header><h1>Reference views</h1>
-<label>Game <select id="label"></select></label><label>Beside it <select id="other"><option value="">nothing</option></select></label>
+<label>Game <select id="label"></select></label><label>Compare with <select id="other"><option value="">None</option></select></label>
 <span class="mean" id="mean"></span><span class="hint">1: nothing like it · 3: you can tell where it is · 5: could be the footage</span></header>
 <main id="list"></main>
 <script>
@@ -171,7 +171,7 @@ const $ = (s) => document.querySelector(s);
 async function load() {
   data = await (await fetch('/data')).json();
   const opts = data.labels.map((l) => '<option value="' + l.label + '">' + l.label + (l.commit ? ' (' + l.commit + ')' : '') + '</option>').join('');
-  $('#label').innerHTML = opts; $('#other').innerHTML = '<option value="">nothing</option>' + opts;
+  $('#label').innerHTML = opts; $('#other').innerHTML = '<option value="">None</option>' + opts;
   label = data.labels.at(-1)?.label ?? ''; $('#label').value = label;
   draw();
 }
@@ -183,7 +183,7 @@ function draw() {
   const list = $('#list'); list.textContent = '';
   for (const v of data.views) {
     const s = document.createElement('section');
-    const h = document.createElement('h2'); h.style.fontSize = '15px'; h.style.margin = '0 0 6px'; h.textContent = v.name + ' (' + v.view + ')'; s.append(h);
+    const h = document.createElement('h2'); h.style.fontSize = '15px'; h.style.margin = '0 0 6px'; h.textContent = v.name.replace(/ km up$/, ' km up the river') + ', looking ' + (v.view === 'ahead' ? 'ahead' : v.view === 'behind' ? 'behind' : 'to the ' + v.view); s.append(h);
     const pics = document.createElement('div'); pics.className = 'pics';
     const fig = (src, cap) => { const f = document.createElement('figure'); const i = new Image(); i.loading = 'lazy'; i.src = src; i.alt = cap + ': ' + v.name; const c = document.createElement('figcaption'); c.textContent = cap; f.append(i, c); return f; };
     pics.append(fig('/frames/' + v.id + '.jpg', 'Footage, ' + v.day.replace('T', ' ')));

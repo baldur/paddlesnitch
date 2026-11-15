@@ -17,7 +17,7 @@ export const SPACING = 200
  */
 export function pickPoints(length: number, along: (s: number) => XZ, landmarks: Array<{ name: string; at: XZ; s: number }>, spacing = SPACING): Point[] {
   const points: Point[] = []
-  for (let s = spacing / 2; s < length; s += spacing) points.push({ id: `s${Math.round(s)}`, name: `${(s / 1000).toFixed(1)} km up`, at: along(s) })
+  for (let s = spacing / 2; s < length; s += spacing) points.push({ id: `s${Math.round(s)}`, name: `${(s / 1000).toFixed(1)} km up the river`, at: along(s) })
   for (const l of landmarks) points.push({ id: l.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name: l.name, at: along(l.s), target: l.at })
   return points
 }
