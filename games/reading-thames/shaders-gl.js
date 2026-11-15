@@ -150,12 +150,13 @@ export const WATER = {
 layout(location = 0) in vec2 grid;
 out vec3 vWorld;
 out vec2 vWoods;
-// How wooded bank k (0 left, 1 right) is a metres along the river from frame.river (frame.woods, every 20 m, ±150 m).
-float woodAt(int k, float a) {
-  float f = clamp(a / 20.0 + 7.5, 0.0, 15.0);
-  int i = min(int(f), 14);
-  int n = k * 16 + i;
-  return mix(frame.woods[n / 4][n % 4], frame.woods[(n + 1) / 4][(n + 1) % 4], f - float(i));
+// How wooded a bank is a metres along the river from frame.river, from its 16
+// values (frame.woods, every 20 m, ±150 m) passed as four vec4s: straight
+// between the two nearest, as tent weights (no index worked out at run time,
+// which software graphics run slowly).
+float woodAt(float a, vec4 w0, vec4 w1, vec4 w2, vec4 w3) {
+  vec4 f = clamp(a / 20.0 + 7.5, 0.0, 15.0) - vec4(0.0, 1.0, 2.0, 3.0);
+  return dot(w0, max(1.0 - abs(f), vec4(0.0))) + dot(w1, max(1.0 - abs(f - 4.0), vec4(0.0))) + dot(w2, max(1.0 - abs(f - 8.0), vec4(0.0))) + dot(w3, max(1.0 - abs(f - 12.0), vec4(0.0)));
 }
 // How far along the river a ray from p meets the bank at that lateral (the river taken as straight from where you are; along it, the next bend, a few hundred metres).
 float alongTo(vec2 p, vec3 refl, float bank) {
@@ -168,7 +169,7 @@ float alongTo(vec2 p, vec3 refl, float bank) {
 // Worked out per vertex: the woods change every 20 m, and reading frame.woods
 // for every pixel made the frame some 60% slower on software graphics (WebKit on CI).
 vec2 woodsHere(vec2 p, vec3 refl) {
-  return vec2(woodAt(0, alongTo(p, refl, -frame.banks.x)), woodAt(1, alongTo(p, refl, frame.banks.y)));
+  return vec2(woodAt(alongTo(p, refl, -frame.banks.x), frame.woods[0], frame.woods[1], frame.woods[2], frame.woods[3]), woodAt(alongTo(p, refl, frame.banks.y), frame.woods[4], frame.woods[5], frame.woods[6], frame.woods[7]));
 }
 void main() {
   vec2 snap = floor(frame.camPos.xz / SPACING) * SPACING;

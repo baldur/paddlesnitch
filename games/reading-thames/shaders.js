@@ -129,12 +129,13 @@ struct Out {
 export const WATER = FRAME + /* wgsl */ `
 struct Out { @builtin(position) clip: vec4f, @location(0) world: vec3f, @location(1) woods: vec2f };
 
-// How wooded bank k (0 left, 1 right) is a metres along the river from frame.river (frame.woods, every 20 m, ±150 m).
-fn woodAt(k: i32, a: f32) -> f32 {
-  let f = clamp(a / 20.0 + 7.5, 0.0, 15.0);
-  let i = min(i32(f), 14);
-  let n = k * 16 + i;
-  return mix(frame.woods[n / 4][n % 4], frame.woods[(n + 1) / 4][(n + 1) % 4], f - f32(i));
+// How wooded a bank is a metres along the river from frame.river, from its 16
+// values (frame.woods, every 20 m, ±150 m) passed as four vec4s: straight
+// between the two nearest, as tent weights (no index worked out at run time,
+// which software graphics run slowly).
+fn woodAt(a: f32, w0: vec4f, w1: vec4f, w2: vec4f, w3: vec4f) -> f32 {
+  let f = clamp(a / 20.0 + 7.5, 0.0, 15.0) - vec4f(0.0, 1.0, 2.0, 3.0);
+  return dot(w0, max(1.0 - abs(f), vec4f(0.0))) + dot(w1, max(1.0 - abs(f - 4.0), vec4f(0.0))) + dot(w2, max(1.0 - abs(f - 8.0), vec4f(0.0))) + dot(w3, max(1.0 - abs(f - 12.0), vec4f(0.0)));
 }
 // How far along the river a ray from p meets the bank at that lateral (the river taken as straight from where you are; along it, the next bend, a few hundred metres).
 fn alongTo(p: vec2f, refl: vec3f, bank: f32) -> f32 {
@@ -147,7 +148,7 @@ fn alongTo(p: vec2f, refl: vec3f, bank: f32) -> f32 {
 // Worked out per vertex: the woods change every 20 m, and reading frame.woods
 // for every pixel made the frame some 60% slower on software graphics (WebKit on CI).
 fn woodsHere(p: vec2f, refl: vec3f) -> vec2f {
-  return vec2f(woodAt(0, alongTo(p, refl, -frame.banks.x)), woodAt(1, alongTo(p, refl, frame.banks.y)));
+  return vec2f(woodAt(alongTo(p, refl, -frame.banks.x), frame.woods[0], frame.woods[1], frame.woods[2], frame.woods[3]), woodAt(alongTo(p, refl, frame.banks.y), frame.woods[4], frame.woods[5], frame.woods[6], frame.woods[7]));
 }
 
 

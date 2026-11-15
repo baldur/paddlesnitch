@@ -370,7 +370,7 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
     const from = src.indexOf(head);
     return src.slice(from, src.indexOf('\n}', from)).split('\n').slice(1)
       .map((l) => l.trim()).filter((l) => l && !l.startsWith('//'))
-      .map((l) => unselect(l.replace(/\b(var|int) /g, '').replace(/\bf32\(/g, 'float(').replace(/^(let|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/[{};]/g, '').replace(/^if (.*) return/, 'if $1 return')))
+      .map((l) => unselect(l.replace(/\b(var|int) /g, '').replace(/\bf32\(/g, 'float(').replace(/^(let|float|vec[234]) /, '').replace(/vec([234])f/g, 'vec$1').replace(/[{};]/g, '').replace(/^if (.*) return/, 'if $1 return')))
       .map((l) => l.replace(/[()\s]/g, ''));
   };
   const gpu = body(await read('shaders.js'), 'fn treeline(');
@@ -380,7 +380,7 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
   // And woodAt(), which reads the woods strip.
   const i32 = (lines) => lines.map((l) => l.replace(/i32/g, 'int'));
   const [gpuWood, glWood] = [i32(body(await read('shaders.js'), 'fn woodAt(')), i32(body(await read('shaders-gl.js'), 'float woodAt('))];
-  assert.equal(gpuWood.length, 4);
+  assert.equal(gpuWood.length, 2);
   assert.deepEqual(glWood, gpuWood);
   // And the vertex shader's woodsHere() and alongTo(), which find where each ray meets the banks.
   for (const [wg, gl] of [['fn woodsHere(', 'vec2 woodsHere('], ['fn alongTo(', 'float alongTo(']]) {
@@ -456,18 +456,21 @@ test("the water shaders read the woods strip where main.js puts it: 16 a bank, 2
   for (const f of ['shaders.js', 'shaders-gl.js']) {
     const src = await read(f);
     assert.ok(src.includes(`clamp(a / ${step}.0 + ${(n - 1) / 2}, 0.0, ${n - 1}.0)`), `${f}: its spacing and centre`);
-    assert.ok(src.includes(`k * ${n} + i`) && src.includes(`, ${n - 2});`), `${f}: ${n} a bank`);
+    // The left bank from the block's first four vec4s, the right from the next four.
+    assert.match(src, /woodAt\(alongTo\(p, refl, -frame\.banks\.x\), (frame\.woods|w)\[0\], \1\[1\], \1\[2\], \1\[3\]\)/, `${f}: the left bank`);
+    assert.match(src, /woodAt\(alongTo\(p, refl, frame\.banks\.y\), (frame\.woods|w)\[4\], \1\[5\], \1\[6\], \1\[7\]\)/, `${f}: the right bank`);
   }
-  // The shaders' woodAt, in JS, over the flat strip main.js writes.
-  const flat = [...left, ...right];
-  const woodAt = (k, a) => { const f = Math.min(n - 1, Math.max(0, a / step + (n - 1) / 2)); const i = Math.min(Math.floor(f), n - 2); const j = k * n + i; return flat[j] + (flat[j + 1] - flat[j]) * (f - i); };
+  // The shaders' woodAt (tent weights over four vec4s), in JS, over each bank's 16 values.
+  const woodAt = (a, w) => { const f = Math.min(n - 1, Math.max(0, a / step + (n - 1) / 2)); return w.reduce((t, v, i) => t + v * Math.max(0, 1 - Math.abs(f - i)), 0); };
+  const lerp = (a, w) => { const f = Math.min(n - 1, Math.max(0, a / step + (n - 1) / 2)); const i = Math.min(Math.floor(f), n - 2); return w[i] + (w[i + 1] - w[i]) * (f - i); };
   for (let k = 0; k < n; k++) {
-    assert.ok(Math.abs(woodAt(0, (k - (n - 1) / 2) * step) - left[k]) < 1e-6, `left ${k}`);
-    assert.ok(Math.abs(woodAt(1, (k - (n - 1) / 2) * step) - right[k]) < 1e-6, `right ${k}`);
+    assert.ok(Math.abs(woodAt((k - (n - 1) / 2) * step, left) - left[k]) < 1e-6, `left ${k}`);
+    assert.ok(Math.abs(woodAt((k - (n - 1) / 2) * step, right) - right[k]) < 1e-6, `right ${k}`);
   }
-  assert.equal(woodAt(0, -1000), left[0]);
-  assert.equal(woodAt(0, 1000), left[n - 1]);
-  assert.equal(woodAt(1, 1000), right[n - 1]);
+  // Between samples it's straight between the two nearest, and past the ends it holds the end's value.
+  for (let a = -200; a <= 200; a += 7.3) assert.ok(Math.abs(woodAt(a, left) - lerp(a, left)) < 1e-6, `at ${a}`);
+  assert.ok(Math.abs(woodAt(-1000, left) - left[0]) < 1e-6);
+  assert.ok(Math.abs(woodAt(1000, right) - right[n - 1]) < 1e-6);
 });
 
 test("a camera held still off the Loop's route mirrors the river where it stands, not the Loop's nearest point", async () => {
