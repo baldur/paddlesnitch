@@ -9,3 +9,8 @@ allowBuilds:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+# Security floors for dev-only tools (vitest's vite, open-next's glob), pinned
+# to releases at least two weeks old. Drop each once its parent requires it.
+overrides:
+  vite@<8.1.6: 8.1.6
+  glob@>=10 <10.5.0: 10.5.0

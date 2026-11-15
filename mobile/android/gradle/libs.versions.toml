@@ -10,11 +10,20 @@ junit = "4.13.2"
 serialization = "1.11.0"
 coroutines = "1.11.0"
 okhttp = "5.5.0"
-json = "20250517"
+json = "20260719"
 maplibre = "13.7.1"
 robolectric = "4.17"
 roborazzi = "1.77.0"
 work = "2.10.1"
+# Lowest safe versions of libraries the build and test tools bring in (none ships
+# in the app). Each one is the fixed version of a security advisory; see
+# build.gradle.kts and app/build.gradle.kts. Drop one once AGP brings it in itself.
+guava = "33.7.2-jre"         # GHSA-xxph-c9ww-hj94
+commonsLang3 = "3.18.0"      # GHSA-j288-q9x7-2f5v
+bouncyCastle = "1.85"        # GHSA-9pwp-9qqc-pr26, GHSA-qp49-qgx5-5m26, GHSA-wg6q-6289-32hp
+httpclient = "4.5.13"        # GHSA-7r82-7xv7-xcpj
+jose4j = "0.9.6"             # GHSA-3677-xxcr-wjqv
+jdom2 = "2.0.6.1"            # GHSA-2363-cqg2-863c
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -42,6 +51,15 @@ roborazzi-junit-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit
 
 work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
+
+safe-guava = { module = "com.google.guava:guava", version.ref = "guava" }
+safe-commons-lang3 = { module = "org.apache.commons:commons-lang3", version.ref = "commonsLang3" }
+safe-bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncyCastle" }
+safe-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncyCastle" }
+safe-bcutil = { module = "org.bouncycastle:bcutil-jdk18on", version.ref = "bouncyCastle" }
+safe-httpclient = { module = "org.apache.httpcomponents:httpclient", version.ref = "httpclient" }
+safe-jose4j = { module = "org.bitbucket.b_c:jose4j", version.ref = "jose4j" }
+safe-jdom2 = { module = "org.jdom:jdom2", version.ref = "jdom2" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

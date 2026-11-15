@@ -220,6 +220,14 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
+
+    // Lowest safe versions (gradle/libs.versions.toml) for the unit tests and the
+    // lint tool; they only raise a version and never add a library.
+    constraints {
+        testImplementation(libs.safe.guava)
+        for (safe in listOf(libs.safe.guava, libs.safe.commons.lang3, libs.safe.bcprov, libs.safe.bcpkix, libs.safe.bcutil, libs.safe.httpclient))
+            add("androidLintTool", safe)
+    }
 }
 
 // Screenshot goldens are committed beside the tests: `./gradlew recordRoborazziDebug`
