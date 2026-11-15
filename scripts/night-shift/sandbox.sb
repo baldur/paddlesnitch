@@ -1,0 +1,42 @@
+;; The night shift's sandbox (docs/night-shift/README.md). run.sh starts the
+;; model, and everything it runs, under this profile with sandbox-exec. The
+;; model's own permission rules are only nudges; this is the boundary.
+;;
+;; Params: HOME, CLONE (its git clone, no remote), NIGHT (~/.paddlesnitch/night-shift).
+(version 1)
+(allow default)
+
+;; Network: this machine only (Ollama, the dev server, cognito-local).
+;; NET=1 (only for run.sh's pnpm install, never while the model runs) lifts it.
+(if (not (equal? (param "NET") "1")) (deny network-outbound))
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-outbound (remote unix-socket))
+
+;; Secrets: keys, tokens, shell profiles, keychains.
+(deny file-read*
+  (subpath (string-append (param "HOME") "/.ssh"))
+  (subpath (string-append (param "HOME") "/.aws"))
+  (subpath (string-append (param "HOME") "/.config/gh"))
+  (subpath (string-append (param "HOME") "/.claude"))
+  (subpath (string-append (param "HOME") "/Library/Keychains"))
+  (literal (string-append (param "HOME") "/.zshrc"))
+  (literal (string-append (param "HOME") "/.zsh_history"))
+  (literal (string-append (param "HOME") "/.bash_history"))
+  (literal (string-append (param "HOME") "/.zprofile"))
+  (literal (string-append (param "HOME") "/.zshenv"))
+  (literal (string-append (param "HOME") "/.bashrc"))
+  (literal (string-append (param "HOME") "/.bash_profile"))
+  (literal (string-append (param "HOME") "/.profile"))
+  (literal (string-append (param "HOME") "/.netrc"))
+  (literal (string-append (param "HOME") "/.npmrc"))
+  (literal (string-append (param "HOME") "/.gitconfig"))
+  (literal (string-append (param "HOME") "/.config/opencode/service.json")))
+
+;; Writes: only its clone and its own folder (which also holds its opencode
+;; data and pnpm store, through XDG_* and --store-dir). Nothing else in the home
+;; folder: no other repo or .git, no shared cache the owner's tools run code
+;; from, no LaunchAgents, no opencode config, not this file or run.sh.
+(deny file-write* (subpath (param "HOME")))
+(allow file-write*
+  (subpath (param "CLONE"))
+  (subpath (param "NIGHT")))
