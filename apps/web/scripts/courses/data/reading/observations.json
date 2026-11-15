@@ -28,7 +28,17 @@
       ],
       "heading": 300,
       "frame": "0095-p2-00600",
-      "note": "1926 road bridge: two flat concrete arches on a pier at Piper's Island, pale stone colour, balustrade parapets and lamps"
+      "note": "1926 road bridge: two flat concrete arches on a pier at Piper's Island, pale stone colour, balustrade parapets and lamps. Its road where the lidar puts it: the deck is 19 m wide and 8 m west of the map's line (owner, 2026-11-15)",
+      "road": [
+        [
+          51.466279,
+          -0.976989
+        ],
+        [
+          51.465515,
+          -0.977331
+        ]
+      ]
     },
     {
       "kind": "moorings",
@@ -295,7 +305,8 @@
         "frame": "0093-p0-03500"
       },
       "boats": "mixed",
-      "note": "a narrowboat and cruisers against the bank"
+      "note": "narrowboats under covers along the island across from the boatyard (footage 2026-08-14; owner, 2026-11-15)",
+      "crew": "covers"
     },
     {
       "kind": "bank",
@@ -1482,12 +1493,12 @@
       "length": 24,
       "paint": "black",
       "at": [
-        51.465393,
-        -0.976449
+        51.465557,
+        -0.976881
       ],
       "heading": 315,
       "frame": "0095-p1-00600-left",
-      "note": "the Caversham Lady and the trip boats moored along Piper's Island, main channel"
+      "note": "the Caversham Lady and the trip boats moored along Piper's Island, main channel; moved 35 m upstream, towards the bridge, so she doesn't hide the Island Bar from the main river (downstream she lay across the racing line) (owner, 2026-11-15)"
     },
     {
       "kind": "buildings",

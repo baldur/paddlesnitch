@@ -12,6 +12,7 @@ export type Observation = {
   count?: number; points?: LatLng[] // anglers along a stretch; posts in the water; a path's line
   length?: number; paint?: string; crew?: string // one boat seen moored: its length (m), paintwork and who's on deck
   exact?: boolean // moored where `at` is, along `heading` (in a side channel, off the river line)
+  road?: LatLng[] // a bridge's road end to end, where it was measured to run (lidar), over the map's
 } & (Place | { from: Place; to: Place })
 
 export type Cover = 'park' | 'trees' | 'gardens' | 'wild'
@@ -127,8 +128,25 @@ export function routePlaces(shapes: Array<{ name: string; shape: XZ[] }>, list: 
   return out.sort((a, b) => a.s - b.s)
 }
 
+/** How far along `line` the segment a–b crosses it (the first crossing), or null if it doesn't. */
+export function crossing(line: XZ[], a: XZ, b: XZ): number | null {
+  let along = 0
+  for (let i = 1; i < line.length; i++) {
+    const [p, q] = [line[i - 1], line[i]]
+    const [rx, rz, sx, sz] = [q[0] - p[0], q[1] - p[1], b[0] - a[0], b[1] - a[1]]
+    const den = rx * sz - rz * sx
+    if (den) {
+      const t = ((a[0] - p[0]) * sz - (a[1] - p[1]) * sx) / den
+      const u = ((a[0] - p[0]) * rz - (a[1] - p[1]) * rx) / den
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return along + t * Math.hypot(rx, rz)
+    }
+    along += Math.hypot(rx, rz)
+  }
+  return null
+}
+
 /** Bridges: every deck crossing of the line, one per bridge (roads, paths and decks of the same bridge cluster). */
-export function bridges(things: RiverThing[], styles: Map<string, { style: string; mast?: -1 | 1 }>): CourseFile['bridges'] {
+export function bridges(things: RiverThing[], styles: Map<string, { style: string; mast?: -1 | 1; ends?: [XZ, XZ]; s?: number }>): CourseFile['bridges'] {
   const crossings = things.filter((t) => t.kind === 'bridge').sort((a, b) => a.s - b.s)
   const out: CourseFile['bridges'] = []
   const longest = new Map<CourseFile['bridges'][number], number>()
@@ -168,9 +186,22 @@ function mulberry32(seed: number) {
 
 const BOATS = { cruiser: [8, 12], narrowboat: [17, 21], 'trip-boat': [24, 26], tatty: [7, 11], houseboat: [14, 18] } as const
 
-/** A row of moored boats filling a stretch of bank, or one or two at a spot. */
-export function mooringRow(from: number, to: number, side: -1 | 1, boats: string, rand: () => number): CourseFile['moorings'] {
-  const pick = (): keyof typeof BOATS => boats === 'mixed' ? (rand() < 0.4 ? 'narrowboat' : 'cruiser') : (boats in BOATS ? boats as keyof typeof BOATS : 'cruiser')
+/**
+ * A row of moored boats filling a stretch of bank, or one or two at a spot.
+ * Where the footage leaves a choice ('mixed'), narrowboats (owner, 2026-11-15),
+ * laid out with draws of their own: the row still takes the draws the old mix
+ * of cruisers and narrowboats took, so every row after it stays as it was.
+ * `crew`: something every boat in the row has (covers).
+ */
+export function mooringRow(from: number, to: number, side: -1 | 1, boats: string, rand: () => number, crew?: string): CourseFile['moorings'] {
+  if (boats === 'mixed') {
+    fillRow(from, to, side, () => (rand() < 0.4 ? 'narrowboat' : 'cruiser'), rand)
+    return fillRow(from, to, side, () => 'narrowboat', mulberry32(Math.round(from * 10) + 1), crew)
+  }
+  return fillRow(from, to, side, () => (boats in BOATS ? boats as keyof typeof BOATS : 'cruiser'), rand, crew)
+}
+
+function fillRow(from: number, to: number, side: -1 | 1, pick: () => keyof typeof BOATS, rand: () => number, crew?: string): CourseFile['moorings'] {
   const out: CourseFile['moorings'] = []
   const [a, b] = from <= to ? [from, to] : [to, from]
   const end = b > a ? b : a + (rand() < 0.5 ? 14 : 30)
@@ -179,7 +210,7 @@ export function mooringRow(from: number, to: number, side: -1 | 1, boats: string
     const [lo, hi] = BOATS[kind]
     const length = r1(lo + rand() * (hi - lo))
     if (s + length > end + 6 && out.length) break
-    out.push({ s: r1(s + length / 2), length, side, kind })
+    out.push({ s: r1(s + length / 2), length, side, kind, ...(crew ? { crew } : {}) })
     s += length + 1 + rand() * (b > a ? 6 : 2)
   }
   return out
@@ -284,13 +315,18 @@ export function courseFile(input: {
   const posts: XZ[] = []
   const paths: XZ[][] = []
   const anglers: NonNullable<CourseFile['anglers']> = []
-  const styles = new Map<string, { style: string; mast?: -1 | 1 }>()
+  const styles = new Map<string, { style: string; mast?: -1 | 1; ends?: [XZ, XZ]; s?: number }>()
   for (const o of input.observations) {
     if (o.kind === 'bridge' && typeof o.name === 'string') {
       // Which bank a cable-stayed bridge's mast stands on, as seen heading `heading`.
       const p = 'at' in o ? input.place(o.at, o.heading) : null
       const mast: -1 | 1 | undefined = p && o.mast ? ((o.mast === 'left') === p.same ? -1 : 1) : undefined
-      styles.set(o.name, { style: String(o.style ?? 'arch'), ...(mast ? { mast } : {}) })
+      // `road`: where its road really runs, measured (lidar), over the map's line.
+      // (and where that road crosses the river line, the bridge's distance along).
+      const ends = o.road?.length === 2 && input.toXZ ? (pts(o.road.map((p) => input.toXZ!(p))) as [XZ, XZ]) : null
+      const at = ends && crossing(input.line, ...ends)
+      const road = ends && at !== null ? { ends, s: r1(at) } : {}
+      styles.set(o.name, { style: String(o.style ?? 'arch'), ...(mast ? { mast } : {}), ...road })
       continue
     }
     const sp = span(o)
@@ -302,7 +338,7 @@ export function courseFile(input: {
       const h = (('at' in o ? o.heading : 0) * Math.PI) / 180
       const exact = o.exact && 'at' in o && input.toXZ ? { at: pts([input.toXZ(o.at)])[0], dir: [Math.round(Math.sin(h) * 1000) / 1000, Math.round(-Math.cos(h) * 1000) / 1000] as XZ } : {}
       moorings.push({ s: r1(sp.from), length: o.length, side: sp.side, kind, ...(o.paint ? { paint: o.paint } : {}), ...(o.crew ? { crew: o.crew } : {}), ...exact })
-    } else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand))
+    } else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand, o.crew))
     else if (o.kind === 'buildings' && o.style === 'flats') flats.push(sp)
     else if (o.kind === 'buildings' && o.style) styled.push({ ...sp, style: o.style })
     else if (o.kind === 'feature' && 'at' in o && o.style && input.toXZ) features.push({ style: o.style, at: pts([input.toXZ(o.at)])[0] })

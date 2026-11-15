@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
-import { groundAt, bridgeBay, BRIDGE, bridgeTriangles, rowingEnd, ROWING_DOORS } from '../reading-thames/world.js';
+import { groundAt, bridgeBay, BRIDGE, bridgeTriangles, rowingEnd, ROWING_DOORS, buildWorld } from '../reading-thames/world.js';
 import { WIDE, PLACES, START, cutBetween, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -374,4 +374,38 @@ test('Between the bridge and the hire bank, or a boat on it, a cut: never a glid
 test('Push off, red, shows keyboard focus (its red hid the amber border)', () => {
   const css = readFileSync(new URL('../reading-thames/kayak.css', import.meta.url), 'utf8');
   assert.match(css, /\.spot\.go:focus-visible\s*\{[^}]*outline:\s*3px solid/);
+});
+
+// The world's triangles from a course file's data, as { p, color }.
+const worldOf = (d) => {
+  const { vertices } = buildWorld(courseFromFile(d), 1, 'river');
+  const out = [];
+  for (let i = 0; i < vertices.length; i += 27) out.push({ p: [0, 9, 18].map((k) => [vertices[i + k], vertices[i + k + 1], vertices[i + k + 2]]), color: [vertices[i + 6], vertices[i + 7], vertices[i + 8]] });
+  return out;
+};
+
+test("Caversham Bridge is as wide as the lidar measures it, 19 m, and stands on its measured road (owner, 2026-11-15)", async () => {
+  const d = await data('reading');
+  const [a, b] = d.bridges.find((x) => x.name === 'Caversham Bridge').ends;
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const v = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  // The deck's top, cream, over the river: how far it reaches either side of the road's line.
+  const cream = [0.9, 0.88, 0.81];
+  const deck = worldOf(d).filter(({ p, color }) => color.every((c, k) => Math.abs(c - cream[k]) < 0.002) && p.every((q) => Math.abs(q[1] - BRIDGE.deck) < 0.01 && Math.hypot(q[0] - mid[0], q[2] - mid[1]) < 40));
+  const across = deck.flatMap(({ p }) => p.map((q) => (q[0] - a[0]) * v[0] + (q[2] - a[1]) * v[1]));
+  assert.ok(deck.length > 10, `${deck.length} deck triangles`);
+  assert.ok(Math.abs(Math.max(...across) - Math.min(...across) - 19) < 0.3, `${(Math.max(...across) - Math.min(...across)).toFixed(1)} m wide`);
+  assert.ok(Math.abs(Math.max(...across) + Math.min(...across)) < 0.3, 'centred on its road');
+});
+
+test('the narrowboats across from the boatyard are laid up under covers, as in the footage', async () => {
+  const d = await data('reading');
+  const covered = d.moorings.filter((m) => m.crew === 'covers');
+  assert.ok(covered.length >= 3 && covered.every((m) => m.kind === 'narrowboat'), `${covered.length} covered`);
+  const canvas = [[0.12, 0.16, 0.3], [0.42, 0.44, 0.45]];
+  const count = (w) => w.filter(({ color }) => canvas.some((c) => c.every((v, k) => Math.abs(v - color[k]) < 0.002))).length;
+  const bare = structuredClone(d);
+  for (const m of bare.moorings) if (m.crew === 'covers') delete m.crew;
+  assert.ok(count(worldOf(d)) - count(worldOf(bare)) >= covered.length * 16, 'a stern hood and a cratch cover on each');
 });

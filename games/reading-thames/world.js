@@ -294,7 +294,17 @@ function narrowboat(m, course, boat, [paint, trim]) {
   const chimney = at(0.3, 1.78, half - 4.5);
   m.cylinder(chimney, 0.08, 0.6, 6, COLORS.boatHull);
   if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 3.7);
+  // Laid up under covers, as on the island across from the boatyard: a canvas
+  // hood over the stern well, and a cratch cover sloping down to the bow.
+  if (crew === 'covers') {
+    const canvas = CANVAS[Math.round(length * 10) % CANVAS.length];
+    orientedBox(m, origin, right, fwd, [-0.98, 0.98], [0.55, 1.65], [-half + 0.15, -half + 1.25], canvas);
+    orientedBox(m, origin, right, fwd, [-0.9, 0.9], [0.55, 1.25], [half - 3, half - 2.35], canvas);
+    for (const e of [-1, 1]) m.triFacing(at(e * 0.9, 1.25, half - 2.35), at(e * 0.9, 0.55, half - 2.35), at(0, 0.75, half - 0.6), canvas, [right[0] * e, 0.4, right[1] * e]);
+  }
 }
+// Boat covers: navy and grey canvas (the footage).
+const CANVAS = [[0.12, 0.16, 0.3], [0.42, 0.44, 0.45]];
 
 // Figures standing on a narrowboat's roof, in front of the chimney: Lara Croft
 // (green vest, blue cargo trousers, holsters on her thighs, a long brown plait)
@@ -2672,7 +2682,9 @@ function bridgeFrame(course, { s, ends }) {
 // pedestals carrying green double lamps, a stone balustrade, pavements either
 // side of the road. Where the bay is, along the road (`t`) and on which side
 // (`e`, the upstream one, towards the clubs), with the bridge's frame.
-export const BRIDGE = { deck: 6.5, half: 5.75, pavement: 2.6, bay: 3.2, out: 3, pedestal: 0.75 };
+// 19 m wide, as the lidar measures it (owner, 2026-11-15: it was 13): `half` is
+// the balustrades' line, `width` the deck and its arches' faces.
+export const BRIDGE = { deck: 6.5, width: 19, half: 9, pavement: 3, bay: 3.2, out: 3, pedestal: 0.75 };
 export function bridgeBay(course, bridge) {
   if (bridge?.name !== 'Caversham Bridge') return null;
   const { c, origin, right, fwd } = bridgeFrame(course, bridge);
@@ -2769,21 +2781,21 @@ function concreteBridge(m, course, bridge) {
     for (let k = 0; k < n; k++) {
       const x0 = a + ((b - a) * k) / n;
       const x1 = a + ((b - a) * (k + 1)) / n;
-      orientedBox(m, origin, right, fwd, [x0, x1], [under((x0 + x1) / 2), deck], [-6, 6], COLORS.cream);
+      orientedBox(m, origin, right, fwd, [x0, x1], [under((x0 + x1) / 2), deck], [-BRIDGE.width / 2 + 0.5, BRIDGE.width / 2 - 0.5], COLORS.cream);
     }
   }
   // Piers and the abutments: the deck carried solid over the land between.
   for (let k = 0; k <= arches.length; k++) {
     const a = k ? arches[k - 1][1] + 1 : lo - 12;
     const b = k < arches.length ? arches[k][0] - 1 : hi + 12;
-    if (b > a) orientedBox(m, origin, right, fwd, [a, b], [-0.5, deck], [-6.5, 6.5], COLORS.cream);
+    if (b > a) orientedBox(m, origin, right, fwd, [a, b], [-0.5, deck], [-BRIDGE.width / 2, BRIDGE.width / 2], COLORS.cream);
   }
   const bay = bridgeBay(course, bridge);
   if (!bay) {
     for (const e of [-1, 1]) {
-      orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 1.1], e < 0 ? [-6, -5.5] : [5.5, 6], COLORS.white);
+      orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 1.1], e < 0 ? [-BRIDGE.half - 0.25, -BRIDGE.half + 0.25] : [BRIDGE.half - 0.25, BRIDGE.half + 0.25], COLORS.white);
       for (let x = lo; x <= hi; x += 12) {
-        const p = [origin[0] + right[0] * x + fwd[0] * e * 5.75, deck + 1.1, origin[2] + right[1] * x + fwd[1] * e * 5.75];
+        const p = [origin[0] + right[0] * x + fwd[0] * e * BRIDGE.half, deck + 1.1, origin[2] + right[1] * x + fwd[1] * e * BRIDGE.half];
         m.cylinder(p, 0.08, 3.2, 5, COLORS.boatHull);
         m.sphere([p[0], p[1] + 3.3, p[2]], 0.25, COLORS.white, 2, 5);
       }

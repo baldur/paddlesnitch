@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bridges, courseFile, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
+import { bridges, courseFile, crossing, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
 import type { XZ } from './river'
 
 describe('widths', () => {
@@ -37,10 +37,34 @@ describe('bridges', () => {
     // The longest road's two ends.
     expect(got[0].ends).toEqual([[-10, 40], [12, -45]])
   })
+
+  it("lays it where its road was measured to run, over the map's (Caversham Bridge, from lidar)", () => {
+    const road = (s: number, tags: Record<string, string>, shape: XZ[], name?: string): RiverThing => ({ ...bridge(s, tags, name), shape })
+    const got = bridges([road(600, { highway: 'primary', bridge: 'yes' }, [[-10, 40], [12, -45]], 'Caversham Bridge')],
+      new Map([['Caversham Bridge', { style: 'concrete-arch', ends: [[-18, 38], [4, -47]] as [XZ, XZ], s: 611.7 }]]))
+    expect(got[0]).toMatchObject({ s: 611.7, ends: [[-18, 38], [4, -47]], style: 'concrete-arch' })
+  })
+})
+
+describe('crossing', () => {
+  it('is how far along the line a road crosses it', () => {
+    const line: Array<[number, number]> = [[0, 0], [100, 0], [100, 100]]
+    expect(crossing(line, [30, -10], [40, 10])).toBeCloseTo(35)
+    expect(crossing(line, [90, 50], [110, 60])).toBeCloseTo(155)
+    expect(crossing(line, [30, 5], [40, 10])).toBeNull()
+  })
 })
 
 describe('mooringRow', () => {
   const rand = () => 0.5
+  it("makes narrowboats where the footage leaves a choice (owner, 2026-11-15), and gives every boat a row's crew", () => {
+    let seed = 1
+    const draws = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const mixed = mooringRow(100, 400, -1, 'mixed', draws)
+    expect(mixed.length).toBeGreaterThan(8)
+    expect(mixed.every((b) => b.kind === 'narrowboat' && b.length >= 17 && b.length <= 21)).toBe(true)
+    expect(mooringRow(100, 200, 1, 'narrowboat', rand, 'covers').every((b) => b.crew === 'covers')).toBe(true)
+  })
   it('fills a stretch of bank nose to tail', () => {
     const row = mooringRow(100, 200, 1, 'cruiser', rand)
     expect(row.length).toBeGreaterThan(5)
