@@ -145,7 +145,8 @@ class RecordingService : Service() {
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(stopAction)
-            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+            // Android 12+ may hold a new service's notification back 10 s; before 12 it shows at once.
+            .apply { if (Build.VERSION.SDK_INT >= 31) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE) }
             .build()
     }
 
