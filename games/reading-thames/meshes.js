@@ -99,8 +99,10 @@ export class MeshBuilder {
         const d = point(r + 1, s);
         const mid = point(r + 0.5, s + 0.5);
         const out = sub(mid, [x, y, z]);
-        this.triFacing(a, b, c, color, out);
-        this.triFacing(a, c, d, color, out);
+        // (At the poles a and b, or c and d, are one point: that triangle has no
+        // area, so it isn't drawn. A third of a tree's crown was such triangles.)
+        if (r > 0) this.triFacing(a, b, c, color, out);
+        if (r < rings - 1) this.triFacing(a, c, d, color, out);
       }
     }
   }

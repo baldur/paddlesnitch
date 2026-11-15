@@ -207,8 +207,8 @@ export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: nu
 export function lidarModule(patch: Patch, ground: { w: number; h: number; dm: number[] }, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>): string {
   const rows: string[] = []
   for (let j = 0; j < ground.h; j++) rows.push('    ' + ground.dm.slice(j * ground.w, (j + 1) * ground.w).join(',') + ',')
-  return `// The ground, buildings and trees round Reading Rowing Club and Caversham
-// Bridge, from Environment Agency lidar (the 1 m composite: bare ground, and
+  return `// The ground, buildings and trees from Caversham Bridge up past Reading
+// Canoe Club and Caversham Court, from Environment Agency lidar (the 1 m composite: bare ground, and
 // the first surface the laser met). © Environment Agency copyright and/or
 // database right, under the Open Government Licence v3. Only numbers worked out
 // from it are here, not the lidar itself. Game metres (x east, z south of
