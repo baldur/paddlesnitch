@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveBuildings, deriveGround, deriveTrees, groundIn, lidarModule, osgb36ToBng, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, blockValues, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -102,14 +102,67 @@ describe('deriveTrees', () => {
   })
 })
 
+// A little-endian float32 GeoTIFF as the EA's: one tile of tw × th holding a width × height image.
+function tiff(width: number, height: number, tw: number, th: number, value: (c: number, r: number) => number): Uint8Array {
+  const tags: Array<[number, number, number]> = [[256, 3, width], [257, 3, height], [258, 3, 32], [259, 3, 1], [322, 3, tw], [323, 3, th], [324, 4, 8 + 2 + 9 * 12 + 4], [325, 4, tw * th * 4], [339, 3, 3]]
+  const data = 8 + 2 + tags.length * 12 + 4
+  const buf = new DataView(new ArrayBuffer(data + tw * th * 4))
+  buf.setUint8(0, 0x49); buf.setUint8(1, 0x49); buf.setUint16(2, 42, true); buf.setUint32(4, 8, true)
+  buf.setUint16(8, tags.length, true)
+  tags.forEach(([tag, type, v], k) => {
+    const at = 10 + k * 12
+    buf.setUint16(at, tag, true); buf.setUint16(at + 2, type, true); buf.setUint32(at + 4, 1, true)
+    if (type === 3) buf.setUint16(at + 8, v, true); else buf.setUint32(at + 8, v, true)
+  })
+  for (let r = 0; r < th; r++) for (let c = 0; c < tw; c++) buf.setFloat32(data + (r * tw + c) * 4, c < width && r < height ? value(c, r) : -9999, true)
+  return new Uint8Array(buf.buffer)
+}
+
+describe('readTile and mosaic', () => {
+  it("reads an EA tile's image out of its padded tile, row 0 north", () => {
+    const t = readTile(tiff(3, 2, 4, 4, (c, r) => 10 * r + c + 0.5))
+    expect([t.width, t.height]).toEqual([3, 2])
+    expect(Array.from(t.values)).toEqual([0.5, 1.5, 2.5, 10.5, 11.5, 12.5])
+  })
+  it('lays tiles side by side by their south-west corners, with none where a square is missing', () => {
+    const one = (v: number) => ({ width: 2, height: 2, values: [v, v, v, v] })
+    const g = mosaic([{ west: 100, south: 200, ...one(1) }, { west: 102, south: 202, ...one(2) }])
+    expect([g.west, g.north, g.width, g.height]).toEqual([100, 204, 4, 4])
+    expect(sampleGrid(g, 103.5, 203.5)).toBe(2) // the north-east square
+    expect(sampleGrid(g, 100.5, 200.5)).toBe(1) // the south-west one
+    expect(sampleGrid(g, 100.5, 203.5)).toBeNull() // the north-west: no tile
+  })
+})
+
+describe('groundBlocks', () => {
+  const n = BLOCK / 5
+  // Two blocks across, one down: a slope rising 1 dm a cell eastward.
+  const ground = { w: 2 * n + 1, h: n + 1, dm: Array.from({ length: (2 * n + 1) * (n + 1) }, (_, k) => k % (2 * n + 1)) }
+  it('writes each kept block as its rows of steps, and reads back the same points', () => {
+    const blocks = groundBlocks(ground, [-BLOCK, 0, BLOCK, BLOCK], (i) => i === 1)
+    expect(Object.keys(blocks)).toEqual(['0,0'])
+    const v = blockValues(blocks['0,0'])
+    expect(v.length).toBe((n + 1) ** 2)
+    expect(v[0]).toBe(n) // its west edge is the slope's middle
+    expect(v[n]).toBe(2 * n)
+    expect(blocks['0,0'].split(',').slice(1, 4)).toEqual(['1', '1', '1'])
+  })
+  it("counts a point on a block's edge or corner as in the block, whichever side it touches from", () => {
+    const kept = new Set(['-5,-2'])
+    for (const [x, z] of [[-1250, -500], [-1000, -500], [-1250, -250], [-1000, -250], [-1100, -250]]) expect(inBlocks(kept, x, z)).toBe(true)
+    expect(inBlocks(kept, -1251, -300)).toBe(false)
+  })
+})
+
 describe('lidarModule', () => {
   it("writes a module the game can import, with the licence's attribution", async () => {
-    const ground = deriveGround(place, PATCH)
-    const src = lidarModule(PATCH, ground, [[25, 5, 9]], [[40.5, 5.5, 12]])
+    const n = BLOCK / 5
+    const blocks = groundBlocks({ w: n + 1, h: n + 1, dm: new Array((n + 1) ** 2).fill(10) }, [0, 0, BLOCK, BLOCK], () => true)
+    const src = lidarModule(blocks, [[25, 5, 9]], [[40.5, 5.5, 12]], 'somewhere')
     expect(src.replace(/\n\/\/ /g, ' ')).toContain('© Environment Agency copyright and/or database right')
     const { LIDAR } = await import(`data:text/javascript,${encodeURIComponent(src)}`)
-    expect(LIDAR.ground).toMatchObject({ x0: -20, z0: -10, cell: 5, w: 17, h: 7 })
-    expect(LIDAR.ground.dm).toHaveLength(17 * 7)
+    expect(LIDAR.ground).toMatchObject({ cell: 5, block: BLOCK })
+    expect(Array.from(blockValues(LIDAR.ground.blocks['0,0']))).toEqual(new Array((n + 1) ** 2).fill(10))
     expect(LIDAR.buildings).toEqual([[25, 5, 9]])
     expect(LIDAR.trees).toEqual([[40.5, 5.5, 12]])
   })

@@ -443,28 +443,55 @@ function ground(course, x, z, lineD = null) {
 // north edge, and easing that inside the patch made a cliff.
 export const FADE = 150;
 function measured(lidar, x, z, d, y) {
-  if (!lidar) return y;
-  const { x0, z0, cell, w, h, dm } = lidar.ground;
-  const u = (x - x0) / cell;
-  const v = (z - z0) / cell;
-  const out = Math.hypot(Math.max(0, -u, u - (w - 1)), Math.max(0, -v, v - (h - 1))) * cell; // metres outside the patch
-  if (out >= FADE) return y;
-  const [cu, cv] = [Math.max(0, Math.min(w - 1, u)), Math.max(0, Math.min(h - 1, v))];
-  const [i, j] = [Math.min(w - 2, Math.floor(cu)), Math.min(h - 2, Math.floor(cv))];
-  const [fu, fv] = [cu - i, cv - j];
-  const q = (a, b) => dm[b * w + a] / 10;
-  const top = (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv;
+  const at = lidarTop(lidar, x, z);
+  if (!at) return y;
+  const { top, out } = at;
   const e = Math.min(1, d / 1.5);
   const real = -0.4 + (top + 0.4) * e * e * (3 - 2 * e);
   const t = 1 - out / FADE;
   return y + (real - y) * t * t * (3 - 2 * t);
 }
 
+// The measured bank top (lidar.js) at (x, z): in its block, or beyond the
+// blocks at the nearest point of one within FADE metres (`out` is how far
+// beyond). Null further out. Blocks are decoded the first time they're read.
+export function lidarTop(lidar, x, z) {
+  if (!lidar) return null;
+  const g = lidar.ground;
+  const n = g.block / g.cell + 1;
+  g.decoded ??= new Map();
+  const values = (key) => {
+    if (!g.decoded.has(key)) {
+      const v = g.blocks[key] ? Int16Array.from(g.blocks[key].split(','), Number) : null;
+      if (v) for (let r = 0; r < n; r++) for (let c = 1; c < n; c++) v[r * n + c] += v[r * n + c - 1];
+      g.decoded.set(key, v);
+    }
+    return g.decoded.get(key);
+  };
+  const [bi, bj] = [Math.floor(x / g.block), Math.floor(z / g.block)];
+  const own = values(`${bi},${bj}`);
+  let best = own && { v: own, out: 0, u: (x - bi * g.block) / g.cell, w: (z - bj * g.block) / g.cell };
+  for (let dj = -1; dj <= 1 && !own; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      const v = values(`${bi + di},${bj + dj}`);
+      if (!v) continue;
+      const [x0, z0] = [(bi + di) * g.block, (bj + dj) * g.block];
+      const [cx, cz] = [Math.max(x0, Math.min(x0 + g.block, x)), Math.max(z0, Math.min(z0 + g.block, z))];
+      const out = Math.hypot(x - cx, z - cz);
+      if (out < FADE && (!best || out < best.out)) best = { v, out, u: (cx - x0) / g.cell, w: (cz - z0) / g.cell };
+    }
+  }
+  if (!best) return null;
+  const { v, u, w } = best;
+  const [i, j] = [Math.min(n - 2, Math.floor(u)), Math.min(n - 2, Math.floor(w))];
+  const [fu, fv] = [u - i, w - j];
+  const q = (a, b) => v[b * n + a] / 10;
+  return { top: (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv, out: best.out };
+}
+
 // Whether (x, z) is where lidar.js has the trees (they're planted from it there).
 function measuredTrees(lidar, x, z) {
-  if (!lidar) return false;
-  const { x0, z0, cell, w, h } = lidar.ground;
-  return x >= x0 && z >= z0 && x <= x0 + (w - 1) * cell && z <= z0 + (h - 1) * cell;
+  return lidarTop(lidar, x, z)?.out === 0;
 }
 
 // The lidar's numbers belong to the Reading river, the one every real course
