@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bridges, courseFile, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
+import { bridges, courseFile, crossing, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
 import type { XZ } from './river'
 
 describe('widths', () => {
@@ -37,10 +37,49 @@ describe('bridges', () => {
     // The longest road's two ends.
     expect(got[0].ends).toEqual([[-10, 40], [12, -45]])
   })
+
+  it("lays it where its road was measured to run, over the map's (Caversham Bridge, from lidar)", () => {
+    const road = (s: number, tags: Record<string, string>, shape: XZ[], name?: string): RiverThing => ({ ...bridge(s, tags, name), shape })
+    const got = bridges([road(600, { highway: 'primary', bridge: 'yes' }, [[-10, 40], [12, -45]], 'Caversham Bridge')],
+      new Map([['Caversham Bridge', { style: 'concrete-arch', ends: [[-18, 38], [4, -47]] as [XZ, XZ], s: 611.7 }]]))
+    expect(got[0]).toMatchObject({ s: 611.7, ends: [[-18, 38], [4, -47]], style: 'concrete-arch' })
+  })
+})
+
+describe('crossing', () => {
+  it('is how far along the line a road crosses it', () => {
+    const line: Array<[number, number]> = [[0, 0], [100, 0], [100, 100]]
+    expect(crossing(line, [30, -10], [40, 10])).toBeCloseTo(35)
+    expect(crossing(line, [90, 50], [110, 60])).toBeCloseTo(155)
+    expect(crossing(line, [30, 5], [40, 10])).toBeNull()
+    expect(crossing(line, [10, 0], [50, 0])).toBeNull() // along it, not across
+    expect(crossing(line, [50, -10], [150, 50])).toBeCloseTo(66.67) // across twice (at 66.7 and 120): the first
+  })
 })
 
 describe('mooringRow', () => {
   const rand = () => 0.5
+  it("makes narrowboats where the footage leaves a choice (owner, 2026-11-15), and gives every boat a row's crew", () => {
+    let seed = 1
+    const draws = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const mixed = mooringRow(100, 400, -1, 'mixed', draws)
+    expect(mixed.length).toBeGreaterThan(8)
+    expect(mixed.every((b) => b.kind === 'narrowboat' && b.length >= 17 && b.length <= 21)).toBe(true)
+    expect(mooringRow(100, 200, 1, 'narrowboat', rand, 'covers').every((b) => b.crew === 'covers')).toBe(true)
+    expect(mooringRow(100, 400, 1, 'mixed', draws, 'covers').every((b) => b.crew === 'covers' && b.kind === 'narrowboat')).toBe(true)
+  })
+
+  it("takes the draws the old mix took, so the rows after a 'mixed' one stay where they were", () => {
+    let seed = 7
+    const draws = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    mooringRow(100, 400, -1, 'mixed', draws)
+    // As main laid it out before 'mixed' became narrowboats (the same seed, the same next row).
+    expect(mooringRow(500, 600, 1, 'cruiser', draws).slice(0, 3)).toEqual([
+      { s: 499.9, length: 11.7, side: 1, kind: 'cruiser' },
+      { s: 514.1, length: 8.7, side: 1, kind: 'cruiser' },
+      { s: 526.5, length: 9.1, side: 1, kind: 'cruiser' },
+    ])
+  })
   it('fills a stretch of bank nose to tail', () => {
     const row = mooringRow(100, 200, 1, 'cruiser', rand)
     expect(row.length).toBeGreaterThan(5)
@@ -89,6 +128,17 @@ describe('courseFile', () => {
       ],
     })
     expect(out.buildings.map((b) => [b.kind, b.height])).toEqual([['flats', 12], ['house', 7]])
+  })
+
+  it("lays a bridge on the road measured for it (`road`), at the distance where that road crosses the line", () => {
+    // Map points here are [s, x]: the line runs north up x = 0.
+    const toXZ = ([a, b]: [number, number]): XZ => [b, -a]
+    const things = [{ ...bridge(600, { highway: 'primary', bridge: 'yes' }, 'Caversham Road'), shape: [[-20, -590], [20, -600]] as XZ[] }, bridge(601, { man_made: 'bridge' }, 'Caversham Bridge')]
+    const crossed = courseFile({ ...base, toXZ, things, observations: [{ kind: 'bridge', name: 'Caversham Bridge', style: 'concrete-arch', at: [600, 0], heading: 0, road: [[600, -20], [620, 20]] }] })
+    expect(crossed.bridges[0]).toMatchObject({ name: 'Caversham Bridge', style: 'concrete-arch', s: 610, ends: [[-20, -600], [20, -620]] })
+    // A road that never reaches the line (a slip with the latitudes) leaves the map's.
+    const missed = courseFile({ ...base, toXZ, things, observations: [{ kind: 'bridge', name: 'Caversham Bridge', style: 'concrete-arch', at: [600, 0], heading: 0, road: [[600, 10], [620, 20]] }] })
+    expect(missed.bridges[0]).toMatchObject({ s: 600, ends: [[-20, -590], [20, -600]] })
   })
 
   it('marks named landmarks for a bespoke model', () => {
