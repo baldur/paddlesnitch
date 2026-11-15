@@ -651,6 +651,14 @@ function buoy(m, { x, z }) {
 const NEAR = [-6, 0, 3, 7, 12, 20, 30, 45];
 const FAR_WATER = 120; // metres out from the bank to look for side channels (Fry's back channel is at most 100)
 const FAR = [45, 65, 90, 120, 160, 220, 320];
+// The strip up from the water's edge: mud where it's low (a muddy margin), but
+// scrub where it climbs (the measured banks' step, an embankment): as mud it
+// read as a concrete wall. No random draw either way, so nothing after moves.
+function edgeColor(prev, next) {
+  const ys = [prev[0].p[1], prev[1].p[1], next[0].p[1], next[1].p[1]];
+  return Math.max(...ys) - Math.min(...ys) > 0.8 ? SHADED : COLORS.mud;
+}
+
 function realLand(m, river, real, rand) {
   const { samples } = river;
   const at = (s, side, d) => [s.x + -s.tz * side * (s.half + d), s.z + s.tx * side * (s.half + d)];
@@ -684,7 +692,7 @@ function realLand(m, river, real, rand) {
             const next = [point(u, rows[k]), point(v, rows[k])];
             const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
             const green = near < 7 ? SHADED : COLORS.meadow;
-            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? COLORS.mud : shade(green, fine, 0.08));
+            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? edgeColor(prev, next) : shade(green, fine, 0.08));
             prev = next;
           }
         }
@@ -695,7 +703,7 @@ function realLand(m, river, real, rand) {
         const next = [point(a, across[k]), point(b, across[k])];
         const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
         const green = near < 7 && (cover === 'park' || cover === 'gardens') ? COLORS.mown : near < 7 ? SHADED : COLORS.meadow;
-        const color = near < 1 ? COLORS.mud : shade(green, rand, 0.08);
+        const color = near < 1 ? edgeColor(prev, next) : shade(green, rand, 0.08);
         m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
         prev = next;
       }

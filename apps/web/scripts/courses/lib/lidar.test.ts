@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK, bankCanopy, blockValues, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, bankCanopy, blockValues, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -169,18 +169,51 @@ describe('bankCanopy', () => {
     expect(right.slice(0, 6)).toEqual([0, 0, 0, 0, 0, 0])
     expect(left[8]).toBeNull()
   })
+  it('counts canopy over 3 m: 3.5 m of willow scrub is wooded, 2.5 m of reeds is not', () => {
+    const [low] = bankCanopy(100, 50, () => 2.5)
+    const [high] = bankCanopy(100, 50, () => 3.5)
+    expect(low[1]).toBe(0)
+    expect(high[1]).toBe(1)
+  })
+  it('gives a value with half the strip measured, and none with less', () => {
+    // The strip's rows out from the edge are at 2, 5, 8, 11 and 14 m; along it, 16 samples.
+    const half = (s: number) => bankCanopy(400, 100, (q) => (q - s < 0 ? 5 : null))[0][2]
+    expect(half(200 + 2)).not.toBeNull() // 8 of the 16 columns measured
+    expect(half(200 - 6)).toBeNull() // 6 of them
+  })
+})
+
+describe('canopyAt', () => {
+  // The river runs north (-z) up x = 0, 20 m wide; a building on the left bank 30 to 40 m up.
+  const river = { length: 100 }
+  const at = (s: number) => ({ x: 0, z: -s, tx: 0, tz: -1, half: 10 })
+  const building = (x: number, z: number) => x < 0 && z < -30 && z > -40
+  const sample = canopyAt(river, at, () => true, building, () => 9)
+  it("finds each bank's side: left is west going north (-x), right is east", () => {
+    const seen: Array<[number, number]> = []
+    canopyAt(river, at, (x, z) => (seen.push([x, z]), true), () => false, () => 9)(50, -1, 4)
+    canopyAt(river, at, (x, z) => (seen.push([x, z]), true), () => false, () => 9)(50, 1, 4)
+    expect(seen).toEqual([[-14, -50], [14, -50]])
+  })
+  it("counts a roof as open bank, and nothing off the river or where there's no lidar", () => {
+    expect(sample(35, -1, 4)).toBe(0)
+    expect(sample(35, 1, 4)).toBe(9)
+    expect(sample(120, 1, 4)).toBeNull()
+    expect(canopyAt(river, at, () => false, building, () => 9)(50, 1, 4)).toBeNull()
+  })
 })
 
 describe('lidarModule', () => {
   it("writes a module the game can import, with the licence's attribution", async () => {
     const n = BLOCK / 5
     const blocks = groundBlocks({ w: n + 1, h: n + 1, dm: new Array((n + 1) ** 2).fill(10) }, [0, 0, BLOCK, BLOCK], () => true)
-    const src = lidarModule(blocks, [[25, 5, 9]], [[40.5, 5.5, 12]], 'somewhere')
+    const src = lidarModule(blocks, [[25, 5, 9]], [[40.5, 5.5, 12]], 'somewhere', { step: 10, sides: [[0.5, null], [1, 0]] })
     expect(src.replace(/\n\/\/ /g, ' ')).toContain('© Environment Agency copyright and/or database right')
     const { LIDAR } = await import(`data:text/javascript,${encodeURIComponent(src)}`)
     expect(LIDAR.ground).toMatchObject({ cell: 5, block: BLOCK })
     expect(Array.from(blockValues(LIDAR.ground.blocks['0,0']))).toEqual(new Array((n + 1) ** 2).fill(10))
     expect(LIDAR.buildings).toEqual([[25, 5, 9]])
     expect(LIDAR.trees).toEqual([[40.5, 5.5, 12]])
+    expect(LIDAR.woods).toEqual({ step: 10, sides: [[0.5, null], [1, 0]] })
   })
 })

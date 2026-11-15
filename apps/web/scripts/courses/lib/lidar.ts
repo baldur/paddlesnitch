@@ -320,6 +320,23 @@ export function bankCanopy(length: number, step: number, above: (s: number, side
   }))
 }
 
+/**
+ * The canopy's height `d` metres out from the water's edge on `side` (-1 left,
+ * 1 right) at `s` along the river: null off the river or where the lidar
+ * isn't kept, 0 on a building (a roof isn't canopy). The sampler bankCanopy takes.
+ */
+export function canopyAt(
+  river: { length: number }, at: (s: number) => { x: number; z: number; tx: number; tz: number; half: number },
+  kept: (x: number, z: number) => boolean, building: (x: number, z: number) => boolean, above: (x: number, z: number) => number | null,
+): (s: number, side: -1 | 1, d: number) => number | null {
+  return (s, side, d) => {
+    if (s < 0 || s > river.length) return null
+    const c = at(s)
+    const [x, z] = [c.x - c.tz * side * (c.half + d), c.z + c.tx * side * (c.half + d)]
+    return !kept(x, z) ? null : building(x, z) ? 0 : above(x, z)
+  }
+}
+
 /** games/reading-thames/lidar.js. */
 export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }): string {
   const keys = Object.keys(blocks).sort((a, b) => { const [p, q] = [a, b].map((k) => k.split(',').map(Number)); return p[1] - q[1] || p[0] - q[0] })

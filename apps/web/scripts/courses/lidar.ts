@@ -16,7 +16,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { projection, type XZ } from './lib/river'
-import { BLOCK, GROUND_CELL, bankCanopy, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
+import { BLOCK, GROUND_CELL, bankCanopy, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
 import { courseFromFile, locate, pointAt, widthAt } from '../../../../games/reading-thames/course.js'
 import { waterMap } from '../../../../games/reading-thames/water.js'
 
@@ -116,13 +116,6 @@ const trees = deriveTrees(heights, patch, keepOut, onBank, fromEdge, inKept)
 
 const out = path.join(GAME, 'lidar.js')
 // How wooded each bank is, for the water's reflections, from the canopy itself.
-const woods = bankCanopy(river.length, 10, (s, side, d) => {
-  if (s < 0 || s > river.length) return null
-  const c = pointAt(river, s)
-  const w = widthAt(river, s).half + d
-  const [x, z] = [c.x - c.tz * side * w, c.z + c.tx * side * w]
-  // (A building isn't canopy: the surface over a roof counts as open bank.)
-  return !inKept(x, z) ? null : keepOut(x, z) ? 0 : heights.above(x, z)
-})
+const woods = bankCanopy(river.length, 10, canopyAt(river, (s) => ({ ...pointAt(river, s), half: widthAt(river, s).half }), inKept, keepOut, heights.above))
 fs.writeFileSync(out, lidarModule(blocks, heightsOut, trees, where, { step: 10, sides: woods }))
 console.log(`${out}: ${Object.keys(blocks).length} blocks of ${GROUND_CELL} m ground, ${heightsOut.length} buildings, ${trees.length} trees, ${(fs.statSync(out).size / 1024).toFixed(0)} KB`)
