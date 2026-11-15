@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowLooper
 import org.robolectric.shadows.ShadowPowerManager
@@ -74,6 +75,18 @@ class RecordingServiceTest {
         assertTrue(shadowOf(s.get()).isForegroundStopped)
         assertTrue(shadowOf(s.get()).isStoppedBySelf)
         assertTrue((state as RecordingService.State.Recording).files.track.length() > 0)
+    }
+
+    // minSdk is 29: the notification's Android 12 calls must be skipped below it, or
+    // Start throws NoSuchMethodError, which the start's catch (Exception) doesn't catch.
+    @Config(sdk = [29, 30])
+    @Test fun startingARecordingWorksOnAndroid10And11() {
+        val s = service()
+        s.startCommand(0, 1)
+        assertTrue("state ${RecordingService.state.value}", RecordingService.state.value is RecordingService.State.Recording)
+        assertNotEquals(null, shadowOf(s.get()).lastForegroundNotification)
+        s.withIntent(Intent(app, RecordingService::class.java).setAction(RecordingService.ACTION_STOP)).startCommand(0, 2)
+        waitFor("stopped") { RecordingService.state.value is RecordingService.State.Stopped }
     }
 
     // C3: Start lets a removed phone be added again; a finished recording goes up, to the account that recorded it.
