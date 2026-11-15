@@ -24,7 +24,7 @@ platform's own window only when that platform has a lot of work going on.
 | `security-privacy` | reviewer | helper | nothing (reports) | none |
 | `design-usability` | reviewer | helper | nothing (reports) | none |
 | `copy-style` | reviewer | helper | nothing (reports) | none |
-| `night-shift` | local model | `scripts/night-shift/run.sh` in a herdr tab | nothing: local branches and reports, triaged by `lead` | `../paddlesnitch-night` (a clone, no remote) |
+| `night-shift` | local model | `scripts/night-shift/run.sh` in a herdr tab | nothing: local branches and reports, triaged by `lead` | a fresh clone per run in `~/.paddlesnitch/night-runs/` (no remote) |
 
 Everything else (the web app, packages, infra) belongs to `lead`, which can
 hand a piece to a helper.

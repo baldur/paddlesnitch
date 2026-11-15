@@ -16,6 +16,13 @@ export const ALLOWED = new Set([
   'POST /api/chat', 'POST /api/generate', 'POST /api/embed', 'POST /api/embeddings',
   'GET /v1/models', 'POST /v1/chat/completions', 'POST /v1/completions', 'POST /v1/embeddings',
 ])
+// Only these models: anything else would load a different model and could
+// evict the owner's own run.
+export const MODELS = new Set(['qwen3.8-64k:latest', 'qwen3.8-64k'])
+export const modelAllowed = (body) => {
+  if (!body.length) return true
+  try { const m = JSON.parse(body.toString('utf8')).model; return m === undefined || MODELS.has(m) } catch { return false }
+}
 export const allowed = (method, url) => ALLOWED.has(`${method} ${new URL(url, 'http://x').pathname.replace(/\/+$/, '')}`)
 
 const server = http.createServer((req, res) => {
@@ -23,15 +30,19 @@ const server = http.createServer((req, res) => {
     res.writeHead(403, { 'content-type': 'text/plain' }).end('the night shift may only chat with the model\n')
     return
   }
-  let size = 0
-  const up = http.request({
+  const chunks = []; let size = 0
+  req.on('data', (c) => { size += c.length; if (size > MAX_BODY) req.destroy(); else chunks.push(c) })
+  req.on('end', () => {
+    const body = Buffer.concat(chunks)
+    if (!modelAllowed(body)) { res.writeHead(403, { 'content-type': 'text/plain' }).end('only the night-shift model\n'); return }
+    const up = http.request({
     // Forward the path that was checked, never the raw one.
     host: OLLAMA.hostname, port: OLLAMA.port, method: req.method, path: new URL(req.url, 'http://x').pathname,
     headers: { 'content-type': req.headers['content-type'] ?? 'application/json' },
-  }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res) })
-  up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end() })
-  req.on('data', (c) => { size += c.length; if (size > MAX_BODY) { req.destroy(); up.destroy() } })
-  req.pipe(up)
+    }, (r) => { res.writeHead(r.statusCode ?? 502, r.headers); r.pipe(res) })
+    up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end() })
+    up.end(body)
+  })
 })
 
 if (import.meta.url === `file://${process.argv[1]}`) {

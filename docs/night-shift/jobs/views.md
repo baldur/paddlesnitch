@@ -19,7 +19,7 @@ writing it is your first run. It sends each frame and game shot to Ollama
 through the gate (`http://127.0.0.1:11435/api/chat`, the only way to the
 model), model `qwen3.8-64k:latest`, `temperature: 0`,
 images as base64), asks for JSON `{ "score": 1-5, "differences": ["…"] }`
-with the rubric above, and writes `~/.paddlesnitch/night-shift/views/model-scores.json`
+with the rubric above, and writes `$NIGHT_WORK/views/model-scores.json`
 as `{ label: { viewId: { score, differences } } }` (`refviews/` is read-only
 for you). Keep the prompt in the
 script, so changing it is a diff `lead` can review. Pure helpers (parsing the

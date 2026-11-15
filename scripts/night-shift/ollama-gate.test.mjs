@@ -18,3 +18,12 @@ test('a refused path cannot be dressed up as an allowed one', () => {
   for (const [m, u] of [['POST', '/api/chat/../pull'], ['POST', '/api/pull?x=/api/chat'], ['GET', '/api/chat'], ['POST', '//api/pull'], ['POST', '/API/CHAT']])
     assert.ok(!allowed(m, u), `${m} ${u}`)
 })
+
+test('only the night-shift model may be asked', async () => {
+  const { modelAllowed } = await import('./ollama-gate.mjs')
+  assert.ok(modelAllowed(Buffer.from('{"model":"qwen3.8-64k:latest","messages":[]}')))
+  assert.ok(modelAllowed(Buffer.from('')))
+  assert.ok(!modelAllowed(Buffer.from('{"model":"qwen2.5vl:32b"}')))
+  assert.ok(!modelAllowed(Buffer.from('{"model":"someone.example/x"}')))
+  assert.ok(!modelAllowed(Buffer.from('not json')))
+})

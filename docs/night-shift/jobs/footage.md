@@ -23,7 +23,7 @@ and 270. Ask the model which still shows the boat's bow or the water ahead
 (the camera sat on the back deck). The direction is the yaw that sees ahead.
 Three moments must agree; if they don't, say `unsure`.
 
-Write proposals to `~/.paddlesnitch/night-shift/footage/cameras-proposed.json`
+Write proposals to `$NIGHT_WORK/footage/cameras-proposed.json`
 as `{ "<file name>": { "yaw": 180, "agree": 3, "moments": ["<ft>", …] } }`,
 plus the stills you used under the same folder so `lead` can check them by eye.
 `lead` copies accepted ones into `cameras.json`.

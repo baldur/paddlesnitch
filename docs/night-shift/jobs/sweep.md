@@ -19,7 +19,7 @@ signed out and signed in (sign up a fresh user through
 - axe violations, **every** impact, rules `wcag2a`, `wcag2aa`, `best-practice`;
 - `console` errors and warnings, `pageerror`s, and responses ≥ 400;
 
-then write `~/.paddlesnitch/night-shift/sweep/<date>.json`. The spec must not
+then write `$NIGHT_WORK/sweep/<date>.json`. The spec must not
 fail on findings (it measures); it fails only if a page doesn't load.
 
 Pages: everything in `accessibility.spec.ts`, plus `/analyse/library`,
