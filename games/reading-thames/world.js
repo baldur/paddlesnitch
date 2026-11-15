@@ -466,30 +466,66 @@ function ground(course, x, z, lineD = null) {
 // not a beach). Beyond its patch, the patch's edge carries on and is eased into
 // the made-up ground over FADE metres: Caversham hill is 30 m up at the patch's
 // north edge, and easing that inside the patch made a cliff.
-export const FADE = 150;
+export const FADE = 200;
 function measured(lidar, x, z, d, y) {
-  if (!lidar) return y;
-  const { x0, z0, cell, w, h, dm } = lidar.ground;
-  const u = (x - x0) / cell;
-  const v = (z - z0) / cell;
-  const out = Math.hypot(Math.max(0, -u, u - (w - 1)), Math.max(0, -v, v - (h - 1))) * cell; // metres outside the patch
-  if (out >= FADE) return y;
-  const [cu, cv] = [Math.max(0, Math.min(w - 1, u)), Math.max(0, Math.min(h - 1, v))];
-  const [i, j] = [Math.min(w - 2, Math.floor(cu)), Math.min(h - 2, Math.floor(cv))];
-  const [fu, fv] = [cu - i, cv - j];
-  const q = (a, b) => dm[b * w + a] / 10;
-  const top = (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv;
+  const at = lidarTop(lidar, x, z);
+  if (!at) return y;
+  const { top, out } = at;
   const e = Math.min(1, d / 1.5);
   const real = -0.4 + (top + 0.4) * e * e * (3 - 2 * e);
   const t = 1 - out / FADE;
   return y + (real - y) * t * t * (3 - 2 * t);
 }
 
+// The measured bank top (lidar.js) at (x, z): in its block, or beyond the
+// blocks at the nearest point of one within FADE metres (`out` is how far
+// beyond). Null further out. Blocks are decoded the first time they're read.
+export function lidarTop(lidar, x, z) {
+  if (!lidar) return null;
+  const g = lidar.ground;
+  const n = g.block / g.cell + 1;
+  g.decoded ??= new Map();
+  const values = (key) => {
+    if (!g.decoded.has(key)) {
+      const v = g.blocks[key] ? Int16Array.from(g.blocks[key].split(','), Number) : null;
+      if (v) for (let r = 0; r < n; r++) for (let c = 1; c < n; c++) v[r * n + c] += v[r * n + c - 1];
+      g.decoded.set(key, v);
+    }
+    return g.decoded.get(key);
+  };
+  const at = (v, u, w) => {
+    const [i, j] = [Math.min(n - 2, Math.floor(u)), Math.min(n - 2, Math.floor(w))];
+    const [fu, fv] = [u - i, w - j];
+    const q = (a, b) => v[b * n + a] / 10;
+    return (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv;
+  };
+  const [bi, bj] = [Math.floor(x / g.block), Math.floor(z / g.block)];
+  const own = values(`${bi},${bj}`);
+  if (own) return { top: at(own, (x - bi * g.block) / g.cell, (z - bj * g.block) / g.cell), out: 0 };
+  // Beyond the blocks: each block within FADE, at its nearest point, weighted
+  // so the nearest counts most and one at FADE not at all (taking only the
+  // nearest jumped where two were as near, at a block's inside corner).
+  let [sum, weight, out] = [0, 0, Infinity];
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      const v = values(`${bi + di},${bj + dj}`);
+      if (!v) continue;
+      const [x0, z0] = [(bi + di) * g.block, (bj + dj) * g.block];
+      const [cx, cz] = [Math.max(x0, Math.min(x0 + g.block, x)), Math.max(z0, Math.min(z0 + g.block, z))];
+      const d = Math.hypot(x - cx, z - cz);
+      if (d >= FADE) continue;
+      const k = ((1 - d / FADE) / Math.max(d, 1e-3)) ** 2;
+      sum += k * at(v, (cx - x0) / g.cell, (cz - z0) / g.cell);
+      weight += k;
+      out = Math.min(out, d);
+    }
+  }
+  return weight ? { top: sum / weight, out } : null;
+}
+
 // Whether (x, z) is where lidar.js has the trees (they're planted from it there).
 function measuredTrees(lidar, x, z) {
-  if (!lidar) return false;
-  const { x0, z0, cell, w, h } = lidar.ground;
-  return x >= x0 && z >= z0 && x <= x0 + (w - 1) * cell && z <= z0 + (h - 1) * cell;
+  return lidarTop(lidar, x, z)?.out === 0;
 }
 
 // The lidar's numbers belong to the Reading river, the one every real course
@@ -600,22 +636,16 @@ export function bankWoods(course, x, z, tx, tz) {
   return at.tx * tx + at.tz * tz < 0 ? pair.reverse() : pair;
 }
 
-// Where lidar.js has the trees, how wooded a bank is comes from them instead:
-// the share of the bank 30 m either way that has a crown (of a tree over 6 m,
-// within 30 m of the water) over it, half covered counting as full.
+// Where lidar.js measured it, how wooded a bank is comes from the canopy: the
+// share of the 14 m by the water under trees and scrub over 3 m, half covered
+// counting as full (the first belt is what shows in the water).
 function measuredWoods(river, step) {
-  const trees = (river.lidar?.trees ?? []).filter(([, , h]) => h > 6).map(([x, z, h]) => {
-    const at = locate(river, x, z);
-    return { s: at.s, side: at.lateral < 0 ? 0 : 1, d: Math.abs(at.lateral) - widthAt(river, at.s).half, r: h * 0.34 };
-  }).filter((t) => t.d < 30);
+  const woods = river.lidar?.woods;
+  if (!woods) return;
   river.woodsAlong.forEach((row, side) => {
     for (let i = 0; i < row.length; i++) {
-      const c = pointAt(river, i * step);
-      const w = widthAt(river, i * step).half + 5;
-      if (!measuredTrees(river.lidar, c.x - c.tz * (side ? 1 : -1) * w, c.z + c.tx * (side ? 1 : -1) * w)) continue;
-      let covered = 0;
-      for (let k = -15; k <= 15; k++) covered += trees.some((t) => t.side === side && Math.abs(t.s - (i * step + k * 2)) < t.r) ? 1 : 0;
-      row[i] = Math.min(1, (2 * covered) / 31);
+      const v = woods.sides[side][Math.round((i * step) / woods.step)];
+      if (v !== null && v !== undefined) row[i] = Math.min(1, 2 * v);
     }
   });
 }
@@ -646,6 +676,14 @@ function buoy(m, { x, z }) {
 const NEAR = [-6, 0, 3, 7, 12, 20, 30, 45];
 const FAR_WATER = 120; // metres out from the bank to look for side channels (Fry's back channel is at most 100)
 const FAR = [45, 65, 90, 120, 160, 220, 320];
+// The strip up from the water's edge: mud where it's low (a muddy margin), but
+// scrub where it climbs (the measured banks' step, an embankment): as mud it
+// read as a concrete wall. No random draw either way, so nothing after moves.
+function edgeColor(prev, next) {
+  const ys = [prev[0].p[1], prev[1].p[1], next[0].p[1], next[1].p[1]];
+  return Math.max(...ys) - Math.min(...ys) > 0.8 ? SHADED : COLORS.mud;
+}
+
 function realLand(m, river, real, rand) {
   const { samples } = river;
   const at = (s, side, d) => [s.x + -s.tz * side * (s.half + d), s.z + s.tx * side * (s.half + d)];
@@ -679,7 +717,7 @@ function realLand(m, river, real, rand) {
             const next = [point(u, rows[k]), point(v, rows[k])];
             const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
             const green = near < 7 ? SHADED : COLORS.meadow;
-            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? COLORS.mud : shade(green, fine, 0.08));
+            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? edgeColor(prev, next) : shade(green, fine, 0.08));
             prev = next;
           }
         }
@@ -690,7 +728,7 @@ function realLand(m, river, real, rand) {
         const next = [point(a, across[k]), point(b, across[k])];
         const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
         const green = near < 7 && (cover === 'park' || cover === 'gardens') ? COLORS.mown : near < 7 ? SHADED : COLORS.meadow;
-        const color = near < 1 ? COLORS.mud : shade(green, rand, 0.08);
+        const color = near < 1 ? edgeColor(prev, next) : shade(green, rand, 0.08);
         m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
         prev = next;
       }

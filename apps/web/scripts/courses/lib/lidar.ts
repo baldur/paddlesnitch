@@ -78,6 +78,55 @@ export function sampleGrid(g: Grid, E: number, N: number): number | null {
   return (a * (1 - fc) + b * fc) * (1 - fr) + (d * (1 - fc) + e * fc) * fr
 }
 
+/**
+ * One Environment Agency tile: a GeoTIFF of float32 values, uncompressed, in a
+ * single tile or in strips (its 256-wide tile padding dropped). Row 0 north.
+ */
+export function readTile(buf: Uint8Array): { width: number; height: number; values: Float32Array } {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  const little = buf[0] === 0x49
+  if (!little && buf[0] !== 0x4d) throw new Error('not a TIFF')
+  const u16 = (o: number) => view.getUint16(o, little)
+  const u32 = (o: number) => view.getUint32(o, little)
+  const ifd = u32(4)
+  const tags = new Map<number, number[]>()
+  for (let i = 0; i < u16(ifd); i++) {
+    const at = ifd + 2 + i * 12
+    const [tag, type, count] = [u16(at), u16(at + 2), u32(at + 4)]
+    const size = type === 3 ? 2 : 4
+    if (type !== 3 && type !== 4) continue
+    const from = count * size <= 4 ? at + 8 : u32(at + 8)
+    tags.set(tag, Array.from({ length: count }, (_, k) => (size === 2 ? u16(from + k * 2) : u32(from + k * 4))))
+  }
+  const one = (t: number) => tags.get(t)?.[0]
+  const [width, height] = [one(256)!, one(257)!]
+  if (one(258) !== 32 || one(339) !== 3 || (one(259) ?? 1) !== 1) throw new Error('expected uncompressed float32')
+  const values = new Float32Array(width * height)
+  const tw = one(322)
+  // Tiles across and down (one, for the EA's 250 m squares), or strips of rows.
+  const pieces = tw ? (tags.get(324) ?? []).map((off, k) => ({ off, x: (k % Math.ceil(width / tw)) * tw, y: Math.floor(k / Math.ceil(width / tw)) * one(323)!, w: tw }))
+    : (tags.get(273) ?? []).map((off, k) => ({ off, x: 0, y: k * (one(278) ?? height), w: width }))
+  for (const { off, x, y, w } of pieces) {
+    const rows = tw ? one(323)! : one(278) ?? height
+    for (let r = 0; r < rows && y + r < height; r++) for (let c = 0; c < w && x + c < width; c++) values[(y + r) * width + x + c] = view.getFloat32(off + (r * w + c) * 4, little)
+  }
+  return { width, height, values }
+}
+
+/** Tiles (each its south-west corner in metres and its values, row 0 north) as one grid; none where there's no tile. */
+export function mosaic(tiles: Array<{ west: number; south: number; width: number; height: number; values: ArrayLike<number> }>, cell = 1): Grid {
+  const west = Math.min(...tiles.map((t) => t.west))
+  const north = Math.max(...tiles.map((t) => t.south + t.height * cell))
+  const width = Math.round((Math.max(...tiles.map((t) => t.west + t.width * cell)) - west) / cell)
+  const height = Math.round((north - Math.min(...tiles.map((t) => t.south))) / cell)
+  const values = new Float32Array(width * height).fill(NaN)
+  for (const t of tiles) {
+    const [c0, r0] = [Math.round((t.west - west) / cell), Math.round((north - (t.south + t.height * cell)) / cell)]
+    for (let r = 0; r < t.height; r++) for (let c = 0; c < t.width; c++) values[(r0 + r) * width + c0 + c] = t.values[r * t.width + c]
+  }
+  return { west, north, width, height, cell, values }
+}
+
 /** The heights the game needs, in its metres: `ground` (bare ground above the water) and `above` (the first surface above the ground). */
 export type Heights = { ground: (x: number, z: number) => number | null; above: (x: number, z: number) => number | null }
 /** The patch: [x0, z0, x1, z1] in game metres (multiples of `GROUND_CELL` apart). */
@@ -103,11 +152,14 @@ export function inside(poly: XZ[], x: number, z: number): boolean {
  * median of the land round each point; a point over the water takes its
  * nearest land's (so the bank top runs out to the game's edge, a metre or two off lidar's).
  */
-export function deriveGround(h: Heights, [x0, z0, x1, z1]: Patch): { w: number; h: number; dm: number[] } {
+export function deriveGround(h: Heights, [x0, z0, x1, z1]: Patch, want: (x: number, z: number) => boolean = () => true): { w: number; h: number; dm: number[] } {
   const w = Math.round((x1 - x0) / GROUND_CELL) + 1
   const rows = Math.round((z1 - z0) / GROUND_CELL) + 1
   let g: Array<number | null> = new Array(w * rows).fill(null)
+  const wanted = new Uint8Array(w * rows)
+  for (let j = 0; j < rows; j++) for (let i = 0; i < w; i++) wanted[j * w + i] = want(x0 + i * GROUND_CELL, z0 + j * GROUND_CELL) ? 1 : 0
   for (let j = 0; j < rows; j++) for (let i = 0; i < w; i++) {
+    if (!wanted[j * w + i]) continue
     const vs: number[] = []
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
       const v = h.ground(x0 + i * GROUND_CELL + dx, z0 + j * GROUND_CELL + dz)
@@ -115,10 +167,10 @@ export function deriveGround(h: Heights, [x0, z0, x1, z1]: Patch): { w: number; 
     }
     if (vs.length >= 5) g[j * w + i] = median(vs)
   }
-  for (let pass = 0; g.some((v) => v === null) && pass < 200; pass++) {
+  for (let pass = 0; g.some((v, k) => v === null && wanted[k]) && pass < 200; pass++) {
     const next = [...g]
     for (let j = 0; j < rows; j++) for (let i = 0; i < w; i++) {
-      if (g[j * w + i] !== null) continue
+      if (g[j * w + i] !== null || !wanted[j * w + i]) continue
       const n = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < w && b < rows).map(([a, b]) => g[b * w + a]).filter((v): v is number => v !== null)
       if (n.length) next[j * w + i] = n.reduce((p, q) => p + q) / n.length
     }
@@ -134,6 +186,42 @@ export function groundIn({ w, h, dm }: { w: number; h: number; dm: number[] }, [
   const [i, j] = [Math.floor(u), Math.floor(v)]
   const q = (a: number, b: number) => dm[b * w + a] / 10
   return (q(i, j) * (1 - (u - i)) + q(i + 1, j) * (u - i)) * (1 - (v - j)) + (q(i, j + 1) * (1 - (u - i)) + q(i + 1, j + 1) * (u - i)) * (v - j)
+}
+
+/** The game's blocks of ground: BLOCK metres square, BLOCK / GROUND_CELL cells, so BLOCK / GROUND_CELL + 1 points a side. */
+export const BLOCK = 250
+
+/**
+ * The ground cut into blocks (`keep` says which: where the game has land), each
+ * written as text: its rows southward, each row's first point in decimetres and
+ * then the steps along it (small numbers, which compress well).
+ */
+export function groundBlocks(ground: { w: number; h: number; dm: number[] }, [x0, z0]: Patch, keep: (i: number, j: number) => boolean): Record<string, string> {
+  const n = BLOCK / GROUND_CELL
+  const out: Record<string, string> = {}
+  for (let j = 0; (j + 1) * n < ground.h; j++) for (let i = 0; (i + 1) * n < ground.w; i++) {
+    if (!keep(i, j)) continue
+    const values: number[] = []
+    for (let r = 0; r <= n; r++) for (let c = 0; c <= n; c++) {
+      const [a, b] = [i * n + c, j * n + r]
+      values.push(c === 0 ? ground.dm[b * ground.w + a] : ground.dm[b * ground.w + a] - ground.dm[b * ground.w + a - 1])
+    }
+    out[`${Math.round(x0 / BLOCK) + i},${Math.round(z0 / BLOCK) + j}`] = values.join(',')
+  }
+  return out
+}
+
+/** Whether (x, z) is in one of the blocks (keys "i,j"): a point on a block's edge or corner is in every block that touches it. */
+export function inBlocks(blocks: Set<string>, x: number, z: number): boolean {
+  return [[0, 0], [-0.01, 0], [0, -0.01], [-0.01, -0.01]].some(([a, b]) => blocks.has(`${Math.floor((x + a) / BLOCK)},${Math.floor((z + b) / BLOCK)}`))
+}
+
+/** A block's text back to its points in decimetres (as world.js reads it). */
+export function blockValues(text: string): Int16Array {
+  const n = BLOCK / GROUND_CELL + 1
+  const v = Int16Array.from(text.split(',').map(Number))
+  for (let r = 0; r < n; r++) for (let c = 1; c < n; c++) v[r * n + c] += v[r * n + c - 1]
+  return v
 }
 
 export type Building = { shape: XZ[]; height: number; kind: string; style?: string }
@@ -181,10 +269,10 @@ export function deriveBuildings(h: Heights, buildings: Building[], [x0, z0, x1, 
  * over the water), `fromWater` is how far it is from the river. Further back,
  * only the taller ones (the triangle budget): over 12 m to 120 m, over 8 m to 70, the rest to 40.
  */
-export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: number, z: number) => boolean, onBank: (x: number, z: number) => XZ | null, fromWater: (x: number, z: number) => number): Array<[number, number, number]> {
+export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: number, z: number) => boolean, onBank: (x: number, z: number) => XZ | null, fromWater: (x: number, z: number) => number, want: (x: number, z: number) => boolean = () => true): Array<[number, number, number]> {
   const W = x1 - x0 + 1
   const chm = new Float32Array(W * (z1 - z0 + 1))
-  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) chm[(z - z0) * W + (x - x0)] = (h.ground(x, z) ?? 0) > LAND ? h.above(x, z) ?? 0 : 0
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (want(x, z)) chm[(z - z0) * W + (x - x0)] = (h.ground(x, z) ?? 0) > LAND ? h.above(x, z) ?? 0 : 0
   const at = (x: number, z: number) => (x < x0 || x > x1 || z < z0 || z > z1 ? 0 : chm[(z - z0) * W + (x - x0)])
   const peaks: Array<[number, number, number]> = []
   for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
@@ -201,37 +289,82 @@ export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: nu
     if (trees.some(([a, b, hh]) => Math.hypot(a - x, b - z) < Math.max(6, 0.5 * (hh + c) * 0.34 * 1.4))) continue
     const bank = onBank(x + 0.5, z + 0.5)
     if (!bank) continue
+    // Two crowns over the water can be moved onto the same spot of bank: one tree there.
+    if (trees.some(([a, b]) => Math.hypot(a - bank[0], b - bank[1]) < 3)) continue
     if (fromWater(...bank) > (c >= 12 ? 120 : c >= 8 ? 70 : 40)) continue
     trees.push([Math.round(bank[0] * 10) / 10, Math.round(bank[1] * 10) / 10, Math.round(c * 10) / 10])
   }
   return trees
 }
 
+/**
+ * How wooded each bank is, every `step` metres along the river (the water's
+ * reflections follow it): the share of the strip 2–14 m out from the water's
+ * edge, 30 m either way, under canopy over 3 m (scrub and young willow mirror as
+ * much as trees), to the nearest 0.05; null where the lidar covers less than half
+ * of it. `above(s, side, d)` is the canopy's height d metres out from the edge
+ * on that side (-1 left, 1 right), or null. [left, right], a value per step.
+ */
+export function bankCanopy(length: number, step: number, above: (s: number, side: -1 | 1, d: number) => number | null): Array<Array<number | null>> {
+  return ([-1, 1] as const).map((side) => Array.from({ length: Math.floor(length / step) + 1 }, (_, i) => {
+    let [seen, wooded, all] = [0, 0, 0]
+    // (Only the first belt by the water shows in it: the strip 2–14 m out.)
+    for (let ds = -30; ds <= 30; ds += 4) for (let d = 2; d <= 14; d += 3) {
+      all++
+      const h = above(i * step + ds, side, d)
+      if (h === null) continue
+      seen++
+      if (h > 3) wooded++
+    }
+    return seen * 2 < all ? null : Math.round((wooded / seen) * 20) / 20
+  }))
+}
+
+/**
+ * The canopy's height `d` metres out from the water's edge on `side` (-1 left,
+ * 1 right) at `s` along the river: null off the river or where the lidar
+ * isn't kept, 0 on a building (a roof isn't canopy). The sampler bankCanopy takes.
+ */
+export function canopyAt(
+  river: { length: number }, at: (s: number) => { x: number; z: number; tx: number; tz: number; half: number },
+  kept: (x: number, z: number) => boolean, building: (x: number, z: number) => boolean, above: (x: number, z: number) => number | null,
+): (s: number, side: -1 | 1, d: number) => number | null {
+  return (s, side, d) => {
+    if (s < 0 || s > river.length) return null
+    const c = at(s)
+    const [x, z] = [c.x - c.tz * side * (c.half + d), c.z + c.tx * side * (c.half + d)]
+    return !kept(x, z) ? null : building(x, z) ? 0 : above(x, z)
+  }
+}
+
 /** games/reading-thames/lidar.js. */
-export function lidarModule(patch: Patch, ground: { w: number; h: number; dm: number[] }, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>): string {
-  const rows: string[] = []
-  for (let j = 0; j < ground.h; j++) rows.push('    ' + ground.dm.slice(j * ground.w, (j + 1) * ground.w).join(',') + ',')
-  return `// The ground, buildings and trees from Caversham Bridge up past Reading
-// Canoe Club and Caversham Court, from Environment Agency lidar (the 1 m composite: bare ground, and
-// the first surface the laser met). © Environment Agency copyright and/or
-// database right, under the Open Government Licence v3. Only numbers worked out
-// from it are here, not the lidar itself. Game metres (x east, z south of
-// 51.46175, -0.96945); heights in metres above the river. Made by
-// \`pnpm --filter web course:lidar\` (apps/web/scripts/courses/lidar.ts).
+export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }): string {
+  const keys = Object.keys(blocks).sort((a, b) => { const [p, q] = [a, b].map((k) => k.split(',').map(Number)); return p[1] - q[1] || p[0] - q[0] })
+  return `// The ground, buildings and trees ${where}, from Environment Agency lidar (the
+// 1 m composite: bare ground, and the first surface the laser met). © Environment
+// Agency copyright and/or database right, under the Open Government Licence v3.
+// Only numbers worked out from it are here, not the lidar itself. Game metres (x
+// east, z south of 51.46175, -0.96945); heights in metres above the river. Made
+// by \`pnpm --filter web course:lidar\` (apps/web/scripts/courses/lidar.ts).
 export const LIDAR = {
-  // The bare ground every \`cell\` metres from (x0, z0), row by row southward,
-  // in decimetres. Under the water: the bank top nearest it.
+  // The bare ground every \`cell\` metres, in blocks \`block\` metres square: block
+  // "i,j" from (i * block, j * block), its (block / cell + 1)² points row by row
+  // southward, in decimetres, each row's first and then the steps along it.
+  // Under the water: the bank top nearest it. Only where the game has land.
   ground: {
-    x0: ${patch[0]}, z0: ${patch[1]}, cell: ${GROUND_CELL}, w: ${ground.w}, h: ${ground.h}, dm: [
-${rows.join('\n')}
-    ],
+    cell: ${GROUND_CELL}, block: ${BLOCK}, blocks: {
+${keys.map((k) => `      '${k}': '${blocks[k]}',`).join('\n')}
+    },
   },
   // Plain buildings' heights to the eaves, by the middle of their footprint
   // (x, z, height): the height that puts the game's roof where lidar's is.
   buildings: ${JSON.stringify(buildings)},
   // The trees' crowns (x, z, height above the ground): the highest points of the
   // canopy, clear of buildings, spaced by their size.
-  trees: ${JSON.stringify(trees)},
+  trees: ${JSON.stringify(trees)},${woods ? `
+  // How wooded each bank is every \`step\` metres up the river, [left, right]: the
+  // share of the 14 m by the water under canopy over 3 m (null: not measured).
+  woods: { step: ${woods.step}, sides: ${JSON.stringify(woods.sides)} },` : ''}
 };
 `
 }

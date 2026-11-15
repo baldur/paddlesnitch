@@ -28,6 +28,8 @@
     "course:look": "tsx scripts/courses/look.ts",
     "course:explore": "tsx scripts/courses/explore.ts",
     "course:lidar": "tsx scripts/courses/lidar.ts",
+    "course:views": "tsx scripts/courses/views.ts",
+    "course:materials": "tsx scripts/courses/materials.ts",
     "build:open-next": "npx open-next build",
     "deploy": "pnpm build:open-next && cd ../../infra && npm run deploy",
     "waterways:national": "tsx scripts/waterways/build-national.ts",

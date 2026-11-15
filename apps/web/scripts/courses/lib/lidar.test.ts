@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveBuildings, deriveGround, deriveTrees, groundIn, lidarModule, osgb36ToBng, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, bankCanopy, blockValues, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -97,20 +97,123 @@ describe('deriveTrees', () => {
     const two: Heights = { ...place, above: (x, z) => Math.max(0, 14 - Math.hypot(x - 40, z - 5), 13.5 - Math.hypot(x - 45, z - 5)) }
     expect(deriveTrees(two, PATCH, everywhere, asIs, () => 10)).toEqual([[40.5, 5.5, 14]])
   })
+  it('keeps one tree where two crowns over the water are moved onto the same spot of bank', () => {
+    const two: Heights = { ...place, above: (x, z) => Math.max(0, 12 - Math.hypot(x - 40, z - 5), 10 - Math.hypot(x - 50, z - 5)) }
+    const bank = (): [number, number] => [45, -2]
+    expect(deriveTrees(two, PATCH, everywhere, bank, () => 10)).toEqual([[45, -2, 12]])
+  })
   it('skips one out over the water, as the bank says', () => {
     expect(deriveTrees(place, PATCH, everywhere, () => null, () => 10)).toEqual([])
   })
 })
 
+// A little-endian float32 GeoTIFF as the EA's: one tile of tw × th holding a width × height image.
+function tiff(width: number, height: number, tw: number, th: number, value: (c: number, r: number) => number): Uint8Array {
+  const tags: Array<[number, number, number]> = [[256, 3, width], [257, 3, height], [258, 3, 32], [259, 3, 1], [322, 3, tw], [323, 3, th], [324, 4, 8 + 2 + 9 * 12 + 4], [325, 4, tw * th * 4], [339, 3, 3]]
+  const data = 8 + 2 + tags.length * 12 + 4
+  const buf = new DataView(new ArrayBuffer(data + tw * th * 4))
+  buf.setUint8(0, 0x49); buf.setUint8(1, 0x49); buf.setUint16(2, 42, true); buf.setUint32(4, 8, true)
+  buf.setUint16(8, tags.length, true)
+  tags.forEach(([tag, type, v], k) => {
+    const at = 10 + k * 12
+    buf.setUint16(at, tag, true); buf.setUint16(at + 2, type, true); buf.setUint32(at + 4, 1, true)
+    if (type === 3) buf.setUint16(at + 8, v, true); else buf.setUint32(at + 8, v, true)
+  })
+  for (let r = 0; r < th; r++) for (let c = 0; c < tw; c++) buf.setFloat32(data + (r * tw + c) * 4, c < width && r < height ? value(c, r) : -9999, true)
+  return new Uint8Array(buf.buffer)
+}
+
+describe('readTile and mosaic', () => {
+  it("reads an EA tile's image out of its padded tile, row 0 north", () => {
+    const t = readTile(tiff(3, 2, 4, 4, (c, r) => 10 * r + c + 0.5))
+    expect([t.width, t.height]).toEqual([3, 2])
+    expect(Array.from(t.values)).toEqual([0.5, 1.5, 2.5, 10.5, 11.5, 12.5])
+  })
+  it('lays tiles side by side by their south-west corners, with none where a square is missing', () => {
+    const one = (v: number) => ({ width: 2, height: 2, values: [v, v, v, v] })
+    const g = mosaic([{ west: 100, south: 200, ...one(1) }, { west: 102, south: 202, ...one(2) }])
+    expect([g.west, g.north, g.width, g.height]).toEqual([100, 204, 4, 4])
+    expect(sampleGrid(g, 103.5, 203.5)).toBe(2) // the north-east square
+    expect(sampleGrid(g, 100.5, 200.5)).toBe(1) // the south-west one
+    expect(sampleGrid(g, 100.5, 203.5)).toBeNull() // the north-west: no tile
+  })
+})
+
+describe('groundBlocks', () => {
+  const n = BLOCK / 5
+  // Two blocks across, one down: a slope rising 1 dm a cell eastward.
+  const ground = { w: 2 * n + 1, h: n + 1, dm: Array.from({ length: (2 * n + 1) * (n + 1) }, (_, k) => k % (2 * n + 1)) }
+  it('writes each kept block as its rows of steps, and reads back the same points', () => {
+    const blocks = groundBlocks(ground, [-BLOCK, 0, BLOCK, BLOCK], (i) => i === 1)
+    expect(Object.keys(blocks)).toEqual(['0,0'])
+    const v = blockValues(blocks['0,0'])
+    expect(v.length).toBe((n + 1) ** 2)
+    expect(v[0]).toBe(n) // its west edge is the slope's middle
+    expect(v[n]).toBe(2 * n)
+    expect(blocks['0,0'].split(',').slice(1, 4)).toEqual(['1', '1', '1'])
+  })
+  it("counts a point on a block's edge or corner as in the block, whichever side it touches from", () => {
+    const kept = new Set(['-5,-2'])
+    for (const [x, z] of [[-1250, -500], [-1000, -500], [-1250, -250], [-1000, -250], [-1100, -250]]) expect(inBlocks(kept, x, z)).toBe(true)
+    expect(inBlocks(kept, -1251, -300)).toBe(false)
+  })
+})
+
+describe('bankCanopy', () => {
+  it("is how much of the first 14 m by the water is under canopy over 3 m, per bank, every step", () => {
+    // The left bank wooded for its first 8 m from 100 m up; the right bank open; nothing measured past 300 m.
+    const above = (s: number, side: -1 | 1, d: number) => (s > 300 ? null : side < 0 && s >= 100 && d <= 8 ? 12 : 0.5)
+    const [left, right] = bankCanopy(400, 50, above)
+    expect(left.slice(0, 2)).toEqual([0, 0])
+    expect(left[4]).toBeCloseTo(0.6, 1) // 3 of the 5 rows out from the edge
+    expect(right.slice(0, 6)).toEqual([0, 0, 0, 0, 0, 0])
+    expect(left[8]).toBeNull()
+  })
+  it('counts canopy over 3 m: 3.5 m of willow scrub is wooded, 2.5 m of reeds is not', () => {
+    const [low] = bankCanopy(100, 50, () => 2.5)
+    const [high] = bankCanopy(100, 50, () => 3.5)
+    expect(low[1]).toBe(0)
+    expect(high[1]).toBe(1)
+  })
+  it('gives a value with half the strip measured, and none with less', () => {
+    // The strip's rows out from the edge are at 2, 5, 8, 11 and 14 m; along it, 16 samples.
+    const half = (s: number) => bankCanopy(400, 100, (q) => (q - s < 0 ? 5 : null))[0][2]
+    expect(half(200 + 2)).not.toBeNull() // 8 of the 16 columns measured
+    expect(half(200 - 6)).toBeNull() // 6 of them
+  })
+})
+
+describe('canopyAt', () => {
+  // The river runs north (-z) up x = 0, 20 m wide; a building on the left bank 30 to 40 m up.
+  const river = { length: 100 }
+  const at = (s: number) => ({ x: 0, z: -s, tx: 0, tz: -1, half: 10 })
+  const building = (x: number, z: number) => x < 0 && z < -30 && z > -40
+  const sample = canopyAt(river, at, () => true, building, () => 9)
+  it("finds each bank's side: left is west going north (-x), right is east", () => {
+    const seen: Array<[number, number]> = []
+    canopyAt(river, at, (x, z) => (seen.push([x, z]), true), () => false, () => 9)(50, -1, 4)
+    canopyAt(river, at, (x, z) => (seen.push([x, z]), true), () => false, () => 9)(50, 1, 4)
+    expect(seen).toEqual([[-14, -50], [14, -50]])
+  })
+  it("counts a roof as open bank, and nothing off the river or where there's no lidar", () => {
+    expect(sample(35, -1, 4)).toBe(0)
+    expect(sample(35, 1, 4)).toBe(9)
+    expect(sample(120, 1, 4)).toBeNull()
+    expect(canopyAt(river, at, () => false, building, () => 9)(50, 1, 4)).toBeNull()
+  })
+})
+
 describe('lidarModule', () => {
   it("writes a module the game can import, with the licence's attribution", async () => {
-    const ground = deriveGround(place, PATCH)
-    const src = lidarModule(PATCH, ground, [[25, 5, 9]], [[40.5, 5.5, 12]])
+    const n = BLOCK / 5
+    const blocks = groundBlocks({ w: n + 1, h: n + 1, dm: new Array((n + 1) ** 2).fill(10) }, [0, 0, BLOCK, BLOCK], () => true)
+    const src = lidarModule(blocks, [[25, 5, 9]], [[40.5, 5.5, 12]], 'somewhere', { step: 10, sides: [[0.5, null], [1, 0]] })
     expect(src.replace(/\n\/\/ /g, ' ')).toContain('© Environment Agency copyright and/or database right')
     const { LIDAR } = await import(`data:text/javascript,${encodeURIComponent(src)}`)
-    expect(LIDAR.ground).toMatchObject({ x0: -20, z0: -10, cell: 5, w: 17, h: 7 })
-    expect(LIDAR.ground.dm).toHaveLength(17 * 7)
+    expect(LIDAR.ground).toMatchObject({ cell: 5, block: BLOCK })
+    expect(Array.from(blockValues(LIDAR.ground.blocks['0,0']))).toEqual(new Array((n + 1) ** 2).fill(10))
     expect(LIDAR.buildings).toEqual([[25, 5, 9]])
     expect(LIDAR.trees).toEqual([[40.5, 5.5, 12]])
+    expect(LIDAR.woods).toEqual({ step: 10, sides: [[0.5, null], [1, 0]] })
   })
 })

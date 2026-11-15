@@ -364,13 +364,16 @@ test("the dead tree, the river sign and the beach stand on their banks, not out 
   }
 });
 
-test("the water mirrors trees only where a bank is wooded: none under the town at Caversham, full above Mapledurham", async () => {
+test("the water mirrors trees only where a bank is wooded (the lidar's canopy): the town front by Christchurch Bridge open, the reach at 3 km wooded both sides", async () => {
   const { bankWoods } = await import('../reading-thames/world.js');
   const { pointAt: at } = await import('../reading-thames/course.js');
   const reading = courseFromFile(await data('reading'));
   const woods = (s) => { const p = at(reading.scenery.river, s); return bankWoods(reading, p.x, p.z, p.tx, p.tz); };
-  assert.deepEqual(woods(50), [0, 0], 'the town reach by Christchurch Bridge');
-  assert.deepEqual(woods(5000), [1, 1], 'the wooded reach');
+  // Above Christchurch Bridge the north bank's trees (the footage shows them mirrored) against
+  // the open town front opposite.
+  const [town, trees] = woods(150);
+  assert.ok(town < 0.3 && trees > 0.5, `above Christchurch Bridge ${town}, ${trees}`);
+  assert.deepEqual(woods(3000), [1, 1], 'the wooded reach');
   // Facing the other way, left and right swap.
   const p = at(reading.scenery.river, 300);
   assert.deepEqual(bankWoods(reading, p.x, p.z, -p.tx, -p.tz), [...woods(300)].reverse());

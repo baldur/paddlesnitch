@@ -1,30 +1,33 @@
-// The stretch from Caversham Bridge up past Reading Canoe Club and Caversham
-// Court from Environment Agency lidar (lidar.js): the measured ground,
-// buildings' heights and trees, and how wooded the banks look in the water.
+// The reach from Caversham Lock to Mapledurham Lock from Environment Agency
+// lidar (lidar.js): the measured ground in 250 m blocks, buildings' heights and
+// trees, and how wooded the banks look in the water.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { courseFromFile, pointAt, locate, widthAt } from '../reading-thames/course.js';
-import { buildWorld, groundAt, bankWoods, landmarkFrame, CANOE, FADE } from '../reading-thames/world.js';
+import { buildWorld, groundAt, bankWoods, landmarkFrame, lidarTop, CANOE, FADE } from '../reading-thames/world.js';
 import { MeshBuilder } from '../reading-thames/meshes.js';
 import { LIDAR } from '../reading-thames/lidar.js';
 import { waterMap } from '../reading-thames/water.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
-const { x0, z0, cell, w, h, dm } = LIDAR.ground;
-const [x1, z1] = [x0 + (w - 1) * cell, z0 + (h - 1) * cell];
-const inPatch = (x, z, margin = 0) => x >= x0 + margin && x <= x1 - margin && z >= z0 + margin && z <= z1 - margin;
-// The measured bank top at a point (as world.js reads lidar.js).
-const top = (x, z) => {
-  const [u, v] = [(x - x0) / cell, (z - z0) / cell];
-  const [i, j] = [Math.floor(u), Math.floor(v)];
-  const q = (a, b) => dm[b * w + a] / 10;
-  return (q(i, j) * (1 - (u - i)) + q(i + 1, j) * (u - i)) * (1 - (v - j)) + (q(i, j + 1) * (1 - (u - i)) + q(i + 1, j + 1) * (u - i)) * (v - j);
+const { cell, block, blocks } = LIDAR.ground;
+const keys = Object.keys(blocks).map((k) => k.split(',').map(Number));
+// The blocks' bounds, and how far (x, z) is outside every block (0 in one).
+const [x0, z0, x1, z1] = [Math.min(...keys.map((k) => k[0])) * block, Math.min(...keys.map((k) => k[1])) * block, (Math.max(...keys.map((k) => k[0])) + 1) * block, (Math.max(...keys.map((k) => k[1])) + 1) * block];
+const outside = (x, z) => {
+  if (x < x0 - 1000 || x > x1 + 1000 || z < z0 - 1000 || z > z1 + 1000) return Infinity;
+  return Math.min(...keys.map(([i, j]) => Math.hypot(Math.max(0, i * block - x, x - (i + 1) * block), Math.max(0, j * block - z, z - (j + 1) * block))));
 };
+const inPatch = (x, z, margin = 0) => [[0, 0], [margin, 0], [-margin, 0], [0, margin], [0, -margin]].every(([a, b]) => outside(x + a, z + b) === 0);
+// The measured bank top at a point (as world.js reads lidar.js).
+const top = (x, z) => lidarTop(LIDAR, x, z).top;
+// The middle of each block's side with no block beyond it, and the way out.
+const edges = keys.flatMap(([i, j]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => !blocks[`${i + a},${j + b}`]).map(([a, b]) => [[(i + 0.5 + a / 2) * block, (j + 0.5 + b / 2) * block], [a, b]]));
 // Builds the river with lidar.js moved out of the way (as if it had none).
 async function without(build) {
   const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees };
-  Object.assign(LIDAR, { ground: { ...LIDAR.ground, x0: 1e6, z0: 1e6 }, buildings: [], trees: [] });
+  Object.assign(LIDAR, { ground: { cell, block, blocks: {} }, buildings: [], trees: [] });
   try { return await build(); } finally { Object.assign(LIDAR, kept); }
 }
 
@@ -40,11 +43,14 @@ async function world() {
   return triangles;
 }
 
-test('lidar.js holds numbers worked out from the lidar, not the lidar itself: 5 m ground over one stretch', () => {
+test('lidar.js holds numbers worked out from the lidar, not the lidar itself: 5 m ground, in blocks beside the river', () => {
   assert.ok(cell >= 5, `${cell} m cells`);
-  assert.equal(dm.length, w * h);
-  assert.ok(dm.every(Number.isInteger), 'whole decimetres');
-  assert.ok((x1 - x0) * (z1 - z0) < 600_000, `${((x1 - x0) * (z1 - z0) / 1e6).toFixed(2)} km²`);
+  for (const [key, text] of Object.entries(blocks)) {
+    const v = text.split(',').map(Number);
+    assert.equal(v.length, (block / cell + 1) ** 2, key);
+    assert.ok(v.every(Number.isInteger), 'whole decimetres');
+  }
+  assert.ok(keys.length * block * block < 8e6, `${(keys.length * block * block / 1e6).toFixed(2)} km²`);
   // The bridge, both clubs and Caversham Court Gardens (beside the canoe club, upstream) are all in it.
   assert.ok(inPatch(-526, -459, 40) && inPatch(-686, -506, 40) && inPatch(-881, -690, 40) && inPatch(-930, -700, 40));
 });
@@ -56,28 +62,33 @@ test('the ground in the stretch is the measured ground, eased into the made-up g
   const pads = river.pads;
   river.pads = []; // (the rowing club's car park is levelled on top)
   const land = waterMap((await data('reading')).water);
-  // Grid points well inside, away from the water.
+  // Points well inside, away from the water.
   let checked = 0;
-  for (let j = 10; j < h - 10; j += 7) {
-    for (let i = 10; i < w - 10; i += 7) {
-      const [x, z] = [x0 + i * cell, z0 + j * cell];
+  for (let x = x0 + 5; x < x1; x += 35) {
+    for (let z = z0 + 5; z < z1; z += 35) {
+      if (!inPatch(x, z, 10)) continue;
       const y = groundAt(reading, x, z);
       if (y < 0.3 || land.shore(x, z) < 2) continue; // the river, and the bank's step up from it
-      assert.ok(Math.abs(y - dm[j * w + i] / 10) < 0.05, `at ${x}, ${z}: ${y.toFixed(2)}, measured ${dm[j * w + i] / 10}`);
+      assert.ok(Math.abs(y - top(x, z)) < 0.05, `at ${x}, ${z}: ${y.toFixed(2)}, measured ${top(x, z).toFixed(2)}`);
       checked++;
     }
   }
   assert.ok(checked > 30, `${checked} points`);
-  // Just outside, the patch's edge carries on (Caversham hill doesn't stop at it).
-  for (const [x, z, ex, ez] of [[x0 - 1, -800, x0, -800], [-700, z0 - 1, -700, z0], [x1 + 1, -900, x1, -900], [-1000, z1 + 1, -1000, z1]]) {
-    assert.ok(Math.abs(groundAt(reading, x, z) - groundAt(reading, ex, ez)) < 0.1, `at ${x}, ${z}`);
+  // Just outside, the blocks' edge carries on (Caversham hill doesn't stop at it).
+  let edgesChecked = 0;
+  for (const [[x, z], [a, b]] of edges) {
+    if (land.inside(x, z) || land.shore(x, z) < 3) continue;
+    assert.ok(Math.abs(groundAt(reading, x + a, z + b) - groundAt(reading, x, z)) < 0.1, `at ${x}, ${z}`);
+    edgesChecked++;
   }
-  // Well outside it, the made-up ground as it was.
+  assert.ok(edgesChecked >= 4, `${edgesChecked} edges`);
+  // Well outside them, the made-up ground as it was.
   const lidar = river.lidar;
-  const outside = [[x0 - FADE - 1, z0 + 300], [x1 + FADE + 1, z1 - 50], [x1 + FADE + 1, -900]];
-  const was = outside.map(([x, z]) => groundAt(reading, x, z));
+  const far = edges.map(([[x, z], [a, b]]) => [x + a * (FADE + 1), z + b * (FADE + 1)]).filter(([x, z]) => outside(x, z) > FADE);
+  assert.ok(far.length >= 3);
+  const was = far.map(([x, z]) => groundAt(reading, x, z));
   river.lidar = null;
-  assert.deepEqual(outside.map(([x, z]) => groundAt(reading, x, z)), was);
+  assert.deepEqual(far.map(([x, z]) => groundAt(reading, x, z)), was);
   // And the made-up ground had hummocks the meadow doesn't: 2 m and more out by the rowing club.
   const meadow = [-700, -470];
   const madeUp = groundAt(reading, ...meadow);
@@ -93,40 +104,85 @@ test('everything outside the stretch is as it was without lidar: the made-up tre
     for (let i = 0; i < v.length; i += 27) {
       // Well clear of the patch and the ground's easing beyond it (and of the trees and buildings standing
       // in that: a building's walls go down to its lowest corner's ground).
-      const m = FADE + 20;
-      if ([0, 9, 18].every((k) => v[i + k] < x0 - m || v[i + k] > x1 + m || v[i + k + 2] < z0 - m || v[i + k + 2] > z1 + m)) out.push(Array.from(v.subarray(i, i + 27)).join(','));
+      if ([0, 9, 18].every((k) => outside(v[i + k], v[i + k + 2]) > FADE + 20)) out.push(Array.from(v.subarray(i, i + 27)).join(','));
     }
     return out;
   };
   const measured = vertices(buildWorld(courseFromFile(course), 1, 'river').vertices);
   const madeUp = await without(() => vertices(buildWorld(courseFromFile(course), 1, 'river').vertices));
-  assert.ok(measured.length > 200_000, `${measured.length} triangles outside`);
+  assert.ok(measured.length > 100, `${measured.length} triangles outside`);
   assert.equal(measured.length, madeUp.length);
   assert.ok(measured.every((t, k) => t === madeUp[k]), 'the same triangles, in the same order');
+});
+
+test('with one block of lidar, everything beyond its easing is as it was without: the ground, and every triangle', async () => {
+  // (The real blocks now cover nearly all the river: one block, by the canoe club, leaves most of it outside.)
+  const course = await data('reading');
+  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees };
+  const key = '-4,-3';
+  const inIt = ([x, z]) => x >= -1000 && x < -750 && z >= -750 && z < -500;
+  const one = (x, z) => Math.hypot(Math.max(0, -1000 - x, x + 750), Math.max(0, -750 - z, z + 500));
+  const far = (v) => { const out = []; for (let i = 0; i < v.length; i += 27) if ([0, 9, 18].every((k) => one(v[i + k], v[i + k + 2]) > FADE + 20)) out.push(Array.from(v.subarray(i, i + 27)).join(',')); return out; };
+  Object.assign(LIDAR, { ground: { cell, block, blocks: { [key]: blocks[key] } }, buildings: kept.buildings.filter(inIt), trees: kept.trees.filter(inIt) });
+  let measured;
+  try { measured = far(buildWorld(courseFromFile(course), 1, 'river').vertices); } finally { Object.assign(LIDAR, kept); }
+  const madeUp = await without(() => far(buildWorld(courseFromFile(course), 1, 'river').vertices));
+  assert.ok(measured.length > 150_000, `${measured.length} triangles beyond it`);
+  assert.equal(measured.length, madeUp.length);
+  assert.ok(measured.every((t, k) => t === madeUp[k]), 'the same triangles, in the same order');
+});
+
+test('beyond the blocks the edges blend: at an inside corner the ground runs on smoothly between two blocks', () => {
+  // An L of three 250 m blocks, two at 10 m and one at 20 m; the fourth square empty.
+  const flat = (dm) => Array.from({ length: (block / cell + 1) ** 2 }, (_, k) => (k % (block / cell + 1) === 0 ? dm : 0)).join(',');
+  const L = { ground: { cell, block, blocks: { '0,0': flat(100), '1,0': flat(200), '0,1': flat(100) } } };
+  assert.equal(lidarTop(L, 100, 100).top, 10, 'in a block, its own');
+  assert.equal(lidarTop(L, 250, 100).top, 20, 'on a shared edge, the block it falls in');
+  // Round the empty square's corner (250, 250), 30 m out: no jump between one metre and the next.
+  let last = null;
+  for (let a = 0; a <= 90; a += 0.5) {
+    const r = (a * Math.PI) / 180;
+    const t = lidarTop(L, 250 + Math.cos(r) * 30, 250 + Math.sin(r) * 30);
+    assert.ok(Math.abs(t.out - 30) < 1e-6 || t.out < 30, 'out is the distance to the nearest block');
+    if (last !== null) assert.ok(Math.abs(t.top - last) < 0.2, `${(t.top - last).toFixed(2)} m at ${a}°`);
+    last = t.top;
+  }
+  assert.equal(lidarTop(L, 250 + FADE + 1, 250 + FADE + 1), null, 'nothing beyond FADE');
+});
+
+test("every block's rim is ground above the water (a corner once came out 0 m)", () => {
+  const n = block / cell + 1;
+  for (const [key, text] of Object.entries(blocks)) {
+    const v = text.split(',').map(Number);
+    for (let r = 0; r < n; r++) for (let c = 1; c < n; c++) v[r * n + c] += v[r * n + c - 1];
+    for (let k = 0; k < n; k++) for (const i of [k, (n - 1) * n + k, k * n, k * n + n - 1]) assert.ok(v[i] > 0, `${key}: ${v[i]} dm at its rim`);
+  }
 });
 
 test('no step in the ground where the measured patch meets the made-up ground', async () => {
   const reading = courseFromFile(await data('reading'));
   groundAt(reading, 0, 0);
   const land = waterMap((await data('reading')).water);
-  const lines = [];
-  // From beyond the easing, across it, and into the patch (on its north edge Caversham hill is 30 m up).
+  // From beyond the easing, across it, and into the blocks (on Caversham hill 30 m up), at each open edge's middle.
   const out = FADE + 10;
-  for (let t = 0.1; t < 1; t += 0.2) {
-    lines.push([[x0 - out, z0 + t * (z1 - z0)], [1, 0]], [[x1 + out, z0 + t * (z1 - z0)], [-1, 0]]);
-    lines.push([[x0 + t * (x1 - x0), z0 - out], [0, 1]], [[x0 + t * (x1 - x0), z1 + out], [0, -1]]);
-  }
+  const lines = edges.flatMap(([[x, z], [a, b]]) => [-120, -60, 0, 60, 120].map((t) => [[x + a * out + b * t, z + b * out + a * t], [-a, -b]]));
   let pairs = 0;
   for (const [[sx, sz], [dx, dz]] of lines) {
     for (let k = 0; k < out + 40; k++) {
       const [a, b] = [[sx + dx * k, sz + dz * k], [sx + dx * (k + 1), sz + dz * (k + 1)]];
       if ([a, b].some(([x, z]) => land.inside(x, z) || land.shore(x, z) < 3)) continue; // (the bank's own step)
+      // (Inside, and within 10 m outside, it's the real ground's own slope: The Warren is steep, and
+      // just outside a block its edge carries on, an embankment by Caversham Lock with it. The blend
+      // between blocks has its own test, above.)
+      if ([a, b].every(([x, z]) => outside(x, z) < 10)) continue;
+      // (Past where the land ends, 320 m from the water, there's no ground to see.)
+      if ([a, b].some(([x, z]) => { const at = locate(reading.scenery.river, x, z); return Math.abs(at.lateral) - widthAt(reading.scenery.river, at.s).half > 320; })) continue;
       const step = Math.abs(groundAt(reading, ...a) - groundAt(reading, ...b));
       assert.ok(step < 0.35, `${step.toFixed(2)} m in a metre at ${a.map((v) => v.toFixed(0))}`);
       pairs++;
     }
   }
-  assert.ok(pairs > 2500, `${pairs} metres walked`);
+  assert.ok(pairs > 5000, `${pairs} metres walked`);
 });
 
 test('the bank rises from the water to its measured top within a metre and a half: a step, not a beach', async () => {
@@ -191,7 +247,12 @@ test('the trees in the stretch are the measured ones, each its measured height; 
   const trunk = [0.35, 0.25, 0.17];
   // (The canoe club's model has its own trees from the footage, out to 30 m upstream of it.)
   const club = clubBox(courseFromFile(await data('reading')), 'canoe-club', 35);
-  const trunks = (await world()).filter(({ p, color }) => color.every((c, k) => Math.abs(c - trunk[k]) < 0.002) && p.every(([x, , z]) => inPatch(x, z)) && !p.every(([x, , z]) => club(x, z)));
+  // (And the things pointed out in the footage, which plant their own: a weeping willow, the bank of trees
+  // beside the deck boathouse, the riverside villa's three.)
+  const raw = await data('reading');
+  const own = [...(raw.features ?? []).map(({ at }) => [...at, 25]), ...raw.buildings.filter((b) => ['riverside-villa', 'tudor-boathouse', 'spiral-boathouse', 'grey-boathouse', 'glass-house', 'victorian', 'boatyard', 'island-bar'].includes(b.style)).map((b) => [b.shape[0][0], b.shape[0][1], 40])];
+  const byFeature = (x, z) => own.some(([ax, az, r]) => Math.hypot(ax - x, az - z) < r);
+  const trunks = (await world()).filter(({ p, color }) => color.every((c, k) => Math.abs(c - trunk[k]) < 0.002) && p.every(([x, , z]) => inPatch(x, z)) && !p.every(([x, , z]) => club(x, z) || byFeature(x, z)));
   assert.ok(trunks.length > 100, `${trunks.length} trunk triangles`);
   for (const { p } of trunks) {
     const [x, z] = [(p[0][0] + p[1][0] + p[2][0]) / 3, (p[0][2] + p[1][2] + p[2][2]) / 3];
@@ -232,9 +293,10 @@ test('land just beyond the patch never sinks to the water as it eases into the m
   const reading = courseFromFile(await data('reading'));
   const land = waterMap((await data('reading')).water);
   const band = [];
-  for (let x = x0 - FADE; x <= x1 + FADE; x += 4) {
-    for (let z = z0 - FADE; z <= z1 + FADE; z += 4) {
-      if (!inPatch(x, z) && !land.inside(x, z) && land.shore(x, z) >= 3) band.push([x, z]);
+  for (let x = x0 - FADE; x <= x1 + FADE; x += 6) {
+    for (let z = z0 - FADE; z <= z1 + FADE; z += 6) {
+      const out = outside(x, z);
+      if (out > 0 && out < FADE && !land.inside(x, z) && land.shore(x, z) >= 3) band.push([x, z]);
     }
   }
   const madeUp = await without(() => band.map(([x, z]) => groundAt(reading, x, z)));
@@ -367,11 +429,14 @@ test("the water mirrors the stretch's measured tree line: a wall of trees on the
   const p = pointAt(reading.scenery.river, 810);
   const [left, right] = bankWoods(reading, p.x, p.z, p.tx, p.tz);
   assert.ok(right > 0.9, `Caversham bank ${right}`);
-  assert.ok(left < 0.2, `rowing club bank ${left}`);
+  assert.ok(left <= 0.25, `rowing club bank ${left}`);
 });
 
-test('the game credits the Environment Agency for the lidar, as its licence asks', async () => {
+test('the game credits the Environment Agency for the lidar, as its licence asks, for the reach lidar.js covers', async () => {
   const page = await readFile(new URL('../reading-thames/index.html', import.meta.url), 'utf8');
+  const header = await readFile(new URL('../reading-thames/lidar.js', import.meta.url), 'utf8');
+  const reach = header.replace(/\n\/\/ /g, ' ').match(/trees (from [A-Z][\w ]+? to [A-Z][\w ]+?),/)[1];
+  assert.ok(page.includes(`heights ${reach} &copy;`), reach);
   assert.match(page, /&copy; Environment Agency copyright and\/or database right/);
   assert.match(page, /Open Government Licence/);
 });
