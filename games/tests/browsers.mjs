@@ -811,10 +811,11 @@ async function play(c, page, errors) {
       });
       errors.push(...over.map((o) => `rowing: ${o}`));
     }
+    // Until the look gets there (it eases in the game's time, which runs slow on
+    // CI's software rendering: a fixed wait read 0.8 there), or 15 s.
     const lookIs = async (side, what) => {
-      await page.waitForTimeout(800);
-      const look = await page.evaluate(() => window.kayak.look);
-      if (!(side ? look * side > 0.9 : Math.abs(look) < 0.1)) errors.push(`${what}: looked ${look.toFixed(2)}, expected ${side}`);
+      const there = await page.waitForFunction((side) => { const look = window.kayak.look; return side ? look * side > 0.9 : Math.abs(look) < 0.1; }, side, { timeout: 15_000, polling: 50 }).then(() => true, () => false);
+      if (!there) errors.push(`${what}: looked ${(await page.evaluate(() => window.kayak.look)).toFixed(2)}, expected ${side}`);
     };
     if (c.touch) {
       // A phone: the two Look buttons, both showing, apart, each looking over its own shoulder.
@@ -831,7 +832,6 @@ async function play(c, page, errors) {
       await page.locator('#lookRight').dispatchEvent('pointerdown');
       await page.locator('#lookRight').dispatchEvent('pointerup');
       await lookIs(1, 'a tap on Look ▶');
-      await page.waitForTimeout(1300);
       await lookIs(0, 'the glance over');
     } else {
       // Over each shoulder: Q left, E right; the coach goes while you look.
