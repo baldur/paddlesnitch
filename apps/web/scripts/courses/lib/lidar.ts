@@ -289,6 +289,8 @@ export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: nu
     if (trees.some(([a, b, hh]) => Math.hypot(a - x, b - z) < Math.max(6, 0.5 * (hh + c) * 0.34 * 1.4))) continue
     const bank = onBank(x + 0.5, z + 0.5)
     if (!bank) continue
+    // Two crowns over the water can be moved onto the same spot of bank: one tree there.
+    if (trees.some(([a, b]) => Math.hypot(a - bank[0], b - bank[1]) < 3)) continue
     if (fromWater(...bank) > (c >= 12 ? 120 : c >= 8 ? 70 : 40)) continue
     trees.push([Math.round(bank[0] * 10) / 10, Math.round(bank[1] * 10) / 10, Math.round(c * 10) / 10])
   }

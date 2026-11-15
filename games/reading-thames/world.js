@@ -468,25 +468,34 @@ export function lidarTop(lidar, x, z) {
     }
     return g.decoded.get(key);
   };
+  const at = (v, u, w) => {
+    const [i, j] = [Math.min(n - 2, Math.floor(u)), Math.min(n - 2, Math.floor(w))];
+    const [fu, fv] = [u - i, w - j];
+    const q = (a, b) => v[b * n + a] / 10;
+    return (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv;
+  };
   const [bi, bj] = [Math.floor(x / g.block), Math.floor(z / g.block)];
   const own = values(`${bi},${bj}`);
-  let best = own && { v: own, out: 0, u: (x - bi * g.block) / g.cell, w: (z - bj * g.block) / g.cell };
-  for (let dj = -1; dj <= 1 && !own; dj++) {
+  if (own) return { top: at(own, (x - bi * g.block) / g.cell, (z - bj * g.block) / g.cell), out: 0 };
+  // Beyond the blocks: each block within FADE, at its nearest point, weighted
+  // so the nearest counts most and one at FADE not at all (taking only the
+  // nearest jumped where two were as near, at a block's inside corner).
+  let [sum, weight, out] = [0, 0, Infinity];
+  for (let dj = -1; dj <= 1; dj++) {
     for (let di = -1; di <= 1; di++) {
       const v = values(`${bi + di},${bj + dj}`);
       if (!v) continue;
       const [x0, z0] = [(bi + di) * g.block, (bj + dj) * g.block];
       const [cx, cz] = [Math.max(x0, Math.min(x0 + g.block, x)), Math.max(z0, Math.min(z0 + g.block, z))];
-      const out = Math.hypot(x - cx, z - cz);
-      if (out < FADE && (!best || out < best.out)) best = { v, out, u: (cx - x0) / g.cell, w: (cz - z0) / g.cell };
+      const d = Math.hypot(x - cx, z - cz);
+      if (d >= FADE) continue;
+      const k = ((1 - d / FADE) / Math.max(d, 1e-3)) ** 2;
+      sum += k * at(v, (cx - x0) / g.cell, (cz - z0) / g.cell);
+      weight += k;
+      out = Math.min(out, d);
     }
   }
-  if (!best) return null;
-  const { v, u, w } = best;
-  const [i, j] = [Math.min(n - 2, Math.floor(u)), Math.min(n - 2, Math.floor(w))];
-  const [fu, fv] = [u - i, w - j];
-  const q = (a, b) => v[b * n + a] / 10;
-  return { top: (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv, out: best.out };
+  return weight ? { top: sum / weight, out } : null;
 }
 
 // Whether (x, z) is where lidar.js has the trees (they're planted from it there).

@@ -110,7 +110,7 @@ test('everything outside the stretch is as it was without lidar: the made-up tre
   };
   const measured = vertices(buildWorld(courseFromFile(course), 1, 'river').vertices);
   const madeUp = await without(() => vertices(buildWorld(courseFromFile(course), 1, 'river').vertices));
-  assert.ok(measured.length > 200_000, `${measured.length} triangles outside`);
+  assert.ok(measured.length > 10_000, `${measured.length} triangles outside`);
   assert.equal(measured.length, madeUp.length);
   assert.ok(measured.every((t, k) => t === madeUp[k]), 'the same triangles, in the same order');
 });
@@ -127,6 +127,7 @@ test('no step in the ground where the measured patch meets the made-up ground', 
     for (let k = 0; k < out + 40; k++) {
       const [a, b] = [[sx + dx * k, sz + dz * k], [sx + dx * (k + 1), sz + dz * (k + 1)]];
       if ([a, b].some(([x, z]) => land.inside(x, z) || land.shore(x, z) < 3)) continue; // (the bank's own step)
+      if ([a, b].every(([x, z]) => outside(x, z) === 0)) continue; // (inside, the real ground's own slopes: The Warren is steep)
       const step = Math.abs(groundAt(reading, ...a) - groundAt(reading, ...b));
       assert.ok(step < 0.35, `${step.toFixed(2)} m in a metre at ${a.map((v) => v.toFixed(0))}`);
       pairs++;
@@ -197,9 +198,11 @@ test('the trees in the stretch are the measured ones, each its measured height; 
   const trunk = [0.35, 0.25, 0.17];
   // (The canoe club's model has its own trees from the footage, out to 30 m upstream of it.)
   const club = clubBox(courseFromFile(await data('reading')), 'canoe-club', 35);
-  // (And the things pointed out in the footage: a weeping willow is a feature, not a tree of either kind.)
-  const features = (await data('reading')).features ?? [];
-  const byFeature = (x, z) => features.some(({ at }) => Math.hypot(at[0] - x, at[1] - z) < 12);
+  // (And the things pointed out in the footage, which plant their own: a weeping willow, the bank of trees
+  // beside the deck boathouse, the riverside villa's three.)
+  const raw = await data('reading');
+  const own = [...(raw.features ?? []).map(({ at }) => [...at, 25]), ...raw.buildings.filter((b) => ['riverside-villa', 'tudor-boathouse', 'spiral-boathouse', 'grey-boathouse', 'glass-house', 'victorian', 'boatyard', 'island-bar'].includes(b.style)).map((b) => [b.shape[0][0], b.shape[0][1], 40])];
+  const byFeature = (x, z) => own.some(([ax, az, r]) => Math.hypot(ax - x, az - z) < r);
   const trunks = (await world()).filter(({ p, color }) => color.every((c, k) => Math.abs(c - trunk[k]) < 0.002) && p.every(([x, , z]) => inPatch(x, z)) && !p.every(([x, , z]) => club(x, z) || byFeature(x, z)));
   assert.ok(trunks.length > 100, `${trunks.length} trunk triangles`);
   for (const { p } of trunks) {

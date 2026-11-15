@@ -97,6 +97,11 @@ describe('deriveTrees', () => {
     const two: Heights = { ...place, above: (x, z) => Math.max(0, 14 - Math.hypot(x - 40, z - 5), 13.5 - Math.hypot(x - 45, z - 5)) }
     expect(deriveTrees(two, PATCH, everywhere, asIs, () => 10)).toEqual([[40.5, 5.5, 14]])
   })
+  it('keeps one tree where two crowns over the water are moved onto the same spot of bank', () => {
+    const two: Heights = { ...place, above: (x, z) => Math.max(0, 12 - Math.hypot(x - 40, z - 5), 10 - Math.hypot(x - 50, z - 5)) }
+    const bank = (): [number, number] => [45, -2]
+    expect(deriveTrees(two, PATCH, everywhere, bank, () => 10)).toEqual([[45, -2, 12]])
+  })
   it('skips one out over the water, as the bank says', () => {
     expect(deriveTrees(place, PATCH, everywhere, () => null, () => 10)).toEqual([])
   })
