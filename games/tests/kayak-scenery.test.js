@@ -372,7 +372,7 @@ test("the water mirrors trees only where a bank is wooded (the lidar's canopy): 
   // Above Christchurch Bridge the north bank's trees (the footage shows them mirrored) against
   // the open town front opposite.
   const [town, trees] = woods(150);
-  assert.ok(town < 0.3 && trees > 0.5, `above Christchurch Bridge ${town}, ${trees}`);
+  assert.ok(town < 0.2 && trees - town >= 0.3, `above Christchurch Bridge ${town}, ${trees}`);
   assert.deepEqual(woods(3000), [1, 1], 'the wooded reach');
   // Facing the other way, left and right swap.
   const p = at(reading.scenery.river, 300);

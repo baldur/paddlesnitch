@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK, bankCanopy, blockValues, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, bankCanopy, bankEdge, blockValues, canopyAt, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -102,6 +102,12 @@ describe('deriveTrees', () => {
     const bank = (): [number, number] => [45, -2]
     expect(deriveTrees(two, PATCH, everywhere, bank, () => 10)).toEqual([[45, -2, 12]])
   })
+  it('looks for crowns hanging over the water only in a vegetation canopy (overWater): there the first surface is boats', () => {
+    const over: Heights = { ground: (x) => (x < 0 ? 0.1 : 1), above: (x, z) => (Math.hypot(x + 3, z - 5) < 3 ? 11 - Math.hypot(x + 3, z - 5) : 0) }
+    const bank = (): [number, number] => [2, 5]
+    expect(deriveTrees(over, PATCH, everywhere, bank, () => 2)).toEqual([])
+    expect(deriveTrees(over, PATCH, everywhere, bank, () => 2, () => true, true)).toEqual([[2, 5, 11]])
+  })
   it('skips one out over the water, as the bank says', () => {
     expect(deriveTrees(place, PATCH, everywhere, () => null, () => 10)).toEqual([])
   })
@@ -180,6 +186,18 @@ describe('bankCanopy', () => {
     const half = (s: number) => bankCanopy(400, 100, (q) => (q - s < 0 ? 5 : null))[0][2]
     expect(half(200 + 2)).not.toBeNull() // 8 of the 16 columns measured
     expect(half(200 - 6)).toBeNull() // 6 of them
+  })
+})
+
+describe('bankEdge', () => {
+  it("is the leaves' height in the first 8 m by the water where most of it is canopy, else none", () => {
+    // Left: 10 m willow along the edge from 100 m up, open below; right: a 4 m hedge on one row only.
+    const above = (s: number, side: -1 | 1, d: number) => (side < 0 ? (s >= 100 ? 10 : 0) : d === 4 ? 4 : 0)
+    const [left, right] = bankEdge(300, 50, above)
+    expect(left.slice(0, 2)).toEqual([null, null])
+    expect(left[3]).toBe(10)
+    expect(right.every((h) => h === null)).toBe(true)
+    expect(bankEdge(100, 50, () => null)[0]).toEqual([null, null, null])
   })
 })
 

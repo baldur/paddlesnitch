@@ -891,6 +891,28 @@ function realScenery(m, course, real, rand) {
     tree(m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
   }
 
+  // The leaves at the water's edge (lidar.js `edge`, from the vegetation model):
+  // a line of low crowns as tall as the canopy there, every few metres, so a
+  // wooded bank is a wall of leaves down to the water, not crowns on trunks
+  // with lawn between. Their own draws.
+  const edgeRand = mulberry32(11);
+  for (const [k, row] of (course.lidar?.edge?.sides ?? []).entries()) {
+    const side = k ? 1 : -1;
+    for (const [i, h] of row.entries()) {
+      if (h === null) continue;
+      const s = i * course.lidar.edge.step;
+      if (s > course.length) continue;
+      const c = pointAt(course, s);
+      const w = widthAt(course, s).half + 2.5;
+      const [x, z] = [c.x - c.tz * side * w, c.z + c.tx * side * w];
+      const leaf = shade(LEAVES[Math.floor(edgeRand() * LEAVES.length)], edgeRand, 0.12);
+      const g = ground(course, x, z);
+      if (g.d < 0 || built(x, z) || onPath(x, z, 3) || cleared(x, z) || byLandmark(x, z)) continue;
+      const r = Math.min(5.5, h * 0.42);
+      m.sphere([x, Math.max(0, g.y) + r * 0.8, z], r, leaf, 3, 6);
+    }
+  }
+
   for (const b of real.buildings) building(m, course, b, rand);
   for (const w of real.walls ?? []) embankment(m, course, w, rand);
   for (const line of real.railways) railway(m, course, line);

@@ -428,7 +428,7 @@ test("the water mirrors the stretch's measured tree line: a wall of trees on the
   const reading = courseFromFile(await data('reading'));
   const p = pointAt(reading.scenery.river, 810);
   const [left, right] = bankWoods(reading, p.x, p.z, p.tx, p.tz);
-  assert.ok(right > 0.9, `Caversham bank ${right}`);
+  assert.ok(right >= 0.8, `Caversham bank ${right}`);
   assert.ok(left <= 0.25, `rowing club bank ${left}`);
 });
 

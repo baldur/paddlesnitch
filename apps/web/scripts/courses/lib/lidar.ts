@@ -269,10 +269,13 @@ export function deriveBuildings(h: Heights, buildings: Building[], [x0, z0, x1, 
  * over the water), `fromWater` is how far it is from the river. Further back,
  * only the taller ones (the triangle budget): over 12 m to 120 m, over 8 m to 70, the rest to 40.
  */
-export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: number, z: number) => boolean, onBank: (x: number, z: number) => XZ | null, fromWater: (x: number, z: number) => number, want: (x: number, z: number) => boolean = () => true): Array<[number, number, number]> {
+export function deriveTrees(h: Heights, [x0, z0, x1, z1]: Patch, keepOut: (x: number, z: number) => boolean, onBank: (x: number, z: number) => XZ | null, fromWater: (x: number, z: number) => number, want: (x: number, z: number) => boolean = () => true, overWater = false): Array<[number, number, number]> {
   const W = x1 - x0 + 1
   const chm = new Float32Array(W * (z1 - z0 + 1))
-  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (want(x, z)) chm[(z - z0) * W + (x - x0)] = (h.ground(x, z) ?? 0) > LAND ? h.above(x, z) ?? 0 : 0
+  // Over the water the first surface is boats and bridges as often as leaves:
+  // only a vegetation canopy (`overWater`) is looked at there, for the crowns
+  // hanging out from the bank.
+  for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (want(x, z)) chm[(z - z0) * W + (x - x0)] = overWater || (h.ground(x, z) ?? 0) > LAND ? h.above(x, z) ?? 0 : 0
   const at = (x: number, z: number) => (x < x0 || x > x1 || z < z0 || z > z1 ? 0 : chm[(z - z0) * W + (x - x0)])
   const peaks: Array<[number, number, number]> = []
   for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
@@ -321,6 +324,29 @@ export function bankCanopy(length: number, step: number, above: (s: number, side
 }
 
 /**
+ * The leaves at the water's edge, every `step` metres along each bank: the
+ * canopy's height in the first 8 m from the edge (the 80th percentile of what's
+ * there), or null where there's no canopy over 3 m on most of it, or no lidar.
+ * The game lines the bank with low crowns of that height, so a wooded bank is a
+ * wall of leaves down to the water, as the footage shows. [left, right].
+ */
+export function bankEdge(length: number, step: number, above: (s: number, side: -1 | 1, d: number) => number | null): Array<Array<number | null>> {
+  return ([-1, 1] as const).map((side) => Array.from({ length: Math.floor(length / step) + 1 }, (_, i) => {
+    const hs: number[] = []
+    let seen = 0
+    for (let ds = -step / 2; ds < step / 2; ds += 2) for (let d = 0; d <= 8; d += 2) {
+      const h = above(i * step + ds, side, d)
+      if (h === null) continue
+      seen++
+      if (h > 3) hs.push(h)
+    }
+    if (!seen || hs.length * 2 < seen) return null
+    hs.sort((a, b) => a - b)
+    return Math.round(hs[Math.floor(hs.length * 0.8)] * 10) / 10
+  }))
+}
+
+/**
  * The canopy's height `d` metres out from the water's edge on `side` (-1 left,
  * 1 right) at `s` along the river: null off the river or where the lidar
  * isn't kept, 0 on a building (a roof isn't canopy). The sampler bankCanopy takes.
@@ -338,7 +364,7 @@ export function canopyAt(
 }
 
 /** games/reading-thames/lidar.js. */
-export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }): string {
+export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }, edge?: { step: number; sides: Array<Array<number | null>> }): string {
   const keys = Object.keys(blocks).sort((a, b) => { const [p, q] = [a, b].map((k) => k.split(',').map(Number)); return p[1] - q[1] || p[0] - q[0] })
   return `// The ground, buildings and trees ${where}, from Environment Agency lidar (the
 // 1 m composite: bare ground, and the first surface the laser met). © Environment
@@ -364,7 +390,10 @@ ${keys.map((k) => `      '${k}': '${blocks[k]}',`).join('\n')}
   trees: ${JSON.stringify(trees)},${woods ? `
   // How wooded each bank is every \`step\` metres up the river, [left, right]: the
   // share of the 14 m by the water under canopy over 3 m (null: not measured).
-  woods: { step: ${woods.step}, sides: ${JSON.stringify(woods.sides)} },` : ''}
+  woods: { step: ${woods.step}, sides: ${JSON.stringify(woods.sides)} },` : ''}${edge ? `
+  // The leaves at the water's edge every \`step\` metres, [left, right]: the canopy's
+  // height in the first 8 m (null: none, or not measured).
+  edge: { step: ${edge.step}, sides: ${JSON.stringify(edge.sides)} },` : ''}
 };
 `
 }
