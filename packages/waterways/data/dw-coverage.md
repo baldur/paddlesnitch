@@ -1,6 +1,6 @@
 # Coverage: Kennet & Avon Canal, River Kennet and the Thames to Westminster
 
-Built 2026-11-08 by `pnpm --filter web waterways dw`. Generated — don't edit by hand.
+Built 2026-11-15 by `pnpm --filter web waterways dw`. Generated — don't edit by hand.
 
 ## Check: Devizes Wharf to Westminster Bridge
 
@@ -17,10 +17,10 @@ Locks and portages aren't the same count. Portages that aren't locks (the race's
 
 | Fact | Locks with it |
 |---|---|
-| Portage side | 11 / 77 (14%) |
-| Take-out | 11 / 77 (14%) |
-| Put-in | 11 / 77 (14%) |
-| Carry route | 12 / 77 (16%) |
+| Portage side | 13 / 77 (17%) |
+| Take-out | 13 / 77 (17%) |
+| Put-in | 13 / 77 (17%) |
+| Carry route | 14 / 77 (18%) |
 | Crew access | 61 / 77 (79%) |
 | Parking | 48 / 77 (62%) |
 | Facilities | 29 / 77 (38%) |
@@ -86,8 +86,8 @@ Locks and portages aren't the same count. Portages that aren't locks (the race's
 | 82.2 | Lock 105, Fobney Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
 | 84.9 | Lock 106, County Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | crt, contribution, osm |
 | 86.4 | Blakes Lock | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ea-thames-locks, contribution, osm |
-| 89.9 | Sonning Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
-| 94.5 | Shiplake Lock | — | — | — | — | ✓ | ✓ | ✓ | ea-thames-locks, ea-thames-site-guides |
+| 89.9 | Sonning Lock | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ea-thames-locks, contribution, osm |
+| 94.5 | Shiplake Lock | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ea-thames-locks, contribution, ea-thames-site-guides |
 | 98.7 | Marsh Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
 | 104.0 | Hambleden Lock | — | — | — | — | — | ✓ | ✓ | ea-thames-locks, osm |
 | 109.9 | Hurley Lock | — | — | — | — | ✓ | ✓ | ✓ | ea-thames-locks, ea-thames-site-guides, osm |

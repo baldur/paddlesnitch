@@ -554,5 +554,131 @@
   },
   "createdAt": "2026-11-08T12:00:00.000Z",
   "updatedAt": "2026-11-08T12:00:00.000Z"
+ },
+ {
+  "id": "survey-2026-11-15-caversham",
+  "name": "paddlesnitch survey",
+  "featureId": "ea-lock:caversham",
+  "at": [
+   51.460695,
+   -0.964119
+  ],
+  "notes": "Landings: timber landing stage above the lock, and low concrete ledge below the stone wall. Carry: paved path beside the lock, about 95 m. Seen 15 Nov 2026.",
+  "landings": [
+   [
+    51.4605947,
+    -0.9646497
+   ],
+   [
+    51.4607843,
+    -0.9634466
+   ]
+  ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 78
+  },
+  "licence": "CC0-1.0",
+  "observed": {
+   "at": "2026-11-15T12:00:00.000Z",
+   "gauge": {
+    "source": "ea",
+    "id": "2201TH",
+    "name": "Caversham Lock",
+    "river": "River Thames",
+    "valueM": 0.236,
+    "readAt": "2026-11-15T12:00:00.000Z",
+    "state": "normal"
+   }
+  },
+  "createdAt": "2026-11-15T12:00:00.000Z",
+  "updatedAt": "2026-11-15T12:00:00.000Z"
+ },
+ {
+  "id": "survey-2026-11-15-shiplake",
+  "name": "paddlesnitch survey",
+  "featureId": "ea-lock:shiplake",
+  "at": [
+   51.501688,
+   -0.88274
+  ],
+  "notes": "Landings: timber staging, and floating timber pontoon reached by a gangway. Carry: short, over grass and leaves, about 60 m. Seen 15 Nov 2026.",
+  "landings": [
+   [
+    51.5015658,
+    -0.8835207
+   ],
+   [
+    51.5013125,
+    -0.8829408
+   ]
+  ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 79
+  },
+  "licence": "CC0-1.0",
+  "observed": {
+   "at": "2026-11-15T12:00:00.000Z",
+   "gauge": {
+    "source": "ea",
+    "id": "2302TH",
+    "name": "Shiplake Lock",
+    "river": "River Thames",
+    "valueM": 0.168,
+    "readAt": "2026-11-15T12:00:00.000Z",
+    "state": "normal"
+   }
+  },
+  "createdAt": "2026-11-15T12:00:00.000Z",
+  "updatedAt": "2026-11-15T12:00:00.000Z"
+ },
+ {
+  "id": "survey-2026-11-15-sonning",
+  "name": "paddlesnitch survey",
+  "featureId": "ea-lock:sonning",
+  "at": [
+   51.472957,
+   -0.91807
+  ],
+  "notes": "Landings: low timber edge by the grass bank, and concrete edge below the lock. Carry: grass, then a gravel path, about 120 m. Seen 15 Nov 2026.",
+  "landings": [
+   [
+    51.4725272,
+    -0.9185446
+   ],
+   [
+    51.4732383,
+    -0.9174694
+   ]
+  ],
+  "seen": {
+   "banks": [
+    "right",
+    "right"
+   ],
+   "headingDeg": 44
+  },
+  "licence": "CC0-1.0",
+  "observed": {
+   "at": "2026-11-15T12:00:00.000Z",
+   "gauge": {
+    "source": "ea",
+    "id": "2301TH",
+    "name": "Sonning Lock",
+    "river": "River Thames",
+    "valueM": 0.293,
+    "readAt": "2026-11-15T12:00:00.000Z",
+    "state": "high"
+   }
+  },
+  "createdAt": "2026-11-15T12:00:00.000Z",
+  "updatedAt": "2026-11-15T12:00:00.000Z"
  }
 ]
