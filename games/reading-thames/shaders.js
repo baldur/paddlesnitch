@@ -127,7 +127,29 @@ struct Out {
 `;
 
 export const WATER = FRAME + /* wgsl */ `
-struct Out { @builtin(position) clip: vec4f, @location(0) world: vec3f };
+struct Out { @builtin(position) clip: vec4f, @location(0) world: vec3f, @location(1) woods: vec2f };
+
+// How wooded bank k (0 left, 1 right) is a metres along the river from frame.river (frame.woods, every 20 m, ±150 m).
+fn woodAt(k: i32, a: f32) -> f32 {
+  let f = clamp(a / 20.0 + 7.5, 0.0, 15.0);
+  let i = min(i32(f), 14);
+  let n = k * 16 + i;
+  return mix(frame.woods[n / 4][n % 4], frame.woods[(n + 1) / 4][(n + 1) % 4], f - f32(i));
+}
+// How far along the river a ray from p meets the bank at that lateral (the river taken as straight from where you are; along it, the next bend, a few hundred metres).
+fn alongTo(p: vec2f, refl: vec3f, bank: f32) -> f32 {
+  let along = frame.river.zw;
+  let across = vec2f(-along.y, along.x);
+  let reach = min(abs(bank - dot(p - frame.river.xy, across)) / max(abs(dot(refl.xz, across)), 0.0001), 260.0);
+  return dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
+}
+// How wooded each bank is where a ray mirrored off the still water at p meets it.
+// Worked out per vertex: the woods change every 20 m, and reading frame.woods
+// for every pixel made the frame some 60% slower on software graphics (WebKit on CI).
+fn woodsHere(p: vec2f, refl: vec3f) -> vec2f {
+  return vec2f(woodAt(0, alongTo(p, refl, -frame.banks.x)), woodAt(1, alongTo(p, refl, frame.banks.y)));
+}
+
 
 const SPACING = 2.0;
 
@@ -146,6 +168,8 @@ fn height(p: vec2f, t: f32) -> f32 {
   var o: Out;
   o.clip = frame.viewProj * vec4f(world, 1.0);
   o.world = world;
+  let v = normalize(frame.camPos.xyz - world);
+  o.woods = woodsHere(xz, vec3f(-v.x, v.y, -v.z));
   return o;
 }
 
@@ -218,14 +242,7 @@ fn spots(p: vec2f, dist: f32) -> f32 {
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
 const TREES = vec3f(0.14, 0.2, 0.1);
-// How wooded bank k (0 left, 1 right) is a metres along the river from frame.river (frame.woods, every 20 m, ±150 m).
-fn woodAt(k: i32, a: f32) -> f32 {
-  let f = clamp(a / 20.0 + 7.5, 0.0, 15.0);
-  let i = min(i32(f), 14);
-  let n = k * 16 + i;
-  return mix(frame.woods[n / 4][n % 4], frame.woods[(n + 1) / 4][(n + 1) % 4], f - f32(i));
-}
-fn treeline(p: vec2f, refl: vec3f) -> vec2f {
+fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
   if (frame.banks.w < 0.5) { return vec2f(0.0); }
   let along = frame.river.zw;
   let across = vec2f(-along.y, along.x);
@@ -240,7 +257,7 @@ fn treeline(p: vec2f, refl: vec3f) -> vec2f {
     // To that bank's line, either side of it; along the river, the next bend (a few hundred metres).
     let reach = min(abs(bank - l) / max(abs(rl), 0.0001), 260.0);
     let a = dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
-    let wood = woodAt(k, a);
+    let wood = select(woods.x, woods.y, e > 0.0);
     let top = max(0.3, frame.banks.z * wood * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3)));
     // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     let leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
@@ -277,7 +294,7 @@ fn treeline(p: vec2f, refl: vec3f) -> vec2f {
   // The banks are mirrored off a calmer surface than the ripples: real river
   // water holds the tree line's reflection whole until a wash breaks it.
   let still = reflect(-v, normalize(vec3f(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
-  let tl = treeline(p, still);
+  let tl = treeline(p, still, in.woods);
   let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x);
   // Still water mirrors the trees even looking down into it (not the sky: there it shows its dark depths).
   var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * tl.x, 0.0, 1.0));

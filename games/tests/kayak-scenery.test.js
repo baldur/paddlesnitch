@@ -220,7 +220,7 @@ test('each club stands square to its mapped bank, its pontoon on the water', asy
 test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water, how calm the water lies)", async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
   const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|var|float|vec[23]) ((fill|lit|still|tl|sky|calm|r|dx|dz) =|c = mix\(frame\.water)/.test(l))
-    .map((l) => l.replace(/^(let|var|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C'));
+    .map((l) => l.replace(/^(let|var|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C').replace(/in\.woods|vWoods/g, 'W'));
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
   for (const n of ['fill', 'calm', 'dx', 'dz', 'r', 'still', 'tl', 'sky', 'c']) assert.ok(gpu.some((l) => l.startsWith(`${n} =`)), `WebGPU has its ${n} line`);
   assert.deepEqual(gl, gpu);
@@ -230,7 +230,7 @@ test("both renderers' per-frame block has the same fields, the size main.js fill
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
   const gpu = await import('../reading-thames/shaders.js');
   const gl = await import('../reading-thames/shaders-gl.js');
-  assert.ok(gpu.WATER.includes('fn woodAt(') && gl.WATER.fs.includes('float woodAt('), 'the water shaders load whole');
+  assert.ok(gpu.WATER.includes('fn woodAt(') && gl.WATER.vs.includes('float woodAt('), 'the water shaders load whole');
   // Field names and sizes in vec4s, in order.
   const block = (src, open) => src.slice(src.indexOf(open), src.indexOf('}', src.indexOf(open))).split('\n').slice(1)
     .map((l) => l.trim().match(/^(?:(\w+): (\w+)(?:<vec4f, (\d+)>)?|(\w+) (\w+)(?:\[(\d+)\])?;)/)).filter(Boolean)
@@ -382,6 +382,12 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
   const [gpuWood, glWood] = [i32(body(await read('shaders.js'), 'fn woodAt(')), i32(body(await read('shaders-gl.js'), 'float woodAt('))];
   assert.equal(gpuWood.length, 4);
   assert.deepEqual(glWood, gpuWood);
+  // And the vertex shader's woodsHere() and alongTo(), which find where each ray meets the banks.
+  for (const [wg, gl] of [['fn woodsHere(', 'vec2 woodsHere('], ['fn alongTo(', 'float alongTo(']]) {
+    const [a, b] = [body(await read('shaders.js'), wg), body(await read('shaders-gl.js'), gl)];
+    assert.ok(a.length >= 1, wg);
+    assert.deepEqual(b, a, wg);
+  }
 });
 
 test("the dead tree, the river sign and the beach stand on their banks, not out in the river", async () => {
