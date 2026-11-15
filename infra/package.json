@@ -9,6 +9,7 @@
     "deploy": "cdk deploy --require-approval never"
   },
   "dependencies": {
+    "@aws-cdk/cloud-assembly-schema": "55.3.0",
     "aws-cdk-lib": "2.275.0",
     "constructs": "^10.0.0"
   },
