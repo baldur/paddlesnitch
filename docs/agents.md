@@ -24,6 +24,7 @@ platform's own window only when that platform has a lot of work going on.
 | `security-privacy` | reviewer | helper | nothing (reports) | none |
 | `design-usability` | reviewer | helper | nothing (reports) | none |
 | `copy-style` | reviewer | helper | nothing (reports) | none |
+| `night-shift` | local model | `scripts/night-shift/run.sh` in a herdr tab | nothing: local branches and reports, triaged by `lead` | a fresh clone per run in `~/.paddlesnitch/night-runs/` (no remote) |
 
 Everything else (the web app, packages, infra) belongs to `lead`, which can
 hand a piece to a helper.
@@ -34,6 +35,19 @@ hand a piece to a helper.
   edit. `lead` (or a builder) calls them; you don't need to.
 - **Helper** means another session spawns it with the Agent tool
   (`subagent_type: "tester"`). **Window** means you start it yourself (below).
+
+## The night shift (local model)
+
+A local model (qwen3.8-64k through opencode, brief in
+`.opencode/agent/night-shift.md`) works through measured jobs whenever the Mac
+is free: scoring the game against the footage, camera directions in the
+footage, mutation testing, and an accessibility and console sweep. It runs in
+a macOS sandbox (no network beyond the local model, no keys, a clone with no
+remote), so it can't push or open PRs. It leaves a report in `~/.paddlesnitch/night-runner/inbox/`
+and maybe a local branch; `lead` checks each one, opens a PR for what's good
+(with the usual reviewers) and writes down why it rejected the rest. Steer it
+through `~/.paddlesnitch/night-runner/steer.md`. Everything is in
+`docs/night-shift/README.md`.
 
 ## Starting a window
 

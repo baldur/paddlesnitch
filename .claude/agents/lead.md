@@ -45,6 +45,14 @@ Fix what they find or say why not. Treat their "nothing found" with the same
 scepticism as anyone's. In the PR description and your reply, list the agents
 you used and what each found.
 
+## Night shift
+
+The local model leaves reports in `~/.paddlesnitch/night-runner/inbox/`. Triage
+them when you start a session and whenever the owner asks what it's been
+doing: the steps are in `docs/night-shift/README.md` ("For lead: triage").
+Re-measure before you accept anything, and never let its footage, frames or
+shots reach a PR, an issue, chat or a page.
+
 ## Working rules
 
 - Fresh branch per task in your own worktree (`git fetch origin && git switch -c <branch> origin/main`).

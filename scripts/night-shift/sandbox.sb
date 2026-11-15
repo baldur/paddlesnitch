@@ -1,0 +1,67 @@
+;; The night shift's sandbox (docs/night-shift/README.md). run.sh starts the
+;; model, and everything it runs, under this profile. The model's own
+;; permission rules are only nudges; this is the boundary.
+;;
+;; Deny by default. What's allowed:
+;; - network: out only to the Ollama gate (ollama-gate.mjs: chat with one
+;;   model, nothing that downloads or uploads), and to its own servers; listen
+;;   only on those same ports. No DNS, no unix sockets (herdr, the owner's
+;;   opencode service), no other port.
+;; - writes: only this run's folder (a new random path every run).
+;; - reads in the home folder: only this run's folder, the footage and
+;;   reference views the jobs need, the runner's folder, and Playwright's
+;;   browsers. No other repo, no .env files, no keys.
+;; - no `open` or `osascript`, no Launch Services or Apple Events: nothing
+;;   that would start a process outside the sandbox.
+;;
+;; Params: HOME, RUN (this run's folder: clone/ and work/), RUNNER, GATE_PORT.
+(version 1)
+(deny default)
+
+(allow process-fork signal sysctl-read iokit-open ipc-posix-shm ipc-posix-sem
+       pseudo-tty system-socket file-ioctl mach-lookup mach-register user-preference-read)
+(allow process-exec)
+(deny process-exec (literal "/usr/bin/open") (literal "/usr/bin/osascript")
+                   (literal "/usr/bin/automator") (literal "/usr/bin/shortcuts"))
+(deny mach-lookup
+  (global-name "com.apple.dnssd.service")
+  (global-name "com.apple.coreservices.launchservicesd")
+  (global-name-prefix "com.apple.lsd")
+  (global-name "com.apple.coreservices.appleevents")
+  (global-name "com.apple.pasteboard.1")
+  (global-name "com.apple.nsurlsessiond")
+  (global-name-prefix "com.apple.sharingd")
+  (global-name-prefix "com.apple.imagent"))
+
+;; Network
+(allow network-outbound
+  (remote ip (string-append "localhost:" (param "GATE_PORT")))
+  (remote ip "localhost:3600")    ; its dev server (sweep)
+  (remote ip "localhost:4097")    ; its opencode server (run.sh)
+  (remote ip "localhost:9229")    ; cognito-local (sweep sign-ups)
+  (remote ip "localhost:9230"))   ; the test suite's own cognito-local
+(allow network-bind network-inbound
+  (local ip "localhost:3600") (local ip "localhost:4097") (local ip "localhost:9230"))
+
+;; Reads
+(allow file-read*)
+(allow file-read-metadata)
+(deny file-read-data
+  (subpath (param "HOME"))
+  (subpath "/private/tmp")
+  (regex #"^/private/var/folders/[^/]+/[^/]+/T/"))
+(allow file-read-data
+  (literal (param "HOME"))
+  (subpath (param "RUN"))
+  (subpath (param "RUNNER"))
+  (subpath (string-append (param "HOME") "/.paddlesnitch/refviews"))
+  (subpath (string-append (param "HOME") "/.paddlesnitch/footage/reference"))
+  (subpath (string-append (param "HOME") "/.paddlesnitch/footage/views"))
+  (subpath (string-append (param "HOME") "/Movies/Paddling"))
+  (subpath (string-append (param "HOME") "/Library/Caches/ms-playwright")))
+
+;; Writes
+(allow file-write*
+  (subpath (param "RUN"))
+  (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper")
+  (regex #"^/dev/tty") (regex #"^/dev/fd/"))
