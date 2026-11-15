@@ -7,6 +7,7 @@ import { waterMap, SHORE_SEARCH } from './water.js';
 import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt, POST } from './course.js';
 import { createAnglers, SNAG } from './anglers.js';
+import { LIDAR } from './lidar.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
@@ -97,6 +98,7 @@ export function buildWorld(course, seed = 1, parts = 'all') {
   if (real) {
     river.land = waterMap(real.water ?? []);
     river.pads = null;
+    river.lidar = undefined;
     carPark(course);
     realLand(m, river, real, rand);
   } else {
@@ -347,9 +349,12 @@ function bridge(m, course, s) {
 // real: a real lowland river, where the riverside trees are all broadleaf, and
 // full-grown (the frames show 10-20 m walls of them).
 // far: well back from the water, where a second ball of crown can't be told apart.
-function tree(m, x, y, z, rand, real = false, far = false) {
+// height: a measured one (lidar.js), else one at random.
+// low: one big crown down to the ground (a measured tree by the water: the
+// bank there is one green mass to the waterline, not crowns on bare trunks).
+function tree(m, x, y, z, rand, real = false, far = false, height = null, low = false) {
   const pine = !real && rand() < 0.2; // mostly broadleaf: oaks, willows, alders
-  const h = pine ? 7 + rand() * 9 : real ? 9 + rand() * 9 : 5 + rand() * 6;
+  const h = height ?? (pine ? 7 + rand() * 9 : real ? 9 + rand() * 9 : 5 + rand() * 6);
   m.cylinder([x, y - 0.3, z], 0.2 + h * 0.015, h * 0.35, far ? 3 : 4, COLORS.trunk); // a trunk shows a few pixels wide: four sides, three far off
   if (pine) {
     for (let k = 0; k < 3; k++) {
@@ -359,10 +364,11 @@ function tree(m, x, y, z, rand, real = false, far = false) {
     // A big riverside crown, its lower branches reaching down to the water.
     const leaf = LEAVES[Math.floor(rand() * LEAVES.length)];
     const r = h * 0.34;
-    m.sphere([x, y + h * 0.64, z], far ? r * 1.15 : r, shade(leaf, rand, 0.1), 3, 6);
+    if (low) m.sphere([x, y + h * 0.5, z], h * 0.45, shade(leaf, rand, 0.1), 3, 6);
+    else m.sphere([x, y + h * 0.64, z], far ? r * 1.15 : r, shade(leaf, rand, 0.1), 3, 6);
     const a = rand() * Math.PI * 2;
     const second = shade(leaf, rand, 0.15); // drawn either way, so the trees after it stay as they were
-    if (!far) m.sphere([x + Math.cos(a) * r * 0.7, y + h * 0.36, z + Math.sin(a) * r * 0.7], r * 0.85, second, 3, 6);
+    if (!far && !low) m.sphere([x + Math.cos(a) * r * 0.7, y + h * 0.36, z + Math.sin(a) * r * 0.7], r * 0.85, second, 3, 6);
   } else {
     // A rounded crown out of a couple of lumpy balls.
     const r = h * 0.3;
@@ -427,7 +433,43 @@ function ground(course, x, z, lineD = null) {
     d = d < SHORE_SEARCH ? course.land.shore(x, z) : Math.min(d, course.land.shore(x, z));
   }
   if (d < 0) return { d, y: -0.4 };
-  return { d, y: level(course.pads, x, z, groundHeight(d, REAL_PROFILE) + bump(x, z, d)) };
+  return { d, y: level(course.pads, x, z, measured(course.lidar, x, z, d, groundHeight(d, REAL_PROFILE) + bump(x, z, d))) };
+}
+
+// The measured ground (lidar.js) where there is some: the bank rises from the
+// water's edge to it within a metre and a half, as the real banks do (a step,
+// not a beach), and it's eased into the made-up ground over its patch's last
+// EASE metres.
+const EASE = 40;
+function measured(lidar, x, z, d, y) {
+  if (!lidar) return y;
+  const { x0, z0, cell, w, h, dm } = lidar.ground;
+  const u = (x - x0) / cell;
+  const v = (z - z0) / cell;
+  const inner = Math.min(u, v, w - 1 - u, h - 1 - v) * cell; // metres inside the patch
+  if (inner <= 0) return y;
+  const [i, j] = [Math.min(w - 2, Math.floor(u)), Math.min(h - 2, Math.floor(v))];
+  const [fu, fv] = [u - i, v - j];
+  const q = (a, b) => dm[b * w + a] / 10;
+  const top = (q(i, j) * (1 - fu) + q(i + 1, j) * fu) * (1 - fv) + (q(i, j + 1) * (1 - fu) + q(i + 1, j + 1) * fu) * fv;
+  const e = Math.min(1, d / 1.5);
+  const real = -0.4 + (top + 0.4) * e * e * (3 - 2 * e);
+  const t = Math.min(1, inner / EASE);
+  return y + (real - y) * t * t * (3 - 2 * t);
+}
+
+// Whether (x, z) is where lidar.js has the trees (they're planted from it there).
+function measuredTrees(lidar, x, z) {
+  if (!lidar) return false;
+  const { x0, z0, cell, w, h } = lidar.ground;
+  return x >= x0 && z >= z0 && x <= x0 + (w - 1) * cell && z <= z0 + (h - 1) * cell;
+}
+
+// The lidar's numbers belong to the Reading river, the one every real course
+// here is on (they share one map projection). Set on the river once.
+function lidarFor(course) {
+  const river = course.scenery?.river ?? course;
+  if (river.lidar === undefined) river.lidar = course.scenery ? LIDAR : null;
 }
 
 // Flat ground where the real ground is flat (a car park): each pad is a
@@ -449,6 +491,7 @@ function level(pads, x, z, y) {
 // starts): flat, though the bank rises behind the club. Set on the river once.
 function carPark(course) {
   const river = course.scenery?.river ?? course;
+  lidarFor(course);
   if (river.pads) return;
   river.pads = [];
   const f = course.scenery && landmarkFrame(course, 'rowing-club');
@@ -514,12 +557,34 @@ export function bankWoods(course, x, z, tx, tz) {
       for (let i = Math.max(0, Math.floor((at.s - 60) / step)); i <= Math.min(n - 1, Math.ceil((at.s + 60) / step)); i++) near[side][i]++;
     }
     river.woodsAlong = near.map((row) => Array.from(row, (c) => Math.max(0, 1 - c / 3)));
+    lidarFor(course);
+    measuredWoods(river, step);
   }
   const at = locate(river, x, z);
   const i = Math.max(0, Math.min(river.woodsAlong[0].length - 1, Math.round(at.s / 10)));
   const pair = [river.woodsAlong[0][i], river.woodsAlong[1][i]];
   // Facing down the river line (a route's leg going the other way), its left is your right.
   return at.tx * tx + at.tz * tz < 0 ? pair.reverse() : pair;
+}
+
+// Where lidar.js has the trees, how wooded a bank is comes from them instead:
+// the share of the bank 30 m either way that has a crown (of a tree over 6 m,
+// within 30 m of the water) over it, half covered counting as full.
+function measuredWoods(river, step) {
+  const trees = (river.lidar?.trees ?? []).filter(([, , h]) => h > 6).map(([x, z, h]) => {
+    const at = locate(river, x, z);
+    return { s: at.s, side: at.lateral < 0 ? 0 : 1, d: Math.abs(at.lateral) - widthAt(river, at.s).half, r: h * 0.34 };
+  }).filter((t) => t.d < 30);
+  river.woodsAlong.forEach((row, side) => {
+    for (let i = 0; i < row.length; i++) {
+      const c = pointAt(river, i * step);
+      const w = widthAt(river, i * step).half + 5;
+      if (!measuredTrees(river.lidar, c.x - c.tz * (side ? 1 : -1) * w, c.z + c.tx * (side ? 1 : -1) * w)) continue;
+      let covered = 0;
+      for (let k = -15; k <= 15; k++) covered += trees.some((t) => t.side === side && Math.abs(t.s - (i * step + k * 2)) < t.r) ? 1 : 0;
+      row[i] = Math.min(1, (2 * covered) / 31);
+    }
+  });
 }
 
 export function groundAt(course, x, z) {
@@ -691,10 +756,12 @@ function realScenery(m, course, real, rand) {
     for (let d = -b.length / 2; d <= b.length / 2; d += 3) clearings.push([origin[0] + fwd[0] * d, origin[2] + fwd[1] * d, 5]);
   }
   const cleared = (x, z) => clearings.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r);
+  // (Where lidar.js has the trees, the made-up ones are drawn nowhere, their
+  // draws kept, and the measured ones planted after, with draws of their own.)
   const plant = (x, z, willow, hidden = false) => {
     const g = ground(course, x, z);
     if (g.d < 1.5 || built(x, z)) return;
-    const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) ? nowhere : m;
+    const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) || measuredTrees(course.lidar, x, z) ? nowhere : m;
     if (willow) willowTree(into, x, g.y, z, rand);
     else tree(into, x, g.y, z, rand, true, fromRiver(course, x, z) > FAR_TREE);
   };
@@ -734,6 +801,13 @@ function realScenery(m, course, real, rand) {
     }
   }
   for (const [x, z] of real.trees) plant(x, z, false);
+  const measuredRand = mulberry32(7);
+  for (const [x, z, h] of course.lidar?.trees ?? []) {
+    const g = ground(course, x, z);
+    if (onPath(x, z, 4.5) || cleared(x, z)) continue;
+    const d = fromRiver(course, x, z);
+    tree(m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
+  }
 
   for (const b of real.buildings) building(m, course, b, rand);
   for (const w of real.walls ?? []) embankment(m, course, w, rand);
@@ -898,6 +972,9 @@ function building(m, course, b, rand) {
   const g = ground(course, cx, cz);
   if (g.d < 0) return; // on an island or a pontoon the river line doesn't know about
   if (LANDMARKS[b.style]) return LANDMARKS[b.style](m, course, landmarkFacing(course, b.style, ring, cx, cz, g));
+  // Its measured height (lidar.js), where it was measured.
+  const measuredHeight = course.lidar?.buildings.find(([x, z]) => Math.abs(x - cx) < 0.1 && Math.abs(z - cz) < 0.1);
+  if (measuredHeight) b = { ...b, height: measuredHeight[2] };
   const y0 = g.y - 1;
   const top = g.y + b.height;
   const clap = b.style === 'clapboard';
@@ -922,7 +999,8 @@ function building(m, course, b, rand) {
   // (Only within 80 m: further back they're a few pixels behind the bank's trees.)
   if (fromRiver(course, cx, cz) < 80 && b.kind !== 'boathouse') {
     let count = 0;
-    for (let i = 0; i < ring.length && count < 60; i++) {
+    const most = Math.max(60, 30 * Math.ceil(b.height / 3)); // (a tall block's floors don't use them all up on one wall)
+    for (let i = 0; i < ring.length && count < most; i++) {
       const [ax, az] = ring[i];
       const [bx, bz] = ring[(i + 1) % ring.length];
       const len = Math.hypot(bx - ax, bz - az);
@@ -946,7 +1024,8 @@ function building(m, course, b, rand) {
   if (b.kind === 'boathouse' && fromRiver(course, cx, cz) < 45) pontoon(m, course, river, Math.min(30, Math.max(15, Math.sqrt(area(ring)) * 2)));
   if (clap && fromRiver(course, cx, cz) < 80) clapboardFront(m, course, facing(course, ring, cx, cz, g), b.height);
   const pitched = b.kind === 'house' || b.kind === 'boathouse';
-  const roof = clap ? CLAP.roof : pitched ? ROOFS[Math.floor(rand() * ROOFS.length)] : COLORS.coping;
+  // (A measured block of four floors or more: a dark roof, as the hotel by Caversham Bridge has.)
+  const roof = clap ? CLAP.roof : pitched ? ROOFS[Math.floor(rand() * ROOFS.length)] : measuredHeight && b.height >= 12 ? ROOFS[1] : COLORS.coping;
   const peak = [cx, top + (pitched ? Math.min(4, 1.5 + Math.sqrt(area(ring)) * 0.18) : 0), cz];
   for (let i = 0; i < ring.length; i++) {
     const [ax, az] = ring[i];
@@ -1002,6 +1081,7 @@ const xz = (p) => [p[0], p[2]];
 export function landmarkFrame(course, style) {
   const river = course.scenery?.river ?? course;
   river.land ??= waterMap(course.scenery?.water ?? []);
+  lidarFor(course);
   const b = course.scenery?.buildings?.find((x) => x.style === style);
   if (!b) return null;
   const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
