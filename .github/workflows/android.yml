@@ -50,6 +50,10 @@ jobs:
       # Release declares exactly releasePermissions (app/build.gradle.kts).
       - name: Release permissions
         run: ./gradlew --no-configuration-cache :app:checkReleasePermissions
+      # minSdk is 29: lint catches a newer Android API called without a version
+      # check (#940 was a crash at Start on Android 10 and 11 that only lint saw).
+      - name: Lint
+        run: ./gradlew --no-configuration-cache :app:lintDebug
       - name: Debug APK
         run: ./gradlew --no-configuration-cache :app:assembleDebug
       - uses: actions/upload-artifact@v7
