@@ -196,6 +196,9 @@ describe('the committed surveys', () => {
     ['survey-2026-11-08-KA-016-001', [[51.4006859, -1.1310837],  [51.4007777, -1.129757]]],
     ['survey-2026-11-08-low-bridge-padworth', [[51.40244, -1.12628],  [51.40281, -1.12595]]],
     ['survey-2026-11-08-low-bridge-sulhamstead', [[51.42308, -1.08974],  [51.42327, -1.08915]]],
+    ['survey-2026-11-15-caversham', [[51.4605947, -0.9646497], [51.4607843, -0.9634466]]],
+    ['survey-2026-11-15-sonning', [[51.4725272, -0.9185446], [51.4732383, -0.9174694]]],
+    ['survey-2026-11-15-shiplake', [[51.5015658, -0.8835207], [51.5013125, -0.8829408]]],
   ] as [string, [LatLng, LatLng]][])('%s keeps its landings as recorded', (id, landings) => {
     expect(surveyPortages.find(p => p.id === id)!.landings).toEqual(landings)
   })
@@ -216,5 +219,14 @@ describe('the committed surveys', () => {
     const upstream = portageOnRoute([...r.line].reverse(), surveyPortages.find(p => p.featureId!.endsWith(id))!)
     const flip = (b: string) => (b === 'left' ? 'right' : 'left')
     expect([upstream.takeOut.bank, upstream.putIn.bank]).toEqual([flip(back), flip(out)])
+  })
+
+  it.each([
+    ['caversham', 'right', 'right'], ['sonning', 'right', 'right'], ['shiplake', 'right', 'right'],
+  ])('Thames, %s: Plan puts the take-out on the %s and the put-in on the %s, going downstream', (id, out, back) => {
+    const r = routePlan(ds, { start: [51.4677, -0.9818], finish: [51.5605, -0.8852], shape: 'one_way' })
+    if (typeof r === 'string') throw new Error(r)
+    const onRoute = portageOnRoute(r.line, surveyPortages.find(p => p.featureId === `ea-lock:${id}`)!)
+    expect([onRoute.takeOut.bank, onRoute.putIn.bank]).toEqual([out, back])
   })
 })
