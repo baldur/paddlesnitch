@@ -25,6 +25,7 @@
     "course:build": "tsx scripts/courses/build.ts",
     "course:route": "tsx scripts/courses/route.ts",
     "course:compare": "tsx scripts/courses/compare.ts",
+    "course:sheds": "tsx scripts/courses/sheds.ts",
     "course:look": "tsx scripts/courses/look.ts",
     "course:explore": "tsx scripts/courses/explore.ts",
     "course:lidar": "tsx scripts/courses/lidar.ts",
