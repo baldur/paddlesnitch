@@ -84,14 +84,21 @@ const ROOFS = [[0.32, 0.2, 0.17], [0.28, 0.28, 0.3], [0.45, 0.25, 0.18]];
 // only the material is taken, with its light or dark shade from the model's
 // colour; the colours are measured from sunlit walls in the frames (a sunlit
 // wall renders at about its own colour). A roof only where two views agreed.
-const MATERIAL_WALLS = {
-  brick: [[0.8, 0.55, 0.42], [0.66, 0.42, 0.32]],
+// Light brick is buff (the model's light answers for brick were sand and tan: the
+// flats below Christchurch Bridge), dark is red; light timber a cooler white than render.
+export const MATERIAL_WALLS = {
+  brick: [[0.8, 0.72, 0.56], [0.66, 0.42, 0.32]],
   render: [[0.92, 0.9, 0.85], [0.72, 0.7, 0.66]],
-  timber: [[0.88, 0.88, 0.84], [0.36, 0.3, 0.25]],
+  timber: [[0.84, 0.86, 0.86], [0.36, 0.3, 0.25]],
   stone: [[0.82, 0.78, 0.68], [0.6, 0.57, 0.52]],
 };
-const MATERIAL_ROOFS = { tile: [0.45, 0.25, 0.18], slate: [0.28, 0.28, 0.3], metal: [0.5, 0.52, 0.54] };
-const materialAt = new Map(MATERIALS.map(([x, z, ...rest]) => [`${x.toFixed(1)},${z.toFixed(1)}`, rest]));
+export const MATERIAL_ROOFS = { tile: [0.45, 0.25, 0.18], slate: [0.28, 0.28, 0.3], metal: [0.5, 0.52, 0.54] };
+let materialAt;
+// (Tests swap the rows, to show that nothing but those buildings' colours depends on them.)
+export function useMaterials(rows) {
+  materialAt = new Map(rows.map(([x, z, ...rest]) => [`${x.toFixed(1)},${z.toFixed(1)}`, rest]));
+}
+useMaterials(MATERIALS);
 // Light or dark, from the model's colour (its colour names do tell white from brown).
 const light = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2] > 0.5; };
 export function buildingMaterial(cx, cz) {
@@ -99,7 +106,12 @@ export function buildingMaterial(cx, cz) {
   if (!m) return null;
   const [wallColour, wall, roofColour, roof] = m;
   const shades = MATERIAL_WALLS[wall];
-  return { wall: shades ? shades[light(wallColour) ? 0 : 1] : null, roof: MATERIAL_ROOFS[roof] ?? null };
+  // A little lighter or darker, warmer or cooler, building by building (from where it stands,
+  // not a random draw), so a row of rendered houses isn't one stamped white.
+  const h = (k) => { const v = Math.sin(cx * 12.9898 + cz * 78.233 + k) * 43758.5453; return v - Math.floor(v) - 0.5; };
+  const [lift, warm] = [1 + h(0) * 0.08, h(1) * 0.04];
+  const color = shades?.[light(wallColour) ? 0 : 1].map((v, i) => Math.min(1, v * lift + (i === 0 ? warm : i === 2 ? -warm : 0)));
+  return { wall: color ?? null, roof: MATERIAL_ROOFS[roof] ?? null };
 }
 
 // `parts`: 'river' is the river and its scenery alone, 'course' what this

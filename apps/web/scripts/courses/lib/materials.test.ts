@@ -39,6 +39,9 @@ describe('combine', () => {
     expect(combine([seen('brick', '#804020', 'tile', '#602010'), seen('brick', '#a06040', 'tile', '#402010')]))
       .toMatchObject({ roof: 'tile', roofColour: '#402010' })
     expect(combine([seen('brick', '#804020', 'tile', '#602010'), seen('brick', '#a06040', 'metal', '#ffffff')])).toMatchObject({ roof: null, roofColour: null })
+    // Two of three agree: theirs, with its colour from those two only.
+    expect(combine([seen('brick', '#804020', 'tile', '#602010'), seen('brick', '#a06040', 'metal', '#ffffff'), seen('brick', '#a06040', 'tile', '#402010')]))
+      .toMatchObject({ roof: 'tile', roofColour: '#402010' })
   })
 })
 
