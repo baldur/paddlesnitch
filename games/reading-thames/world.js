@@ -3045,7 +3045,7 @@ function weirSill(m, line) {
 // at it a little (`TILT`), lit as the mesh shader lights it, clear where
 // there's nothing (the sky shows round a gable, through railings).
 // Returns { facades: [{ name, p, u, v, row }], width, height, pixels } or null.
-export const FACADE = { w: 128, h: 64, tilt: 0.26 };
+export const FACADE = { w: 256, h: 64, tilt: 0.26 };
 export function mirrorFacades(course, sun, sky) {
   const real = course.scenery;
   if (!real) return null;
@@ -3073,21 +3073,15 @@ export function mirrorFacades(course, sun, sky) {
     const box = bounds(tris, [cx, 0, cz], f.right, f.fwd);
     out.push({ name: b.style, ...facade(tris, [cx, 0, cz], f.right, f.fwd, [box.x[0], box.x[1]], [0, box.y[1]], f.depth[1], sun, sky) });
   }
+  // Caversham Bridge only: Christchurch's deck is a thin line 6 m up, which the
+  // ripples bent into a black snake across the water (design review).
   for (const b of river.bridges ?? []) {
-    if (typeof b === 'number' || !b.style) continue;
+    if (b?.style !== 'concrete-arch') continue;
     const m = new MeshBuilder();
-    let origin, right, fwd;
-    const piers = [];
-    if (b.style === 'concrete-arch') {
-      concreteBridge(m, river, b);
-      ({ origin, right, fwd } = bridgeFrame(river, b));
-      // The piers' faces either side of each arch, under the deck.
-      for (const [a, z] of bridgeArches(river, b).arches) piers.push([a - 1, 1], [z + 1, -1]);
-    } else {
-      cableStayedBridge(m, river, b);
-      const c = pointAt(river, b.s);
-      [origin, right, fwd] = [[c.x, 0, c.z], [-c.tz, c.tx], [c.tx, c.tz]];
-    }
+    concreteBridge(m, river, b);
+    const { origin, right, fwd } = bridgeFrame(river, b);
+    // The piers' faces either side of each arch, under the deck.
+    const piers = bridgeArches(river, b).arches.flatMap(([a, z]) => [[a - 1, 1], [z + 1, -1]]);
     const tris = m.build().vertices;
     const box = bounds(tris, origin, right, fwd);
     // Its two sides, each seen from its own side of the bridge.
@@ -3160,7 +3154,7 @@ function ceiling(tris, origin, right, fwd, box, y, sun, sky) {
   const u = [right[0] * (box.x[1] - box.x[0]), 0, right[1] * (box.x[1] - box.x[0])];
   const v = [fwd[0] * (box.z[1] - box.z[0]), 0, fwd[1] * (box.z[1] - box.z[0])];
   const view = [0, -1, 0];
-  return orient({ p, u, v, pixels: bake(tris, p, u, v, view, sun, sky).pixels }, view);
+  return orient({ p, u, v, pixels: bake(tris, p, u, v, view, sun, sky, false).pixels }, view);
 }
 
 const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -3193,7 +3187,7 @@ function lit(color, n, sun, sky) {
 // rectangle's plane, the one nearest the eye kept, texel by texel. Row 0 is
 // the bottom (b = 0). Clear where nothing is. `middle`: how far in front of
 // the rectangle (along view) most of what's seen is.
-function bake(tris, p, u, v, view, sun, sky) {
+function bake(tris, p, u, v, view, sun, sky, walls = true) {
   const { w, h } = FACADE;
   const pixels = new Uint8Array(w * h * 4);
   const near = new Float32Array(w * h).fill(-Infinity);
@@ -3213,6 +3207,9 @@ function bake(tris, p, u, v, view, sun, sky) {
     const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
     if (Math.abs(area) < 1e-9) continue;
     let normal = [tris[i + 3], tris[i + 4], tris[i + 5]];
+    // From the water you look up at a building: its walls, never the tops of its
+    // roofs, quays and paths (seen from below they made thick dark bands).
+    if (walls && Math.abs(normal[1]) > 0.6) continue;
     if (dot3(normal, view) < 0) normal = normal.map((x) => -x); // the side the eye sees
     const flat = dot3(normal, view) > 0.9 ? 1 : 0;
     const col = lit([tris[i + 6], tris[i + 7], tris[i + 8]], normal, sun, sky).map((x) => Math.round(Math.min(1, x) * 255));

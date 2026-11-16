@@ -723,9 +723,9 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
     const only = nearFacades({ ...m, facades: [f] }, behind[0], behind[2]);
     assert.equal(seen(behind, unit([fr.fwd[0], 0.15, fr.fwd[1]]), only, m).slot, null, `${style} from behind`);
   }
-  for (const name of ['Caversham Bridge', 'Christchurch Bridge']) {
-    for (const part of ['side', 'underside']) assert.ok(m.facades.some((f) => f.name === `${name} ${part}`), `${name} ${part}`);
-  }
+  for (const part of ['side', 'underside']) assert.ok(m.facades.some((f) => f.name === `Caversham Bridge ${part}`), part);
+  // Not Christchurch Bridge: its thin deck high over the water bent into a black snake in the ripples.
+  assert.ok(!m.facades.some((f) => f.name.startsWith('Christchurch')), 'no Christchurch Bridge');
   assert.equal(m.facades.filter((f) => f.name === 'Caversham Bridge side').length, 2, 'both its sides');
   assert.ok(m.facades.some((f) => f.name === 'Caversham Bridge pier'), 'its piers');
   assert.equal(m.height, FACADE.h * m.facades.length);

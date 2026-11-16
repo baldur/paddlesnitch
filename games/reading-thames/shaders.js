@@ -329,7 +329,7 @@ fn facades(o: vec3f, d: vec3f) -> vec4f {
   let still = reflect(-v, normalize(vec3f(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
   let tl = treeline(p, still, in.woods);
   let fa = facades(vec3f(p.x, 0.0, p.y), still);
-  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
+  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb * fa.a; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it (not the sky: there it shows its dark depths).
   var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * max(tl.x, fa.a), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
