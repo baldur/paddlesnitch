@@ -225,6 +225,13 @@ test("both renderers light the world and mirror the banks the same way (fill lig
   for (const n of ['fill', 'calm', 'dx', 'dz', 'r', 'still', 'tl', 'fa', 'sky', 'c', 'c +']) assert.ok(gpu.some((l) => l.startsWith(`${n} =`) || l.startsWith(`${n}=`)), `WebGPU has its ${n} line`);
   // The sun's glint is kept off where a bridge or a building is mirrored.
   assert.ok(gpu.some((l) => l.startsWith('c +=') && l.endsWith('* (1.0 - fa.a);')), 'no glint under a bridge');
+  // The facades' texture is premultiplied (clear texels are black): added as it is, not mixed by its alpha again
+  // (a plain mix drew a dark rim round every reflection).
+  assert.ok(gpu.some((l) => /^sky = .* \* \(1\.0 - fa\.a\) \+ fa\.rgb;/.test(l)), 'premultiplied');
+  for (const f of ['shaders.js', 'shaders-gl.js']) {
+    // Each picture's ends fade out (a hard end read as a picture pasted on the water).
+    assert.match(await read(f), /\* smoothstep\(0\.0, 0\.04, min\(best\.x, 1\.0 - best\.x\)\);/, `${f}: faded ends`);
+  }
   assert.deepEqual(gl, gpu);
 });
 

@@ -300,7 +300,8 @@ vec4 facades(vec3 o, vec3 d) {
   best = facadeHit(o, d, frame.facades[12], frame.facades[13], frame.facades[14], best);
   best = facadeHit(o, d, frame.facades[15], frame.facades[16], frame.facades[17], best);
   if (best.w > 1e8) { return vec4(0.0); }
-  return textureLod(facadeTex, best.xy, 0.0);
+  // (Its ends fade out: hard ends read as a picture pasted on the water.)
+  return textureLod(facadeTex, best.xy, 0.0) * smoothstep(0.0, 0.04, min(best.x, 1.0 - best.x));
 }
 
 void main() {
@@ -332,7 +333,7 @@ void main() {
   vec3 still = reflect(-v, normalize(vec3(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
   vec2 tl = treeline(p, still, vWoods);
   vec4 fa = facades(vec3(p.x, 0.0, p.y), still);
-  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb * fa.a; // (premultiplied: the clear texels round a picture are black)
+  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it (not the sky: there it shows its dark depths).
   vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * max(tl.x, fa.a), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
