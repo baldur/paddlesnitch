@@ -11,6 +11,8 @@ describe('clampScore', () => {
     expect(clampScore(0)).toBeNull()
     expect(clampScore(6)).toBeNull()
     expect(clampScore('nope')).toBeNull()
+    expect(clampScore(true)).toBeNull()
+    expect(clampScore([4])).toBeNull()
   })
 })
 
@@ -32,6 +34,10 @@ describe('parseScoreAnswer', () => {
   it('falls back to the score when the object is not clean JSON', () => {
     const r = parseScoreAnswer('the score is "score": 2, differences were minor noise')
     expect(r.score).toBe(2)
+  })
+  it('keeps each difference whole in the fallback, commas and all', () => {
+    const r = parseScoreAnswer('"score": 3, "differences": ["a, b", "c", "d"] and then it rambled {')
+    expect(r.differences).toEqual(['a, b', 'c', 'd'])
   })
   it('throws when there is no usable 1-5 score', () => {
     expect(() => parseScoreAnswer('I cannot tell, the images are unclear')).toThrow()

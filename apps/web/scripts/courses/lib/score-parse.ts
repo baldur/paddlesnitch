@@ -6,6 +6,7 @@ export type ViewScore = { score: number; differences: string[] }
 
 /** A score clamped to the rubric's 1..5, or null when the text has none. */
 export function clampScore(raw: unknown): number | null {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return null
   const n = Math.round(Number(raw))
   if (!Number.isInteger(n) || n < 1 || n > 5) return null
   return n
@@ -41,11 +42,13 @@ export function parseScoreAnswer(text: string): ViewScore {
   const score = m ? clampScore(m[1]) : null
   if (score === null) throw new Error(`no 1-5 score in the answer: ${text.slice(0, 120)}`)
   const diff = candidate.match(/"differences"\s*:\s*\[([\s\S]*?)\]/i)
-  const differences = diff
-    ? diff[1]
-        .split(',')
-        .map((d) => d.replace(/^["']|["']$/g, '').trim())
-        .filter(Boolean)
-    : []
+  let differences: string[] = []
+  if (diff) {
+    try {
+      differences = (JSON.parse(`[${diff[1]}]`) as unknown[]).map((d) => String(d).trim()).filter(Boolean)
+    } catch {
+      differences = diff[1].split(',').map((d) => d.trim().replace(/^["']|["']$/g, '').trim()).filter(Boolean)
+    }
+  }
   return { score, differences }
 }

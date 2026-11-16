@@ -7,7 +7,7 @@
 //
 // Generates one-at-a-time mutants of the file, runs the test command for each
 // (with a per-mutant timeout), and restores the file exactly (in finally, so it
-// is left untouched even on crash — verified with `git diff --quiet -- <file>`).
+// is left untouched even on crash; a copy is kept beside it until the end).
 //
 // Mutant types (one per occurrence, one occurrence applied at a time):
 //   < <-> <=,  > <-> >=,  === <-> !==,  + <-> -,  && <-> ||,
@@ -17,8 +17,8 @@
 // Prints JSON to stdout: { file, total, killed, survived: [{line, from, to, op}] }.
 // Progress + a breakdown by op go to stderr. A hang/timeout counts as killed.
 
-import { spawn, execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const cwd = process.cwd()
@@ -33,6 +33,10 @@ if (args[0] === '--list') {
   for (const m of mutants) byOp[m.op] = (byOp[m.op] || 0) + 1
   process.stdout.write(JSON.stringify({ file, total: mutants.length, byOp }, null, 2) + '\n')
   process.exit(0)
+}
+if (!args[0] || !args[1]) {
+  process.stderr.write('usage: mutate.mjs <source file> "<test command>" [timeoutMs] [limit]\n')
+  process.exit(2)
 }
 const file = resolve(args[0])
 const testCmd = args[1]
@@ -59,6 +63,9 @@ function restore() {
 process.on('exit', restore)
 process.on('SIGINT', () => { restore(); process.exit(130) })
 process.on('SIGTERM', () => { restore(); process.exit(143) })
+process.on('SIGHUP', () => { restore(); process.exit(129) })
+// A SIGKILL can't be caught: keep a copy beside the file while mutants run.
+const backup = file + '.mutate-backup'
 
 // ---- run the test command for the current on-disk file -------------------
 function runTest() {
@@ -149,12 +156,13 @@ function buildMutants(src, file) {
     // runtime values, so leave them alone — mutating them is an equivalent mutant.
     const skipNums = /\|\s*-?\d/.test(code)
 
-    // === comparison operators, both directions, context-guarded so we don't
-    // === touch generics (Array<..>, T<X>) or arrow => -----------------------
-    for (const v of eachMatch(code, /</g, () => '<=')) emit(v, '< -> <=')
-    for (const v of eachMatch(code, />/g, () => '>=')) emit(v, '> -> >=')
-    for (const v of eachMatch(code, /<=/g, () => '<')) emit(v, '<= -> <')
-    for (const v of eachMatch(code, />=/g, () => '>')) emit(v, '>= -> >')
+    // === comparison operators, both directions. Only space-delimited ones, so
+    // === generics (Array<number>), arrows (=>) and <= / >= themselves are never
+    // === turned into a syntax error that would count as a kill. -------------
+    for (const v of eachMatch(code, /(?<= )<(?= )/g, () => '<=')) emit(v, '< -> <=')
+    for (const v of eachMatch(code, /(?<= )>(?= )/g, () => '>=')) emit(v, '> -> >=')
+    for (const v of eachMatch(code, /(?<= )<=(?= )/g, () => '<')) emit(v, '<= -> <')
+    for (const v of eachMatch(code, /(?<= )>=(?= )/g, () => '>')) emit(v, '>= -> >')
 
     // === === <-> !== -------------------------------------------------------
     for (const v of eachMatch(code, /===/g, () => '!==')) emit(v, '=== -> !==')
@@ -200,6 +208,14 @@ function buildMutants(src, file) {
 
 // ---- drive --------------------------------------------------------------
 async function main() {
+  // The suite must pass on the unmutated file, or every mutant looks "killed"
+  // (a wrong command, an already-red suite or a timeout all exit non-zero).
+  const baseline = await runTest()
+  if (baseline !== 0) {
+    process.stderr.write(`the test command fails on the unmutated file (exit ${baseline}); fix it first\n`)
+    process.exit(3)
+  }
+  writeFileSync(backup, original)
   let mutants = buildMutants(original, file)
   if (limit !== Infinity) mutants = mutants.slice(0, limit)
   process.stderr.write(`mutants: ${mutants.length}${limit !== Infinity ? ` (of ${buildMutants(original, file).length}, limit ${limit})` : ''}\n`)
@@ -226,18 +242,12 @@ async function main() {
       process.stderr.write(`  ${k + 1}/${mutants.length} killed=${killed} survived=${survived.length}\n`)
     }
   }
-  // verify the file is exactly as we found it
-  let clean = true
-  try {
-    execFileSync('git', ['diff', '--quiet', '--', file], { cwd, stdio: 'ignore' })
-  } catch {
-    clean = false
-    restore()
-    try {
-      execFileSync('git', ['diff', '--quiet', '--', file], { cwd, stdio: 'ignore' })
-    } catch { clean = false }
-  }
-  process.stderr.write(clean ? 'file restored cleanly\n' : 'WARNING: file not restored cleanly\n')
+  // The file must be exactly as we found it.
+  restored = false
+  restore()
+  const clean = readFileSync(file, 'utf8') === original
+  if (clean) unlinkSync(backup)
+  process.stderr.write(clean ? 'file restored cleanly\n' : `WARNING: file not restored; the original is in ${backup}\n`)
   const result = {
     file,
     total: mutants.length,

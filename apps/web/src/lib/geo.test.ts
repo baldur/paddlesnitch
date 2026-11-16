@@ -445,6 +445,14 @@ describe('allPasses', () => {
     for (const p of passes) expect(p.startMs).toBeLessThan(p.finishMs)
   })
 
+  it('keeps only the passes whose crossings go the required way', () => {
+    // Unfiltered there are 2; a southbound start and finish are required here,
+    // and no southbound start is followed by a southbound finish.
+    expect(allPasses(twoLaps, startLine, finishLine).length).toBe(2)
+    expect(allPasses(twoLaps, startLine, finishLine, -1, -1)).toEqual([])
+    expect(allPasses(twoLaps, startLine, finishLine, -1).length).toBe(1)
+  })
+
   it('returns an empty list when the finish line is never crossed', () => {
     expect(allPasses([pt(0.000, 0, 0), pt(0.002, 0, 10_000)], startLine, finishLine)).toEqual([])
   })
@@ -455,11 +463,6 @@ describe('allPasses', () => {
     expect(allPasses(track, startLine, finishLine, 1, 1)).toEqual([])
   })
 
-  it('drops a start whose direction does not match startSign', () => {
-    // Only a southbound crossing of the start line; startSign=+1 must drop it.
-    const track = [pt(0.006, 0.000, 0), pt(0.000, 0.000, 10_000)]
-    expect(allPasses(track, startLine, finishLine, 1)).toEqual([])
-  })
 })
 
 // --- crossingSignNear ---------------------------------------------------
@@ -513,11 +516,9 @@ describe('processTrace — 500 m splits', () => {
     expect(result!.splits.length).toBe(2)
     expect(result!.splits[0].distance).toBe(500)
     expect(result!.splits[1].distance).toBe(1000)
-    // ~0.5 s from start to the 500 m mark, ~3.0 s more to the 1000 m mark.
-    expect(result!.splits[0].elapsedSeconds).toBeGreaterThan(1)
-    expect(result!.splits[0].elapsedSeconds).toBeLessThan(3)
-    expect(result!.splits[1].elapsedSeconds).toBeGreaterThan(3)
-    expect(result!.splits[1].elapsedSeconds).toBeLessThan(5)
+        // Timed from the start crossing (0.5 s in), not from the first point.
+    expect(result!.splits[0].elapsedSeconds).toBeCloseTo(2.25, 1)
+    expect(result!.splits[1].elapsedSeconds).toBeCloseTo(4.5, 1)
   })
 
   it('emits no split when the run is shorter than the 500 m step', () => {
@@ -542,11 +543,7 @@ describe('projectRoute', () => {
   })
 
   it('emits one rounded [x,y] pair per point', () => {
-    const out = projectRoute([{ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 }], 100, 100, 10)
-    expect(out.length).toBe(2)
-    for (const [x, y] of out) {
-      expect(x).toBe(Math.round(x * 10) / 10)
-      expect(y).toBe(Math.round(y * 10) / 10)
-    }
+    const out = projectRoute([{ lat: 0, lng: 0 }, { lat: 0.003, lng: 0.007 }, { lat: 0.01, lng: 0.001 }], 100, 100, 7)
+    expect(out).toEqual([[19.9, 93], [80.1, 67.2], [28.5, 7]])
   })
 })

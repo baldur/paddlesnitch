@@ -283,7 +283,7 @@ test('sweep: summary', async () => {
   let rawTotal = 0
   let productTotal = 0
   let pagesBlocked = 0
-  let loadFailures: string[] = []
+  const loadFailures: string[] = []
   // Group the overlay-crashed pages by their runtime crash. The recurring
   // night-shift blocker is ONE shared crash (e.g. a casing collision in a shared
   // package) that hits every page, so the summary should say "N pages down on the
