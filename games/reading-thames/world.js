@@ -1781,7 +1781,7 @@ function canoeClub(m, course, f) {
 // roof down to that floor, white bargeboards; white spiral stairs at both
 // ends, a flagpole by each, a grey pontoon in front, and the wooded hill behind.
 export const SPIRAL = {
-  brick: [0.55, 0.3, 0.23], timber: [0.27, 0.19, 0.15], roof: [0.2, 0.2, 0.22], glass: [0.5, 0.58, 0.62], glazing: [0.22, 0.27, 0.3],
+  brick: [0.55, 0.3, 0.23], timber: [0.27, 0.19, 0.15], roof: [0.2, 0.2, 0.22], glass: [0.68, 0.75, 0.78], glazing: [0.22, 0.27, 0.3],
   pontoon: [0.55, 0.56, 0.56],
 };
 function spiralBoathouse(m, course, f) {
@@ -1833,19 +1833,21 @@ function spiralBoathouse(m, course, f) {
   f.box(m, [-0.88, 0.88], [eave + 0.42, eave + 1.78], [front - 1.1, front - 1.04], C.glazing);
   // White spiral stairs at both ends, from the dock up to the first floor, and a flagpole by each.
   for (const e of [-1, 1]) {
-    const c = [e * (half + 1.1), front - 0.9];
-    m.cylinder(f.at(c[0], sea, c[1]), 0.08, f1 + 0.4 - sea, 5, COLORS.white);
+    // (Big and bright from the water, the footage's mark of the place: 1.3 m round.)
+    const c = [e * (half + 1.4), front - 1];
+    m.cylinder(f.at(c[0], sea, c[1]), 0.13, f1 + 1.2 - sea, 6, COLORS.white);
     let last = null;
     for (let k = 0; k < 12; k++) {
       const a = k * 0.6 * e;
       const y = sea + 0.3 + (k * (f1 - sea)) / 12;
-      const tip = [c[0] + Math.cos(a) * 0.95, c[1] + Math.sin(a) * 0.95];
-      beam(m, f.at(c[0], y, c[1]), f.at(tip[0], y, tip[1]), 0.16, COLORS.white);
-      const rail = f.at(tip[0], y + 0.9, tip[1]);
-      if (last) beam(m, last, rail, 0.03, COLORS.white);
+      const tip = [c[0] + Math.cos(a) * 1.3, c[1] + Math.sin(a) * 1.3];
+      beam(m, f.at(c[0], y, c[1]), f.at(tip[0], y, tip[1]), 0.22, COLORS.white);
+      const rail = f.at(tip[0], y + 1, tip[1]);
+      if (last) beam(m, last, rail, 0.05, COLORS.white);
+      beam(m, f.at(tip[0], y, tip[1]), rail, 0.03, COLORS.white);
       last = rail;
     }
-    m.cylinder(f.at(e * (half + 2.4), sea + 0.5, front - 1.6), 0.05, ridgeY + 1 - sea, 4, COLORS.white);
+    m.cylinder(f.at(e * (half + 3.1), sea + 0.5, front - 2.4), 0.05, ridgeY + 1 - sea, 4, COLORS.white);
   }
   // The pontoon in front, and the wooded hill behind it (the footage's wall of trees).
   f.box(m, [-half - 1, half + 1], [sea - 0.2, sea + 0.25], [front + 1.6, front + 3.4], C.pontoon);
@@ -1976,12 +1978,12 @@ function riversideVilla(m, course, f) {
 // A half-timbered boathouse on the Caversham bank (1.7 km), as the footage and
 // the lidar show it: a narrow one, about 7.6 m across and 7.8 m to its ridge
 // over the water, its gable end standing in the river. Below, white render and
-// a pair of tall grey panelled boat doors onto the water; above, a balcony
+// a pair of tall near-black panelled boat doors onto the water; above, a balcony
 // with a dark rail, white French doors, and the gable black-and-white, white
 // bargeboards; a steep dark roof. A brick-faced lawn upstream, a stone quay
 // downstream, and big trees behind, a purple-leaved one among them.
 export const TUDOR = {
-  render: [0.93, 0.92, 0.88], timber: [0.1, 0.09, 0.09], roof: [0.24, 0.22, 0.22], doors: [0.5, 0.51, 0.49], panel: [0.36, 0.37, 0.36],
+  render: [0.93, 0.92, 0.88], timber: [0.1, 0.09, 0.09], roof: [0.24, 0.22, 0.22], doors: [0.2, 0.2, 0.19], panel: [0.34, 0.34, 0.33],
   rail: [0.14, 0.13, 0.13], brick: [0.56, 0.32, 0.25], stone: [0.66, 0.63, 0.56], purple: [[0.32, 0.18, 0.2], [0.38, 0.22, 0.23], [0.27, 0.15, 0.17]],
 };
 function tudorBoathouse(m, course, f) {
@@ -2050,11 +2052,11 @@ function tudorBoathouse(m, course, f) {
 // balcony that runs the width of the front. Above, white render, a striped
 // awning over the middle windows, a band of red brick under a wide bay window,
 // and a big gable to the river with white bargeboards and dark timbers in its
-// peak, a red-tiled roof and a brick chimney. At its upstream corner (on your
+// peak, a dark slate roof and a brick chimney. At its upstream corner (on your
 // left from the water) a round tower: white, a red brick band, an open
 // belvedere on white columns and a dark dome with a flagstaff on it.
 export const VICTORIAN = {
-  render: [0.92, 0.92, 0.9], brick: [0.6, 0.29, 0.22], pier: [0.9, 0.89, 0.86], tiles: [0.52, 0.27, 0.21], dome: [0.32, 0.33, 0.36],
+  render: [0.92, 0.92, 0.9], brick: [0.6, 0.29, 0.22], pier: [0.9, 0.89, 0.86], tiles: [0.3, 0.3, 0.33], dome: [0.45, 0.46, 0.48],
   timber: [0.25, 0.24, 0.24], awning: [0.45, 0.6, 0.72], window: [0.25, 0.3, 0.34],
 };
 function victorian(m, course, f) {
@@ -2207,11 +2209,11 @@ function islandBar(m, course, f) {
 // the middle a dark shed under a dark pitched roof, white sign boards along its
 // front and a pale grey roller door; upstream a long single-storey building
 // with a band of white-framed windows and three flagpoles before it (5-6 m).
-// A yard in front, and a quay of dark steel piling with a concrete top.
+// A yard in front, and a pale concrete quay wall.
 export const BOATYARD = {
   wall: [0.22, 0.23, 0.24], brick: [0.46, 0.28, 0.23], low: [0.33, 0.27, 0.25], roof: [0.29, 0.28, 0.28], window: [0.22, 0.26, 0.3],
-  door: [0.66, 0.67, 0.67], sign: [0.93, 0.93, 0.9], letters: [0.2, 0.22, 0.3], quay: [0.6, 0.58, 0.54], piling: [0.3, 0.29, 0.27], yard: [0.5, 0.49, 0.46],
-  flags: [[0.92, 0.92, 0.9], [0.8, 0.15, 0.15], [0.92, 0.92, 0.9]],
+  door: [0.66, 0.67, 0.67], sign: [0.93, 0.93, 0.9], letters: [0.2, 0.22, 0.3], quay: [0.72, 0.7, 0.66], piling: [0.62, 0.6, 0.56], yard: [0.5, 0.49, 0.46],
+  flags: [[0.92, 0.92, 0.9], [0.88, 0.88, 0.85], [0.92, 0.92, 0.9]],
 };
 function boatyard(m, course, f) {
   const C = BOATYARD;
@@ -2253,7 +2255,7 @@ function boatyard(m, course, f) {
     f.box(m, [x, x + 1.1], [6.1, 6.8], [front + 1.48, front + 1.52], C.flags[k]);
   });
   // The yard in front, sloping down to the quay (the lidar: about 1.2 m over
-  // the water at the edge), and the quay: dark steel piling, a concrete top.
+  // the water at the edge), and the quay: a pale concrete wall, its joints a shade darker.
   const quayTop = Math.min(0, sea + 1.2);
   const [x0, x1] = [a - 6, d + 10];
   const yard = [f.at(x0, 0.05, front), f.at(x1, 0.05, front), f.at(x1, quayTop, f.edge - 0.6), f.at(x0, quayTop, f.edge - 0.6)];
@@ -2388,13 +2390,13 @@ function clapboardFront(m, course, f, height) {
 // A modern flat-roofed house (owner's point, below the marina), as the footage
 // and the lidar show it: set back 17 m behind a big weeping willow (the
 // `willow` feature) and a lawn, low and dark. A ground floor clad in black
-// boards with big dark windows, a white upper floor set back over it with a
-// glass band (the lidar: 6-7 m), a flat roof with a dark edge; a white parasol
-// on the lawn, a big round tree upstream, and at the water a quay faced with
-// timber piling under a pale capping.
+// boards with big dark windows, an upper floor set back over it, black too,
+// with a glass band (the lidar: 6-7 m), a flat roof with a dark edge and a
+// glass rail round it; a white parasol on the lawn, a big round tree upstream,
+// and at the water a long pale concrete quay under timber plank coping.
 export const GLASS = {
-  clad: [0.15, 0.15, 0.16], seam: [0.1, 0.1, 0.11], glass: [0.2, 0.25, 0.29], render: [0.9, 0.9, 0.87], fascia: [0.2, 0.2, 0.21],
-  piling: [0.46, 0.4, 0.32], cap: [0.7, 0.67, 0.6], parasol: [0.93, 0.93, 0.9],
+  clad: [0.15, 0.15, 0.16], seam: [0.1, 0.1, 0.11], glass: [0.2, 0.25, 0.29], upper: [0.19, 0.19, 0.2], fascia: [0.24, 0.24, 0.25],
+  rail: [0.62, 0.7, 0.74], quay: [0.74, 0.72, 0.67], cap: [0.6, 0.52, 0.42], parasol: [0.93, 0.93, 0.9],
 };
 function glassHouse(m, course, f) {
   const C = GLASS;
@@ -2406,17 +2408,17 @@ function glassHouse(m, course, f) {
   for (let x = -half + 0.3; x < half; x += 0.6) f.box(m, [x, x + 0.04], [0, 3.1], [front, front + 0.06], C.seam);
   for (const [x0, x1] of [[-half + 1.5, -half + 6], [-3, 3.5], [5, half - 1.5]]) f.box(m, [x0, x1], [0.3, 2.7], [front, front + 0.1], C.glass);
   f.box(m, [-half - 0.3, half + 0.3], [3.1, 3.4], [back - 0.3, front + 0.3], C.fascia);
-  // The white upper floor, set back, its band of glass.
-  f.box(m, [-half + 3, half - 2], [3.4, 6.2], [back, front - 2], C.render);
-  f.box(m, [-half + 3.6, half - 2.6], [4.1, 5.5], [front - 2, front - 1.95], C.glass);
+  // The upper floor, set back, its band of glass, a glass rail round the roof.
+  f.box(m, [-half + 3, half - 2], [3.4, 6.2], [back, front - 2], C.upper);
+  f.box(m, [-half + 3.6, half - 2.6], [4.1, 5.5], [front - 2, front - 1.9], C.glass);
   f.box(m, [-half + 2.8, half - 1.8], [6.2, 6.5], [back - 0.2, front - 1.8], C.fascia);
-  // The lawn to the water, a parasol on it, and the quay: timber piling, a pale capping.
+  f.box(m, [-half + 2.8, half - 1.8], [6.5, 7.4], [front - 1.9, front - 1.82], C.rail);
+  // The lawn to the water, a parasol on it, and the quay: pale concrete, timber plank coping.
   const sea = -f.origin[1];
   f.box(m, [-half - 8, half + 8], [sea + 0.5, sea + 0.75], [front, f.edge - 0.5], COLORS.mown);
   m.cylinder(f.at(half - 3, sea + 0.75, front + 4), 0.04, 2, 3, C.fascia);
   m.cone(f.at(half - 3, sea + 2.5, front + 4), 1.4, 0.5, 8, C.parasol);
-  f.box(m, [-half - 14, half + 14], [sea - 0.6, sea + 0.75], [f.edge - 0.5, f.edge], C.piling);
-  for (let x = -half - 14; x < half + 14; x += 0.4) f.box(m, [x, x + 0.06], [sea - 0.6, sea + 0.75], [f.edge, f.edge + 0.04], C.piling.map((v) => v * 0.78));
+  f.box(m, [-half - 14, half + 14], [sea - 0.6, sea + 0.75], [f.edge - 0.5, f.edge], C.quay);
   f.box(m, [-half - 14, half + 14], [sea + 0.75, sea + 0.95], [f.edge - 0.6, f.edge + 0.1], C.cap);
   for (const [x, z, h, leaves] of [[30, front + 6, 17, [LEAVES[2], LEAVES[3], LEAVES[1]]], [12, front - 4, 10, LEAVES], [-22, -6, 14, [LEAVES[1], LEAVES[0], LEAVES[2]]]]) {
     bigTree(m, course, f, x, z, h, leaves);
@@ -2658,20 +2660,33 @@ function boatShed(m, course, f) {
 }
 
 // A weathered timber boathouse at the water (at the downstream end of the
-// riverside villa's quay, from the footage): grey boarding, a dark opening to
-// the river, a deck on its roof behind a timber railing, and a thick bank of
-// shrubs beside it downstream (on your right from the water: -x).
+// riverside villa's quay, from the footage): pale silver weathered oak boards,
+// closed board doors to the river, a pitched gable over its downstream half, a
+// frame of tall timber posts with a railing round the deck on the other half,
+// and a thick bank of shrubs beside it downstream (on your right from the water: -x).
+export const DECK = { wall: [0.66, 0.62, 0.55], board: [0.55, 0.52, 0.46], post: [0.5, 0.45, 0.38], roof: [0.42, 0.4, 0.37] };
 function deckBoathouse(m, course, f) {
-  const grey = [0.5, 0.47, 0.43];
+  const C = DECK;
   const y = Math.max(0.6, f.ground(0, -3));
-  f.box(m, [-3, 3], [-0.6, y + 2.6], [-6, -0.3], grey);
-  for (let x = -3; x <= 3; x += 0.5) f.box(m, [x - 0.03, x + 0.03], [-0.4, y + 2.6], [-0.3, -0.26], grey.map((v) => v * 0.8));
-  f.box(m, [-1.8, 1.8], [-0.4, y + 1.4], [-0.3, -0.24], [0.13, 0.12, 0.11]);
-  f.box(m, [-3.2, 3.2], [y + 2.6, y + 2.8], [-6.2, -0.1], grey.map((v) => v * 0.9));
-  // The roof deck's railing, round its three open sides.
-  f.box(m, [-3.2, 3.2], [y + 3.7, y + 3.8], [-0.2, -0.1], grey.map((v) => v * 0.75));
-  for (const x of [-3.2, 3.1]) f.box(m, [x, x + 0.1], [y + 3.7, y + 3.8], [-6.2, -0.1], grey.map((v) => v * 0.75));
-  for (let x = -3.2; x <= 3.2; x += 1.6) f.box(m, [x - 0.05, x + 0.05], [y + 2.8, y + 3.8], [-0.2, -0.1], grey.map((v) => v * 0.75));
+  f.box(m, [-3, 3], [-0.6, y + 2.6], [-6, -0.3], C.wall);
+  for (let x = -3; x <= 3; x += 0.5) f.box(m, [x - 0.03, x + 0.03], [-0.4, y + 2.6], [-0.3, -0.22], C.board);
+  // The doors, closed: boards a shade darker, a rail across.
+  f.box(m, [-1.8, 1.8], [-0.4, y + 1.6], [-0.3, -0.2], C.board);
+  f.box(m, [-1.8, 1.8], [y + 0.5, y + 0.65], [-0.2, -0.14], C.post);
+  f.box(m, [-3.2, 3.2], [y + 2.6, y + 2.8], [-6.2, -0.1], C.board);
+  // Downstream half: a pitched gable, its end to the river.
+  const out = [f.fwd[0], 0, f.fwd[1]];
+  m.triFacing(f.at(-3.2, y + 2.8, -0.15), f.at(0, y + 2.8, -0.15), f.at(-1.6, y + 4.3, -0.15), C.wall, out);
+  for (const [a, b] of [[-3.3, -1.6], [0.1, -1.6]]) {
+    const run = [f.at(a, y + 2.75, -6.3), f.at(a, y + 2.75, 0), f.at(b, y + 4.35, 0), f.at(b, y + 4.35, -6.3)];
+    m.tri(run[0], run[1], run[2], C.roof);
+    m.tri(run[0], run[2], run[3], C.roof);
+  }
+  // Upstream half: the roof deck, tall posts at its corners, a railing round it.
+  for (const [x, z] of [[0.2, -0.2], [3.1, -0.2], [3.1, -6.1], [0.2, -6.1]]) f.box(m, [x - 0.08, x + 0.08], [y + 2.8, y + 4.6], [z - 0.08, z + 0.08], C.post);
+  f.box(m, [0.2, 3.2], [y + 3.7, y + 3.8], [-0.25, -0.12], C.post);
+  f.box(m, [3.05, 3.15], [y + 3.7, y + 3.8], [-6.2, -0.1], C.post);
+  for (const z of [-0.2, -6.1]) f.box(m, [0.2, 3.1], [y + 4.45, y + 4.6], [z - 0.06, z + 0.06], C.post);
   f.box(m, [-3, 6], [0.2, 0.45], [-0.3, 1.2], COLORS.timber);
   // A tall bank of shrubs along the water downstream, and trees over it.
   // (Each wholly on land: a shrub whose spot is water, where the bank curves away, is left out.)

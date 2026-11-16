@@ -318,9 +318,10 @@ test('the boatyard stands on land on its quay, and the timber boathouse at the d
   assert.ok(quay.length > 6, 'its quay');
   const edge = yard.at(0, 0, yard.edge + 0.5);
   assert.ok(land.inside(edge[0], edge[2]), 'water just off the quay');
-  // The timber boathouse: grey boarding near its spot, all on land.
+  // The timber boathouse: pale weathered boarding near its spot, all on land.
+  const { DECK } = await import('../reading-thames/world.js');
   const spot = reading.features.find((f) => f.style === 'deck-boathouse');
-  const grey = tris.filter(is([0.5, 0.47, 0.43])).filter((t) => Math.hypot(mid(t)[0] - spot.at[0], mid(t)[1] - spot.at[1]) < 12);
+  const grey = tris.filter(is(DECK.wall)).filter((t) => Math.hypot(mid(t)[0] - spot.at[0], mid(t)[1] - spot.at[1]) < 12);
   assert.ok(grey.length >= 12, `its boarding: ${grey.length}`);
   assert.ok(grey.every((t) => !land.inside(...mid(t))), 'on land, not in the river');
   // Where the footage and the lidar put it: at the water in front of the
@@ -367,18 +368,20 @@ test('the riverside villa as the footage shows it: no house at the water, a timb
   assert.ok(!(await landmarkParts('riverside-villa', [0.56, 0.63, 0.7], 60)).pts.length, 'no blue clapboard villa');
 });
 
-test('the glass house as the footage and lidar show it: black boards below, a white floor set back above, 6-7 m to its roof, set back behind a lawn and a piled quay', async () => {
+test('the glass house as the footage and lidar show it: black on both floors, the upper set back under a glass rail, 6-7 m to its roof, behind a lawn and a pale quay', async () => {
   const { GLASS } = await import('../reading-thames/world.js');
   const clad = await landmarkParts('glass-house', GLASS.clad);
-  const upper = await landmarkParts('glass-house', GLASS.render);
+  const upper = await landmarkParts('glass-house', GLASS.upper);
   const roof = await landmarkParts('glass-house', GLASS.fascia);
-  assert.ok(clad.pts.length && upper.pts.length, 'black boards and white render');
-  assert.ok(clad.top < upper.top, 'the white floor is the upper one');
+  assert.ok(clad.pts.length && upper.pts.length, 'both floors built');
+  assert.ok([GLASS.clad, GLASS.upper].every((c) => Math.max(...c) < 0.3), 'both dark');
+  assert.ok(clad.top < upper.top, 'one over the other');
+  assert.ok((await landmarkParts('glass-house', GLASS.rail)).top > roof.top, 'a glass rail round the roof');
   assert.ok(Math.max(...upper.zs) < Math.max(...clad.zs) - 1, 'the upper floor set back');
   const tall = roof.top - roof.f.origin[1];
   assert.ok(tall > 5.5 && tall < 7.5, `roof ${tall.toFixed(1)} m over its ground (lidar: 5.7 m median, 8.9 m at most)`);
   assert.ok(clad.f.edge - Math.max(...clad.zs) > 14, 'set back from the water');
-  assert.ok((await landmarkParts('glass-house', GLASS.piling)).pts.length, 'the timber-piled quay');
+  assert.ok((await landmarkParts('glass-house', GLASS.quay)).pts.length && Math.min(...GLASS.quay) > 0.6, 'the pale quay');
 });
 
 test('the canoe club as the footage shows it: one band of big windows by the gable, a tree at its upstream end, the narrow steps past it, a brick ramp wall with a white rail coming down upstream', async () => {
