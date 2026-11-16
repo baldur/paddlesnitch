@@ -99,7 +99,8 @@ async function shoot(name: string) {
   await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/reading-thames/?webgl#debug`)
   await page.waitForFunction(() => (window as unknown as { kayak?: { course?: { scenery?: unknown } } }).kayak?.course?.scenery, null, { timeout: 120_000 })
   // Drawing at all: a shader that doesn't compile leaves no renderer (and drew 44 views of the menu's backdrop).
-  if (!(await page.evaluate(() => (window as unknown as { kayak: { gpu?: unknown } }).kayak.gpu))) broken.push('no renderer started (a shader error?)')
+  await page.waitForFunction(() => (window as unknown as { kayak: { gpu?: unknown } }).kayak.gpu, null, { timeout: 30_000 })
+    .catch(() => broken.push('no renderer started (a shader error?)'))
   // Only the scene: the walk's cards and labels hidden.
   await page.addStyleTag({ content: '* { visibility: hidden !important } canvas { visibility: visible !important }' })
   for (const v of views) {
