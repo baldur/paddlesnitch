@@ -7,7 +7,8 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE } from '../reading-thames/world.js';
+import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED } from '../reading-thames/world.js';
+const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 
@@ -799,6 +800,82 @@ test("each building the footage saw gets its material's light or dark shade by t
   // (Every one: the random roofs include tile's and slate's colours, so some would match by chance.)
   assert.ok(pitchedTotal >= 4 && pitchedChecked === pitchedTotal, `${pitchedChecked} of ${pitchedTotal} houses with their agreed roof`);
   assert.ok(flatChecked >= 1, 'a flat roof with a seen roof row kept its own');
+});
+
+test("the small sheds by the water that OpenStreetMap lacks (sheds.js, OS OpenMap Local) stand on their footprints at the lidar's height, with no tree growing in them", async () => {
+  const { SHEDS } = await import('../reading-thames/sheds.js');
+  const { shedsOf } = await import('../reading-thames/world.js');
+  assert.ok(SHEDS.length >= 20, `${SHEDS.length} sheds`);
+  const tris = await world();
+  const land = waterMap((await data('reading')).water);
+  for (const { ring, height } of shedsOf()) {
+    const [cx, cz] = [ring.reduce((t, p) => t + p[0], 0) / ring.length, ring.reduce((t, p) => t + p[1], 0) / ring.length];
+    const inRing = (x, z) => { let h = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, zi] = ring[i], [xj, zj] = ring[j]; if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) h = !h; } return h; };
+    // Its walls stand on each corner.
+    for (const [x, z] of ring) assert.ok(tris.some((t) => t.p.some((q) => Math.abs(q[0] - x) < 0.01 && Math.abs(q[2] - z) < 0.01)), `a wall at ${x}, ${z}`);
+    // Its ridge over the middle at its measured height over the ground (2.6 m where trees hid it from the lidar).
+    const over = tris.filter((t) => under(t.p, cx, cz) && SHED_ROOFS.some((c) => c.every((v, i) => Math.abs(v - t.color[i]) < 1e-6)));
+    assert.ok(over.length, `a roof over ${cx.toFixed(0)}, ${cz.toFixed(0)}`);
+    const top = Math.max(...over.flatMap((t) => t.p.map((q) => q[1])));
+    const base = Math.min(...tris.filter((t) => t.p.some((q) => ring.some(([x, z]) => Math.abs(q[0] - x) < 0.01 && Math.abs(q[2] - z) < 0.01))).flatMap((t) => t.p.map((q) => q[1])));
+    // (Its ridge at its measured height, or lower where the roof would be steeper than about 50 degrees: at least its eaves.)
+    const want = height ?? 2.6;
+    assert.ok(top - base <= want + 0.05 && top - base >= Math.min(want, 2.6) - 0.05, `${cx.toFixed(0)}, ${cz.toFixed(0)}: ${(top - base).toFixed(2)} m tall, measured ${height}`);
+    // Its door faces the water: nearer the river line than its middle.
+    const doors = tris.filter((t) => t.color.every((v, i) => Math.abs(v - SHED.door[i]) < 1e-6) && t.p.every((q) => Math.hypot(q[0] - cx, q[2] - cz) < 15));
+    assert.ok(doors.length, `${cx.toFixed(0)}, ${cz.toFixed(0)}: a door`);
+    const off = (x, z) => land.shore(x, z); // (to the mapped water: a side channel too)
+    const dc = [0, 2].map((k) => doors.reduce((a, t) => a + t.p.reduce((b, q) => b + q[k], 0) / 3, 0) / doors.length);
+    assert.ok(off(dc[0], dc[1]) < off(cx, cz), `${cx.toFixed(0)}, ${cz.toFixed(0)}: its door faces the water`);
+    // No tree grows in it: no trunk inside its walls (a neighbour's crown may hang over its roof, as the lidar's do).
+    const trunks = tris.filter((t) => t.color.every((v, i) => Math.abs(v - [0.35, 0.25, 0.17][i]) < 1e-6) && t.p.some((q) => inRing(q[0], q[2]) && q[1] < base + 1.8));
+    assert.equal(trunks.length, 0, `${cx.toFixed(0)}, ${cz.toFixed(0)}: a tree in it`);
+  }
+  assert.match(await readFile(new URL('../reading-thames/index.html', import.meta.url), 'utf8'), /Contains OS data &copy; Crown copyright and database right/, 'credited');
+});
+
+test("the sheds change nothing else: every other triangle of the river is as without them, but the trees and bushes that stood in them", async () => {
+  const { useSheds, shedsOf } = await import('../reading-thames/world.js');
+  const { SHEDS } = await import('../reading-thames/sheds.js');
+  const key = (v, i) => Array.from(v.subarray(i, i + 27), (x) => x.toFixed(4)).join(',');
+  const count = (v) => { const m = new Map(); for (let i = 0; i < v.length; i += 27) { const k = key(v, i); m.set(k, (m.get(k) ?? 0) + 1); } return m; };
+  useSheds([]);
+  const without = count(buildWorld(courseFromFile(await data('reading')), 1, 'river').vertices);
+  useSheds(SHEDS);
+  const withSheds = count(buildWorld(courseFromFile(await data('reading')), 1, 'river').vertices);
+  const boxes = shedsOf().map(({ ring }) => [Math.min(...ring.map((p) => p[0])) - 8, Math.min(...ring.map((p) => p[1])) - 8, Math.max(...ring.map((p) => p[0])) + 8, Math.max(...ring.map((p) => p[1])) + 8]);
+  const nearShed = (k) => { const v = k.split(',').map(Number); return boxes.some(([x0, z0, x1, z1]) => [0, 9, 18].some((o) => v[o] >= x0 && v[o] <= x1 && v[o + 2] >= z0 && v[o + 2] <= z1)); };
+  let gone = 0, added = 0;
+  for (const [k, n] of without) if ((withSheds.get(k) ?? 0) < n) { gone++; assert.ok(nearShed(k), 'only what stood in a shed went'); }
+  for (const [k, n] of withSheds) if ((without.get(k) ?? 0) < n) { added++; assert.ok(nearShed(k), 'only the sheds came'); }
+  assert.ok(added > 20 * 8, `${added} shed triangles`);
+  // (The bushes and waterside leaves that stood in them go, about 330 triangles: drawn nowhere, so their draws are kept.)
+  assert.ok(gone > 100 && gone < 2000, `${gone} tree and bush triangles taken out`);
+});
+
+test("a shed set down where trees stand clears them: their trunks go (drawn nowhere), whichever planting they came from", async () => {
+  const { useSheds } = await import('../reading-thames/world.js');
+  const { SHEDS } = await import('../reading-thames/sheds.js');
+  const TRUNK = [0.35, 0.25, 0.17];
+  const isTrunk = (t) => t.color.every((v, i) => Math.abs(v - TRUNK[i]) < 1e-6);
+  const trunks = (await world()).filter(isTrunk);
+  // A few trunks along the river, the bank's planted trees and the lidar's measured ones among them.
+  const picks = [0.1, 0.3, 0.5, 0.7, 0.9].map((f) => trunks[Math.floor(trunks.length * f)]);
+  const at = picks.map((t) => [(t.p[0][0] + t.p[1][0] + t.p[2][0]) / 3, (t.p[0][2] + t.p[1][2] + t.p[2][2]) / 3]);
+  try {
+    useSheds(at.map(([x, z]) => [[x - 2, z - 2, x + 2, z - 2, x + 2, z + 2, x - 2, z + 2], 2.5]));
+    const { vertices: v } = buildWorld(courseFromFile(await data('reading')), 1, 'river');
+    for (const [x, z] of at) {
+      let left = 0;
+      for (let i = 0; i < v.length; i += 27) {
+        if (![6, 7, 8].every((k, j) => Math.abs(v[i + k] - TRUNK[j]) < 1e-6)) continue;
+        if ([0, 9, 18].some((o) => Math.abs(v[i + o] - x) < 1 && Math.abs(v[i + o + 2] - z) < 1)) left++;
+      }
+      assert.equal(left, 0, `the tree at ${x.toFixed(0)}, ${z.toFixed(0)} still stands in the shed`);
+    }
+  } finally {
+    useSheds(SHEDS);
+  }
 });
 
 // --- what the water mirrors besides trees ---------------------------------------
