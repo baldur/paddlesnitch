@@ -29,8 +29,6 @@ const MODEL = arg('model') ?? 'qwen2.5vl:32b'
 const DIR = path.join(os.homedir(), '.paddlesnitch', 'materials')
 const ANSWERS = path.join(DIR, 'answers.json')
 const GAMES = path.join(process.cwd(), '../../games/reading-thames')
-// Modelled from the footage already (world.js LANDMARKS).
-const LANDMARKS = new Set(['island-bar', 'victorian', 'tudor-boathouse', 'rowing-club', 'canoe-club', 'spiral-boathouse', 'grey-boathouse', 'riverside-villa', 'glass-house', 'boatyard'])
 
 type Saved = { building: string; clip: string; ft: number; raw: string; answer: Answer | null; version?: number }
 
@@ -38,7 +36,8 @@ const data = JSON.parse(fs.readFileSync(path.join(GAMES, 'courses/reading.json')
 const river = courseFromFile(data).scenery.river
 const { toLatLng, toXZ } = projection([51.46175, -0.96945])
 const keyOf = ([x, z]: XZ) => `${x.toFixed(1)},${z.toFixed(1)}`
-const targets = (data.buildings as Array<{ shape: XZ[]; style?: string }>).filter((b) => !LANDMARKS.has(b.style ?? '')).map((b) => {
+// (Any styled building is drawn its own way, modelled from the footage already: landmarks, clapboard, stilts, balcony terraces.)
+const targets = (data.buildings as Array<{ shape: XZ[]; style?: string }>).filter((b) => !b.style).map((b) => {
   const ring = b.shape[0][0] === b.shape.at(-1)![0] && b.shape[0][1] === b.shape.at(-1)![1] ? b.shape.slice(0, -1) : b.shape
   const c: XZ = [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length]
   const at = locate(river, ...c)

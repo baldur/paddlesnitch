@@ -518,3 +518,116 @@ test("the rowing club stands at the same height, and its car park at the same pl
   assert.deepEqual(rowingEnd(fresh).at(0, 0, 0), before.end, "the car park where the walk's camera stands");
   assert.deepEqual(landmarkFrame(fresh, 'rowing-club').origin, before.origin, 'the club where it is drawn');
 });
+
+test("a building the footage saw is drawn in its material (materials.js): brick, render or timber in a measured shade, a roof only where two views agreed; one it didn't see keeps its random pick", async () => {
+  const { MATERIALS } = await import('../reading-thames/materials.js');
+  const { buildingMaterial } = await import('../reading-thames/world.js');
+  const reading = courseFromFile(await data('reading'));
+  const tris = await world();
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-3);
+  const centre = (b) => {
+    const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+    return [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length, ring];
+  };
+  // Walls standing on the footprint's edges (in that colour, or any).
+  const wallsOf = (ring, color) => tris.filter((t) => (!color || same(t.color, color)) && t.p.every((q) => ring.some(([x, z], i) => {
+    const [bx, bz] = ring[(i + 1) % ring.length];
+    const len = Math.hypot(bx - x, bz - z) || 1;
+    const along = ((q[0] - x) * (bx - x) + (q[2] - z) * (bz - z)) / (len * len);
+    return along > -0.01 && along < 1.01 && Math.abs((q[0] - x) * (bz - z) - (q[2] - z) * (bx - x)) / len < 0.05;
+  })));
+  let checked = 0;
+  let matched = 0;
+  for (const b of reading.scenery.buildings) {
+    if (b.style) continue;
+    const [cx, cz, ring] = centre(b);
+    const seen = buildingMaterial(cx, cz);
+    if (!seen?.wall) continue;
+    matched++;
+    // Not drawn where the map has water (an island, a pontoon): no wall over 2 m on its edges (fences and paths can line them).
+    if (wallsOf(ring, null).filter((t) => Math.max(...t.p.map((q) => q[1])) - Math.min(...t.p.map((q) => q[1])) > 2).length < 2) continue;
+    assert.ok(wallsOf(ring, seen.wall).length >= 2, `the building at ${cx.toFixed(1)}, ${cz.toFixed(1)} has walls in its material's colour`);
+    checked++;
+  }
+  // Every row is a plain building in the file (a row that matches none would be dropped silently), and most are drawn.
+  assert.ok(matched >= MATERIALS.length - 2, `${matched} of ${MATERIALS.length} rows match a building`);
+  assert.ok(checked >= 0.8 * MATERIALS.length, `${checked} of ${MATERIALS.length} rows drawn in their material`);
+  // Brick the model saw as brown or red is red brick; as sand or tan, buff (the flats below
+  // Christchurch Bridge, which a light-red shade turned salmon: design review).
+  const wallOf = (hex, kind) => { const r = MATERIALS.find((x) => x[2] === hex && x[3] === kind); assert.ok(r, `a ${kind} row with ${hex}`); return buildingMaterial(r[0], r[1]).wall; };
+  const red = wallOf('#8b4513', 'brick');
+  assert.ok(red[0] > red[2] + 0.25 && red[1] < 0.5, `red brick ${red}`);
+  const buff = wallOf('#c2b280', 'brick');
+  assert.ok(buff[1] > 0.62 && buff[0] - buff[2] < 0.32, `buff brick ${buff}`);
+  // Rendered walls aren't one stamped white: each building a little lighter or darker, warmer or cooler.
+  const whites = MATERIALS.filter((r) => r[3] === 'render').map((r) => buildingMaterial(r[0], r[1]).wall).filter((c) => c[1] > 0.8);
+  assert.ok(whites.length >= 10 && new Set(whites.map((c) => c.map((v) => v.toFixed(2)).join())).size >= whites.length * 0.8, `${whites.length} whites`);
+  assert.ok(whites.every((c) => c.every((v) => v > 0.8 && v <= 1)), 'still white');
+  assert.equal(buildingMaterial(0.123, 0.456), null, 'a building it never saw');
+  // Roofs: only the rows with an agreed roof have one.
+  for (const r of MATERIALS) assert.equal(buildingMaterial(r[0], r[1]).roof === null, r[5] === null || !['tile', 'slate', 'metal'].includes(r[5]), `${r}`);
+});
+
+test("the materials change only the colours of the buildings they name: every position, normal and other colour is as without them (the random pick is still drawn)", async () => {
+  const { MATERIALS } = await import('../reading-thames/materials.js');
+  const { useMaterials } = await import('../reading-thames/world.js');
+  const reading = await data('reading');
+  const build = () => buildWorld(courseFromFile(reading), 1, 'river').vertices;
+  let without;
+  try { useMaterials([]); without = build(); } finally { useMaterials(MATERIALS); }
+  const withThem = build();
+  assert.equal(withThem.length, without.length);
+  // Each named building's footprint, widened by half a metre (its walls and roof stand on it).
+  const boxes = reading.buildings.filter((b) => !b.style).map((b) => {
+    const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+    const c = [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length];
+    return MATERIALS.some((r) => r[0].toFixed(1) === c[0].toFixed(1) && r[1].toFixed(1) === c[1].toFixed(1))
+      ? [Math.min(...ring.map((p) => p[0])) - 0.5, Math.max(...ring.map((p) => p[0])) + 0.5, Math.min(...ring.map((p) => p[1])) - 0.5, Math.max(...ring.map((p) => p[1])) + 0.5] : null;
+  }).filter(Boolean);
+  let moved = 0, recoloured = 0, stray = 0;
+  for (let i = 0; i < withThem.length; i += 9) {
+    for (let k = 0; k < 6; k++) if (withThem[i + k] !== without[i + k]) moved++;
+    if ([6, 7, 8].some((k) => withThem[i + k] !== without[i + k])) {
+      recoloured++;
+      const [x, z] = [withThem[i], withThem[i + 2]];
+      if (!boxes.some(([x0, x1, z0, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)) stray++;
+    }
+  }
+  assert.equal(moved, 0, 'positions and normals');
+  assert.ok(recoloured > 100, `${recoloured} vertices recoloured`);
+  assert.equal(stray, 0, 'recoloured vertices off the named buildings');
+});
+
+test("each building the footage saw gets its material's light or dark shade by the model's colour, and its agreed roof on a pitched roof only", async () => {
+  const { MATERIALS } = await import('../reading-thames/materials.js');
+  const { buildingMaterial, MATERIAL_WALLS, MATERIAL_ROOFS } = await import('../reading-thames/world.js');
+  const luma = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2]; };
+  for (const r of MATERIALS) {
+    const want = MATERIAL_WALLS[r[3]]?.[luma(r[2]) > 0.5 ? 0 : 1];
+    const got = buildingMaterial(r[0], r[1]).wall;
+    if (!want) { assert.equal(got, null, `${r}`); continue; }
+    assert.ok(got.every((v, i) => Math.abs(v - want[i]) < 0.07), `${r}: ${got} against ${want}`);
+  }
+  assert.ok(['#ffffff', '#8b4513'].every((h) => MATERIALS.some((r) => r[2] === h)), 'the data has light and dark answers');
+  // Roofs as drawn: a house's agreed roof is on it; a flat roof keeps its own.
+  const reading = courseFromFile(await data('reading'));
+  const tris = await world();
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-3);
+  let pitchedChecked = 0, pitchedTotal = 0, flatChecked = 0;
+  for (const b of reading.scenery.buildings) {
+    if (b.style) continue;
+    const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+    const [cx, cz] = [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length];
+    const roof = buildingMaterial(cx, cz)?.roof;
+    if (!roof) continue;
+    // Its drawn roof triangles (any of the roof colours: world.js ROOFS and MATERIAL_ROOFS).
+    const roofs = [[0.32, 0.2, 0.17], ...Object.values(MATERIAL_ROOFS)];
+    const onIt = (color) => tris.filter((t) => (color ? same(t.color, color) : roofs.some((c) => same(t.color, c))) && (() => { const [x, z] = [(t.p[0][0] + t.p[1][0] + t.p[2][0]) / 3, (t.p[0][2] + t.p[1][2] + t.p[2][2]) / 3]; let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) if ((ring[i][1] > z) !== (ring[j][1] > z) && x < ((ring[j][0] - ring[i][0]) * (z - ring[i][1])) / (ring[j][1] - ring[i][1]) + ring[i][0]) inside = !inside; return inside; })());
+    if (!onIt(null).length && (b.kind === 'house' || b.kind === 'boathouse')) continue; // not drawn (where the map has water)
+    if (b.kind === 'house' || b.kind === 'boathouse') { pitchedTotal++; if (onIt(roof).length) pitchedChecked++; }
+    else if (same(roof, MATERIAL_ROOFS.metal)) { assert.equal(onIt(roof).length, 0, `a flat roof at ${cx.toFixed(1)}, ${cz.toFixed(1)} took the seen metal roof`); flatChecked++; }
+  }
+  // (Every one: the random roofs include tile's and slate's colours, so some would match by chance.)
+  assert.ok(pitchedTotal >= 4 && pitchedChecked === pitchedTotal, `${pitchedChecked} of ${pitchedTotal} houses with their agreed roof`);
+  assert.ok(flatChecked >= 1, 'a flat roof with a seen roof row kept its own');
+});
