@@ -7,6 +7,7 @@
 //   pnpm --filter web course:views pick [--again]   choose the places and cut their frames (once)
 //   pnpm --filter web course:views shoot <label>    draw the game from each (after every change)
 //   pnpm --filter web course:views serve [--port 3202]   the page to compare and score: http://localhost:3202
+//   pnpm --filter web course:views around <style> [--n 6] up to 6 looks at one landmark, from different days
 //
 // Everything is kept in ~/.paddlesnitch/refviews/ (views.json, frames/,
 // game/<label>/, scores.json) and stays on this machine: the frames are the
@@ -21,7 +22,7 @@ import { HERE_DIRS, type HereDir } from './lib/here'
 import { cutView, loadClips, passesAt } from './lib/footage-passes'
 import { openStore } from './lib/footage-db'
 import { projection, type XZ } from './lib/river'
-import { average, choosePass, cleanScores, gameCamera, pickPoints, viewFacing, type Scores } from './lib/views'
+import { average, choosePass, choosePasses, cleanScores, gameCamera, pickPoints, viewFacing, type Scores } from './lib/views'
 import { courseFromFile, locate, pointAt } from '../../../../games/reading-thames/course.js'
 
 const DIR = path.join(os.homedir(), '.paddlesnitch', 'refviews')
@@ -216,6 +217,26 @@ $('#other').onchange = (e) => { other = e.target.value; draw(); };
 load();
 </script></body></html>`
 
-const run = cmd === 'pick' ? pick : cmd === 'shoot' ? () => shoot(label) : cmd === 'serve' ? async () => serve() : null
-if (!run) { console.error('usage: course:views pick [--again] | shoot <label> | serve [--port 3202]'); process.exit(1) }
+// Several looks at one landmark, from different days, for modelling it: up to
+// --n (6) passes 15-70 m off, each one's view facing it, in around/<style>/.
+async function around(style: string) {
+  const data = JSON.parse(fs.readFileSync(path.join(GAMES, 'reading-thames/courses/reading.json'), 'utf8'))
+  const b = data.buildings.find((x: { style?: string }) => x.style === style)
+  if (!b) throw new Error(`usage: course:views around <style> (one of ${LANDMARK_STYLES.join(', ')})`)
+  const at: XZ = [b.shape.reduce((a: number, p: XZ) => a + p[0], 0) / b.shape.length, b.shape.reduce((a: number, p: XZ) => a + p[1], 0) / b.shape.length]
+  const [lat, lng] = toLatLng(at)
+  const near = passesAt(loadClips(openStore()), { lat, lng }, 70).filter((p) => p.metres >= 15 && fs.existsSync(p.c.path))
+  const out = path.join(DIR, 'around', style)
+  fs.mkdirSync(out, { recursive: true })
+  for (const [k, p] of choosePasses(near, Number(arg('n') ?? 6)).entries()) {
+    const from = toXZ([p.lat, p.lng])
+    const view = viewFacing(p.heading!, from, at)
+    const file = path.join(out, `${k + 1}.jpg`)
+    await cutView(p.c, p.ft, p.cameraYaw!, HERE_DIRS.find((d) => d.name === view)!.fromBow, file)
+    console.log(`${file}: ${view}, ${Math.round(p.metres)} m off, ${p.c.startUtc?.slice(0, 10) ?? '?'}, from (${from.map((v) => v.toFixed(0)).join(', ')})${p.cameraKnown ? '' : ', camera assumed'}`)
+  }
+}
+
+const run = cmd === 'pick' ? pick : cmd === 'shoot' ? () => shoot(label) : cmd === 'serve' ? async () => serve() : cmd === 'around' ? () => around(label) : null
+if (!run) { console.error('usage: course:views pick [--again] | shoot <label> | serve [--port 3202] | around <style> [--n 6]'); process.exit(1) }
 run!().catch((e: Error) => { console.error(`stopped: ${e.message}`); process.exit(1) })
