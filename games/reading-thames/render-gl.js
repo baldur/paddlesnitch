@@ -8,7 +8,7 @@ import { SKY, MESH, WATER } from './shaders-gl.js';
 import { waterGrid } from './meshes.js';
 import { createPacer } from './pacing.js';
 
-const FRAME_BYTES = 16 * 4 + 37 * 16;
+const FRAME_BYTES = 16 * 4 + 55 * 16;
 const MAX_DPR = matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
 
 export function createRendererGL(canvas) {
@@ -46,6 +46,20 @@ export function createRendererGL(canvas) {
   gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, frameBuffer);
 
   const skyVao = gl.createVertexArray();
+
+  // The pictures of what the water mirrors besides trees (world.js mirrorFacades), on unit 0; none until set.
+  const facadeTex = gl.createTexture();
+  const setFacades = ({ width, height, pixels }) => {
+    gl.bindTexture(gl.TEXTURE_2D, facadeTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  setFacades({ width: 1, height: 1, pixels: new Uint8Array(4) });
+  gl.useProgram(water);
+  gl.uniform1i(gl.getUniformLocation(water, 'facadeTex'), 0);
 
   const grid = waterGrid(260, 520);
   const gridVao = gl.createVertexArray();
@@ -116,6 +130,9 @@ export function createRendererGL(canvas) {
       m.instanceCount = matrices.length;
     },
 
+    // The pictures of the facades the water mirrors (world.js mirrorFacades).
+    setFacades,
+
     // frameData: Float32Array laid out like the Frame block.
     draw(frameData, meshes) {
       const now = performance.now();
@@ -149,6 +166,8 @@ export function createRendererGL(canvas) {
         gl.drawArraysInstanced(gl.TRIANGLES, 0, m.count, m.instanceCount);
       }
       gl.useProgram(water);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, facadeTex);
       gl.bindVertexArray(gridVao);
       gl.drawArrays(gl.TRIANGLES, 0, gridCount);
       gl.bindVertexArray(null);

@@ -93,13 +93,22 @@ async function shoot(name: string) {
   const browser = await webkit.launch()
   const page = await browser.newPage({ viewport: { width: 1536, height: 960 } })
   await page.route('**/api/**', (r) => r.fulfill({ status: 404, body: '' }))
+  // A broken page (a shader that doesn't compile) still draws something: stop rather than score it.
+  const broken: string[] = []
+  page.on('pageerror', (e) => broken.push(e.message))
+  page.on('console', (m) => { if (m.type() === 'error' && !/404|Failed to load resource/.test(m.text())) broken.push(m.text()) })
   await page.goto(`http://127.0.0.1:${(server.address() as { port: number }).port}/reading-thames/?webgl#debug`)
   await page.waitForFunction(() => (window as unknown as { kayak?: { course?: { scenery?: unknown } } }).kayak?.course?.scenery, null, { timeout: 120_000 })
+  // Drawing at all: a shader that doesn't compile leaves no renderer (and drew 44 views of the menu's backdrop).
+  await page.waitForFunction(() => (window as unknown as { kayak: { gpu?: unknown } }).kayak.gpu, null, { timeout: 30_000 })
+    .catch(() => broken.push('no renderer started (a shader error?)'))
   // Only the scene: the walk's cards and labels hidden.
   await page.addStyleTag({ content: '* { visibility: hidden !important } canvas { visibility: visible !important }' })
   for (const v of views) {
+    if (broken.length) throw new Error(`the game broke, so the views stop here: ${broken[0]}`)
     await page.evaluate((shot) => (window as unknown as { kayak: { shoot: (s: unknown) => void } }).kayak.shoot(shot), { eye: v.eye, look: v.look, wide: 90 })
     await page.waitForTimeout(1500)
+    if (broken.length) throw new Error(`the game broke, so the views stop here: ${broken[0]}`)
     await page.locator('canvas').screenshot({ path: path.join(out, `${v.id}.png`) })
     process.stdout.write('.')
   }
