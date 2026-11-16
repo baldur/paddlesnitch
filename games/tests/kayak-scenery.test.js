@@ -228,6 +228,8 @@ test("both renderers light the world and mirror the banks the same way (fill lig
   // The facades' texture is premultiplied (clear texels are black): added as it is, not mixed by its alpha again
   // (a plain mix drew a dark rim round every reflection).
   assert.ok(gpu.some((l) => /^sky = .* \* \(1\.0 - fa\.a\) \+ fa\.rgb;/.test(l)), 'premultiplied');
+  // Calm water mirrors a building as it mirrors trees, looking down into it too.
+  assert.ok(gpu.some((l) => l.startsWith('c = mix(frame.water') && l.includes('max(tl.x, fa.a)')), 'calm water mirrors the facades');
   for (const f of ['shaders.js', 'shaders-gl.js']) {
     // Each picture's ends fade out (a hard end read as a picture pasted on the water).
     assert.match(await read(f), /\* smoothstep\(0\.0, 0\.04, min\(best\.x, 1\.0 - best\.x\)\);/, `${f}: faded ends`);
@@ -401,6 +403,15 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
     assert.ok(a.length >= 1, wg);
     assert.deepEqual(b, a, wg);
   }
+  // facadeHit() as the JS port in these tests (seen) has it: a face only from its front, ahead of the ray,
+  // nearer than the best so far, inside its rectangle, sampled inside its own row.
+  const hit = tex(body(await read('shaders.js'), 'fn facadeHit('));
+  for (const line of ['ifdn>-0.000001returnbest', 'ift<=0.0||t>=best.wreturnbest', 'ifu<0.0||u>1.0||v<0.0||v>1.0returnbest', 'returnvec4u,a.w+clampv,0.02,0.98*b.w,0.0,t']) {
+    assert.ok(hit.includes(line), `facadeHit has ${line}`);
+  }
+  // facades() looks at all six slots (nearFacades fills six).
+  const all = body(await read('shaders.js'), 'fn facades(').join('\n');
+  for (let k = 0; k < 6; k++) assert.ok(all.includes(`facadeHito,d,frame.facades[${k * 3}],frame.facades[${k * 3 + 1}],frame.facades[${k * 3 + 2}],best`), `slot ${k}`);
 });
 
 test("the dead tree, the river sign and the beach stand on their banks, not out in the river", async () => {
@@ -737,6 +748,13 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
   assert.ok(m.facades.some((f) => f.name === 'Caversham Bridge pier'), 'its piers');
   assert.equal(m.height, FACADE.h * m.facades.length);
   assert.equal(m.pixels.length, m.width * m.height * 4);
+  // Premultiplied, as the shaders add it: a texel is solid or clear, and clear is black.
+  for (let i = 0; i < m.pixels.length; i += 4) {
+    const [r, g, b, a] = m.pixels.subarray(i, i + 4);
+    assert.ok(a === 255 || (a === 0 && r === 0 && g === 0 && b === 0), `texel ${i / 4}: ${[r, g, b, a]}`);
+  }
+  // main.js hands the pictures to the renderer.
+  assert.match(await readFile(new URL('../reading-thames/main.js', import.meta.url), 'utf8'), /renderer\.setFacades\(mirror \?\?/);
 });
 
 test("drawing the facades for the water changes nothing in the world: the river is the same, built before or after them", async () => {
@@ -751,4 +769,29 @@ test("drawing the facades for the water changes nothing in the world: the river 
   assert.ok(after.every((v, i) => v === plain[i]), 'built after the facades');
   assert.ok(again.every((v, i) => v === plain[i]), 'built again after them');
   assert.ok(m.facades.length > 10);
+});
+
+test("each frame gets the six facades nearest the camera, nearest first, each slot pointing at its own picture row", async () => {
+  const { course, mirror: m } = await mirror();
+  const c = pointAt(course, course.bridges.find((b) => b.name === 'Caversham Bridge').s);
+  const rows = m.facades.length;
+  // From the bridge more than six are within reach (its sides, underside and piers, and the clubs upstream).
+  const slots = nearFacades(m, c.x, c.z);
+  const far = (f) => {
+    // Distance to the rectangle's footprint, sampled finely (not the code's own formula).
+    let best = Infinity;
+    for (let a = 0; a <= 1; a += 0.005) for (let b = 0; b <= 1; b += f.v[1] ? 1 : 0.02) {
+      best = Math.min(best, Math.hypot(f.p[0] + f.u[0] * a + f.v[0] * b - c.x, f.p[2] + f.u[2] * a + f.v[2] * b - c.z));
+    }
+    return best;
+  };
+  const ranked = m.facades.map((f) => [far(f), f.row]).sort((a, b) => a[0] - b[0]);
+  assert.ok(ranked.filter(([d]) => d < 400).length > 6, 'more than six within reach');
+  const got = [0, 1, 2, 3, 4, 5].map((k) => Math.round(slots[k * 12 + 3] * rows));
+  assert.deepEqual(got, ranked.slice(0, 6).map(([, row]) => row));
+  for (let k = 0; k < 6; k++) assert.ok(Math.abs(slots[k * 12 + 7] * rows - 1) < 1e-6, `slot ${k}: one row's share`);
+  // Far up the river (5 km), none of these.
+  const p = pointAt(course, 5000);
+  const there = nearFacades(m, p.x, p.z);
+  assert.ok([0, 1, 2, 3, 4, 5].every((k) => !m.facades[Math.round(there[k * 12 + 3] * rows)]?.name.startsWith('Caversham') || there[k * 12 + 7] === 0));
 });
