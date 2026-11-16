@@ -864,7 +864,9 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
     const toward = unit([fr.origin[0] + fr.right[0] * mid - o[0], 0, fr.origin[2] + fr.right[1] * mid - o[2]]);
     let met = 0;
     for (let up = 0.05; up <= 0.4; up += 0.05) met += seen(o, unit([toward[0], up, toward[2]]), slots, m).color[3] > 0.5;
-    assert.ok(met >= 3, `${style}: the reflection shows it (${met} of 8 rays)`);
+    // (Not the riverside villa: the footage has no house at its water, only a low
+    // quay, the house 30 m back among trees; the boathouse there is a feature.)
+    if (style !== 'riverside-villa') assert.ok(met >= 3, `${style}: the reflection shows it (${met} of 8 rays)`);
     // From behind it (inland), a ray towards the water passes through its picture: only its front is mirrored.
     const behind = [fr.origin[0] - fr.fwd[0] * 30, 0, fr.origin[2] - fr.fwd[1] * 30];
     const only = nearFacades({ ...m, facades: [f] }, behind[0], behind[2]);

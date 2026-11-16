@@ -1892,6 +1892,7 @@ function greyBoathouse(m, course, f) {
 // A landmark's own big tree (the world's trees keep 30 m clear of a landmark):
 // a trunk and a few lumps of leaves round it, `h` tall from the ground at (x, z).
 function bigTree(m, course, f, x, z, h, leaves) {
+  if (m.facade) return; // (mirrorFacades: the building's front only; the water mirrors trees already)
   const y = Math.max(ground(course, ...xz(f.at(x, 0, z))).y, 0) - f.origin[1];
   const at = f.at(x, y, z);
   m.cylinder([at[0], at[1] - 0.3, at[2]], 0.25 + h * 0.012, h * 0.5, 5, COLORS.trunk);
@@ -2256,6 +2257,7 @@ function boatyard(m, course, f) {
   });
   // The yard in front, sloping down to the quay (the lidar: about 1.2 m over
   // the water at the edge), and the quay: a pale concrete wall, its joints a shade darker.
+  if (m.facade) return; // (mirrorFacades: the buildings' front, not the yard and quay 14 m before it)
   const quayTop = Math.min(0, sea + 1.2);
   const [x0, x1] = [a - 6, d + 10];
   const yard = [f.at(x0, 0.05, front), f.at(x1, 0.05, front), f.at(x1, quayTop, f.edge - 0.6), f.at(x0, quayTop, f.edge - 0.6)];
@@ -3339,6 +3341,7 @@ export function mirrorFacades(course, sun, sky) {
     if (g.d < 0) continue;
     const f = landmarkFacing(river, b.style, ring, cx, cz, g);
     const m = new MeshBuilder();
+    m.facade = true; // (a landmark's own big trees aren't its front: bigTree leaves them out)
     LANDMARKS[b.style](m, river, f);
     const tris = m.build().vertices;
     // Its front: the footprint's water side, as wide and tall as the model.
