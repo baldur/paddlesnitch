@@ -37,9 +37,15 @@ export function inside(poly: Ring, x: number, z: number): boolean {
   }
   return hit
 }
-/** Whether two footprints overlap: either's middle or any corner inside the other. */
+const crosses = ([p, q]: [XZ, XZ], [r, s]: [XZ, XZ]) => {
+  const side = (a: XZ, b: XZ, c: XZ) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+  return side(p, q, r) * side(p, q, s) < 0 && side(r, s, p) * side(r, s, q) < 0
+}
+const edges = (r: Ring): Array<[XZ, XZ]> => r.map((p, i) => [p, r[(i + 1) % r.length]])
+/** Whether two footprints overlap: either's middle or any corner inside the other, or their edges crossing (two thin ones laid across each other like a plus). */
 export function overlaps(a: Ring, b: Ring): boolean {
   return inside(b, ...centre(a)) || inside(a, ...centre(b)) || b.some(([x, z]) => inside(a, x, z)) || a.some(([x, z]) => inside(b, x, z))
+    || edges(a).some((e) => edges(b).some((f) => crosses(e, f)))
 }
 
 /** The footprints in `os` that overlap none of the game's buildings. */
@@ -51,12 +57,14 @@ export function missingFrom(os: Ring[], game: Ring[]): Ring[] {
  * How tall a small building stands, from lidar samples inside its footprint
  * ([surface over ground, vegetation over ground] each): the 80th percentile of
  * the surface where there's no vegetation (a tree over a shed is not the shed),
- * clamped to a shed's 1.8-6 m. Null where every sample is under a tree or
- * missing: the caller uses its usual height.
+ * 1.8 m at least. Null where every sample is under a tree or missing, or it
+ * comes out over 6 m (not the shed): the caller uses its usual height.
  */
 export function shedHeight(samples: Array<[number | null, number | null]>): number | null {
   const bare = samples.filter(([s, v]) => s !== null && (v ?? 0) < 1.5).map(([s]) => s as number).sort((a, b) => a - b)
   if (bare.length < 3) return null
   const h = bare[Math.min(bare.length - 1, Math.floor(bare.length * 0.8))]
-  return Math.round(Math.min(6, Math.max(1.8, h)) * 10) / 10
+  // (Over 6 m it isn't the shed: a tree the vegetation model missed, a wall behind it.)
+  if (h > 6) return null
+  return Math.round(Math.max(1.8, h) * 10) / 10
 }

@@ -26,7 +26,7 @@ const data = JSON.parse(fs.readFileSync(path.join(GAME, 'courses/reading.json'),
 const river = courseFromFile(data).scenery.river
 const { toLatLng } = projection([51.46175, -0.96945])
 const bng = (p: XZ) => wgs84ToBng(...toLatLng(p))
-// Game metres from the grid's: a step of Newton's method from a local fit, twice (to millimetres).
+// Game metres from the grid's: four steps of Newton's method from the origin (to millimetres).
 const game = ([E, N]: XZ): XZ => {
   let p: XZ = [0, 0]
   for (let k = 0; k < 4; k++) {
