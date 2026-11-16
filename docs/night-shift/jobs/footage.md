@@ -43,3 +43,10 @@ footage into the repo or a commit message.
 ## Lessons
 
 (lead adds what it learns from your reports here.)
+
+- 2026-11-16 (lead): the wake cue is good (8 of 8 known chapters). The
+  proposals were not taken: chapters of one recording came back with different
+  directions (GS0x0094: 0, 180, 180, 0) although a recording shares one, and 7
+  were carried over without being checked again. Propose a direction per
+  **recording**, only when every chapter you checked agrees, with 3 of 3
+  moments in each; list conflicts under Unsure instead of picking one.

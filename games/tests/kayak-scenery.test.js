@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES, SHED } from '../reading-thames/world.js';
+import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED } from '../reading-thames/world.js';
 const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -220,10 +220,21 @@ test('each club stands square to its mapped bank, its pontoon on the water', asy
 
 test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water, how calm the water lies)", async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
-  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|var|float|vec[23]) ((fill|lit|still|tl|sky|calm|r|dx|dz) =|c = mix\(frame\.water)/.test(l))
-    .map((l) => l.replace(/^(let|var|float|vec[23]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C').replace(/in\.woods|vWoods/g, 'W'));
+  const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|var|float|vec[234]) ((fill|lit|still|tl|fa|sky|calm|r|dx|dz) =|c = mix\(frame\.water)|^c \+= vec3f?\(1\.0, 0\.9/.test(l))
+    .map((l) => l.replace(/^(let|var|float|vec[234]) /, '').replace(/vec([23])f/g, 'vec$1').replace(/in\.color/g, 'C').replace(/vColor/g, 'C').replace(/in\.woods|vWoods/g, 'W'));
   const [gpu, gl] = [lines(await read('shaders.js')), lines(await read('shaders-gl.js'))];
-  for (const n of ['fill', 'calm', 'dx', 'dz', 'r', 'still', 'tl', 'sky', 'c']) assert.ok(gpu.some((l) => l.startsWith(`${n} =`)), `WebGPU has its ${n} line`);
+  for (const n of ['fill', 'calm', 'dx', 'dz', 'r', 'still', 'tl', 'fa', 'sky', 'c', 'c +']) assert.ok(gpu.some((l) => l.startsWith(`${n} =`) || l.startsWith(`${n}=`)), `WebGPU has its ${n} line`);
+  // The sun's glint is kept off where a bridge or a building is mirrored.
+  assert.ok(gpu.some((l) => l.startsWith('c +=') && l.endsWith('* (1.0 - fa.a);')), 'no glint under a bridge');
+  // The facades' texture is premultiplied (clear texels are black): added as it is, not mixed by its alpha again
+  // (a plain mix drew a dark rim round every reflection).
+  assert.ok(gpu.some((l) => /^sky = .* \* \(1\.0 - fa\.a\) \+ fa\.rgb;/.test(l)), 'premultiplied');
+  // Calm water mirrors a building as it mirrors trees, looking down into it too.
+  assert.ok(gpu.some((l) => l.startsWith('c = mix(frame.water') && l.includes('max(tl.x, fa.a)')), 'calm water mirrors the facades');
+  for (const f of ['shaders.js', 'shaders-gl.js']) {
+    // Each picture's ends fade out (a hard end read as a picture pasted on the water).
+    assert.match(await read(f), /\* smoothstep\(0\.0, 0\.04, min\(best\.x, 1\.0 - best\.x\)\);/, `${f}: faded ends`);
+  }
   assert.deepEqual(gl, gpu);
 });
 
@@ -250,6 +261,8 @@ test("both renderers' per-frame block has the same fields, the size main.js fill
   assert.match(main, new RegExp(`\\[half \\+ 9, half \\+ 4, 7, 1\\], ${at.banks}\\);`), `banks at ${at.banks}`);
   assert.ok(main.includes(`frameData.set(spots[i] ?? [0, 0, 0, 0], ${at.spots} + i * 4);`), `spots at ${at.spots}`);
   assert.ok(main.includes(`frameData.set([...woodL, ...woodR], ${at.woods});`), `woods at ${at.woods}`);
+  assert.ok(main.includes(`frameData.set(nearFacades(facadesShown, eye[0], eye[2]), ${at.facades});`), `facades at ${at.facades}`);
+  assert.equal(nearFacades(null, 0, 0).length, wgsl.find(([n]) => n === 'facades')[1] * 4, 'nearFacades fills the facades field');
   // The Thames lies calm (water.w), a made-up river doesn't.
   assert.match(main, /const THAMES = \[[^\]]*, 0\.[1-9]\d*\];/);
   assert.match(main, /const WATER = \[[^\]]*, 0\];/);
@@ -384,11 +397,22 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
   assert.equal(gpuWood.length, 2);
   assert.deepEqual(glWood, gpuWood);
   // And the vertex shader's woodsHere() and alongTo(), which find where each ray meets the banks.
-  for (const [wg, gl] of [['fn woodsHere(', 'vec2 woodsHere('], ['fn alongTo(', 'float alongTo(']]) {
-    const [a, b] = [body(await read('shaders.js'), wg), body(await read('shaders-gl.js'), gl)];
+  // And the reflected landmarks and bridges: facadeHit() and facades().
+  const tex = (lines) => lines.map((l) => l.replace('textureSampleLevelfacadeTex,facadeSampler,', 'textureLodfacadeTex,'));
+  for (const [wg, gl] of [['fn woodsHere(', 'vec2 woodsHere('], ['fn alongTo(', 'float alongTo('], ['fn facadeHit(', 'vec4 facadeHit('], ['fn facades(', 'vec4 facades(']]) {
+    const [a, b] = [tex(body(await read('shaders.js'), wg)), tex(body(await read('shaders-gl.js'), gl))];
     assert.ok(a.length >= 1, wg);
     assert.deepEqual(b, a, wg);
   }
+  // facadeHit() as the JS port in these tests (seen) has it: a face only from its front, ahead of the ray,
+  // nearer than the best so far, inside its rectangle, sampled inside its own row.
+  const hit = tex(body(await read('shaders.js'), 'fn facadeHit('));
+  for (const line of ['ifdn>-0.000001returnbest', 'ift<=0.0||t>=best.wreturnbest', 'ifu<0.0||u>1.0||v<0.0||v>1.0returnbest', 'returnvec4u,a.w+clampv,0.02,0.98*b.w,0.0,t']) {
+    assert.ok(hit.includes(line), `facadeHit has ${line}`);
+  }
+  // facades() looks at all six slots (nearFacades fills six).
+  const all = body(await read('shaders.js'), 'fn facades(').join('\n');
+  for (let k = 0; k < 6; k++) assert.ok(all.includes(`facadeHito,d,frame.facades[${k * 3}],frame.facades[${k * 3 + 1}],frame.facades[${k * 3 + 2}],best`), `slot ${k}`);
 });
 
 test("the dead tree, the river sign and the beach stand on their banks, not out in the river", async () => {
@@ -707,4 +731,144 @@ test("a shed set down where trees stand clears them: their trunks go (drawn nowh
   } finally {
     useSheds(SHEDS);
   }
+});
+
+// --- what the water mirrors besides trees ---------------------------------------
+
+const SUN = (() => { const v = [0.35, 0.42, -0.84]; const l = Math.hypot(...v); return v.map((x) => x / l); })();
+const SKY_TOP = [0.3, 0.52, 0.84];
+let mirrored;
+async function mirror() {
+  mirrored ??= (async () => {
+    const course = courseFromFile(await data('reading'));
+    buildWorld(course, 1, 'river');
+    return { course, mirror: mirrorFacades(course, SUN, SKY_TOP) };
+  })();
+  return mirrored;
+}
+// The water shaders' facadeHit() and facades(), in JS: what a ray from o along d
+// sees of the frame's facade slots, as [r, g, b, a] 0..1 from the texture's
+// nearest texel, and which slot it met (or null).
+function seen(o, d, slots, mirror) {
+  const sub = (a, b) => a.map((v, i) => v - b[i]);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  let best = [0, 0, 0, 1e9];
+  let slot = null;
+  for (let k = 0; k < slots.length / 12; k++) {
+    const [a, b, c] = [0, 4, 8].map((i) => Array.from(slots.slice(k * 12 + i, k * 12 + i + 4)));
+    const n = cross(b, c);
+    const dn = dot(d, n);
+    if (dn > -0.000001) continue;
+    const t = dot(sub(a, o), n) / dn;
+    if (t <= 0 || t >= best[3]) continue;
+    const h = sub(o.map((v, i) => v + d[i] * t), a);
+    const u = dot(h, b) / dot(b, b);
+    const v = dot(h, c) / dot(c, c);
+    if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+    best = [u, a[3] + Math.min(0.98, Math.max(0.02, v)) * b[3], 0, t];
+    slot = k;
+  }
+  if (slot === null) return { color: [0, 0, 0, 0], slot };
+  const x = Math.min(mirror.width - 1, Math.floor(best[0] * mirror.width));
+  const y = Math.min(mirror.height - 1, Math.floor(best[1] * mirror.height));
+  return { color: Array.from(mirror.pixels.slice((y * mirror.width + x) * 4, (y * mirror.width + x) * 4 + 4)).map((c) => c / 255), slot };
+}
+const unit = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+
+test("the water under Caversham Bridge mirrors the bridge's dark underside, not the sky and the sun's glint", async () => {
+  const { course, mirror: m } = await mirror();
+  const bridge = course.bridges.find((b) => b.name === 'Caversham Bridge');
+  const c = pointAt(course, bridge.s);
+  const slots = nearFacades(m, c.x, c.z);
+  // Looking up from the water under the deck, a little downstream and up.
+  for (const along of [-0.3, 0, 0.3]) {
+    const { color, slot } = seen([c.x, 0, c.z], unit([c.tx * along, 1, c.tz * along]), slots, m);
+    assert.notEqual(slot, null, `along ${along}: the ray meets the bridge`);
+    const f = m.facades.find((x) => x.row === Math.round(slots[slot * 12 + 3] * m.facades.length));
+    assert.equal(f.name, 'Caversham Bridge underside');
+    assert.equal(color[3], 1, 'solid, not clear');
+    assert.ok(color[0] * 0.3 + color[1] * 0.59 + color[2] * 0.11 < 0.4, `dark (in shadow): ${color.map((x) => x.toFixed(2))}`);
+  }
+});
+
+test("the water mirrors each landmark and both bridges: a landmark from its front only, its picture standing where its walls are (the Island Bar mirrored twice its width from its footprint's edge)", async () => {
+  const { course, mirror: m } = await mirror();
+  const landmarks = course.scenery.buildings.filter((b) => LANDMARK_STYLES.includes(b.style)).map((b) => b.style);
+  for (const style of landmarks) {
+    const f = m.facades.find((x) => x.name === style);
+    assert.ok(f, `${style} is mirrored`);
+    const fr = landmarkFrame(course, style);
+    // Where the picture stands, out from the footprint's middle towards the water.
+    const out = (f.p[0] - fr.origin[0]) * fr.fwd[0] + (f.p[2] - fr.origin[2]) * fr.fwd[1];
+    // (Within its footprint, or out to the bank where it's built to the water: the spiral-stair boathouse's dock.)
+    assert.ok(out > fr.depth[0] - 2 && out < Math.max(fr.depth[1], fr.edge) + 2, `${style}: ${out.toFixed(1)} m out, its footprint ${fr.depth.map((x) => x.toFixed(1))}, the bank ${fr.edge.toFixed(1)}`);
+    // The Island Bar's glass front stands well back from its footprint's edge, which mirrored it twice its width.
+    if (style === 'island-bar') assert.ok(out < fr.depth[1] - 5, `the Island Bar's picture at ${out.toFixed(1)} m`);
+    // From 25 m out in front, looking back at it and up a little, the ray meets its picture; looking away it doesn't.
+    const o = [fr.origin[0] + fr.fwd[0] * (fr.depth[1] + 25), 0, fr.origin[2] + fr.fwd[1] * (fr.depth[1] + 25)];
+    const slots = nearFacades(m, o[0], o[2]);
+    const mid = (fr.along[0] + fr.along[1]) / 2;
+    const toward = unit([fr.origin[0] + fr.right[0] * mid - o[0], 0, fr.origin[2] + fr.right[1] * mid - o[2]]);
+    let met = 0;
+    for (let up = 0.05; up <= 0.4; up += 0.05) met += seen(o, unit([toward[0], up, toward[2]]), slots, m).color[3] > 0.5;
+    assert.ok(met >= 3, `${style}: the reflection shows it (${met} of 8 rays)`);
+    // From behind it (inland), a ray towards the water passes through its picture: only its front is mirrored.
+    const behind = [fr.origin[0] - fr.fwd[0] * 30, 0, fr.origin[2] - fr.fwd[1] * 30];
+    const only = nearFacades({ ...m, facades: [f] }, behind[0], behind[2]);
+    assert.equal(seen(behind, unit([fr.fwd[0], 0.15, fr.fwd[1]]), only, m).slot, null, `${style} from behind`);
+  }
+  for (const part of ['side', 'underside']) assert.ok(m.facades.some((f) => f.name === `Caversham Bridge ${part}`), part);
+  // Not Christchurch Bridge: its thin deck high over the water bent into a black snake in the ripples.
+  assert.ok(!m.facades.some((f) => f.name.startsWith('Christchurch')), 'no Christchurch Bridge');
+  assert.equal(m.facades.filter((f) => f.name === 'Caversham Bridge side').length, 2, 'both its sides');
+  assert.ok(m.facades.some((f) => f.name === 'Caversham Bridge pier'), 'its piers');
+  assert.equal(m.height, FACADE.h * m.facades.length);
+  assert.equal(m.pixels.length, m.width * m.height * 4);
+  // Premultiplied, as the shaders add it: a texel is solid or clear, and clear is black.
+  for (let i = 0; i < m.pixels.length; i += 4) {
+    const [r, g, b, a] = m.pixels.subarray(i, i + 4);
+    assert.ok(a === 255 || (a === 0 && r === 0 && g === 0 && b === 0), `texel ${i / 4}: ${[r, g, b, a]}`);
+  }
+  // main.js hands the pictures to the renderer.
+  assert.match(await readFile(new URL('../reading-thames/main.js', import.meta.url), 'utf8'), /renderer\.setFacades\(mirror \?\?/);
+});
+
+test("drawing the facades for the water changes nothing in the world: the river is the same, built before or after them", async () => {
+  const { vertices: plain } = buildWorld(courseFromFile(await data('reading')), 1, 'river');
+  const first = courseFromFile(await data('reading'));
+  mirrorFacades(first, SUN, SKY_TOP);
+  const { vertices: after } = buildWorld(first, 1, 'river');
+  const { mirror: m, course } = await mirror();
+  mirrorFacades(course, SUN, SKY_TOP);
+  const { vertices: again } = buildWorld(course, 1, 'river');
+  assert.equal(after.length, plain.length);
+  assert.ok(after.every((v, i) => v === plain[i]), 'built after the facades');
+  assert.ok(again.every((v, i) => v === plain[i]), 'built again after them');
+  assert.ok(m.facades.length > 10);
+});
+
+test("each frame gets the six facades nearest the camera, nearest first, each slot pointing at its own picture row", async () => {
+  const { course, mirror: m } = await mirror();
+  const c = pointAt(course, course.bridges.find((b) => b.name === 'Caversham Bridge').s);
+  const rows = m.facades.length;
+  // From the bridge more than six are within reach (its sides, underside and piers, and the clubs upstream).
+  const slots = nearFacades(m, c.x, c.z);
+  const far = (f) => {
+    // Distance to the rectangle's footprint, sampled finely (not the code's own formula).
+    let best = Infinity;
+    for (let a = 0; a <= 1; a += 0.005) for (let b = 0; b <= 1; b += f.v[1] ? 1 : 0.02) {
+      best = Math.min(best, Math.hypot(f.p[0] + f.u[0] * a + f.v[0] * b - c.x, f.p[2] + f.u[2] * a + f.v[2] * b - c.z));
+    }
+    return best;
+  };
+  const ranked = m.facades.map((f) => [far(f), f.row]).sort((a, b) => a[0] - b[0]);
+  assert.ok(ranked.filter(([d]) => d < 400).length > 6, 'more than six within reach');
+  const got = [0, 1, 2, 3, 4, 5].map((k) => Math.round(slots[k * 12 + 3] * rows));
+  assert.deepEqual(got, ranked.slice(0, 6).map(([, row]) => row));
+  for (let k = 0; k < 6; k++) assert.ok(Math.abs(slots[k * 12 + 7] * rows - 1) < 1e-6, `slot ${k}: one row's share`);
+  // Far up the river (5 km), none of these.
+  const p = pointAt(course, 5000);
+  const there = nearFacades(m, p.x, p.z);
+  assert.ok([0, 1, 2, 3, 4, 5].every((k) => !m.facades[Math.round(there[k * 12 + 3] * rows)]?.name.startsWith('Caversham') || there[k * 12 + 7] === 0));
 });

@@ -2895,13 +2895,11 @@ export function bridgeTriangles(course, bridge) {
   return m.build().count / 3;
 }
 
-function concreteBridge(m, course, bridge) {
-  const f = bridgeFrame(course, bridge);
-  const { origin, right, fwd } = f;
-  f.at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
-  const { s } = bridge;
-  const deck = BRIDGE.deck;
-  const half = widthAt(course, s).half;
+// Where a concrete bridge's arches are, along its road from its frame's origin
+// ([from, to] over the water), and how far its deck runs (lo to hi).
+function bridgeArches(course, bridge) {
+  const { origin, right } = bridgeFrame(course, bridge);
+  const half = widthAt(course, bridge.s).half;
   const wet = (x) => (course.land?.rings ? course.land.inside(origin[0] + right[0] * x, origin[2] + right[1] * x) : Math.abs(x) < half);
   // The water across the line, out to where a long stretch of land begins.
   const spans = [];
@@ -2919,6 +2917,15 @@ function concreteBridge(m, course, bridge) {
     if (arches.length && x - arches.at(-1)[1] <= 2) arches.at(-1)[1] = x;
     else arches.push([x, x]);
   }
+  return { lo, hi, arches };
+}
+
+function concreteBridge(m, course, bridge) {
+  const f = bridgeFrame(course, bridge);
+  const { origin, right, fwd } = f;
+  f.at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
+  const deck = BRIDGE.deck;
+  const { lo, hi, arches } = bridgeArches(course, bridge);
   for (const [a0, b0] of arches) {
     const [a, b] = [a0 - 1, b0 + 1];
     const mid = (a + b) / 2;
@@ -3117,4 +3124,235 @@ function shed(m, course, { ring, height }, rand) {
   const h = gable ? eave - 0.15 : Math.min(eave - 0.1, base + 1.9);
   const door = (a, b) => (gable ? at(o, 0, mid + a) : at((u0 + u1) / 2 + a, 0, o)).map((v, i) => (i === 1 ? b : v));
   m.quad(door(-w / 2, base), door(w / 2, base), door(w / 2, h), door(-w / 2, h), SHED.door);
+}
+
+// --- what the water mirrors besides trees ------------------------------------
+
+// The landmarks and bridges mirrored in the water (the footage's calm river
+// shows the canoe club, the spiral-stair boathouse, the Island Bar and the
+// underside of Caversham Bridge in it; the game showed sky). Each is a
+// rectangle the water shader's reflected rays can meet: a landmark's front,
+// a bridge's two sides and its underside. Each one's picture is the model
+// itself, drawn once into a small texture as seen from the water: looking up
+// at it a little (`TILT`), lit as the mesh shader lights it, clear where
+// there's nothing (the sky shows round a gable, through railings).
+// Returns { facades: [{ name, p, u, v, row }], width, height, pixels } or null.
+export const FACADE = { w: 256, h: 64, tilt: 0.26 };
+export function mirrorFacades(course, sun, sky) {
+  const real = course.scenery;
+  if (!real) return null;
+  const river = real.river ?? course;
+  if (river.pads === undefined) {
+    river.land ??= waterMap(real.water ?? []);
+    river.pads = null;
+    river.lidar = undefined;
+    carPark(course);
+  }
+  lidarFor(course);
+  const out = [];
+  for (const b of real.buildings ?? []) {
+    if (!LANDMARKS[b.style]) continue;
+    const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+    const cx = ring.reduce((a, q) => a + q[0], 0) / ring.length;
+    const cz = ring.reduce((a, q) => a + q[1], 0) / ring.length;
+    const g = ground(river, cx, cz);
+    if (g.d < 0) continue;
+    const f = landmarkFacing(river, b.style, ring, cx, cz, g);
+    const m = new MeshBuilder();
+    LANDMARKS[b.style](m, river, f);
+    const tris = m.build().vertices;
+    // Its front: the footprint's water side, as wide and tall as the model.
+    const box = bounds(tris, [cx, 0, cz], f.right, f.fwd);
+    out.push({ name: b.style, ...facade(tris, [cx, 0, cz], f.right, f.fwd, [box.x[0], box.x[1]], [0, box.y[1]], f.depth[1], sun, sky) });
+  }
+  // Caversham Bridge only: Christchurch's deck is a thin line 6 m up, which the
+  // ripples bent into a black snake across the water (design review).
+  for (const b of river.bridges ?? []) {
+    if (b?.style !== 'concrete-arch') continue;
+    const m = new MeshBuilder();
+    concreteBridge(m, river, b);
+    const { origin, right, fwd } = bridgeFrame(river, b);
+    // The piers' faces either side of each arch, under the deck.
+    const piers = bridgeArches(river, b).arches.flatMap(([a, z]) => [[a - 1, 1], [z + 1, -1]]);
+    const tris = m.build().vertices;
+    const box = bounds(tris, origin, right, fwd);
+    // Its two sides, each seen from its own side of the bridge.
+    const name = b.name ?? b.style;
+    out.push({ name: `${name} side`, ...facade(tris, origin, right, fwd, box.x, [0, box.y[1]], box.z[1], sun, sky) });
+    out.push({ name: `${name} side`, ...facade(tris, origin, right, [-fwd[0], -fwd[1]], [-box.x[1], -box.x[0]], [0, box.y[1]], -box.z[0], sun, sky, true) });
+    // And its underside, seen from the water below, at the arches' crown over the
+    // middle of the river.
+    const top = crown(tris, origin, right);
+    out.push({ name: `${name} underside`, ...ceiling(tris, origin, right, fwd, box, top, sun, sky) });
+    for (const [x, e] of piers) out.push({ name: `${name} pier`, ...facade(tris, origin, fwd, [right[0] * e, right[1] * e], box.z, [0, top], x * e, sun, sky) });
+  }
+  const { w, h } = FACADE;
+  const pixels = new Uint8Array(w * h * Math.max(1, out.length) * 4);
+  out.forEach((f, k) => {
+    pixels.set(f.pixels, k * w * h * 4);
+    f.row = k;
+    delete f.pixels;
+  });
+  return { facades: out, width: w, height: h * Math.max(1, out.length), pixels };
+}
+
+// A model's extent in a frame: x along `right`, z along `fwd`, y up.
+function bounds(tris, origin, right, fwd) {
+  const box = { x: [Infinity, -Infinity], y: [Infinity, -Infinity], z: [Infinity, -Infinity] };
+  for (let i = 0; i < tris.length; i += 9) {
+    const [dx, y, dz] = [tris[i] - origin[0], tris[i + 1], tris[i + 2] - origin[2]];
+    const x = dx * right[0] + dz * right[1];
+    const z = dx * fwd[0] + dz * fwd[1];
+    for (const [k, v] of [['x', x], ['y', y], ['z', z]]) {
+      box[k][0] = Math.min(box[k][0], v);
+      box[k][1] = Math.max(box[k][1], v);
+    }
+  }
+  return box;
+}
+
+// How high the underside is over the middle of the river: the lowest part of
+// the model within 4 m of the river line that's clear of the water.
+function crown(tris, origin, right) {
+  let low = Infinity;
+  for (let i = 0; i < tris.length; i += 9) {
+    const x = (tris[i] - origin[0]) * right[0] + (tris[i + 2] - origin[2]) * right[1];
+    if (Math.abs(x) < 4 && tris[i + 1] > 1) low = Math.min(low, tris[i + 1]);
+  }
+  return Number.isFinite(low) ? low : 4;
+}
+
+// A wall facing `fwd` (towards the water), `at` metres out along it from
+// `origin`, from x0 to x1 along `right` and y0 to y1 up. `flip`: its own
+// right is the other way (the far side of a bridge).
+// The rectangle stands where most of what's seen of the model is (a footprint
+// can reach well in front of its walls: the Island Bar's mirrored twice its width).
+function facade(tris, origin, right, fwd, [x0, x1], [y0, y1], at, sun, sky, flip = false) {
+  const r = flip ? [-right[0], -right[1]] : right;
+  // Seen from the water in front, looking up at it a little.
+  const view = [fwd[0] * Math.cos(FACADE.tilt), -Math.sin(FACADE.tilt), fwd[1] * Math.cos(FACADE.tilt)];
+  const u = [r[0] * (x1 - x0), 0, r[1] * (x1 - x0)];
+  const v = [0, y1 - y0, 0];
+  const corner = (d) => [origin[0] + r[0] * x0 + fwd[0] * d, y0, origin[2] + r[1] * x0 + fwd[1] * d];
+  const first = bake(tris, corner(at), u, v, view, sun, sky);
+  const p = corner(at + first.middle * Math.cos(FACADE.tilt));
+  // (u × v must face the viewer: the shader only mirrors a face from its front.)
+  return orient({ p, u, v, pixels: bake(tris, p, u, v, view, sun, sky).pixels }, view);
+}
+
+// A bridge's underside: level at `y`, over the model's extent, seen from below.
+function ceiling(tris, origin, right, fwd, box, y, sun, sky) {
+  const p = [origin[0] + right[0] * box.x[0] + fwd[0] * box.z[0], y, origin[2] + right[1] * box.x[0] + fwd[1] * box.z[0]];
+  const u = [right[0] * (box.x[1] - box.x[0]), 0, right[1] * (box.x[1] - box.x[0])];
+  const v = [fwd[0] * (box.z[1] - box.z[0]), 0, fwd[1] * (box.z[1] - box.z[0])];
+  const view = [0, -1, 0];
+  return orient({ p, u, v, pixels: bake(tris, p, u, v, view, sun, sky, false).pixels }, view);
+}
+
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+// Turns a rectangle so u × v faces the viewer, mirroring its picture to match.
+function orient(f, view) {
+  if (dot3(cross3(f.u, f.v), view) > 0) return f;
+  const { w, h } = FACADE;
+  const flipped = new Uint8Array(f.pixels.length);
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) flipped.set(f.pixels.subarray((j * w + i) * 4, (j * w + i) * 4 + 4), (j * w + (w - 1 - i)) * 4);
+  }
+  return { p: f.p.map((c, k) => c + f.u[k]), u: f.u.map((c) => -c), v: f.v, pixels: flipped };
+}
+
+// The mesh shader's light (shaders.js MESH fs), for a surface facing n.
+function lit(color, n, sun, sky) {
+  const s = Math.max(dot3(n, sun), 0);
+  const t = 0.5 + 0.5 * n[1];
+  const ambient = [0, 1, 2].map((i) => [0.3, 0.27, 0.24][i] * (1 - t) + (sky[i] * 0.7 + 0.25) * t);
+  const fl = [-sun[0], 0.25, -sun[2]];
+  const len = Math.hypot(...fl);
+  const fill = Math.max(dot3(n, fl.map((c) => c / len)), 0);
+  const light = [1, 0.94, 0.82].map((c, i) => c * s * 0.8 + ambient[i] * 0.62 + [0.85, 0.88, 0.95][i] * fill * 0.3);
+  return color.map((c, i) => c * light[i]);
+}
+
+// The model drawn onto the rectangle p + a·u + b·v as seen along -view (view
+// points from the model to the eye): each triangle slid along view onto the
+// rectangle's plane, the one nearest the eye kept, texel by texel. Row 0 is
+// the bottom (b = 0). Clear where nothing is. `middle`: how far in front of
+// the rectangle (along view) most of what's seen is.
+function bake(tris, p, u, v, view, sun, sky, walls = true) {
+  const { w, h } = FACADE;
+  const pixels = new Uint8Array(w * h * 4);
+  const near = new Float32Array(w * h).fill(-Infinity);
+  const square = new Uint8Array(w * h); // whether what's seen there faces the eye squarely (a wall)
+  const n = cross3(u, v);
+  const nv = dot3(n, view);
+  const uu = dot3(u, u);
+  const vv = dot3(v, v);
+  const project = (i) => {
+    const q = [tris[i] - p[0], tris[i + 1] - p[1], tris[i + 2] - p[2]];
+    const s = dot3(q, n) / nv; // how far towards the eye
+    const on = [q[0] - view[0] * s, q[1] - view[1] * s, q[2] - view[2] * s];
+    return [(dot3(on, u) / uu) * w, (dot3(on, v) / vv) * h, s];
+  };
+  for (let i = 0; i < tris.length; i += 27) {
+    const [a, b, c] = [project(i), project(i + 9), project(i + 18)];
+    const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+    if (Math.abs(area) < 1e-9) continue;
+    let normal = [tris[i + 3], tris[i + 4], tris[i + 5]];
+    // From the water you look up at a building: its walls, never the tops of its
+    // roofs, quays and paths (seen from below they made thick dark bands).
+    if (walls && Math.abs(normal[1]) > 0.6) continue;
+    if (dot3(normal, view) < 0) normal = normal.map((x) => -x); // the side the eye sees
+    const flat = dot3(normal, view) > 0.9 ? 1 : 0;
+    const col = lit([tris[i + 6], tris[i + 7], tris[i + 8]], normal, sun, sky).map((x) => Math.round(Math.min(1, x) * 255));
+    const [i0, i1] = [Math.max(0, Math.floor(Math.min(a[0], b[0], c[0]))), Math.min(w - 1, Math.ceil(Math.max(a[0], b[0], c[0])))];
+    const [j0, j1] = [Math.max(0, Math.floor(Math.min(a[1], b[1], c[1]))), Math.min(h - 1, Math.ceil(Math.max(a[1], b[1], c[1])))];
+    for (let j = j0; j <= j1; j++) {
+      for (let k = i0; k <= i1; k++) {
+        const [x, y] = [k + 0.5, j + 0.5];
+        const wa = ((b[0] - x) * (c[1] - y) - (c[0] - x) * (b[1] - y)) / area;
+        const wb = ((c[0] - x) * (a[1] - y) - (a[0] - x) * (c[1] - y)) / area;
+        const wc = 1 - wa - wb;
+        if (wa < 0 || wb < 0 || wc < 0) continue;
+        const s = wa * a[2] + wb * b[2] + wc * c[2];
+        if (s <= near[j * w + k]) continue;
+        near[j * w + k] = s;
+        square[j * w + k] = flat;
+        pixels.set([...col, 255], (j * w + k) * 4);
+      }
+    }
+  }
+  // The most common, to half a metre, of what faces the eye squarely over its
+  // upper two thirds: the walls (not a pontoon, hedge or steps in front, nor the
+  // round crowns of the canoe club's trees, which a median followed 5 m out).
+  const counts = new Map();
+  for (let i = Math.floor(h / 3) * w; i < w * h; i++) {
+    if (square[i]) counts.set(Math.round(near[i] * 2), (counts.get(Math.round(near[i] * 2)) ?? 0) + 1);
+  }
+  const most = [...counts].reduce((a, b) => (b[1] > a[1] ? b : a), [0, 0])[0];
+  return { pixels, middle: most / 2 };
+}
+
+// The `count` facades nearest (x, z), as the frame's `facades` slots: for each,
+// its corner and the texture row's start (as a share of the texture), the
+// rectangle's u and one row's share, its v. Empty slots are zeros (never met).
+export function nearFacades(mirror, x, z, count = 6) {
+  const slots = new Float32Array(count * 12);
+  if (!mirror) return slots;
+  const rows = mirror.facades.length;
+  const far = (f) => {
+    // From (x, z) to the rectangle's footprint (a wall's is a line).
+    const q = [x - f.p[0], z - f.p[2]];
+    const a = Math.max(0, Math.min(1, (q[0] * f.u[0] + q[1] * f.u[2]) / (f.u[0] ** 2 + f.u[2] ** 2)));
+    const vl = f.v[0] ** 2 + f.v[2] ** 2;
+    const b = vl ? Math.max(0, Math.min(1, (q[0] * f.v[0] + q[1] * f.v[2]) / vl)) : 0;
+    return Math.hypot(q[0] - a * f.u[0] - b * f.v[0], q[1] - a * f.u[2] - b * f.v[2]);
+  };
+  mirror.facades
+    .map((f) => [far(f), f])
+    .filter(([d]) => d < 400)
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, count)
+    .forEach(([, f], k) => slots.set([...f.p, f.row / rows, ...f.u, 1 / rows, ...f.v, 0], k * 12));
+  return slots;
 }
