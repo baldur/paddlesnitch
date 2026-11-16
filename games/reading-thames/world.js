@@ -9,6 +9,7 @@ import { locate, pointAt, widthAt, POST } from './course.js';
 import { createAnglers, SNAG } from './anglers.js';
 import { LIDAR } from './lidar.js';
 import { MATERIALS } from './materials.js';
+import { SHEDS } from './sheds.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
@@ -873,12 +874,16 @@ function realScenery(m, course, real, rand) {
     for (let d = -b.length / 2; d <= b.length / 2; d += 3) clearings.push([origin[0] + fwd[0] * d, origin[2] + fwd[1] * d, 5]);
   }
   const cleared = (x, z) => clearings.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r);
+  // The small waterside sheds OpenStreetMap lacks (sheds.js): no tree or bush in
+  // them, the draws of any that would be kept (drawn nowhere), so nothing else moves.
+  const shedBoxes = shedsOf(real).map(({ ring }) => box2(ring, 1.5));
+  const inShed = (x, z) => shedBoxes.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1);
   // (Where lidar.js has the trees, the made-up ones are drawn nowhere, their
   // draws kept, and the measured ones planted after, with draws of their own.)
   const plant = (x, z, willow, hidden = false) => {
     const g = ground(course, x, z);
     if (g.d < 1.5 || built(x, z)) return;
-    const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) || measuredTrees(course.lidar, x, z) ? nowhere : m;
+    const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) || inShed(x, z) || measuredTrees(course.lidar, x, z) ? nowhere : m;
     if (willow) willowTree(into, x, g.y, z, rand);
     else tree(into, x, g.y, z, rand, true, fromRiver(course, x, z) > FAR_TREE);
   };
@@ -897,7 +902,7 @@ function realScenery(m, course, real, rand) {
       if (rand() < p.bushes * 0.7 && !walled(real, side, s)) {
         const [x, z] = at(0.5 + rand() * 1.5);
         if (built(x, z)) continue;
-        (onPath(x, z, 4) || cleared(x, z) ? nowhere : m).sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
+        (onPath(x, z, 4) || cleared(x, z) || inShed(x, z) ? nowhere : m).sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
       }
       if (p.stages && rand() < p.stages) landingStage(m, c, side, w);
     }
@@ -934,7 +939,7 @@ function realScenery(m, course, real, rand) {
     const g = ground(course, x, z);
     if (onPath(x, z, 4.5) || cleared(x, z) || byLandmark(x, z)) continue;
     const d = fromRiver(course, x, z);
-    tree(m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
+    tree(inShed(x, z) ? nowhere : m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
   }
 
   // The leaves at the water's edge (lidar.js `edge`, from the vegetation model):
@@ -954,7 +959,7 @@ function realScenery(m, course, real, rand) {
       // (A touch lighter than the trees behind: lit leaves at the water, not a black band.)
       const leaf = shade(LEAVES[Math.floor(edgeRand() * LEAVES.length)], edgeRand, 0.12).map((v) => Math.min(1, v * 1.15));
       const g = ground(course, x, z);
-      if (g.d < 0 || walled(real, side, s) || built(x, z) || onPath(x, z, 3) || cleared(x, z) || byLandmark(x, z)) continue;
+      if (g.d < 0 || walled(real, side, s) || built(x, z) || onPath(x, z, 3) || cleared(x, z) || inShed(x, z) || byLandmark(x, z)) continue;
       // In front of a house (within 15 m behind it), garden shrubs: hedge-sized, so the house shows.
       const out = [-c.tz * side, c.tx * side];
       const house = [5, 10, 15].some((k) => built(x + out[0] * k, z + out[1] * k));
@@ -965,12 +970,14 @@ function realScenery(m, course, real, rand) {
       let back = 0;
       while (reach(x + out[0] * back, z + out[1] * back) > 1.5 && back < 8) back += 0.5;
       const [cx, cz] = [x + out[0] * back, z + out[1] * back];
-      if (reach(cx, cz) > 1.5) continue;
+      if (reach(cx, cz) > 1.5 || inShed(cx, cz)) continue;
       m.sphere([cx, Math.max(0, ground(course, cx, cz).y) + r * 0.8, cz], r, leaf, 3, 6);
     }
   }
 
   for (const b of real.buildings) building(m, course, b, rand);
+  const shedRand = mulberry32(23); // their own draws
+  for (const b of shedsOf(real)) shed(m, course, b, shedRand);
   for (const w of real.walls ?? []) embankment(m, course, w, rand);
   for (const line of real.railways) railway(m, course, line);
   for (const lock of real.locks) lockGates(m, lock);
@@ -3025,4 +3032,68 @@ function weirSill(m, line) {
     m.quad([ax, 0.06, az], [bx, 0.06, bz], [bx + n[0], 0.03, bz + n[1]], [ax + n[0], 0.03, az + n[1]], COLORS.foam);
     m.quad([ax, 0.06, az], [bx, 0.06, bz], [bx - n[0], 0.03, bz - n[1]], [ax - n[0], 0.03, az - n[1]], COLORS.foam);
   }
+}
+
+// --- the small waterside sheds OpenStreetMap lacks -----------------------------
+
+// The sheds on the Reading Thames (sheds.js: Ordnance Survey footprints, lidar
+// heights), as { ring, height }. Every real river here is that one (made-up
+// rivers have no scenery, so never come here).
+let shedRows = SHEDS;
+export function useSheds(rows) { shedRows = rows; } // (tests: the world without them)
+export function shedsOf() {
+  return shedRows.map(([flat, height]) => ({ ring: Array.from({ length: flat.length / 2 }, (_, i) => [flat[2 * i], flat[2 * i + 1]]), height }));
+}
+const box2 = (ring, m = 0) => [Math.min(...ring.map((p) => p[0])) - m, Math.min(...ring.map((p) => p[1])) - m, Math.max(...ring.map((p) => p[0])) + m, Math.max(...ring.map((p) => p[1])) + m];
+
+// Sheds by the water, as the footage shows them: stained or weathered timber,
+// a dark green one now and then, a felt or tin roof.
+export const SHED = {
+  walls: [[0.42, 0.32, 0.23], [0.55, 0.52, 0.46], [0.25, 0.31, 0.24], [0.36, 0.27, 0.2]],
+  roofs: [[0.18, 0.18, 0.2], [0.3, 0.29, 0.28], [0.45, 0.28, 0.2]],
+  door: [0.16, 0.13, 0.11],
+  height: 2.6, // where trees hide it from the lidar
+};
+
+// A shed on its footprint: walls up to the eaves, a pitched roof along its
+// longer side up to its measured height, a dark door on the side facing the water.
+function shed(m, course, { ring, height }, rand) {
+  const wall = SHED.walls[Math.floor(rand() * SHED.walls.length)];
+  const roofColor = SHED.roofs[Math.floor(rand() * SHED.roofs.length)];
+  // Its frame: the longest edge's way, and across.
+  let long = [1, 0];
+  let best = 0;
+  ring.forEach((a, i) => {
+    const b = ring[(i + 1) % ring.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len > best) [best, long] = [len, [(b[0] - a[0]) / len, (b[1] - a[1]) / len]];
+  });
+  const across = [-long[1], long[0]];
+  const c = [ring.reduce((t, p) => t + p[0], 0) / ring.length, ring.reduce((t, p) => t + p[1], 0) / ring.length];
+  const u = ring.map(([x, z]) => (x - c[0]) * long[0] + (z - c[1]) * long[1]);
+  const v = ring.map(([x, z]) => (x - c[0]) * across[0] + (z - c[1]) * across[1]);
+  const [u0, u1, v0, v1] = [Math.min(...u), Math.max(...u), Math.min(...v), Math.max(...v)];
+  const at = (a, y, b) => [c[0] + long[0] * a + across[0] * b, y, c[1] + long[1] * a + across[1] * b];
+  // Down to its lowest corner's ground; on the water's edge, the water.
+  const base = Math.max(0, Math.min(...ring.map(([x, z]) => ground(course, x, z).y)));
+  const top = base + (height ?? SHED.height);
+  // (A low one keeps 1.8 m eaves, its roof flatter, the ridge at its height.)
+  const rise = Math.max(0.1, Math.min(1.2, (v1 - v0) * 0.3, top - base - 1.8));
+  const eave = top - rise;
+  for (let i = 0; i < ring.length; i++) {
+    const [a, b] = [ring[i], ring[(i + 1) % ring.length]];
+    m.quad([a[0], base, a[1]], [b[0], base, b[1]], [b[0], eave, b[1]], [a[0], eave, a[1]], wall);
+  }
+  // The roof, a little over the walls, its gable ends filled.
+  const [r0, r1, s0, s1] = [u0 - 0.2, u1 + 0.2, v0 - 0.25, v1 + 0.25];
+  const ridge = eave + rise;
+  const mid = (v0 + v1) / 2;
+  m.quad(at(r0, eave, s0), at(r1, eave, s0), at(r1, ridge, mid), at(r0, ridge, mid), roofColor);
+  m.quad(at(r0, eave, s1), at(r1, eave, s1), at(r1, ridge, mid), at(r0, ridge, mid), roofColor);
+  for (const e of [u0, u1]) m.tri(at(e, eave, v0), at(e, eave, v1), at(e, ridge, mid), wall);
+  // A door on the side nearest the water.
+  const side = [v0, v1].map((b) => [b, fromRiver(course, ...xz(at(0, 0, b)))]).sort((p, q) => p[1] - q[1])[0][0];
+  const w = Math.min(1.1, (u1 - u0) * 0.35);
+  const o = side + Math.sign(side - mid) * 0.03;
+  m.quad(at(-w / 2, base, o), at(w / 2, base, o), at(w / 2, Math.min(eave - 0.1, base + 1.9), o), at(-w / 2, Math.min(eave - 0.1, base + 1.9), o), SHED.door);
 }
