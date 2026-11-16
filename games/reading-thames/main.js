@@ -1,5 +1,5 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
-import { loadCourse, riverView, locate } from './course.js';
+import { loadCourse, riverView, mirrorLine, locate } from './course.js';
 import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
@@ -13,7 +13,7 @@ import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, moveOldScull, boardHul
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
-import { buildWorld, groundAt, bankWoods } from './world.js';
+import { buildWorld, groundAt, bankWoodsAlong } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, HIRE_BOATS, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
 import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, strokeTwist, shouldersAt, legPush, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
@@ -2159,10 +2159,10 @@ function simulate(dt) {
 
 // --- rendering ---------------------------------------------------------------
 
-const frameData = new Float32Array(132);
+const frameData = new Float32Array(164);
 // Deep water: a made-up river's, and the real Thames's olive green.
 const WATER = [0.07, 0.2, 0.24, 0];
-const THAMES = [0.19, 0.23, 0.16, 0];
+const THAMES = [0.19, 0.23, 0.16, 0.8]; // w: how calm (the shader's water.w): the Thames lies still between washes
 const SUN = normalize([0.35, 0.42, -0.84]);
 
 function boatFrame(b, y = 0) {
@@ -2572,16 +2572,19 @@ function render(time) {
   // The riverside trees, for their reflections: a real river's are tall and
   // come down to the water, a made-up one's stand back across the fields.
   // (A held camera mirrors the banks where it is, not where your boat is.)
-  const mirrorAt = fixedShot ? locate(race.course, fixedShot.eye[0], fixedShot.eye[2]).s : race.player.loc.s;
-  reflected = riverView(race.course, mirrorAt, fixedShot ? null : reflected, time - (reflected?.time ?? time));
+  const line = mirrorLine(race.course, !!fixedShot);
+  const mirrorAt = fixedShot ? locate(line, fixedShot.eye[0], fixedShot.eye[2]).s : race.player.loc.s;
+  reflected = riverView(line, mirrorAt, fixedShot ? null : reflected, time - (reflected?.time ?? time));
   reflected.time = time;
   const { half } = reflected;
   frameData.set([reflected.x, reflected.z, reflected.tx, reflected.tz], 112);
-  // A real river's banks: trees about 10 m tall as the water mirrors them (6 m left the far water sky-pale).
-  // How wooded each bank is here (world.js bankWoods), packed into w as ninths: w = 1 + left tenths + right hundredths.
-  const [woodL, woodR] = race.course.scenery ? bankWoods(race.course, reflected.x, reflected.z, reflected.tx, reflected.tz) : [1, 1];
-  const woods = 1 + Math.round(woodL * 9) / 10 + Math.round(woodR * 9) / 100;
-  frameData.set(race.course.scenery ? [half + 1, half + 1, 10, woods] : [half + 9, half + 4, 7, woods], 116);
+  // A real river's banks: trees about 15 m tall as the water mirrors them, as the lidar's riverside crowns are
+  // (10 m mirrored them only in a thin band at the far bank; 6 m left the far water sky-pale).
+  frameData.set(race.course.scenery ? [half + 1, half + 1, 15, 1] : [half + 9, half + 4, 7, 1], 116);
+  // How wooded each bank is (world.js bankWoodsAlong), every 20 m from 150 m behind to 150 m ahead:
+  // the shader reads it where each reflected ray meets the bank.
+  const [woodL, woodR] = bankWoodsAlong(race.course, reflected.x, reflected.z, reflected.tx, reflected.tz);
+  frameData.set([...woodL, ...woodR], 132);
   const spots = state === 'racing' ? washMarks(race, race.player) : [];
   for (let i = 0; i < 3; i++) frameData.set(spots[i] ?? [0, 0, 0, 0], 120 + i * 4);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];

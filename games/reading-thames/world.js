@@ -607,12 +607,20 @@ function fromRiver(course, x, z) {
 // How wooded each bank of a real river is beside (x, z), [left, right] as you
 // face along (tx, tz) (left = negative lateral, as the water shader's `across`), 0 to 1: 1 with no
 // buildings within 45 m of the water's edge 60 m either way, falling to 0 with
-// three or more. The water mirrors trees in proportion (main.js packs it into
+// three or more. The water mirrors trees in proportion (bankWoodsAlong, into
 // the frame), so a town reach mirrors its sky, not a wall of leaves under its
 // houses. Worked out once per course, every 10 m.
 export function bankWoods(course, x, z, tx, tz) {
+  const [left, right] = bankWoodsAlong(course, x, z, tx, tz, 1);
+  return [left[0], right[0]];
+}
+
+// The same for each bank at `n` points `step` metres apart along (tx, tz),
+// centred on (x, z): the water shader looks up the woods where each reflected
+// ray meets the bank (main.js puts them in the frame), not only beside you.
+export function bankWoodsAlong(course, x, z, tx, tz, n = 16, step = 20) {
   const river = course.scenery?.river ?? course;
-  if (!course.scenery?.buildings) return [1, 1];
+  if (!course.scenery?.buildings) return [Array(n).fill(1), Array(n).fill(1)];
   if (!river.woodsAlong) {
     const step = 10;
     const n = Math.ceil(river.length / step) + 1;
@@ -630,10 +638,11 @@ export function bankWoods(course, x, z, tx, tz) {
     measuredWoods(river, step);
   }
   const at = locate(river, x, z);
-  const i = Math.max(0, Math.min(river.woodsAlong[0].length - 1, Math.round(at.s / 10)));
-  const pair = [river.woodsAlong[0][i], river.woodsAlong[1][i]];
   // Facing down the river line (a route's leg going the other way), its left is your right.
-  return at.tx * tx + at.tz * tz < 0 ? pair.reverse() : pair;
+  const dir = at.tx * tx + at.tz * tz < 0 ? -1 : 1;
+  const last = river.woodsAlong[0].length - 1;
+  const row = (side) => Array.from({ length: n }, (_, k) => river.woodsAlong[side][Math.max(0, Math.min(last, Math.round((at.s + dir * (k - (n - 1) / 2) * step) / 10)))]);
+  return dir < 0 ? [row(1), row(0)] : [row(0), row(1)];
 }
 
 // Where lidar.js measured it, how wooded a bank is comes from the canopy: the

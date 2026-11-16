@@ -115,6 +115,13 @@ export function widthAt(course, s) {
   return samples[Math.max(0, Math.min(samples.length - 1, Math.round(s / SPACING)))];
 }
 
+// The line the water's reflections are taken along: the course being raced,
+// or for a camera held still (kayak.shoot), which can stand off that course's
+// route, the whole river's.
+export function mirrorLine(course, held) {
+  return held ? course.scenery?.river ?? course : course;
+}
+
 // Where the water's tree reflections are taken from: the river line at `s`,
 // its direction and how wide the open water is, eased from the last frame's
 // (`prev`, `dt` seconds ago), since at an island's end the width jumps by tens

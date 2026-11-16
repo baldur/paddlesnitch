@@ -15,11 +15,12 @@ layout(std140) uniform Frame {
   vec4 sunDir;     // towards the sun
   vec4 skyTop;     // w = cloud cover, 0..1
   vec4 skyHorizon; // also the fog colour; w = fog density
-  vec4 water;      // deep water colour
+  vec4 water;      // deep water colour; w = how calm, 0..1 (a real river's lies still between washes)
   vec4 boats[16];  // x, z, heading, speed: for their wakes
   vec4 river;      // the river where you are: centre x, z and direction x, z
   vec4 banks;      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
   vec4 spots[3];   // x, z, heading, how bright: the free places in the wash ahead of you
+  vec4 woods[8];   // how wooded the left bank (first 4) and right bank are, every 20 m from 150 m behind to 150 m ahead
 } frame;
 
 vec4 toGL(vec4 clip) { return vec4(clip.xy, clip.z * 2.0 - clip.w, clip.w); }
@@ -148,16 +149,41 @@ export const WATER = {
   vs: FRAME + WAVES + /* glsl */ `
 layout(location = 0) in vec2 grid;
 out vec3 vWorld;
+out vec2 vWoods;
+// How wooded a bank is a metres along the river from frame.river, from its 16
+// values (frame.woods, every 20 m, ±150 m) passed as four vec4s: straight
+// between the two nearest, as tent weights (no index worked out at run time,
+// which software graphics run slowly).
+float woodAt(float a, vec4 w0, vec4 w1, vec4 w2, vec4 w3) {
+  vec4 f = clamp(a / 20.0 + 7.5, 0.0, 15.0) - vec4(0.0, 1.0, 2.0, 3.0);
+  return dot(w0, max(1.0 - abs(f), vec4(0.0))) + dot(w1, max(1.0 - abs(f - 4.0), vec4(0.0))) + dot(w2, max(1.0 - abs(f - 8.0), vec4(0.0))) + dot(w3, max(1.0 - abs(f - 12.0), vec4(0.0)));
+}
+// How far along the river a ray from p meets the bank at that lateral (the river taken as straight from where you are; along it, the next bend, a few hundred metres).
+float alongTo(vec2 p, vec3 refl, float bank) {
+  vec2 along = frame.river.zw;
+  vec2 across = vec2(-along.y, along.x);
+  float reach = min(abs(bank - dot(p - frame.river.xy, across)) / max(abs(dot(refl.xz, across)), 0.0001), 260.0);
+  return dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
+}
+// How wooded each bank is where a ray mirrored off the still water at p meets it.
+// Worked out per vertex: the woods change every 20 m, and reading frame.woods
+// for every pixel made the frame some 60% slower on software graphics (WebKit on CI).
+vec2 woodsHere(vec2 p, vec3 refl) {
+  return vec2(woodAt(alongTo(p, refl, -frame.banks.x), frame.woods[0], frame.woods[1], frame.woods[2], frame.woods[3]), woodAt(alongTo(p, refl, frame.banks.y), frame.woods[4], frame.woods[5], frame.woods[6], frame.woods[7]));
+}
 void main() {
   vec2 snap = floor(frame.camPos.xz / SPACING) * SPACING;
   vec2 xz = grid + snap;
   vec3 world = vec3(xz.x, height(xz, frame.camPos.w), xz.y);
   gl_Position = toGL(frame.viewProj * vec4(world, 1.0));
   vWorld = world;
+  vec3 v = normalize(frame.camPos.xyz - world);
+  vWoods = woodsHere(xz, vec3(-v.x, v.y, -v.z));
 }
 `,
   fs: FRAME + WAVES + /* glsl */ `
 in vec3 vWorld;
+in vec2 vWoods;
 out vec4 outColor;
 
 // Fine ripples only exist in the normal, so they cost nothing in geometry.
@@ -221,29 +247,26 @@ float spots(vec2 p, float dist) {
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
 const vec3 TREES = vec3(0.14, 0.2, 0.1);
-vec2 treeline(vec2 p, vec3 refl) {
+vec2 treeline(vec2 p, vec3 refl, vec2 woods) {
   if (frame.banks.w < 0.5) return vec2(0.0);
   vec2 along = frame.river.zw;
   vec2 across = vec2(-along.y, along.x);
   float l = dot(p - frame.river.xy, across);
   float rl = dot(refl.xz, across);
-  // How wooded each bank is near you (0 to 1, ninths), packed into w's tenths and hundredths.
-  float packed = (frame.banks.w - 1.0) * 10.0 + 0.001;
-  vec2 woods = vec2(floor(packed) / 9.0, floor(fract(packed) * 10.0) / 9.0);
   vec2 mirrored = vec2(0.0);
   // Both banks, blended as the ray turns from one to the other (no seam where it's along the river).
   for (int k = 0; k < 2; k++) {
     float e = float(k) * 2.0 - 1.0;
     float bank = e > 0.0 ? frame.banks.y : -frame.banks.x;
-    float wood = e > 0.0 ? woods.y : woods.x;
     float weight = smoothstep(-0.06, 0.06, rl * e);
     // To that bank's line, either side of it; along the river, the next bend (a few hundred metres).
     float reach = min(abs(bank - l) / max(abs(rl), 0.0001), 260.0);
     float a = dot(p - frame.river.xy, along) + reach * dot(refl.xz, along);
+    float wood = e > 0.0 ? woods.y : woods.x;
     float top = max(0.3, frame.banks.z * wood * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3)));
-    // (leaf: how light the leaves are, crown by crown; sky shows between the darkest.)
+    // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     float leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
-    float cover = 0.9 * smoothstep(0.05, 0.3, leaf) * (1.0 - smoothstep(top * 0.6, top * 1.35, reach * refl.y));
+    float cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.5, top * 1.6, reach * refl.y));
     mirrored += weight * vec2(cover, leaf);
   }
   return mirrored;
@@ -257,15 +280,17 @@ void main() {
   // Slopes by forward differences. Far off, wakes are too small to see.
   float e = 0.05;
   float h = height(p, t);
-  float dx = (height(p + vec2(e, 0.0), t) - h) / e;
-  float dz = (height(p + vec2(0.0, e), t) - h) / e;
+  // A calm river's swell barely tilts it; wakes still break it up.
+  float calm = frame.water.w;
+  float dx = (height(p + vec2(e, 0.0), t) - h) / e * (1.0 - 0.6 * calm);
+  float dz = (height(p + vec2(0.0, e), t) - h) / e * (1.0 - 0.6 * calm);
   vec2 w = vec2(0.0);
   if (dist < 140.0) {
     w = wake(p);
     dx += (wake(p + vec2(e, 0.0)).x - w.x) / e;
     dz += (wake(p + vec2(0.0, e)).x - w.x) / e;
   }
-  vec2 r = ripple(p, t);
+  vec2 r = ripple(p, t) * (1.0 - 0.75 * calm);
   vec3 n = normalize(vec3(-dx - r.x, 1.0, -dz - r.y));
 
   vec3 v = toEye / dist;
@@ -274,9 +299,10 @@ void main() {
   // The banks are mirrored off a calmer surface than the ripples: real river
   // water holds the tree line's reflection whole until a wash breaks it.
   vec3 still = reflect(-v, normalize(vec3(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
-  vec2 tl = treeline(p, still);
+  vec2 tl = treeline(p, still, vWoods);
   vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x);
-  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15, 0.0, 1.0));
+  // Still water mirrors the trees even looking down into it (not the sky: there it shows its dark depths).
+  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * tl.x, 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles.
   c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;
   float foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2(13.0, 9.0)) + t * 6.0));
