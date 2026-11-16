@@ -38,3 +38,10 @@ it in the report instead of testing it.
 
 (lead adds what it learns from your reports here, including each target's
 score so the next run moves on.)
+
+- 2026-11-16 (lead): `mutate.mjs` and 18 tests for geo.ts are on main
+  (`apps/web/src/lib/geo.test.ts`, where geo's tests live; don't start a second
+  geo test file). geo.ts measured 52.2% with them. Known weakness: any non-zero
+  exit counts as killed, so a mutant that breaks the build counts as a kill;
+  make it count those as skipped before trusting a score. Next target:
+  `apps/web/src/lib/permissions.ts`.

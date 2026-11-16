@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { haversine, processTrace, formatTime, diagnoseGates, noRunReason } from './geo'
+import { haversine, processTrace, formatTime, diagnoseGates, noRunReason, lineMidpoint, allPasses, crossingSignNear, gateDiagnosisMessage, projectRoute } from './geo'
 import type { TrackPoint, Line } from './types'
+import type { GateDiagnosis } from './geo'
 import failingGateTrace from '../tests/fixtures/gate-66-failing-trace.json'
 
 // Helpers
@@ -374,5 +375,175 @@ describe('noRunReason', () => {
     const once = full.slice(0, 3)
     const reasons = ([1, -1] as const).map(d => noRunReason(once, startLine, undefined, 'gate', d))
     expect(reasons.sort()).toEqual(['MISSED_FINISH', 'WRONG_DIRECTION'])
+  })
+})
+
+// --- lineMidpoint -------------------------------------------------------
+describe('lineMidpoint', () => {
+  it('averages the two endpoints on each axis', () => {
+    // lat from lat, lng from lng: a + <-> - or an axis swap must move the result.
+    const m = lineMidpoint([[10, 20], [12, 30]] as Line)
+    expect(m[0]).toBe(11) // (10 + 12) / 2 — the lat axis
+    expect(m[1]).toBe(25) // (20 + 30) / 2 — the lng axis
+  })
+})
+
+// --- gateDiagnosisMessage ----------------------------------------------
+describe('gateDiagnosisMessage', () => {
+  it('reports a clean run when there is no blocking gate', () => {
+    const d: GateDiagnosis = { total: 3, gatesPassed: 3, blocking: null }
+    expect(gateDiagnosisMessage(d)).toBe(
+      'The trace crosses every gate in the required order and direction.',
+    )
+  })
+
+  it('explains a wrong-direction gate reached after some progress', () => {
+    const d = { total: 4, gatesPassed: 2, blocking: { gateNumber: 3, requiredDirection: -1, reason: 'wrong_direction' } } as GateDiagnosis
+    const msg = gateDiagnosisMessage(d)
+    expect(msg).toContain('You passed 2 of 4 gates in order.')
+    expect(msg).toContain('Gate 3 was crossed in the opposite direction')
+  })
+
+  it('explains a wrong-direction start gate with no progress', () => {
+    const d = { total: 4, gatesPassed: 0, blocking: { gateNumber: 1, requiredDirection: 1, reason: 'wrong_direction' } } as GateDiagnosis
+    const msg = gateDiagnosisMessage(d)
+    expect(msg).not.toContain('You passed') // gatesPassed == 0 → no progress prefix
+    expect(msg).toContain('Gate 1 was crossed in the opposite direction')
+  })
+
+  it('explains a not-crossed gate reached after some progress', () => {
+    const d = { total: 4, gatesPassed: 1, blocking: { gateNumber: 2, requiredDirection: 1, reason: 'not_crossed' } } as GateDiagnosis
+    const msg = gateDiagnosisMessage(d)
+    expect(msg).toContain('You passed 1 of 4 gates in order.')
+    expect(msg).toContain('Gate 2 was not crossed after the previous gate')
+  })
+
+  it('explains a not-crossed start gate with no progress', () => {
+    const d = { total: 4, gatesPassed: 0, blocking: { gateNumber: 1, requiredDirection: 1, reason: 'not_crossed' } } as GateDiagnosis
+    const msg = gateDiagnosisMessage(d)
+    expect(msg).not.toContain('You passed')
+    expect(msg).toContain('Gate 1 was not crossed.') // no " after the previous gate"
+  })
+})
+
+// --- allPasses ----------------------------------------------------------
+describe('allPasses', () => {
+  const startLine: Line = [[0.001, -0.001], [0.001, 0.001]]
+  const finishLine: Line = [[0.005, -0.001], [0.005, 0.001]]
+  // Up (crosses both, northbound +1), down the same lane (sign -1), up again
+  // (+1). The southbound down-leg is dropped by startSign/finishSign = +1.
+  const twoLaps = [
+    pt(0.000, 0.000, 0),
+    pt(0.006, 0.000, 10_000),
+    pt(0.000, 0.000, 30_000),
+    pt(0.006, 0.000, 50_000),
+  ]
+
+  it('counts one pass per northbound start -> finish pair', () => {
+    const passes = allPasses(twoLaps, startLine, finishLine, 1, 1)
+    expect(passes.length).toBe(2)
+    for (const p of passes) expect(p.startMs).toBeLessThan(p.finishMs)
+  })
+
+  it('keeps only the passes whose crossings go the required way', () => {
+    // Unfiltered there are 2; a southbound start and finish are required here,
+    // and no southbound start is followed by a southbound finish.
+    expect(allPasses(twoLaps, startLine, finishLine).length).toBe(2)
+    expect(allPasses(twoLaps, startLine, finishLine, -1, -1)).toEqual([])
+    expect(allPasses(twoLaps, startLine, finishLine, -1).length).toBe(1)
+  })
+
+  it('returns an empty list when the finish line is never crossed', () => {
+    expect(allPasses([pt(0.000, 0, 0), pt(0.002, 0, 10_000)], startLine, finishLine)).toEqual([])
+  })
+
+  it('skips a start that is never followed by a finish', () => {
+    // start is crossed (northbound) but the track never reaches the finish lat.
+    const track = [pt(0.000, 0.000, 0), pt(0.002, 0.000, 10_000), pt(0.002, 0.010, 20_000)]
+    expect(allPasses(track, startLine, finishLine, 1, 1)).toEqual([])
+  })
+
+})
+
+// --- crossingSignNear ---------------------------------------------------
+describe('crossingSignNear', () => {
+  const line: Line = [[0.002, -0.001], [0.002, 0.001]]
+
+  it('is undefined when the track never crosses the line', () => {
+    const track = [pt(0.000, 0, 0), pt(0.001, 0, 10_000)] // stays below lat 0.002
+    expect(crossingSignNear(track, line, 1)).toBeUndefined()
+  })
+
+  it('returns +1 for a single northbound crossing', () => {
+    const track = [pt(0.000, 0, 0), pt(0.004, 0, 10_000)]
+    expect(crossingSignNear(track, line, 0)).toBe(1)
+  })
+
+  it('returns the sign of the crossing nearest to `near`', () => {
+    // +1 at trackIndex 0, -1 at trackIndex 2 (same lng, so both cross the line);
+    // proximity to `near` decides which.
+    const track = [
+      pt(0.000, 0.000, 0),
+      pt(0.004, 0.000, 10_000), // +1
+      pt(0.004, 0.000, 10_000),
+      pt(0.000, 0.000, 30_000), // -1
+      pt(0.000, 0.000, 40_000),
+    ]
+    expect(crossingSignNear(track, line, 0.5)).toBe(1)
+    expect(crossingSignNear(track, line, 1.5)).toBe(-1)
+  })
+})
+
+// --- processTrace: 500 m splits ----------------------------------------
+describe('processTrace — 500 m splits', () => {
+  // A long straight run north, one point every 0.002 deg lat (~222 m), 1 s
+  // apart. Start at lat 0.001 (t=0.5 s), finish at lat 0.011 (t=5.5 s):
+  // ~1.1 km, so a 500 m and a 1000 m split fall inside the racing segment.
+  const startLine: Line = [[0.001, -0.001], [0.001, 0.001]]
+  const finishLine: Line = [[0.011, -0.001], [0.011, 0.001]]
+  const track = [
+    pt(0.000, 0, 0),
+    pt(0.002, 0, 1000),
+    pt(0.004, 0, 2000),
+    pt(0.006, 0, 3000),
+    pt(0.008, 0, 4000),
+    pt(0.010, 0, 5000),
+    pt(0.012, 0, 6000),
+  ]
+
+  it('records a split at each 500 m boundary with an interpolated time', () => {
+    const result = processTrace(track, startLine, finishLine)
+    expect(result!.splits.length).toBe(2)
+    expect(result!.splits[0].distance).toBe(500)
+    expect(result!.splits[1].distance).toBe(1000)
+        // Timed from the start crossing (0.5 s in), not from the first point.
+    expect(result!.splits[0].elapsedSeconds).toBeCloseTo(2.25, 1)
+    expect(result!.splits[1].elapsedSeconds).toBeCloseTo(4.5, 1)
+  })
+
+  it('emits no split when the run is shorter than the 500 m step', () => {
+    // Start and finish in different segments, end-to-end ≈ 167 m (0.0015 deg
+    // lat) — well under one 500 m step, so no boundary is ever crossed.
+    const short = [pt(0.000, 0, 0), pt(0.001, 0, 1000), pt(0.002, 0, 2000)]
+    const result = processTrace(short, [[0.0005, -0.001], [0.0005, 0.001]] as Line, [[0.0015, -0.001], [0.0015, 0.001]] as Line)
+    expect(result).not.toBeNull()
+    expect(result!.splits).toEqual([])
+  })
+})
+
+// --- projectRoute -------------------------------------------------------
+describe('projectRoute', () => {
+  it('returns an empty list for fewer than two points', () => {
+    expect(projectRoute([{ lat: 0, lng: 0 }], 100, 100, 5)).toEqual([])
+  })
+
+  it('projects north as up: a more northerly point has the smaller pixel y', () => {
+    const out = projectRoute([{ lat: 0, lng: 0 }, { lat: 0.01, lng: 0 }], 100, 100, 10)
+    expect(out[1][1]).toBeLessThan(out[0][1])
+  })
+
+  it('emits one rounded [x,y] pair per point', () => {
+    const out = projectRoute([{ lat: 0, lng: 0 }, { lat: 0.003, lng: 0.007 }, { lat: 0.01, lng: 0.001 }], 100, 100, 7)
+    expect(out).toEqual([[19.9, 93], [80.1, 67.2], [28.5, 7]])
   })
 })
