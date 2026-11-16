@@ -21,6 +21,7 @@ layout(std140) uniform Frame {
   vec4 banks;      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
   vec4 spots[3];   // x, z, heading, how bright: the free places in the wash ahead of you
   vec4 woods[8];   // how wooded the left bank (first 4) and right bank are, every 20 m from 150 m behind to 150 m ahead
+  vec4 facades[18]; // the six nearest landmark fronts and bridge sides and undersides, three each (world.js nearFacades)
 } frame;
 
 vec4 toGL(vec4 clip) { return vec4(clip.xy, clip.z * 2.0 - clip.w, clip.w); }
@@ -185,6 +186,7 @@ void main() {
 in vec3 vWorld;
 in vec2 vWoods;
 out vec4 outColor;
+uniform sampler2D facadeTex;
 
 // Fine ripples only exist in the normal, so they cost nothing in geometry.
 vec2 ripple(vec2 p, float t) {
@@ -272,6 +274,35 @@ vec2 treeline(vec2 p, vec3 refl, vec2 woods) {
   return mirrored;
 }
 
+// The landmarks and bridges mirrored in the water (world.js mirrorFacades): a
+// rectangle from corner a.xyz along b.xyz and c.xyz (square to each other,
+// b x c facing the water), its picture from row a.w of the facades' texture,
+// b.w high. Keeps the nearer of it and best: the texture's u, v and the distance.
+vec4 facadeHit(vec3 o, vec3 d, vec4 a, vec4 b, vec4 c, vec4 best) {
+  vec3 n = cross(b.xyz, c.xyz);
+  float dn = dot(d, n);
+  if (dn > -0.000001) { return best; }
+  float t = dot(a.xyz - o, n) / dn;
+  if (t <= 0.0 || t >= best.w) { return best; }
+  vec3 h = o + d * t - a.xyz;
+  float u = dot(h, b.xyz) / dot(b.xyz, b.xyz);
+  float v = dot(h, c.xyz) / dot(c.xyz, c.xyz);
+  if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) { return best; }
+  return vec4(u, a.w + clamp(v, 0.02, 0.98) * b.w, 0.0, t);
+}
+// What a ray from o along d sees of them: colour, and how much (0 for nothing).
+vec4 facades(vec3 o, vec3 d) {
+  vec4 best = vec4(0.0, 0.0, 0.0, 1e9);
+  best = facadeHit(o, d, frame.facades[0], frame.facades[1], frame.facades[2], best);
+  best = facadeHit(o, d, frame.facades[3], frame.facades[4], frame.facades[5], best);
+  best = facadeHit(o, d, frame.facades[6], frame.facades[7], frame.facades[8], best);
+  best = facadeHit(o, d, frame.facades[9], frame.facades[10], frame.facades[11], best);
+  best = facadeHit(o, d, frame.facades[12], frame.facades[13], frame.facades[14], best);
+  best = facadeHit(o, d, frame.facades[15], frame.facades[16], frame.facades[17], best);
+  if (best.w > 1e8) { return vec4(0.0); }
+  return textureLod(facadeTex, best.xy, 0.0);
+}
+
 void main() {
   float t = frame.camPos.w;
   vec2 p = vWorld.xz;
@@ -300,11 +331,12 @@ void main() {
   // water holds the tree line's reflection whole until a wash breaks it.
   vec3 still = reflect(-v, normalize(vec3(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
   vec2 tl = treeline(p, still, vWoods);
-  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x);
-  // Still water mirrors the trees even looking down into it (not the sky: there it shows its dark depths).
-  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * tl.x, 0.0, 1.0));
-  // Sun glitter: a tight highlight that the ripples break up into sparkles.
-  c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;
+  vec4 fa = facades(vec3(p.x, 0.0, p.y), still);
+  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
+  // Still water mirrors the trees and buildings even looking down into it (not the sky: there it shows its dark depths).
+  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * max(tl.x, fa.a), 0.0, 1.0));
+  // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
+  c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   float foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2(13.0, 9.0)) + t * 6.0));
   c = mix(c, vec3(0.85, 0.9, 0.9), foam * 0.45);
   c = mix(c, vec3(0.22, 0.74, 0.97), clamp(spots(p, dist), 0.0, 1.0) * 0.6);

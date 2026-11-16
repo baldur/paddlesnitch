@@ -13,7 +13,7 @@ import { SKIN_TONES, cleanKit, randomKit, livery, kitKey, moveOldScull, boardHul
 import { beginPlay, playEvent, kitEvent, createSession, setVisible, sessionEvent } from './metrics.js';
 import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.js';
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
-import { buildWorld, groundAt, bankWoodsAlong } from './world.js';
+import { buildWorld, groundAt, bankWoodsAlong, mirrorFacades, nearFacades } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
 import { OUTINGS, HIRE_BOATS, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
 import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, strokeTwist, shouldersAt, legPush, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
@@ -2159,11 +2159,12 @@ function simulate(dt) {
 
 // --- rendering ---------------------------------------------------------------
 
-const frameData = new Float32Array(164);
+const frameData = new Float32Array(236);
 // Deep water: a made-up river's, and the real Thames's olive green.
 const WATER = [0.07, 0.2, 0.24, 0];
 const THAMES = [0.19, 0.23, 0.16, 0.8]; // w: how calm (the shader's water.w): the Thames lies still between washes
 const SUN = normalize([0.35, 0.42, -0.84]);
+const SKY_TOP = [0.3, 0.52, 0.84];
 
 function boatFrame(b, y = 0) {
   const h = b.heading;
@@ -2555,7 +2556,7 @@ function render(time) {
   frameData.set([...up, tanY], 24);
   frameData.set([...fwd, 0], 28);
   frameData.set([...SUN, 0], 32);
-  frameData.set([0.3, 0.52, 0.84, race.course.scenery ? 0.8 : 0], 36); // w: cloud cover, on a real river's English sky
+  frameData.set([...SKY_TOP, race.course.scenery ? 0.8 : 0], 36); // w: cloud cover, on a real river's English sky
   frameData.set([0.78, 0.85, 0.9, 0.0016], 40);
   frameData.set(race.course.scenery ? THAMES : WATER, 44);
   // Wakes, for the racers and then the nearest other boats (placed so their bow
@@ -2585,6 +2586,8 @@ function render(time) {
   // the shader reads it where each reflected ray meets the bank.
   const [woodL, woodR] = bankWoodsAlong(race.course, reflected.x, reflected.z, reflected.tx, reflected.tz);
   frameData.set([...woodL, ...woodR], 132);
+  // The landmarks and bridges nearest the camera, for their reflections (world.js nearFacades).
+  frameData.set(nearFacades(facadesShown, eye[0], eye[2]), 164);
   const spots = state === 'racing' ? washMarks(race, race.player) : [];
   for (let i = 0; i < 3; i++) frameData.set(spots[i] ?? [0, 0, 0, 0], 120 + i * 4);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
@@ -3045,11 +3048,20 @@ function paddlerOf(l) {
 // every course on it (they're all on the one at Reading), and each course's own
 // buoys, start and finish.
 const worldOf = (m) => m.course.world ?? m.key;
+const mirrors = new Map();
+let facadesShown = null;
 function useWorld() {
   if (!meshes.worlds.has(worldOf(mode))) {
     const world = renderer.createMesh(buildWorld(mode.course, 1, 'river'));
     renderer.place(world, [translation(0, 0, 0)]);
     meshes.worlds.set(worldOf(mode), world);
+    mirrors.set(worldOf(mode), mirrorFacades(mode.course, SUN, SKY_TOP));
+  }
+  // What its water mirrors besides trees: the landmarks and bridges, drawn once.
+  const mirror = mirrors.get(worldOf(mode)) ?? null;
+  if (mirror !== facadesShown) {
+    renderer.setFacades(mirror ?? { width: 1, height: 1, pixels: new Uint8Array(4) });
+    facadesShown = mirror;
   }
   if (!meshes.marks.has(mode)) {
     const marks = renderer.createMesh(buildWorld(mode.course, 1, 'course'));

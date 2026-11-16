@@ -16,6 +16,7 @@ struct Frame {
   banks: vec4f,      // how far the trees stand left and right of it, how tall they are; w = 1 to draw them in the water
   spots: array<vec4f, 3>, // x, z, heading, how bright: the free places in the wash ahead of you
   woods: array<vec4f, 8>, // how wooded the left bank (first 4) and right bank are, every 20 m from 150 m behind to 150 m ahead
+  facades: array<vec4f, 18>, // the six nearest landmark fronts and bridge sides and undersides, three each (world.js nearFacades)
 };
 @group(0) @binding(0) var<uniform> frame: Frame;
 
@@ -127,6 +128,8 @@ struct Out {
 `;
 
 export const WATER = FRAME + /* wgsl */ `
+@group(0) @binding(1) var facadeTex: texture_2d<f32>;
+@group(0) @binding(2) var facadeSampler: sampler;
 struct Out { @builtin(position) clip: vec4f, @location(0) world: vec3f, @location(1) woods: vec2f };
 
 // How wooded a bank is a metres along the river from frame.river, from its 16
@@ -268,6 +271,35 @@ fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
   return mirrored;
 }
 
+// The landmarks and bridges mirrored in the water (world.js mirrorFacades): a
+// rectangle from corner a.xyz along b.xyz and c.xyz (square to each other,
+// b x c facing the water), its picture from row a.w of the facades' texture,
+// b.w high. Keeps the nearer of it and best: the texture's u, v and the distance.
+fn facadeHit(o: vec3f, d: vec3f, a: vec4f, b: vec4f, c: vec4f, best: vec4f) -> vec4f {
+  let n = cross(b.xyz, c.xyz);
+  let dn = dot(d, n);
+  if (dn > -0.000001) { return best; }
+  let t = dot(a.xyz - o, n) / dn;
+  if (t <= 0.0 || t >= best.w) { return best; }
+  let h = o + d * t - a.xyz;
+  let u = dot(h, b.xyz) / dot(b.xyz, b.xyz);
+  let v = dot(h, c.xyz) / dot(c.xyz, c.xyz);
+  if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) { return best; }
+  return vec4f(u, a.w + clamp(v, 0.02, 0.98) * b.w, 0.0, t);
+}
+// What a ray from o along d sees of them: colour, and how much (0 for nothing).
+fn facades(o: vec3f, d: vec3f) -> vec4f {
+  var best = vec4f(0.0, 0.0, 0.0, 1e9);
+  best = facadeHit(o, d, frame.facades[0], frame.facades[1], frame.facades[2], best);
+  best = facadeHit(o, d, frame.facades[3], frame.facades[4], frame.facades[5], best);
+  best = facadeHit(o, d, frame.facades[6], frame.facades[7], frame.facades[8], best);
+  best = facadeHit(o, d, frame.facades[9], frame.facades[10], frame.facades[11], best);
+  best = facadeHit(o, d, frame.facades[12], frame.facades[13], frame.facades[14], best);
+  best = facadeHit(o, d, frame.facades[15], frame.facades[16], frame.facades[17], best);
+  if (best.w > 1e8) { return vec4f(0.0); }
+  return textureSampleLevel(facadeTex, facadeSampler, best.xy, 0.0);
+}
+
 @fragment fn fs(in: Out) -> @location(0) vec4f {
   let t = frame.camPos.w;
   let p = in.world.xz;
@@ -296,11 +328,12 @@ fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
   // water holds the tree line's reflection whole until a wash breaks it.
   let still = reflect(-v, normalize(vec3f(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
   let tl = treeline(p, still, in.woods);
-  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x);
-  // Still water mirrors the trees even looking down into it (not the sky: there it shows its dark depths).
-  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * tl.x, 0.0, 1.0));
-  // Sun glitter: a tight highlight that the ripples break up into sparkles.
-  c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0;
+  let fa = facades(vec3f(p.x, 0.0, p.y), still);
+  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
+  // Still water mirrors the trees and buildings even looking down into it (not the sky: there it shows its dark depths).
+  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * max(tl.x, fa.a), 0.0, 1.0));
+  // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
+  c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   let foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2f(13.0, 9.0)) + t * 6.0));
   c = mix(c, vec3f(0.85, 0.9, 0.9), foam * 0.45);
   c = mix(c, vec3f(0.22, 0.74, 0.97), clamp(spots(p, dist), 0.0, 1.0) * 0.6);
