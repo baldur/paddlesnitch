@@ -55,6 +55,9 @@ copied without following links.
 You were started by `scripts/night-shift/run.sh`. It told you the **job**, the
 **branch** you are on and the **report** path. Do exactly one run of that job.
 
+0. Write a short report to the report path now (`result: stuck`, what you
+   plan), and keep it up to date. The runner stops you without warning at the
+   deadline it gave you; a run that leaves no report is wasted.
 1. Read `~/.paddlesnitch/night-runner/steer.md` if it exists. Its instructions
    come from `lead` and win over everything below except the rules.
 2. Read your job file in `docs/night-shift/jobs/`, including its **Lessons**.
@@ -69,8 +72,9 @@ You were started by `scripts/night-shift/run.sh`. It told you the **job**, the
 8. Write the report (format below) to the report path. Always write it, even
    if nothing worked: a failed run is still information.
 
-Stop after about 90 minutes of work, or when the same error happens three
-times (report `stuck` and paste the error).
+Finish 20 minutes before the deadline: never start a long step (a full
+measurement, a test suite) you can't complete by then. Stop when the same error
+happens three times (report `stuck` and paste the error).
 
 ## Rules (never break these)
 

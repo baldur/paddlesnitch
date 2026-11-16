@@ -221,7 +221,10 @@ run_once() {
   sb perl -e 'setpgrp(0,0); exec @ARGV' opencode serve --hostname 127.0.0.1 --port "$SERVE_PORT" >>"$RUNNER/inbox/$stamp-$job.log" 2>&1 &
   SERVE_PID=$!
   perl -e 'select(undef,undef,undef,5)'
-  local prompt="You are the night shift. Job: $job. Branch: $branch (already checked out). Your work folder is $WORK (also \$NIGHT_WORK). Write your report to $WORK/report.md. Read docs/night-shift/README.md, then docs/night-shift/jobs/$job.md, and do exactly one run. Write the report before you stop."
+  # The model is stopped hard at the deadline, so it is told the deadline and
+  # keeps a report on disk from the start (a run killed with none teaches nothing).
+  local deadline; deadline=$(date -v+"${RUN_MINUTES}"M +%H:%M)
+  local prompt="You are the night shift. Job: $job. Branch: $branch (already checked out). Your work folder is $WORK (also \$NIGHT_WORK). Write your report to $WORK/report.md. You are stopped without warning at $deadline (check the time with date). First write a short report there with result: stuck, then keep it up to date as you go. Plan to finish 20 minutes before the deadline; never start a step you can't finish by then. Read docs/night-shift/README.md, then docs/night-shift/jobs/$job.md, and do exactly one run."
   sb perl -e 'setpgrp(0,0); alarm shift; exec @ARGV' $((RUN_MINUTES * 60)) \
     opencode run --server "http://127.0.0.1:$SERVE_PORT" --agent night-shift --auto --title "night $job $stamp" "$prompt" \
     >>"$RUNNER/inbox/$stamp-$job.log" 2>&1 &
