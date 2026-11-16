@@ -16,6 +16,11 @@ const isCi = !!process.env.CI
 
 export default defineConfig({
   testDir: './e2e',
+  // The night-shift accessibility sweep (e2e/sweep/) runs under its own config
+  // (e2e/sweep/playwright.config.ts, base :3600, no webServer) so it can point
+  // at the night-shift dev server instead of the owner's :3000. Keep it out of
+  // this critical suite.
+  testIgnore: '**/sweep/**',
   // Serialise for now — tests share filesystem state (.local-data/ and
   // .cognito-local/) so parallel runs can race on unique-id collisions.
   // When we add explicit per-test cleanup we can enable parallel mode.

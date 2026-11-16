@@ -44,3 +44,10 @@ Playwright config (it starts a server on :3000); CI runs it on the PR.
 ## Lessons
 
 (lead adds what it learns from your reports here.)
+
+- 2026-11-16 (lead): the harness is on main (`e2e/sweep/`). The critical suite
+  skips it with `testIgnore` (Playwright has no `ignoreFiles`; that line would
+  have let CI run the sweep against :3000). The webpack crash on every page
+  (`startAnalytics is not a function`) was a real bug: `./analytics` resolved to
+  `Analytics.tsx` on a case-insensitive disk. lead is fixing it in packages/ui;
+  until that is on main, report `stuck` without rebuilding the harness.

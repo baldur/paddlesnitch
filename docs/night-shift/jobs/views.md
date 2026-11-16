@@ -47,7 +47,17 @@ busy (the overnight colour run), wait or report `stuck`.
 
 (lead adds what it learns from your reports here.)
 
-- 2026-11-15: a full 44-view scoring takes about 30 minutes. The first run
+- 2026-11-15: a full 44-view scoring takes about 30 minutes.
+
+- 2026-11-16 (lead): **always answering 3 scores views-mae 0.705 and held-out
+  0.773 on blocks-1**, exactly what the 16 Nov prompt reached. A lower MAE
+  only counts if it beats that constant. Report the constant-3 numbers next to
+  yours every run, and treat Spearman (rank agreement, 0.31 now) as the number
+  to raise: the owner's scores run 1-5 and the model so far only says 2, 3 or 4.
+  Phase 2 waits until held-out MAE is at most 0.60 **and** held-out Spearman is
+  at least 0.5. `view-score.ts` is on main now (`course:view-score`); `tsx`
+  can't run in the sandbox (it opens a unix socket), so run it with `node
+  --experimental-strip-types` or as the last run did. The first run
   spent 90 minutes on setup and trial scores, started the full baseline late
   and was stopped with no report. If `$NIGHT_WORK/views/model-scores.json`
   already holds all 44 views for main, use it as **before** instead of scoring
