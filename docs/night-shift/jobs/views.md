@@ -46,3 +46,9 @@ busy (the overnight colour run), wait or report `stuck`.
 ## Lessons
 
 (lead adds what it learns from your reports here.)
+
+- 2026-11-15: a full 44-view scoring takes about 30 minutes. The first run
+  spent 90 minutes on setup and trial scores, started the full baseline late
+  and was stopped with no report. If `$NIGHT_WORK/views/model-scores.json`
+  already holds all 44 views for main, use it as **before** instead of scoring
+  again; otherwise score the baseline first, before anything else.
