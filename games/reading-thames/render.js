@@ -7,7 +7,7 @@ import { SKY, MESH, WATER } from './shaders.js';
 import { waterGrid } from './meshes.js';
 
 const SAMPLES = 4; // MSAA
-const FRAME_BYTES = 16 * 4 + 37 * 16;
+const FRAME_BYTES = 16 * 4 + 55 * 16;
 // Resolution follows the GPU: if frames take longer than this to draw, render
 // fewer pixels (down to half the screen's density); when there's room again,
 // creep back up. Phones start lower, since their screens are dense and small.
@@ -37,9 +37,27 @@ async function createRendererGPU(canvas) {
 
   const frameBuffer = device.createBuffer({ size: FRAME_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const layout = device.createBindGroupLayout({
-    entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: {} }],
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: {} },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+    ],
   });
-  const bindGroup = device.createBindGroup({ layout, entries: [{ binding: 0, resource: { buffer: frameBuffer } }] });
+  // The pictures of what the water mirrors besides trees (world.js mirrorFacades); none until set.
+  const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+  let facadeTex = null;
+  let bindGroup = null;
+  const setFacades = ({ width, height, pixels }) => {
+    facadeTex?.destroy();
+    facadeTex = device.createTexture({ size: [width, height], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+    device.queue.writeTexture({ texture: facadeTex }, pixels, { bytesPerRow: width * 4 }, [width, height]);
+    bindGroup = device.createBindGroup({ layout, entries: [
+      { binding: 0, resource: { buffer: frameBuffer } },
+      { binding: 1, resource: facadeTex.createView() },
+      { binding: 2, resource: sampler },
+    ] });
+  };
+  setFacades({ width: 1, height: 1, pixels: new Uint8Array(4) });
   const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] });
 
   const pipeline = (code, buffers, depth) => {
@@ -130,6 +148,9 @@ async function createRendererGPU(canvas) {
       device.queue.writeBuffer(m.instances, 0, m.scratch, 0, matrices.length * 16);
       m.instanceCount = matrices.length;
     },
+
+    // The pictures of the facades the water mirrors (world.js mirrorFacades).
+    setFacades,
 
     // frameData: Float32Array laid out like the WGSL Frame struct.
     draw(frameData, meshes) {
