@@ -60,7 +60,11 @@ export function aimAt(eye: XZ, heading: number, ring: XZ[]): { fromBow: number; 
   return { fromBow: ((((want - heading) % 360) + 360) % 360), hFov: Math.max(30, Math.min(90, span * 1.6)), metres }
 }
 
-/** One building's answers combined: the commonest wall and roof, and each colour's middle (per channel); null with nothing seen. */
+/**
+ * One building's answers combined: the commonest wall and each colour's middle
+ * (per channel); a roof only where two views agree on it (one view's roof was
+ * often sky or a balcony); null with nothing seen.
+ */
 export function combine(answers: Answer[]): Omit<Answer, 'visible'> | null {
   const seen = answers.filter((a) => a.visible)
   if (!seen.length) return null
@@ -70,7 +74,9 @@ export function combine(answers: Answer[]): Omit<Answer, 'visible'> | null {
     return `#${[0, 1, 2].map((k) => ch(k).toString(16).padStart(2, '0')).join('')}`
   }
   const roofs = seen.filter((a) => a.roof && a.roofColour)
-  return { wall: mode(seen.map((a) => a.wall)), wallColour: middle(seen.map((a) => a.wallColour)), roof: roofs.length ? mode(roofs.map((a) => a.roof!)) : null, roofColour: roofs.length ? middle(roofs.map((a) => a.roofColour!)) : null }
+  const roof = roofs.length ? mode(roofs.map((a) => a.roof!)) : null
+  const agreed = roofs.filter((a) => a.roof === roof)
+  return { wall: mode(seen.map((a) => a.wall)), wallColour: middle(seen.map((a) => a.wallColour)), roof: agreed.length >= 2 ? roof : null, roofColour: agreed.length >= 2 ? middle(agreed.map((a) => a.roofColour!)) : null }
 }
 
 /** games/reading-thames/materials.js: per building, by the middle of its footprint. */

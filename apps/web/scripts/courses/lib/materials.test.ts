@@ -32,8 +32,13 @@ describe('combine', () => {
   const seen = (wall: Answer['wall'], wallColour: string, roof: Answer['roof'] = null, roofColour: string | null = null): Answer => ({ visible: true, wall, wallColour, roof, roofColour })
   it("takes the commonest material and each colour's middle, leaving out views that didn't see it", () => {
     expect(combine([seen('brick', '#804020', 'tile', '#602010'), seen('brick', '#a06040'), seen('render', '#ffffff'), { ...seen('other', ''), visible: false }]))
-      .toEqual({ wall: 'brick', wallColour: '#a06040', roof: 'tile', roofColour: '#602010' })
+      .toEqual({ wall: 'brick', wallColour: '#a06040', roof: null, roofColour: null })
     expect(combine([{ ...seen('other', ''), visible: false }])).toBeNull()
+  })
+  it('keeps a roof only where two views agree on it (one view saw sky or a balcony as a white metal roof)', () => {
+    expect(combine([seen('brick', '#804020', 'tile', '#602010'), seen('brick', '#a06040', 'tile', '#402010')]))
+      .toMatchObject({ roof: 'tile', roofColour: '#402010' })
+    expect(combine([seen('brick', '#804020', 'tile', '#602010'), seen('brick', '#a06040', 'metal', '#ffffff')])).toMatchObject({ roof: null, roofColour: null })
   })
 })
 

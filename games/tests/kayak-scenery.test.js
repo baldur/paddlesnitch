@@ -518,3 +518,45 @@ test("the rowing club stands at the same height, and its car park at the same pl
   assert.deepEqual(rowingEnd(fresh).at(0, 0, 0), before.end, "the car park where the walk's camera stands");
   assert.deepEqual(landmarkFrame(fresh, 'rowing-club').origin, before.origin, 'the club where it is drawn');
 });
+
+test("a building the footage saw is drawn in its material (materials.js): brick, render or timber in a measured shade, a roof only where two views agreed; one it didn't see keeps its random pick", async () => {
+  const { MATERIALS } = await import('../reading-thames/materials.js');
+  const { buildingMaterial } = await import('../reading-thames/world.js');
+  const reading = courseFromFile(await data('reading'));
+  const tris = await world();
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-3);
+  const centre = (b) => {
+    const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+    return [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length, ring];
+  };
+  // Walls standing on the footprint's edges (in that colour, or any).
+  const wallsOf = (ring, color) => tris.filter((t) => (!color || same(t.color, color)) && t.p.every((q) => ring.some(([x, z], i) => {
+    const [bx, bz] = ring[(i + 1) % ring.length];
+    const len = Math.hypot(bx - x, bz - z) || 1;
+    const along = ((q[0] - x) * (bx - x) + (q[2] - z) * (bz - z)) / (len * len);
+    return along > -0.01 && along < 1.01 && Math.abs((q[0] - x) * (bz - z) - (q[2] - z) * (bx - x)) / len < 0.05;
+  })));
+  let checked = 0;
+  let matched = 0;
+  for (const b of reading.scenery.buildings) {
+    if (b.style) continue;
+    const [cx, cz, ring] = centre(b);
+    const seen = buildingMaterial(cx, cz);
+    if (!seen?.wall) continue;
+    matched++;
+    // Not drawn where the map has water (an island, a pontoon): no wall over 2 m on its edges (fences and paths can line them).
+    if (wallsOf(ring, null).filter((t) => Math.max(...t.p.map((q) => q[1])) - Math.min(...t.p.map((q) => q[1])) > 2).length < 2) continue;
+    assert.ok(wallsOf(ring, seen.wall).length >= 2, `the building at ${cx.toFixed(1)}, ${cz.toFixed(1)} has walls in its material's colour`);
+    checked++;
+  }
+  // Every row is a plain building in the file (a row that matches none would be dropped silently), and most are drawn.
+  assert.ok(matched >= MATERIALS.length - 2, `${matched} of ${MATERIALS.length} rows match a building`);
+  assert.ok(checked >= 0.8 * MATERIALS.length, `${checked} of ${MATERIALS.length} rows drawn in their material`);
+  // Brick is brick-coloured (redder than it is blue), render white or grey; a light answer gets the light shade.
+  const brick = MATERIALS.find((r) => r[3] === 'brick');
+  const w = buildingMaterial(brick[0], brick[1]).wall;
+  assert.ok(w[0] > w[2] + 0.2, `brick ${w}`);
+  assert.equal(buildingMaterial(0.123, 0.456), null, 'a building it never saw');
+  // Roofs: only the rows with an agreed roof have one.
+  for (const r of MATERIALS) assert.equal(buildingMaterial(r[0], r[1]).roof === null, r[5] === null || !['tile', 'slate', 'metal'].includes(r[5]), `${r}`);
+});

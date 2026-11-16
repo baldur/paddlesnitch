@@ -8,6 +8,7 @@ import { MeshBuilder } from './meshes.js';
 import { locate, pointAt, widthAt, POST } from './course.js';
 import { createAnglers, SNAG } from './anglers.js';
 import { LIDAR } from './lidar.js';
+import { MATERIALS } from './materials.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
@@ -76,6 +77,30 @@ const SHADED = [0.25, 0.36, 0.17];
 // Reading's red brick, buff brick and white render.
 const WALLS = [[0.62, 0.32, 0.24], [0.7, 0.42, 0.3], [0.86, 0.8, 0.68], [0.92, 0.9, 0.85], [0.55, 0.3, 0.25], [0.8, 0.68, 0.47]];
 const ROOFS = [[0.32, 0.2, 0.17], [0.28, 0.28, 0.3], [0.45, 0.25, 0.18]];
+
+// What the buildings near the water are made of, as a local vision model saw
+// them in the footage (materials.js; course:materials). Its colours are mostly
+// guesses from its colour names (94 of 110 walls were exact CSS colours), so
+// only the material is taken, with its light or dark shade from the model's
+// colour; the colours are measured from sunlit walls in the frames (a sunlit
+// wall renders at about its own colour). A roof only where two views agreed.
+const MATERIAL_WALLS = {
+  brick: [[0.8, 0.55, 0.42], [0.66, 0.42, 0.32]],
+  render: [[0.92, 0.9, 0.85], [0.72, 0.7, 0.66]],
+  timber: [[0.88, 0.88, 0.84], [0.36, 0.3, 0.25]],
+  stone: [[0.82, 0.78, 0.68], [0.6, 0.57, 0.52]],
+};
+const MATERIAL_ROOFS = { tile: [0.45, 0.25, 0.18], slate: [0.28, 0.28, 0.3], metal: [0.5, 0.52, 0.54] };
+const materialAt = new Map(MATERIALS.map(([x, z, ...rest]) => [`${x.toFixed(1)},${z.toFixed(1)}`, rest]));
+// Light or dark, from the model's colour (its colour names do tell white from brown).
+const light = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.3 * v[0] + 0.59 * v[1] + 0.11 * v[2] > 0.5; };
+export function buildingMaterial(cx, cz) {
+  const m = materialAt.get(`${cx.toFixed(1)},${cz.toFixed(1)}`);
+  if (!m) return null;
+  const [wallColour, wall, roofColour, roof] = m;
+  const shades = MATERIAL_WALLS[wall];
+  return { wall: shades ? shades[light(wallColour) ? 0 : 1] : null, roof: MATERIAL_ROOFS[roof] ?? null };
+}
 
 // `parts`: 'river' is the river and its scenery alone, 'course' what this
 // course adds to it (turning buoys, start and finish gantries, distance
@@ -1106,8 +1131,11 @@ function building(m, course, b, rand) {
   const clap = b.style === 'clapboard';
   if (b.style === 'stilts') return onStilts(m, course, b, ring, cx, cz, g, rand);
   if (b.style === 'balcony-terrace') return balconyTerrace(m, course, b, ring, cx, cz, g, rand);
-  const wall = clap ? CLAP.walls[Math.floor(rand() * CLAP.walls.length)]
+  // (The random pick is still drawn where the footage says what it's made of, so everything after it stays put.)
+  const seen = buildingMaterial(cx, cz);
+  const picked = clap ? CLAP.walls[Math.floor(rand() * CLAP.walls.length)]
     : b.kind === 'boathouse' ? (rand() < 0.5 ? COLORS.white : [0.3, 0.42, 0.33]) : WALLS[Math.floor(rand() * WALLS.length)];
+  const wall = (!clap && seen?.wall) || picked; // (clapboard is its own style, from the footage already)
   for (let i = 0; i < ring.length; i++) {
     const [ax, az] = ring[i];
     const [bx, bz] = ring[(i + 1) % ring.length];
@@ -1151,7 +1179,8 @@ function building(m, course, b, rand) {
   if (clap && fromRiver(course, cx, cz) < 80) clapboardFront(m, course, facing(course, ring, cx, cz, g), b.height);
   const pitched = b.kind === 'house' || b.kind === 'boathouse';
   // (A measured block of four floors or more: a dark roof, as the hotel by Caversham Bridge has.)
-  const roof = clap ? CLAP.roof : pitched ? ROOFS[Math.floor(rand() * ROOFS.length)] : measuredHeight && b.height >= 12 ? ROOFS[1] : COLORS.coping;
+  const roofPick = clap ? CLAP.roof : pitched ? ROOFS[Math.floor(rand() * ROOFS.length)] : measuredHeight && b.height >= 12 ? ROOFS[1] : COLORS.coping;
+  const roof = (pitched && seen?.roof) || roofPick;
   const peak = [cx, top + (pitched ? Math.min(4, 1.5 + Math.sqrt(area(ring)) * 0.18) : 0), cz];
   for (let i = 0; i < ring.length; i++) {
     const [ax, az] = ring[i];
