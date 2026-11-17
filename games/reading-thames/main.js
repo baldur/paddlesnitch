@@ -2604,7 +2604,7 @@ function render(time) {
     clubEl.classList.remove('waiting');
     focusFirst();
   }
-  if (shot) placeDoors();
+  if (shot && club) placeDoors(); // (as placeClub: a shot held mid-race has no club, and threw here)
   placeCoach();
 }
 
