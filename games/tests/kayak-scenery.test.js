@@ -1158,6 +1158,27 @@ test('the water at the glass house mirrors the weeping willow in front of it, no
   for (const f of m.facades) if (/ /.test(f.name) && !/ (side|underside|pier)$/.test(f.name)) assert.match(f.name, / (willow|dead-tree)$/);
 });
 
+test("a landmark takes in only the trees before it: not one behind it, off to the side or far out, and not a quay", async () => {
+  // (The real river has one such tree, so these are placed in the glass house's frame: x along, z out.)
+  const raw = await data('reading');
+  const pictures = (extra) => {
+    const course = courseFromFile(structuredClone(raw));
+    buildWorld(course, 1, 'river');
+    const fr = landmarkFrame(course, 'glass-house');
+    const at = (x, z) => [fr.origin[0] + fr.right[0] * x + fr.fwd[0] * z, fr.origin[2] + fr.right[1] * x + fr.fwd[1] * z];
+    // (Without the real willow, so whatever's taken in is the one placed.)
+    course.scenery.features = course.scenery.features.filter((t) => !FRONT.has(t.style)).concat(extra ? [{ style: extra[0], at: at(extra[1], extra[2]) }] : []);
+    return mirrorFacades(course, SUN, SKY_TOP).facades.filter((f) => f.name.startsWith('glass-house ')).map((f) => f.name);
+  };
+  const FRONT = new Set(['willow', 'dead-tree']);
+  assert.deepEqual(pictures(), []);
+  assert.deepEqual(pictures(['dead-tree', 5, 15]), ['glass-house dead-tree'], 'a dead tree before it');
+  assert.deepEqual(pictures(['willow', 0, -25]), [], 'a willow behind it');
+  assert.deepEqual(pictures(['willow', 45, 15]), [], 'a willow 30 m off to the side');
+  assert.deepEqual(pictures(['willow', 0, 50]), [], 'a willow 40 m out before it');
+  assert.deepEqual(pictures(['quay', 0, 15]), [], 'a quay');
+});
+
 test("drawing the facades for the water changes nothing in the world: the river is the same, built before or after them", async () => {
   const { vertices: plain } = buildWorld(courseFromFile(await data('reading')), 1, 'river');
   const first = courseFromFile(await data('reading'));
