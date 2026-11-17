@@ -188,17 +188,12 @@ const BOATS = { cruiser: [8, 12], narrowboat: [17, 21], 'trip-boat': [24, 26], t
 
 /**
  * A row of moored boats filling a stretch of bank, or one or two at a spot.
- * Where the footage leaves a choice ('mixed'), narrowboats (owner, 2026-11-15),
- * laid out with draws of their own: the row still takes the draws the old mix
- * of cruisers and narrowboats took, so every row after it stays as it was.
+ * Where the footage leaves a choice ('mixed'), narrowboats (owner, 2026-11-15).
  * `crew`: something every boat in the row has (covers).
  */
 export function mooringRow(from: number, to: number, side: -1 | 1, boats: string, rand: () => number, crew?: string): CourseFile['moorings'] {
-  if (boats === 'mixed') {
-    fillRow(from, to, side, () => (rand() < 0.4 ? 'narrowboat' : 'cruiser'), rand)
-    return fillRow(from, to, side, () => 'narrowboat', mulberry32(Math.round(from * 10) + 1), crew)
-  }
-  return fillRow(from, to, side, () => (boats in BOATS ? boats as keyof typeof BOATS : 'cruiser'), rand, crew)
+  const kind = boats === 'mixed' ? 'narrowboat' : boats in BOATS ? boats as keyof typeof BOATS : 'cruiser'
+  return fillRow(from, to, side, () => kind, rand, crew)
 }
 
 function fillRow(from: number, to: number, side: -1 | 1, pick: () => keyof typeof BOATS, rand: () => number, crew?: string): CourseFile['moorings'] {
@@ -252,6 +247,57 @@ export function spaceOut(moorings: CourseFile['moorings'], line: XZ[], width: nu
   return moorings
 }
 
+// A moored boat's beam by kind, as the game moors it (course.js BEAM).
+const BEAM: Record<string, number> = { narrowboat: 2.1, cruiser: 3.4, 'trip-boat': 4.6, tatty: 3.4, houseboat: 4.6 }
+
+const insideRings = (rings: XZ[][], [x, z]: XZ) => {
+  let odd = false
+  for (const ring of rings) {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const [[ax, az], [bx, bz]] = [ring[i], ring[i + 1]]
+      if ((az > z) !== (bz > z) && x < ax + ((z - az) * (bx - ax)) / (bz - az)) odd = !odd
+    }
+  }
+  return odd
+}
+
+/**
+ * The game moors a boat at the river's half width less half its beam, which
+ * where the mapped water is narrower than that width put boats on the grass
+ * (a narrowboat half sunk into the bank above Purley, design review). A boat
+ * whose middle or either end is off the mapped water is moved in, half a metre
+ * at a time, until all three are on it, and given its place (`at`, `dir`).
+ * One that's never on it (a quay the map has as land) stays where it was.
+ */
+export function afloat(moorings: CourseFile['moorings'], line: XZ[], width: number[], water: XZ[][] | undefined): CourseFile['moorings'] {
+  if (!water?.length) return moorings
+  const cum = cumulative(line)
+  for (const m of moorings) {
+    if (m.at) continue
+    let i = 0
+    while (i < cum.length - 2 && cum[i + 1] < m.s) i++
+    const f = Math.max(0, Math.min(1, (m.s - cum[i]) / (cum[i + 1] - cum[i] || 1)))
+    const [a, b] = [line[i], line[i + 1]]
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
+    const [tx, tz] = [(b[0] - a[0]) / len, (b[1] - a[1]) / len]
+    const [cx, cz] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]
+    const beam = BEAM[m.kind] ?? 2.1
+    const full = (width[i] + (width[i + 1] - width[i]) * f) / 2 - beam / 2
+    const place = (w: number): XZ => [cx - tz * m.side * w, cz + tx * m.side * w]
+    // Its middle and both ends, on its bank side (the whole hull afloat).
+    const wet = (w: number) => [0, 1, -1].every((e) => { const p = place(w + beam / 2); return insideRings(water, [p[0] + tx * e * m.length / 2, p[1] + tz * e * m.length / 2]) })
+    if (wet(full)) continue
+    for (let w = full - 0.5; w > beam; w -= 0.5) {
+      if (!wet(w)) continue
+      const p = place(w)
+      m.at = [r1(p[0]), r1(p[1])]
+      m.dir = [Math.round(tx * 1000) / 1000, Math.round(tz * 1000) / 1000]
+      break
+    }
+  }
+  return moorings
+}
+
 const HEIGHTS = { house: 7, flats: 12, boathouse: 6, other: 6 }
 const kindOfBuilding = (tags: Record<string, string>): CourseFile['buildings'][number]['kind'] =>
   tags.building === 'boathouse' ? 'boathouse'
@@ -293,7 +339,9 @@ export function courseFile(input: {
   /** Map coordinates to the file's metres: for things placed by a point (landmarks, posts). */
   toXZ?: (at: LatLng) => XZ
 }): CourseFile {
-  const rand = mulberry32(7)
+  // Each row of boats and each stretch of anglers draws from its own seed (where
+  // it starts), so adding or moving one never moves another.
+  const ownDraws = (from: number) => mulberry32(Math.round(from * 10) + 7)
   const sideOf = (o: Observation, p: { same: boolean }): -1 | 1 => ((o.side === 'left') === p.same ? -1 : 1)
   const span = (o: Observation) => {
     if ('from' in o) {
@@ -338,7 +386,7 @@ export function courseFile(input: {
       const h = (('at' in o ? o.heading : 0) * Math.PI) / 180
       const exact = o.exact && 'at' in o && input.toXZ ? { at: pts([input.toXZ(o.at)])[0], dir: [Math.round(Math.sin(h) * 1000) / 1000, Math.round(-Math.cos(h) * 1000) / 1000] as XZ } : {}
       moorings.push({ s: r1(sp.from), length: o.length, side: sp.side, kind, ...(o.paint ? { paint: o.paint } : {}), ...(o.crew ? { crew: o.crew } : {}), ...exact })
-    } else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), rand, o.crew))
+    } else if (o.kind === 'moorings') moorings.push(...mooringRow(sp.from, sp.to, sp.side, String(o.boats ?? 'cruiser'), ownDraws(sp.from), o.crew))
     else if (o.kind === 'buildings' && o.style === 'flats') flats.push(sp)
     else if (o.kind === 'buildings' && o.style) styled.push({ ...sp, style: o.style })
     else if (o.kind === 'feature' && 'at' in o && o.style && input.toXZ) features.push({ style: o.style, at: pts([input.toXZ(o.at)])[0] })
@@ -348,7 +396,8 @@ export function courseFile(input: {
     else if (o.kind === 'anglers') {
       // Evenly along the stretch, each nudged a little.
       const n = o.count ?? 1
-      for (let k = 0; k < n; k++) anglers.push({ s: r1(sp.from + ((k + 0.3 + rand() * 0.4) / n) * (sp.to - sp.from)), side: sp.side })
+      const nudge = ownDraws(sp.from)
+      for (let k = 0; k < n; k++) anglers.push({ s: r1(sp.from + ((k + 0.3 + nudge() * 0.4) / n) * (sp.to - sp.from)), side: sp.side })
     }
   }
 
@@ -380,7 +429,7 @@ export function courseFile(input: {
     licence: 'ODbL 1.0 (https://opendatacommons.org/licenses/odbl/1-0/): derived from OpenStreetMap; observations from paddlesnitch footage',
     speedup: input.speedup, warp: input.warp, start: r1(input.start), finish: r1(input.finish),
     line: pts(input.line), width: widths(input.edges),
-    banks, walls, moorings: spaceOut(moorings, input.line, widths(input.edges)).sort((a, b) => a.s - b.s),
+    banks, walls, moorings: afloat(spaceOut(moorings, input.line, widths(input.edges)), input.line, widths(input.edges), input.water).sort((a, b) => a.s - b.s),
     bridges: bridges(input.things, styles),
     buildings,
     woods: input.things.filter((t) => /wood|forest|scrub/.test(t.kind) && t.shape && t.shape.length > 3 && near(t, 250)).map((t) => pts(thin(t.shape!, 40))),

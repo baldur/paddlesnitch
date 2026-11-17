@@ -11,7 +11,7 @@
 // See docs/features/game-courses-from-video.md.
 import fs from 'fs'
 import path from 'path'
-import { cumulative, locate, projection, type LatLng, type XZ } from './lib/river'
+import { cumulative, locate, placeOn, projection, type LatLng, type XZ } from './lib/river'
 import { courseFile, type Flock, type Observation, type Landmark, type RiverThing } from './lib/course-file'
 
 const id = process.argv[2]
@@ -46,16 +46,7 @@ const out = courseFile({
   // Observations are tied to places, not to this course: find each on the line,
   // and flip its side if the camera was heading the other way.
   places: landmarks, birds: config.birds, styles: config.styles,
-  observations: items, toXZ, place: (at: LatLng, heading: number) => {
-    const p = toXZ(at)
-    const cum = cumulative(line)
-    const hit = locate(line, cum, p)
-    const i = Math.min(line.length - 2, Math.max(0, Math.round(hit.s / (cum[1] || 10))))
-    const t = [line[i + 1][0] - line[i][0], line[i + 1][1] - line[i][1]]
-    const courseHeading = (Math.atan2(t[0], -t[1]) * 180) / Math.PI
-    const diff = Math.abs(((heading - courseHeading + 540) % 360) - 180)
-    return { s: hit.s, same: diff < 90 }
-  },
+  observations: items, toXZ, place: placeOn(line, toXZ),
 })
 
 const file = path.resolve(process.cwd(), '../../games/reading-thames/courses', `${id}.json`)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { banks, chainCentreline, crossings, cumulative, locate, projection, recentre, resample, thinLine, type XZ } from './river'
+import { banks, chainCentreline, crossings, cumulative, locate, placeOn, projection, recentre, resample, thinLine, type XZ } from './river'
 
 describe('projection', () => {
   it('puts north at -z and east at +x, in metres, and round-trips', () => {
@@ -20,6 +20,21 @@ describe('locate', () => {
     const cum = cumulative(line)
     expect(locate(line, cum, [5, -40])).toMatchObject({ s: 40, lateral: 5 })   // east is right when heading north
     expect(locate(line, cum, [-5, -40]).lateral).toBe(-5)
+  })
+})
+
+describe('placeOn', () => {
+  it("judges the camera's way on the segment the point lies by, however long the segments (a short first one flipped sides 3 km on)", () => {
+    // A short first step, then 10 m steps: east for 500 m, then north for 500 m.
+    const line: XZ[] = [[0, 0], [2, 0]]
+    for (let x = 10; x <= 500; x += 10) line.push([x, 0])
+    for (let z = -10; z >= -500; z -= 10) line.push([500, z])
+    const place = placeOn(line, ([a, b]) => [a, b])
+    // 300 m up the northward leg, a camera heading north goes the line's way; one heading south doesn't.
+    expect(place([505, -300], 0)).toEqual({ s: expect.closeTo(800, 1), same: true })
+    expect(place([505, -300], 180).same).toBe(false)
+    // On the eastward leg, heading east is the line's way.
+    expect(place([250, 5], 90).same).toBe(true)
   })
 })
 
