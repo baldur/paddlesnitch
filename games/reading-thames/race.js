@@ -856,7 +856,7 @@ function think(r, race) {
   // swing round until it faces the way on (the rudder does nothing at a
   // standstill, and paddling on only drove it into the bank again: rivals sat
   // there for minutes).
-  const off = cornered(r, course, lateral, ahead);
+  const off = cornered(r, course, lateral, ahead, race.time);
   const strokes = [];
   if (cadence && race.time >= ai.next) {
     strokes.push(off ? `back-${off}` : boat.lastSide === 'left' ? 'right' : 'left');
@@ -930,17 +930,21 @@ function aimAt({ boat, loc }, course, lateral, ahead) {
 // Which side to back-paddle on to get a boat off the bank it's nosed into
 // ('left' swings the bow left), or null if it isn't stuck. Once it starts, it
 // backs off until it faces the way on (`ai.backOff`).
-function cornered(r, course, lateral, ahead) {
+const BACK_OFF = 8; // s: the longest a rival backs off (one pinned from behind backed on for 30 s)
+function cornered(r, course, lateral, ahead, time) {
   const { boat, ai } = r;
-  if (!course.shore || (!ai.backOff && boat.speed > Math.min(0.4, SLOW))) return (ai.backOff = null);
+  if (!course.shore || r.finish !== null || (!ai.backOff && boat.speed > 0.4)) return (ai.backOff = null);
   const [ax, az] = aimAt(r, course, lateral, ahead);
   const err = wrap(Math.atan2(ax - boat.x, -(az - boat.z)) - boat.heading);
   if (ai.backOff) {
-    if (Math.abs(err) < 0.35 || boat.speed > 0.8) ai.backOff = null;
+    if (Math.abs(err) < 0.35 || boat.speed > 0.8 || time - ai.backedAt > BACK_OFF) ai.backOff = null;
     return ai.backOff;
   }
   const f = [Math.sin(boat.heading), -Math.cos(boat.heading)];
-  if (Math.abs(err) >= 1 && course.shore.dry(boat.x + f[0] * 4.5, boat.z + f[1] * 4.5)) ai.backOff = err < 0 ? 'left' : 'right';
+  if (Math.abs(err) >= 1 && course.shore.dry(boat.x + f[0] * 4.5, boat.z + f[1] * 4.5)) {
+    ai.backOff = err < 0 ? 'left' : 'right';
+    ai.backedAt = time;
+  }
   return ai.backOff;
 }
 
