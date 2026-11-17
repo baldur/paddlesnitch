@@ -42,6 +42,18 @@ export function choosePass<T extends Pass & { cameraKnown: boolean; cameraYaw: n
   return [...good].sort((a, b) => Number(b.cameraKnown) - Number(a.cameraKnown) || a.metres - b.metres)[0] ?? null
 }
 
+/**
+ * Up to `n` passes to look at one place from, each from a different recording
+ * (so different days and light), chosen as choosePass chooses one.
+ */
+export function choosePasses<T extends Pass & { cameraKnown: boolean; cameraYaw: number | null; hour: number; heading: number | null; recording: string }>(passes: T[], n: number): T[] {
+  const out: T[] = []
+  for (const p of passes.filter((x) => choosePass([x])).sort((a, b) => Number(b.cameraKnown) - Number(a.cameraKnown) || a.metres - b.metres)) {
+    if (out.length < n && !out.some((o) => o.recording === p.recording)) out.push(p)
+  }
+  return out
+}
+
 /** Which way a clip's camera faced from the bow: its own, or the one every known clip in its folder has (rowing 0, kayak 180), else none. */
 export const FOLDER_YAW: Record<string, number> = { rowing: 0, kayak: 180 }
 export function cameraYawOf(known: number | null, folder: string): number | null {

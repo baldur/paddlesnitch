@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { average, cameraYawOf, choosePass, cleanScores, gameCamera, headingAt, pickPoints, viewFacing } from './views'
+import { average, cameraYawOf, choosePass, choosePasses, cleanScores, gameCamera, headingAt, pickPoints, viewFacing } from './views'
 
 describe('pickPoints', () => {
   it('spreads places every 200 m up the river, and adds one off each landmark looking at it', () => {
@@ -33,6 +33,14 @@ describe('choosePass', () => {
   })
   it("assumes a clip's camera from its folder: rowing faced the bow, kayak the stern", () => {
     expect([cameraYawOf(null, 'rowing'), cameraYawOf(null, 'kayak'), cameraYawOf(null, 'pair'), cameraYawOf(90, 'kayak')]).toEqual([0, 180, null, 90])
+  })
+})
+
+describe('choosePasses', () => {
+  const pass = (metres: number, recording: string, extra: object = {}) => ({ ft: 1, lat: 0, lng: 0, metres, recording, cameraKnown: true, cameraYaw: 0, hour: 9, heading: 10, ...extra })
+  it('takes one pass from each recording, the closest of each, known cameras first, up to n', () => {
+    const got = choosePasses([pass(5, 'a'), pass(3, 'a'), pass(8, 'b'), pass(1, 'c', { cameraKnown: false }), pass(2, 'd', { hour: 4 }), pass(9, 'e')], 3)
+    expect(got.map((p) => [p.recording, p.metres])).toEqual([['a', 3], ['b', 8], ['e', 9]])
   })
 })
 

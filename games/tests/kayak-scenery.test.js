@@ -314,7 +314,7 @@ test('a row of styled houses (balcony-terrace) keeps the trees between them, as 
   assert.equal(trunks(reading), trunks(plain));
 });
 
-test('the boatyard stands on land on its quay, and the timber boathouse on its own bank clear of the riverside villa', async () => {
+test('the boatyard stands on land on its quay, and the timber boathouse at the downstream end of the riverside villa\'s quay', async () => {
   const { BOATYARD, landmarkFrame } = await import('../reading-thames/world.js');
   const reading = await data('reading');
   const land = waterMap(reading.water);
@@ -332,14 +332,159 @@ test('the boatyard stands on land on its quay, and the timber boathouse on its o
   assert.ok(quay.length > 6, 'its quay');
   const edge = yard.at(0, 0, yard.edge + 0.5);
   assert.ok(land.inside(edge[0], edge[2]), 'water just off the quay');
-  // The timber boathouse: grey boarding near its spot, all on land, and 8 m clear of the villa's footprint.
+  // The timber boathouse: pale weathered boarding near its spot, all on land.
+  const { DECK } = await import('../reading-thames/world.js');
   const spot = reading.features.find((f) => f.style === 'deck-boathouse');
-  const grey = tris.filter(is([0.5, 0.47, 0.43])).filter((t) => Math.hypot(mid(t)[0] - spot.at[0], mid(t)[1] - spot.at[1]) < 12);
+  const grey = tris.filter(is(DECK.wall)).filter((t) => Math.hypot(mid(t)[0] - spot.at[0], mid(t)[1] - spot.at[1]) < 12);
   assert.ok(grey.length >= 12, `its boarding: ${grey.length}`);
   assert.ok(grey.every((t) => !land.inside(...mid(t))), 'on land, not in the river');
-  const villa = reading.buildings.find((b) => b.style === 'riverside-villa').shape;
-  const gap = Math.min(...villa.map(([x, z]) => Math.hypot(x - spot.at[0], z - spot.at[1])));
-  assert.ok(gap > 8, `${gap.toFixed(1)} m from the villa`);
+  // Where the footage and the lidar put it: at the water in front of the
+  // villa's footprint (the lidar's 4 m roof there), the quay running upstream
+  // from it (+x, on your left from the water), its shrubs downstream.
+  const { VILLA } = await import('../reading-thames/world.js');
+  const villa = landmarkFrame(course, 'riverside-villa');
+  const [sx, sz] = inFrame(villa, [spot.at[0], 0, spot.at[1]]);
+  assert.ok(Math.abs(sx) < 4 && sz > villa.depth[1] - 1 && sz < villa.edge + 1, `the boathouse at (${sx.toFixed(1)}, ${sz.toFixed(1)}) in the villa's frame`);
+  const posts = tris.filter(is(VILLA.post)).filter((t) => Math.hypot(mid(t)[0] - villa.origin[0], mid(t)[1] - villa.origin[2]) < 50);
+  assert.ok(posts.length > 50, `the quay's posts: ${posts.length}`);
+  assert.ok(posts.every(({ p }) => inFrame(villa, p[0])[0] > sx + 2), 'the quay runs upstream from the boathouse');
+});
+
+// A point's place in a landmark's frame: [x along the bank (+ on your left
+// from the water), z towards the water], and its height over the water.
+function inFrame(f, [x, y, z]) {
+  const [dx, dz] = [x - f.origin[0], z - f.origin[2]];
+  return [dx * f.right[0] + dz * f.right[1], dx * f.fwd[0] + dz * f.fwd[1], y];
+}
+// A landmark's triangles of one colour within r of it, as points in its frame.
+// (`shaded`: any shade of it, as a cone's sides are drawn.)
+async function landmarkParts(style, rgb, r = 40, shaded = false) {
+  const { landmarkFrame } = await import('../reading-thames/world.js');
+  const f = landmarkFrame(courseFromFile(await data('reading')), style);
+  const same = (color) => (shaded ? color.every((v, i) => Math.abs(v / rgb[i] - color[0] / rgb[0]) < 1e-3) && color[0] / rgb[0] > 0.8 && color[0] / rgb[0] < 1.2 : color.every((v, i) => Math.abs(v - rgb[i]) < 1e-3));
+  const pts = (await world()).filter(({ color, p }) => same(color) && Math.hypot(p[0][0] - f.origin[0], p[0][2] - f.origin[2]) < r)
+    .flatMap(({ p }) => p.map((q) => inFrame(f, q)));
+  const span = (i) => pts.length ? Math.max(...pts.map((q) => q[i])) - Math.min(...pts.map((q) => q[i])) : 0;
+  return { f, pts, top: Math.max(...pts.map((q) => q[2])), width: span(0), xs: pts.map((q) => q[0]), zs: pts.map((q) => q[1]) };
+}
+
+test('the riverside villa as the footage shows it: no house at the water, a timber quay with posts, lamps and parasols, big trees with a copper beech, the white house 25 m back', async () => {
+  const { VILLA } = await import('../reading-thames/world.js');
+  const house = await landmarkParts('riverside-villa', VILLA.render, 60);
+  assert.ok(house.pts.length > 0, 'the house is built');
+  assert.ok(Math.max(...house.zs) < house.f.edge - 25, `the house is ${(house.f.edge - Math.max(...house.zs)).toFixed(1)} m back from the water`);
+  assert.ok((await landmarkParts('riverside-villa', VILLA.chimney, 60)).top > 9, 'its brick chimney over its roof');
+  const lamps = await landmarkParts('riverside-villa', VILLA.lamp, 60);
+  const parasols = await landmarkParts('riverside-villa', VILLA.parasol, 60);
+  assert.ok(lamps.pts.length && parasols.pts.length, 'lamp posts and parasols');
+  // On the quay: each beside one of its edge posts, not somewhere on the lawn.
+  const posts = (await landmarkParts('riverside-villa', VILLA.post, 60)).pts;
+  for (const [x, z] of [...lamps.pts, ...parasols.pts]) assert.ok(posts.some(([px, pz]) => Math.abs(px - x) < 1.6 && Math.abs(pz - z) < 3.5), `on the quay at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+  assert.ok((await landmarkParts('riverside-villa', VILLA.beech[0], 60)).pts.length, 'the copper beech');
+  // Nothing of the old villa: no clapboard, no white tower at the water.
+  assert.ok(!(await landmarkParts('riverside-villa', [0.56, 0.63, 0.7], 60)).pts.length, 'no blue clapboard villa');
+});
+
+test('the glass house as the footage and lidar show it: black on both floors, the upper set back under a glass rail, 6-7 m to its roof, behind a lawn and a pale quay', async () => {
+  const { GLASS } = await import('../reading-thames/world.js');
+  const clad = await landmarkParts('glass-house', GLASS.clad);
+  const upper = await landmarkParts('glass-house', GLASS.upper);
+  const roof = await landmarkParts('glass-house', GLASS.fascia);
+  assert.ok(clad.pts.length && upper.pts.length, 'both floors built');
+  assert.ok([GLASS.clad, GLASS.upper].every((c) => Math.max(...c) < 0.3), 'both dark');
+  assert.ok(clad.top < upper.top, 'one over the other');
+  assert.ok((await landmarkParts('glass-house', GLASS.rail)).top > roof.top, 'a glass rail round the roof');
+  assert.ok(Math.max(...upper.zs) < Math.max(...clad.zs) - 1, 'the upper floor set back');
+  const tall = roof.top - roof.f.origin[1];
+  assert.ok(tall > 5.5 && tall < 7.5, `roof ${tall.toFixed(1)} m over its ground (lidar: 5.7 m median, 8.9 m at most)`);
+  assert.ok(clad.f.edge - Math.max(...clad.zs) > 14, 'set back from the water');
+  assert.ok((await landmarkParts('glass-house', GLASS.quay)).pts.length && Math.min(...GLASS.quay) > 0.6, 'the pale quay');
+});
+
+test('the canoe club as the footage shows it: one band of big windows by the gable, a tree at its upstream end, the narrow steps past it, a brick ramp wall with a white rail coming down upstream', async () => {
+  const { CANOE } = await import('../reading-thames/world.js');
+  const { f, pts } = await landmarkParts('canoe-club', CANOE.glass);
+  const [lo, hi] = [Math.max(f.along[0], -21), Math.min(f.along[1], 14)];
+  const b = hi - 17;
+  const third = (b - lo) / 3;
+  // The glass: the glazed corner room downstream, the face by the gable, and the door; none on the middle of the bow.
+  assert.ok(pts.every(([x]) => x < lo + 3.1 || x > lo + 2 * third - 0.1), 'no band of windows across the whole bowed wing');
+  assert.ok(pts.some(([x]) => x > lo + 2 * third && x < b), 'the band on the face by the gable');
+  // The narrow flight of steps past the upstream end, none in front of the upstream wing.
+  const steps = (await landmarkParts('canoe-club', CANOE.concrete.map((v) => v * 0.86), 50)).xs;
+  assert.ok(steps.some((x) => x > hi + 7 && x < hi + 10), 'the narrow steps upstream of the club');
+  assert.ok(!steps.some((x) => x > hi - 9 + 0.5 && x < hi + 0.5), 'no steps in front of the upstream wing');
+  // The upstream tree's trunk at the club's upstream end.
+  const trunks = await landmarkParts('canoe-club', [0.35, 0.25, 0.17], 40);
+  assert.ok(trunks.pts.some(([x, z]) => Math.abs(x - (hi + 2.5)) < 1 && z > f.edge - 6), 'a big tree at the upstream end');
+  // The ramp wall's white rail upstream, higher by the club than further up.
+  const rail = (await landmarkParts('canoe-club', CANOE.rail, 50)).pts.filter(([x]) => x > hi + 0.5);
+  assert.ok(rail.length > 20, 'the rail upstream of the club');
+  const near = Math.max(...rail.filter(([x]) => x < hi + 4).map((q) => q[2]));
+  const far = Math.max(...rail.filter(([x]) => x > hi + 17).map((q) => q[2]));
+  assert.ok(near > far + 2, `the ramp comes down: ${near.toFixed(1)} m by the club, ${far.toFixed(1)} m upstream`);
+});
+
+test('the spiral-stair boathouse to the lidar: 11.5 m to its ridge over the water, 11 m wide, a dock on the water, two glass balconies, the gable dark timber', async () => {
+  const { SPIRAL } = await import('../reading-thames/world.js');
+  const roof = await landmarkParts('spiral-boathouse', SPIRAL.roof, 20);
+  assert.ok(roof.top > 11 && roof.top < 12, `ridge ${roof.top.toFixed(1)} m over the water`);
+  const brick = await landmarkParts('spiral-boathouse', SPIRAL.brick, 20);
+  assert.ok(brick.width > 9 && brick.width < 11.5, `${brick.width.toFixed(1)} m wide`);
+  const glass = await landmarkParts('spiral-boathouse', SPIRAL.glass, 20);
+  assert.ok(glass.pts.some((q) => q[2] < 5) && glass.pts.some((q) => q[2] > 6.5), 'a glass balcony on each floor (3.5 m and 7 m over the water)');
+  assert.ok((await landmarkParts('spiral-boathouse', SPIRAL.timber, 20)).top > 10, 'the dark timber gable');
+  assert.ok(Math.max(...brick.zs) > brick.f.edge - 0.5, 'its dock at the water');
+});
+
+test('the Tudor boathouse to the footage and lidar: a narrow gable end in the river, 7.6 m across and 7.8 m to its ridge, grey boat doors, black-and-white timbering', async () => {
+  const { TUDOR } = await import('../reading-thames/world.js');
+  const walls = await landmarkParts('tudor-boathouse', TUDOR.render, 15);
+  assert.ok(walls.width > 7 && walls.width < 8.8, `${walls.width.toFixed(1)} m across`);
+  const roof = await landmarkParts('tudor-boathouse', TUDOR.roof, 15);
+  assert.ok(roof.top > 7.3 && roof.top < 8.3, `ridge ${roof.top.toFixed(1)} m over the water`);
+  const doors = await landmarkParts('tudor-boathouse', TUDOR.doors, 15);
+  assert.ok(doors.pts.length && Math.min(...doors.zs) > doors.f.edge - 0.5, 'the boat doors on the water');
+  assert.ok(Math.min(...doors.pts.map((q) => q[2])) < 0.5, 'down to the water');
+  assert.ok((await landmarkParts('tudor-boathouse', TUDOR.timber, 15)).top > 6, 'timbers up the gable');
+  assert.ok((await landmarkParts('tudor-boathouse', TUDOR.purple[0], 30)).pts.length, 'the purple-leaved tree behind');
+  assert.ok((await landmarkParts('tudor-boathouse', TUDOR.brick, 30)).xs.every((x) => x > 0), 'the brick-faced lawn upstream');
+  assert.ok((await landmarkParts('tudor-boathouse', TUDOR.stone, 30)).xs.every((x) => x < 0), 'the stone quay downstream');
+});
+
+test('the Victorian house is the one the footage shows (the lidar\'s 13 m roof, not the tree), with its tower upstream, a balcony over the dock, and the striped awning', async () => {
+  const { VICTORIAN } = await import('../reading-thames/world.js');
+  const reading = await data('reading');
+  const b = reading.buildings.find((x) => x.style === 'victorian');
+  const c = [0, 1].map((i) => b.shape.reduce((t, p) => t + p[i], 0) / b.shape.length);
+  // (The OSM footprint under the lidar's 13 m roof, in the course's metres; it moves only if the course's origin does.)
+  assert.ok(Math.hypot(c[0] + 1587.1, c[1] + 828.1) < 3, `its footprint at (${c.map((v) => v.toFixed(1))})`);
+  const roof = await landmarkParts('victorian', VICTORIAN.tiles, 25);
+  assert.ok(roof.top > 12.5 && roof.top < 13.5, `ridge ${roof.top.toFixed(1)} m over the water`);
+  const dome = await landmarkParts('victorian', VICTORIAN.dome, 25, true);
+  assert.ok(dome.xs.every((x) => x > 4), 'the tower on its upstream side (your left from the water)');
+  assert.ok(dome.top > roof.top, 'its dome over the roof');
+  assert.ok((await landmarkParts('victorian', VICTORIAN.awning, 25)).pts.length, 'the striped awning');
+  // The balcony: its white balusters out over the water's edge, the width of the front.
+  const pier = await landmarkParts('victorian', VICTORIAN.pier, 25);
+  const balusters = pier.pts.filter(([, z, y]) => y > 3.5 && z > pier.f.edge + 0.9);
+  assert.ok(balusters.length && Math.max(...balusters.map((q) => q[0])) - Math.min(...balusters.map((q) => q[0])) > 11, 'the balcony along its front');
+  // Its ground floor at the water, the dock opening onto it.
+  assert.ok(Math.max(...(await landmarkParts('victorian', VICTORIAN.brick, 25)).zs) > pier.f.edge - 0.5, 'its front at the water');
+});
+
+test('the boatyard to the footage and lidar: low and dark, the two-storey brick end downstream, a long low building upstream with flagpoles, 9 m at most over the water', async () => {
+  const { BOATYARD } = await import('../reading-thames/world.js');
+  const roof = await landmarkParts('boatyard', BOATYARD.roof, 40);
+  assert.ok(roof.top < 9.5 && roof.top > 7, `highest roof ${roof.top.toFixed(1)} m over the water (lidar 7-9 m)`);
+  const brick = await landmarkParts('boatyard', BOATYARD.brick, 40);
+  const low = await landmarkParts('boatyard', BOATYARD.low, 40);
+  assert.ok(Math.max(...brick.xs) < Math.min(...low.xs), 'brick end downstream (your right), the low building upstream');
+  assert.ok(low.top < brick.top - 1, 'the upstream building is the low one');
+  const back = brick.f.edge - Math.max(...brick.zs);
+  assert.ok(back > 12 && back < 16, `${back.toFixed(1)} m back from the quay across its yard (the lidar: 14 m)`);
+  assert.ok((await landmarkParts('boatyard', BOATYARD.sign, 40)).pts.length, 'its sign boards');
+  assert.ok((await landmarkParts('boatyard', BOATYARD.flags[1], 40)).pts.length, 'its flags');
 });
 
 test('upstream of Mapledurham: the dead tree, the white river sign and the sand beach are built on their banks', async () => {
@@ -812,7 +957,9 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
     const toward = unit([fr.origin[0] + fr.right[0] * mid - o[0], 0, fr.origin[2] + fr.right[1] * mid - o[2]]);
     let met = 0;
     for (let up = 0.05; up <= 0.4; up += 0.05) met += seen(o, unit([toward[0], up, toward[2]]), slots, m).color[3] > 0.5;
-    assert.ok(met >= 3, `${style}: the reflection shows it (${met} of 8 rays)`);
+    // (Not the riverside villa: the footage has no house at its water, only a low
+    // quay, the house 30 m back among trees; the boathouse there is a feature.)
+    if (style !== 'riverside-villa') assert.ok(met >= 3, `${style}: the reflection shows it (${met} of 8 rays)`);
     // From behind it (inland), a ray towards the water passes through its picture: only its front is mirrored.
     const behind = [fr.origin[0] - fr.fwd[0] * 30, 0, fr.origin[2] - fr.fwd[1] * 30];
     const only = nearFacades({ ...m, facades: [f] }, behind[0], behind[2]);
