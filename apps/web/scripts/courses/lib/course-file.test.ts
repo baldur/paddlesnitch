@@ -69,17 +69,6 @@ describe('mooringRow', () => {
     expect(mooringRow(100, 400, 1, 'mixed', draws, 'covers').every((b) => b.crew === 'covers' && b.kind === 'narrowboat')).toBe(true)
   })
 
-  it("takes the draws the old mix took, so the rows after a 'mixed' one stay where they were", () => {
-    let seed = 7
-    const draws = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
-    mooringRow(100, 400, -1, 'mixed', draws)
-    // As main laid it out before 'mixed' became narrowboats (the same seed, the same next row).
-    expect(mooringRow(500, 600, 1, 'cruiser', draws).slice(0, 3)).toEqual([
-      { s: 499.9, length: 11.7, side: 1, kind: 'cruiser' },
-      { s: 514.1, length: 8.7, side: 1, kind: 'cruiser' },
-      { s: 526.5, length: 9.1, side: 1, kind: 'cruiser' },
-    ])
-  })
   it('fills a stretch of bank nose to tail', () => {
     const row = mooringRow(100, 200, 1, 'cruiser', rand)
     expect(row.length).toBeGreaterThan(5)
@@ -114,6 +103,15 @@ describe('courseFile', () => {
     expect(out.walls).toEqual([{ side: 1, from: 700, to: 800 }])
     expect(out.credit).toMatch(/OpenStreetMap/)
     expect(out.licence).toMatch(/ODbL/)
+  })
+
+  it('lays each row of boats and each stretch of anglers from its own draws: adding a row moves nothing else', () => {
+    const row = (from: number, to: number) => ({ kind: 'moorings', boats: 'cruiser', side: 'left', from: { at: [from, 0] as [number, number], heading: 0 }, to: { at: [to, 0] as [number, number], heading: 0 } })
+    const anglers = { kind: 'anglers', count: 3, side: 'right', from: { at: [600, 0] as [number, number], heading: 0 }, to: { at: [800, 0] as [number, number], heading: 0 } }
+    const before = courseFile({ ...base, observations: [row(300, 400), anglers] })
+    const after = courseFile({ ...base, observations: [row(100, 200), row(300, 400), anglers] })
+    expect(after.moorings.filter((m) => m.s > 250)).toEqual(before.moorings)
+    expect(after.anglers).toEqual(before.anglers)
   })
 
   it('keeps nearby buildings, makes those in a stretch of flats tall, and drops far ones', () => {
