@@ -7,12 +7,12 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE } from '../reading-thames/world.js';
+import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE } from '../reading-thames/world.js';
 const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 
-// The world's triangles, as [[x, y, z] x 3, colour].
+// The world's triangles, as [[x, y, z] x 3, colour, normal].
 let triangles;
 async function world() {
   if (triangles) return triangles;
@@ -20,7 +20,7 @@ async function world() {
   triangles = [];
   for (let i = 0; i < vertices.length; i += 27) {
     const p = [0, 9, 18].map((k) => [vertices[i + k], vertices[i + k + 1], vertices[i + k + 2]]);
-    triangles.push({ p, color: [vertices[i + 6], vertices[i + 7], vertices[i + 8]] });
+    triangles.push({ p, color: [vertices[i + 6], vertices[i + 7], vertices[i + 8]], n: [vertices[i + 3], vertices[i + 4], vertices[i + 5]] });
   }
   return triangles;
 }
@@ -1084,6 +1084,42 @@ test("the water under Caversham Bridge mirrors the bridge's dark underside, not 
     assert.equal(color[3], 1, 'solid, not clear');
     assert.ok(color[0] * 0.3 + color[1] * 0.59 + color[2] * 0.11 < 0.4, `dark (in shadow): ${color.map((x) => x.toFixed(2))}`);
   }
+});
+
+test("Caversham Bridge's piers are drawn in the deck's shadow: each face into an arch shaded, facing that arch's water", async () => {
+  const course = courseFromFile(await data('reading'));
+  buildWorld(course, 1, 'river');
+  const river = course.scenery?.river ?? course;
+  const shaded = (await world()).filter((t) => t.color.every((v, i) => Math.abs(v - PIER_SHADE[i]) < 1e-3));
+  // Two faces an arch (one each side), each its middle and the two half-metre strips up to the deck: six triangles.
+  assert.ok(shaded.length >= 24 && shaded.length % 12 === 0, `${shaded.length} shaded triangles`);
+  for (const t of shaded) {
+    const c = [0, 1, 2].map((i) => (t.p[0][i] + t.p[1][i] + t.p[2][i]) / 3);
+    assert.ok(Math.abs(t.n[1]) < 0.01, 'an upright face');
+    // More of the arch's water the way it faces than behind it, the pier (out to
+    // 3 m: where the deck meets the bank the mapped water bends away).
+    const wet = (k) => [0.5, 1, 1.5, 3].filter((d) => river.land.inside(c[0] + t.n[0] * d * k, c[2] + t.n[2] * d * k)).length;
+    assert.ok(wet(1) > wet(-1), `faces its arch at (${c[0].toFixed(1)}, ${c[2].toFixed(1)}): water ${wet(1)} ahead, ${wet(-1)} behind`);
+  }
+});
+
+test("the water under Caversham Bridge mirrors its piers in the deck's shadow: darker than its sides, not a pale grey wall", async () => {
+  const { mirror: m } = await mirror();
+  // The mean brightness of a picture's solid texels (premultiplied, so solid ones only).
+  const bright = (f) => {
+    const px = m.pixels.subarray(f.row * FACADE.h * m.width * 4, (f.row + 1) * FACADE.h * m.width * 4);
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) { sum += (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255; n++; }
+    return sum / n;
+  };
+  const sides = m.facades.filter((f) => f.name === 'Caversham Bridge side').map(bright);
+  const piers = m.facades.filter((f) => f.name === 'Caversham Bridge pier').map(bright);
+  assert.ok(piers.length >= 2, `${piers.length} piers`);
+  // (The sides' pictures hold their dark arches too. On 2026-11-17 a pier's was
+  // brighter than either, 0.46 against 0.26 and 0.31: lit as if in the open, a
+  // grey patch in the water under the bridge.)
+  for (const p of piers) assert.ok(p < (2 / 3) * Math.min(...sides), `a pier ${p.toFixed(2)} against the sides ${sides.map((s) => s.toFixed(2))}`);
 });
 
 test("the water mirrors each landmark and both bridges: a landmark from its front only, its picture standing where its walls are (the Island Bar mirrored twice its width from its footprint's edge)", async () => {
