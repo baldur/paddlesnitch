@@ -233,6 +233,28 @@ test('the traffic fits each stretch, as the footage shows: rowing by the clubs, 
   assert.ok(Math.abs(boats / before - 1) < 0.15, `${(boats / races).toFixed(2)} boats a race, ${(before / races).toFixed(2)} before`);
 });
 
+test('a narrowboat under way keeps out of line with the moored ones: off its bank by a moored beam and more, wherever the river has room', async () => {
+  const course = await fromFile('hasler16');
+  let seen = 0;
+  for (let seed = 0; seed < 120; seed++) {
+    const traffic = createTraffic(course, seed);
+    if (!traffic.boats.some((b) => b.kind === 'narrowboat')) continue;
+    for (let t = 0; t < 1500; t += 3) {
+      moveTraffic(traffic, t);
+      for (const b of traffic.boats.filter((x) => x.on && x.kind === 'narrowboat')) {
+        const w = widthAt(traffic.river, b.s);
+        const open = b.dir > 0 ? w.right : w.left;
+        if (open < 12) continue;
+        seen++;
+        // Its side from the bank, against a moored narrowboat's beam (2.1 m) and 2 m of water.
+        const gap = open - Math.abs(b.lateral) - TRAFFIC.narrowboat.hull;
+        assert.ok(gap > 2.1 + 2, `${gap.toFixed(1)} m off its bank at ${b.s.toFixed(0)} m (half width ${open.toFixed(1)})`);
+      }
+    }
+  }
+  assert.ok(seen > 50, `${seen} narrowboat positions`);
+});
+
 test("motorboats and cruisers on the river wander a little and drift: the bow swings past where they're going; a sculler keeps its line", () => {
   const course = raceRiver();
   const seen = Object.fromEntries(['motorboat', 'cruiser', 'sculler'].map((kind) => [kind, { swing: 0, bow: 0, drift: 0, n: 0 }]));

@@ -26,7 +26,9 @@ export const TRAFFIC = {
   motorboat: { length: 6, hull: 1.2, speed: 2.2, wash: 0.8, weight: 0.28 },
   // A narrowboat under way: 18 m, at a canal boat's 4 mph. Only where a course
   // file's stretches put them (weight 0: the made-up rivers keep their mix).
-  narrowboat: { length: 18, hull: 1.05, speed: 1.8, wash: 0.25, weight: 0 },
+  // keep: its share of its half of the river from the middle (else 0.6): nearer
+  // the middle than the moored boats it would look like (design review).
+  narrowboat: { length: 18, hull: 1.05, speed: 1.8, wash: 0.25, weight: 0, keep: 0.35 },
 };
 // A motorboat isn't on rails (owner, 2026-11-03: "make the river motorboats
 // drift a little too"): it wanders across its lane, its track swinging up to
@@ -256,7 +258,7 @@ export function lane(river, s, dir, T) {
   const w = widthAt(river, s);
   const open = dir > 0 ? w.right : w.left;
   const reach = Math.max(T.hull, T.oars?.[2] ?? 0);
-  return Math.max(0, Math.min(Math.max(open * 0.6, reach + 0.5), open - reach - 0.5));
+  return Math.max(0, Math.min(Math.max(open * (T.keep ?? 0.6), reach + 0.5), open - reach - 0.5));
 }
 
 // The parts of a boat a kayak can hit, as stretches of its length (from the
