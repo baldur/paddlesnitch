@@ -1095,8 +1095,10 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
     const fr = landmarkFrame(course, style);
     // Where the picture stands, out from the footprint's middle towards the water.
     const out = (f.p[0] - fr.origin[0]) * fr.fwd[0] + (f.p[2] - fr.origin[2]) * fr.fwd[1];
-    // (Within its footprint, or out to the bank where it's built to the water: the spiral-stair boathouse's dock.)
-    assert.ok(out > fr.depth[0] - 2 && out < Math.max(fr.depth[1], fr.edge) + 2, `${style}: ${out.toFixed(1)} m out, its footprint ${fr.depth.map((x) => x.toFixed(1))}, the bank ${fr.edge.toFixed(1)}`);
+    // (Within its footprint, or out to the bank where it's built to the water: the spiral-stair boathouse's dock.
+    // The riverside villa's walls are its house, 30 m back among trees behind its quay.)
+    if (style === 'riverside-villa') assert.ok(out < fr.depth[0] - 20 && out > fr.depth[0] - 40, `the villa's picture at its house: ${out.toFixed(1)} m`);
+    else assert.ok(out > fr.depth[0] - 2 && out < Math.max(fr.depth[1], fr.edge) + 2, `${style}: ${out.toFixed(1)} m out, its footprint ${fr.depth.map((x) => x.toFixed(1))}, the bank ${fr.edge.toFixed(1)}`);
     // The Island Bar's glass front stands well back from its footprint's edge, which mirrored it twice its width.
     if (style === 'island-bar') assert.ok(out < fr.depth[1] - 5, `the Island Bar's picture at ${out.toFixed(1)} m`);
     // From 25 m out in front, looking back at it and up a little, the ray meets its picture; looking away it doesn't.
@@ -1128,6 +1130,53 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
   }
   // main.js hands the pictures to the renderer.
   assert.match(await readFile(new URL('../reading-thames/main.js', import.meta.url), 'utf8'), /renderer\.setFacades\(mirror \?\?/);
+});
+
+test('the water at the glass house mirrors the weeping willow in front of it, not a dark box of the house behind', async () => {
+  const { course, mirror: m } = await mirror();
+  const fr = landmarkFrame(course, 'glass-house');
+  // The willow on the bank before it (the footage's frame there is all willow, in the water too).
+  const willow = course.scenery.features.filter((f) => f.style === 'willow')
+    .map((f) => ({ f, d: Math.hypot(f.at[0] - fr.origin[0], f.at[1] - fr.origin[2]) })).sort((a, b) => a.d - b.d)[0].f;
+  // From the water 30 m out from the willow, towards the middle of the river, looking back at it.
+  const o = [willow.at[0] + fr.fwd[0] * 30, 0, willow.at[1] + fr.fwd[1] * 30];
+  const slots = nearFacades(m, o[0], o[2]);
+  const toward = unit([willow.at[0] - o[0], 0, willow.at[1] - o[2]]);
+  const colors = [];
+  for (let up = 0.05; up <= 0.35; up += 0.05) colors.push(seen(o, unit([toward[0], up, toward[2]]), slots, m).color);
+  const green = colors.filter(([r, g, b, a]) => a > 0.5 && g > r && g > b * 1.4).length;
+  assert.ok(green >= 4, `leaves in ${green} of ${colors.length} rays: ${colors.map((c) => c.map((x) => x.toFixed(2)).join(' ')).join(' | ')}`);
+  // Its picture stands at the willow (its trunk is 6 m in from its point), not at the house's
+  // walls 15 m behind, where its reflection slid off the tree as the view turned (design review).
+  const pic = m.facades.find((f) => f.name === 'glass-house willow');
+  assert.ok(pic, 'the willow has a picture of its own');
+  const depth = (q) => (q[0] - fr.origin[0]) * fr.fwd[0] + (q[q.length - 1] - fr.origin[2]) * fr.fwd[1];
+  const trunk = depth(willow.at) - 6;
+  assert.ok(Math.abs(depth(pic.p) - trunk) < 6, `the willow's picture ${depth(pic.p).toFixed(1)} m out, its trunk ${trunk.toFixed(1)} m`);
+  assert.ok(depth(m.facades.find((f) => f.name === 'glass-house').p) < trunk - 6, "the house's picture is behind it");
+  // Only trees: no landmark took in a quay, a jetty or a boat shed.
+  for (const f of m.facades) if (/ /.test(f.name) && !/ (side|underside|pier)$/.test(f.name)) assert.match(f.name, / (willow|dead-tree)$/);
+});
+
+test("a landmark takes in only the trees before it: not one behind it, off to the side or far out, and not a quay", async () => {
+  // (The real river has one such tree, so these are placed in the glass house's frame: x along, z out.)
+  const raw = await data('reading');
+  const pictures = (extra) => {
+    const course = courseFromFile(structuredClone(raw));
+    buildWorld(course, 1, 'river');
+    const fr = landmarkFrame(course, 'glass-house');
+    const at = (x, z) => [fr.origin[0] + fr.right[0] * x + fr.fwd[0] * z, fr.origin[2] + fr.right[1] * x + fr.fwd[1] * z];
+    // (Without the real willow, so whatever's taken in is the one placed.)
+    course.scenery.features = course.scenery.features.filter((t) => !FRONT.has(t.style)).concat(extra ? [{ style: extra[0], at: at(extra[1], extra[2]) }] : []);
+    return mirrorFacades(course, SUN, SKY_TOP).facades.filter((f) => f.name.startsWith('glass-house ')).map((f) => f.name);
+  };
+  const FRONT = new Set(['willow', 'dead-tree']);
+  assert.deepEqual(pictures(), []);
+  assert.deepEqual(pictures(['dead-tree', 5, 15]), ['glass-house dead-tree'], 'a dead tree before it');
+  assert.deepEqual(pictures(['willow', 0, -25]), [], 'a willow behind it');
+  assert.deepEqual(pictures(['willow', 45, 15]), [], 'a willow 30 m off to the side');
+  assert.deepEqual(pictures(['willow', 0, 50]), [], 'a willow 40 m out before it');
+  assert.deepEqual(pictures(['quay', 0, 15]), [], 'a quay');
 });
 
 test("drawing the facades for the water changes nothing in the world: the river is the same, built before or after them", async () => {

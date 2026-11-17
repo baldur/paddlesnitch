@@ -1,13 +1,13 @@
 {
  "reading": {
-  "anglers": "e2bf3f23c0ff",
+  "anglers": "c19dab9bbaca",
   "banks": "284f75749d4b",
   "birds": "4bbfd5b8d8ab",
   "bridges": "537e8b66a516",
   "finish": "c6a967bff46c",
   "line": "6198211cb4eb",
   "locks": "4f53cda18c2b",
-  "moorings": "02c05e6f564b",
+  "moorings": "0547d4d6da48",
   "paths": "366f48e2579d",
   "posts": "191c5cdebd64",
   "railways": "72448b33b9f0",
@@ -20,7 +20,7 @@
   "width": "99db1a4ecd25"
  },
  "loop": {
-  "anglers": "e2bf3f23c0ff",
+  "anglers": "c19dab9bbaca",
   "banks": "284f75749d4b",
   "birds": "aa74274cf0fa",
   "bridges": "537e8b66a516",
@@ -30,7 +30,7 @@
   "line": "6198211cb4eb",
   "locks": "4f53cda18c2b",
   "marks": "ba81c52e7f3d",
-  "moorings": "02c05e6f564b",
+  "moorings": "0547d4d6da48",
   "paths": "366f48e2579d",
   "posts": "191c5cdebd64",
   "railways": "72448b33b9f0",
@@ -45,7 +45,7 @@
   "world": "cb64c6fbe804"
  },
  "hasler16": {
-  "anglers": "e2bf3f23c0ff",
+  "anglers": "c19dab9bbaca",
   "banks": "284f75749d4b",
   "birds": "375a4bf6fd48",
   "bridges": "537e8b66a516",
@@ -55,7 +55,7 @@
   "line": "6198211cb4eb",
   "locks": "4f53cda18c2b",
   "marks": "dd68f7ad037e",
-  "moorings": "02c05e6f564b",
+  "moorings": "0547d4d6da48",
   "paths": "366f48e2579d",
   "posts": "191c5cdebd64",
   "railways": "72448b33b9f0",
@@ -70,7 +70,7 @@
   "world": "cb64c6fbe804"
  },
  "hasler79": {
-  "anglers": "e2bf3f23c0ff",
+  "anglers": "c19dab9bbaca",
   "banks": "284f75749d4b",
   "birds": "83880e76c101",
   "bridges": "537e8b66a516",
@@ -80,7 +80,7 @@
   "line": "6198211cb4eb",
   "locks": "4f53cda18c2b",
   "marks": "2022d1101279",
-  "moorings": "02c05e6f564b",
+  "moorings": "0547d4d6da48",
   "paths": "366f48e2579d",
   "posts": "191c5cdebd64",
   "railways": "72448b33b9f0",
@@ -95,7 +95,7 @@
   "world": "cb64c6fbe804"
  },
  "practice": {
-  "anglers": "e2bf3f23c0ff",
+  "anglers": "c19dab9bbaca",
   "banks": "284f75749d4b",
   "birds": "4f53cda18c2b",
   "bridges": "537e8b66a516",
@@ -105,7 +105,7 @@
   "line": "6198211cb4eb",
   "locks": "4f53cda18c2b",
   "marks": "4f53cda18c2b",
-  "moorings": "02c05e6f564b",
+  "moorings": "0547d4d6da48",
   "paths": "366f48e2579d",
   "posts": "191c5cdebd64",
   "railways": "72448b33b9f0",

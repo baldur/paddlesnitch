@@ -352,3 +352,50 @@ test("rivals don't sit with their bow in the bank at an island's end: mass start
     assert.ok(race.racers.every((r) => !r.ai || r.finish === null || !r.ai.backOff), 'no back-off after the finish');
   }
 });
+
+// Every moored boat's deck, as course.js moors it: at its `at` along `dir`, or against its bank.
+const BEAMS = { narrowboat: 2.1, cruiser: 3.4, 'trip-boat': 4.6, tatty: 3.4, houseboat: 4.6 };
+function decks(reading) {
+  const river = courseFromFile(reading).scenery.river;
+  return reading.moorings.map((m) => {
+    const c = pointAt(river, m.s);
+    const beam = BEAMS[m.kind] ?? 2.1;
+    const w = widthAt(river, m.s).half - beam / 2;
+    const mid = m.at ?? [c.x - c.tz * m.side * w, c.z + c.tx * m.side * w];
+    const [ux, uz] = m.dir ?? [c.tx, c.tz];
+    const pts = [-1, -0.5, 0, 0.5, 1].flatMap((k) => [-beam / 2, beam / 2].map((b) => [mid[0] + ux * k * m.length / 2 - uz * b, mid[1] + uz * k * m.length / 2 + ux * b]));
+    return { m, mid, pts };
+  });
+}
+
+test('no moored boat lies on a racing line, a turning buoy or a gate, and no angler fishes over one', async () => {
+  const reading = await data('reading');
+  const boats = decks(reading);
+  // Known and kept: the trip boat moored in Piper's Island's north channel, which the Hasler courses go up.
+  const allow = { 600.7: "the trip boat in Piper's north channel" };
+  for (const id of ['loop', 'hasler79', 'hasler16', 'practice']) {
+    const route = courseFromFile(await data(id));
+    for (const { m, mid, pts } of boats) {
+      if (allow[m.s]) continue;
+      const near = route.samples.filter((p) => Math.hypot(p.x - mid[0], p.z - mid[1]) < 60);
+      if (!near.length) continue;
+      const gap = Math.min(...near.flatMap((p) => pts.map(([x, z]) => Math.hypot(x - p.x, z - p.z))));
+      assert.ok(gap > 2, `${id}: the ${m.kind} at ${m.s} m is ${gap.toFixed(1)} m from the racing line`);
+    }
+    const raw = await data(id);
+    for (const mark of raw.marks ?? []) {
+      const gap = Math.min(...boats.flatMap(({ pts }) => pts.map(([x, z]) => Math.hypot(x - mark.x, z - mark.z))));
+      assert.ok(gap > 5, `${id}: a boat ${gap.toFixed(1)} m from the buoy at ${mark.x}, ${mark.z}`);
+    }
+    for (const g of raw.gates ?? []) {
+      const p = pointAt(route, g.s);
+      const gap = Math.min(...boats.flatMap(({ pts }) => pts.map(([x, z]) => Math.hypot(x - p.x, z - p.z))));
+      assert.ok(gap > 5, `${id}: a boat ${gap.toFixed(1)} m from the gate "${g.label}"`);
+    }
+  }
+  // And no angler fishes over a moored boat on their own bank.
+  for (const a of reading.anglers ?? []) {
+    const over = reading.moorings.find((m) => !m.at && m.side === a.side && Math.abs(m.s - a.s) < m.length / 2 + 4);
+    assert.ok(!over, `the angler at ${a.s} m fishes over the ${over?.kind} at ${over?.s} m`);
+  }
+});
