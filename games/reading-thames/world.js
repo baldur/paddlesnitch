@@ -3505,6 +3505,21 @@ export function mirrorFacades(course, sun, sky) {
     // Its front: the footprint's water side, as wide and tall as the model.
     const box = bounds(tris, [cx, 0, cz], f.right, f.fwd);
     out.push({ name: b.style, ...facade(tris, [cx, 0, cz], f.right, f.fwd, [box.x[0], box.x[1]], [0, box.y[1]], f.depth[1], sun, sky) });
+    // And the trees on the bank before it, each a picture of its own standing at
+    // the tree (the willow hides the glass house in the footage, in the water
+    // too; the game showed a dark box of the house). In the house's picture, 15 m
+    // behind, the willow's reflection slid off the tree as the view turned.
+    for (const t of real.features ?? []) {
+      if (!FRONT_TREES.has(t.style)) continue;
+      const [dx, dz] = [t.at[0] - cx, t.at[1] - cz];
+      const [x, z] = [dx * f.right[0] + dz * f.right[1], dx * f.fwd[0] + dz * f.fwd[1]];
+      if (!(x > box.x[0] - 6 && x < box.x[1] + 6 && z > f.depth[0] && z < box.z[1] + 15)) continue;
+      const tm = new MeshBuilder();
+      FEATURES[t.style](tm, river, spot(river, t.at));
+      const tt = tm.build().vertices;
+      const tb = bounds(tt, [cx, 0, cz], f.right, f.fwd);
+      out.push({ name: `${b.style} ${t.style}`, ...facade(tt, [cx, 0, cz], f.right, f.fwd, [tb.x[0], tb.x[1]], [0, tb.y[1]], (tb.z[0] + tb.z[1]) / 2, sun, sky) });
+    }
   }
   // Caversham Bridge only: Christchurch's deck is a thin line 6 m up, which the
   // ripples bent into a black snake across the water (design review).
@@ -3581,6 +3596,9 @@ function facade(tris, origin, right, fwd, [x0, x1], [y0, y1], at, sun, sky, flip
   return orient({ p, u, v, pixels: bake(tris, p, u, v, view, sun, sky).pixels }, view);
 }
 
+// The trees before a landmark that the water mirrors as pictures of their own.
+const FRONT_TREES = new Set(['willow', 'dead-tree']);
+
 // A bridge's underside: level at `y`, over the model's extent, seen from below.
 function ceiling(tris, origin, right, fwd, box, y, sun, sky) {
   const p = [origin[0] + right[0] * box.x[0] + fwd[0] * box.z[0], y, origin[2] + right[1] * box.x[0] + fwd[1] * box.z[0]];
@@ -3625,6 +3643,7 @@ function bake(tris, p, u, v, view, sun, sky, walls = true) {
   const pixels = new Uint8Array(w * h * 4);
   const near = new Float32Array(w * h).fill(-Infinity);
   const square = new Uint8Array(w * h); // whether what's seen there faces the eye squarely (a wall)
+  const high = new Uint8Array(w * h); // whether it stands in the upper two thirds (its own height, not where the tilt puts it)
   const n = cross3(u, v);
   const nv = dot3(n, view);
   const uu = dot3(u, u);
@@ -3633,8 +3652,9 @@ function bake(tris, p, u, v, view, sun, sky, walls = true) {
     const q = [tris[i] - p[0], tris[i + 1] - p[1], tris[i + 2] - p[2]];
     const s = dot3(q, n) / nv; // how far towards the eye
     const on = [q[0] - view[0] * s, q[1] - view[1] * s, q[2] - view[2] * s];
-    return [(dot3(on, u) / uu) * w, (dot3(on, v) / vv) * h, s];
+    return [(dot3(on, u) / uu) * w, (dot3(on, v) / vv) * h, s, dot3(q, v) / vv];
   };
+  const top = 1 / 3;
   for (let i = 0; i < tris.length; i += 27) {
     const [a, b, c] = [project(i), project(i + 9), project(i + 18)];
     const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
@@ -3659,6 +3679,7 @@ function bake(tris, p, u, v, view, sun, sky, walls = true) {
         if (s <= near[j * w + k]) continue;
         near[j * w + k] = s;
         square[j * w + k] = flat;
+        high[j * w + k] = wa * a[3] + wb * b[3] + wc * c[3] > top ? 1 : 0;
         pixels.set([...col, 255], (j * w + k) * 4);
       }
     }
@@ -3666,9 +3687,12 @@ function bake(tris, p, u, v, view, sun, sky, walls = true) {
   // The most common, to half a metre, of what faces the eye squarely over its
   // upper two thirds: the walls (not a pontoon, hedge or steps in front, nor the
   // round crowns of the canoe club's trees, which a median followed 5 m out).
+  // Upper by its own height: looking up, a face 18 m before the walls is drawn
+  // 5 m higher, and the glass house's 50 m quay front placed its picture at the
+  // quay, the house mirrored 18 m out as a big dark box.
   const counts = new Map();
-  for (let i = Math.floor(h / 3) * w; i < w * h; i++) {
-    if (square[i]) counts.set(Math.round(near[i] * 2), (counts.get(Math.round(near[i] * 2)) ?? 0) + 1);
+  for (let i = 0; i < w * h; i++) {
+    if (square[i] && high[i]) counts.set(Math.round(near[i] * 2), (counts.get(Math.round(near[i] * 2)) ?? 0) + 1);
   }
   const most = [...counts].reduce((a, b) => (b[1] > a[1] ? b : a), [0, 0])[0];
   return { pixels, middle: most / 2 };
