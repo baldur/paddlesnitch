@@ -2289,44 +2289,16 @@
     {
       "kind": "moorings",
       "side": "left",
-      "boats": "trip-boat",
-      "length": 25,
-      "exact": true,
-      "at": [
-        51.465352,
-        -0.975725
-      ],
-      "heading": 115,
-      "frame": "0095-p1-00600",
-      "note": "moored-boats survey, 2026-11-17: off the main channel at 572 m along, seen in 1 frame(s); placed where the frame's bearing to it meets the mapped water"
-    },
-    {
-      "kind": "moorings",
-      "side": "left",
       "boats": "cruiser",
       "length": 10,
       "exact": true,
       "at": [
-        51.465023,
-        -0.976439
+        51.465029,
+        -0.976469
       ],
-      "heading": 314,
+      "heading": 306,
       "frame": "0095-p1-00600",
-      "note": "moored-boats survey, 2026-11-17: off the main channel at 589 m along, seen in 2 frame(s); placed where the frame's bearing to it meets the mapped water"
-    },
-    {
-      "kind": "moorings",
-      "side": "left",
-      "boats": "cruiser",
-      "length": 10,
-      "exact": true,
-      "at": [
-        51.465086,
-        -0.976546
-      ],
-      "heading": 314,
-      "frame": "0095-p1-00600",
-      "note": "moored-boats survey, 2026-11-17: off the main channel at 598 m along, seen in 2 frame(s); placed where the frame's bearing to it meets the mapped water"
+      "note": "moored-boats survey, 2026-11-17: off the main channel at 591 m along, seen in 1 frame(s); placed where the frame's bearing to it meets the mapped water"
     },
     {
       "kind": "moorings",
