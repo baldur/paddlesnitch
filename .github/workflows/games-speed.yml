@@ -17,6 +17,11 @@ concurrency:
 permissions:
   contents: read
 
+# Explicit bash runs steps with pipefail, so `node … | tee` fails when node does.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   speed:
     name: games speed against main (same machine)

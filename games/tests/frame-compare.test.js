@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { frameTimes, compare } from './frame-compare.mjs';
+import { frameTimes, compare, passes, LIMIT } from './frame-compare.mjs';
 
 const MAIN = [
   '2026-11-17T06:28:56Z ✔ webkit, desktop: webgl2, 3.4 m/s, 400 ms frames',
@@ -40,4 +40,25 @@ test('nothing in common gives no rows and no median', () => {
   const { rows, median } = compare({ a: [100] }, { b: [100] });
   assert.equal(rows.length, 0);
   assert.ok(Number.isNaN(median));
+});
+
+test('a case that drew no frames (0 ms) is never compared, on either side', () => {
+  const main = frameTimes('✔ a: webgl2, 400 ms frames\n✔ b: webgl2, 400 ms frames\n✔ c: no renderer, 0 ms frames');
+  const pr = frameTimes('✖ a: no renderer, 0 ms frames\n✔ b: webgl2, 440 ms frames\n✔ c: webgl2, 500 ms frames');
+  const { rows, median } = compare(main, pr);
+  assert.deepEqual(rows.map((r) => r.name), ['b']);
+  assert.equal(median, 1.1);
+});
+
+test('repeated case names pair by order', () => {
+  const main = frameTimes('✔ a: 100 ms frames\n✔ a: 200 ms frames');
+  const pr = frameTimes('✔ a: 150 ms frames\n✔ a: 200 ms frames');
+  assert.deepEqual(compare(main, pr).rows.map((r) => r.ratio), [1.5, 1]);
+});
+
+test('passes only with something compared and the median at most the limit', () => {
+  assert.equal(LIMIT, 1.15);
+  assert.equal(passes(compare({ a: [100] }, { a: [115] })), true);
+  assert.equal(passes(compare({ a: [100] }, { a: [116] })), false);
+  assert.equal(passes(compare({ a: [100] }, { b: [100] })), false);
 });
