@@ -643,11 +643,13 @@ function fromRiver(course, x, z) {
 // The height of the ground at a point beside a real river (for a paddler
 // running along the bank on a portage); 0 on a made-up river.
 // How wooded each bank of a real river is beside (x, z), [left, right] as you
-// face along (tx, tz) (left = negative lateral, as the water shader's `across`), 0 to 1: 1 with no
+// face along (tx, tz) (left = negative lateral, as the water shader's `across`):
+// the height its trees stand at in the water, against 15 m (0 to 1.5). Where
+// lidar.js measured it, the bank's skyline (measuredWoods); elsewhere 1 with no
 // buildings within 45 m of the water's edge 60 m either way, falling to 0 with
-// three or more. The water mirrors trees in proportion (bankWoodsAlong, into
-// the frame), so a town reach mirrors its sky, not a wall of leaves under its
-// houses. Worked out once per course, every 10 m.
+// three or more, so a town reach mirrors its sky, not a wall of leaves under its
+// houses. The water mirrors trees that high (bankWoodsAlong, into the frame).
+// Worked out once per course, every 10 m.
 export function bankWoods(course, x, z, tx, tz) {
   const [left, right] = bankWoodsAlong(course, x, z, tx, tz, 1);
   return [left[0], right[0]];
@@ -683,16 +685,25 @@ export function bankWoodsAlong(course, x, z, tx, tz, n = 16, step = 20) {
   return dir < 0 ? [row(1), row(0)] : [row(0), row(1)];
 }
 
-// Where lidar.js measured it, how wooded a bank is comes from the canopy: the
-// share of the 14 m by the water under trees and scrub over 3 m, half covered
-// counting as full (the first belt is what shows in the water).
+// Where lidar.js measured it, the bank's woods come from the canopy. The water
+// shader takes them as the trees' height (TREE_TOP, 15 m, times this), so they're
+// the bank's skyline over 15 m: how high its trees stand as the water mirrors
+// them, set-back ones too (lidar.js `skyline`). Before, the share of the 14 m by
+// the water under canopy (half covered counting as full) set it: a lawn or a
+// clubhouse before tall trees mirrored as 0-7 m trees, and the reflections
+// stopped half way to the boat where the footage's come right across.
+export const TREE_TOP = 15;
+export const SKYLINE_SCALE = 1.5;
 function measuredWoods(river, step) {
+  const sky = river.lidar?.skyline;
   const woods = river.lidar?.woods;
-  if (!woods) return;
+  if (!sky && !woods) return;
   river.woodsAlong.forEach((row, side) => {
     for (let i = 0; i < row.length; i++) {
-      const v = woods.sides[side][Math.round((i * step) / woods.step)];
-      if (v !== null && v !== undefined) row[i] = Math.min(1, 2 * v);
+      const h = sky?.sides[side][Math.round((i * step) / sky.step)];
+      const v = woods?.sides[side][Math.round((i * step) / woods.step)];
+      if (h !== null && h !== undefined) row[i] = Math.min(1.5, (h * SKYLINE_SCALE) / TREE_TOP);
+      else if (v !== null && v !== undefined) row[i] = Math.min(1, 2 * v);
     }
   });
 }

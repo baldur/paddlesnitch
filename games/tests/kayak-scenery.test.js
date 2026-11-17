@@ -732,10 +732,45 @@ test("the water mirrors trees only where a bank is wooded (the lidar's canopy): 
   // against the open town front opposite.
   const [town, trees] = woods(150);
   assert.ok(town < 0.2 && trees >= 0.4, `above Christchurch Bridge ${town}, ${trees}`);
-  assert.deepEqual(woods(3000), [1, 1], 'the wooded reach');
+  // (Woods are the trees' height in the water against 15 m, from the lidar's skyline: over 15 m here.)
+  assert.ok(woods(3000).every((w) => w >= 1.2), `the wooded reach ${woods(3000)}`);
   // Facing the other way, left and right swap.
   const p = at(reading.scenery.river, 300);
   assert.deepEqual(bankWoods(reading, p.x, p.z, -p.tx, -p.tz), [...woods(300)].reverse());
+});
+
+test("the water mirrors each bank's trees as high as they stand, set-back ones too (the lidar's skyline): reflections nearer the boat, as the footage shows, bare banks still bare", async () => {
+  const { bankWoodsAlong } = await import('../reading-thames/world.js');
+  const reading = courseFromFile(await data('reading'));
+  bankWoodsAlong(reading, 0, 0, 1, 0);
+  // Every 10 m of both banks: the mirrored trees' height (woods × 15 m).
+  const heights = reading.scenery.river.woodsAlong.flat().map((w) => w * 15).sort((a, b) => a - b);
+  const share = (f) => heights.filter(f).length / heights.length;
+  // (On main, 2026-11-17, the share of the first 14 m under canopy set it: a median 6 m, 31% at 10 m or more.
+  // Now 11.6 m and 62%; over the 44 reference views the water's pixels off the footage's, green or not, 0.38 to 0.31.)
+  assert.ok(heights[Math.floor(heights.length / 2)] >= 10, `median ${heights[Math.floor(heights.length / 2)].toFixed(1)} m`);
+  assert.ok(share((h) => h >= 10) > 0.55, `${share((h) => h >= 10).toFixed(2)} at 10 m or more`);
+  assert.ok(share((h) => h < 3) > 0.05, `${share((h) => h < 3).toFixed(2)} bare (under 3 m): not trees everywhere`);
+});
+
+test("without a skyline the woods are the old share of the first 14 m (half covered counting as full), and a skyline's trees stand at most 1.5 × 15 m", async () => {
+  const { bankWoodsAlong, SKYLINE_SCALE, TREE_TOP } = await import('../reading-thames/world.js');
+  const { LIDAR } = await import('../reading-thames/lidar.js');
+  const along = (lidar) => {
+    const reading = courseFromFile(structuredClone(readingData));
+    reading.scenery.river.lidar = lidar;
+    bankWoodsAlong(reading, 0, 0, 1, 0);
+    return reading.scenery.river.woodsAlong;
+  };
+  const readingData = await data('reading');
+  const old = along({ ...LIDAR, skyline: undefined });
+  const share = LIDAR.woods.sides[0][100];
+  assert.equal(old[0][100], Math.min(1, 2 * share), 'the share where there is no skyline');
+  const tall = along({ ...LIDAR, skyline: { step: 10, sides: LIDAR.skyline.sides.map((row) => row.map(() => 100)) } });
+  assert.ok(tall.flat().every((w) => w === 1.5), 'capped');
+  const plain = along(LIDAR);
+  const h = LIDAR.skyline.sides[1][300];
+  assert.equal(plain[1][300], Math.min(1.5, (h * SKYLINE_SCALE) / TREE_TOP), 'the skyline where there is one');
 });
 
 test("the water reads the woods where each reflection meets the bank, not only beside you: a strip along each bank, which changes where the town front by Christchurch Bridge begins", async () => {
