@@ -3146,12 +3146,12 @@ export function bridgeBay(course, bridge) {
 const STONE = [0.93, 0.92, 0.88];
 const PAVING = [0.72, 0.71, 0.68];
 const ROAD = [0.3, 0.3, 0.32];
-// A concrete bridge's piers under its deck, in its shadow: a duller grey-green
-// than its sunlit sides, as the footage shows. Their picture in the water is lit
+// A concrete bridge's piers under its deck, in its shadow: a duller grey than
+// its sunlit sides, as the footage shows (a green tint read as another material). Their picture in the water is lit
 // by the sky alone (no sun under the deck) and dimmed a little more (UNDER_DECK,
 // the water there in shadow too): about as dark as the underside's, as in the
 // footage, where the wall's reflection is a third as bright as the wall.
-export const PIER_SHADE = [0.62, 0.64, 0.56];
+export const PIER_SHADE = [0.6, 0.62, 0.6];
 export const UNDER_DECK = 0.8;
 const BRONZE = [0.42, 0.6, 0.52];
 const GLOBE = [0.93, 0.93, 0.9];
@@ -3276,21 +3276,28 @@ function concreteBridge(m, course, bridge) {
     const b = k < arches.length ? arches[k][0] - 1 : xb;
     for (const [x0, x1] of b > a ? deckPieces(a, b) : []) slab(m, f, [x0, x1], [-W, W], -0.5, deckAt, COLORS.cream);
   }
-  // Under the deck the piers' faces are in its shadow (the footage: a dark
-  // grey-green wall either side of each arch, its reflection darker still), so
-  // each face into an arch, up to the arch's first step, is shaded, 1 cm proud:
-  // lit as the open sides were, it read as a pale grey wall, and its picture in
+  // Under the deck the piers' faces are in its shadow (the footage: a shaded
+  // grey wall either side of each arch, its reflection darker still), so each
+  // face into an arch is shaded, 2 cm proud (1 cm could flicker from 100 m):
+  // up to the arch's first step, and up to the deck in the half metre each side
+  // where the pier is wider than the arch's steps (a cream sliver otherwise).
+  // Lit as the open sides were, it read as a pale grey wall, and its picture in
   // the water (mirrorFacades) a bright patch under the bridge.
   for (const [a0, b0] of arches) {
     const [a, b] = [a0 - 1, b0 + 1];
     const step = (b - a) / Math.max(4, Math.round((b - a) / 4));
     for (const [x, into] of [[a, 1], [b, -1]]) {
       const top = Math.min(archUnder(a, b, x + (into * step) / 2), deckAt(x) - ARCH_DEPTH, deckAt(x + into * step) - ARCH_DEPTH);
-      const p = x + into * 0.01;
-      const face = [f.at(p, -0.5, -W), f.at(p, -0.5, W), f.at(p, top, W), f.at(p, top, -W)];
+      const p = x + into * 0.02;
       const towards = [right[0] * into, 0, right[1] * into];
-      m.triFacing(face[0], face[1], face[2], PIER_SHADE, towards);
-      m.triFacing(face[0], face[2], face[3], PIER_SHADE, towards);
+      const rect = ([z0, z1], y1) => {
+        const q = [f.at(p, -0.5, z0), f.at(p, -0.5, z1), f.at(p, y1, z1), f.at(p, y1, z0)];
+        m.triFacing(q[0], q[1], q[2], PIER_SHADE, towards);
+        m.triFacing(q[0], q[2], q[3], PIER_SHADE, towards);
+      };
+      rect([-W + 0.5, W - 0.5], top);
+      rect([-W, -W + 0.5], deckAt(x));
+      rect([W - 0.5, W], deckAt(x));
     }
   }
   const bay = bridgeBay(course, bridge);
@@ -3565,8 +3572,9 @@ export function mirrorFacades(course, sun, sky) {
     const top = crown(tris, origin, right);
     out.push({ name: `${name} underside`, ...ceiling(tris, origin, right, fwd, box, top, sun, sky) });
     for (const [x, e] of piers) {
-      // (No sun under the deck: lit by the sky alone, so a pier facing the sun isn't the bright one.)
-      const pic = facade(tris, origin, fwd, [right[0] * e, right[1] * e], box.z, [0, top], x * e, [0, -1, 0], sky);
+      // (No sun under the deck: lit by the sky alone, so a pier facing the sun
+      // isn't the bright one. Straight overhead, it lights no wall or underside.)
+      const pic = facade(tris, origin, fwd, [right[0] * e, right[1] * e], box.z, [0, top], x * e, [0, 1, 0], sky);
       for (let i = 0; i < pic.pixels.length; i += 4) for (let k = 0; k < 3; k++) pic.pixels[i + k] = Math.round(pic.pixels[i + k] * UNDER_DECK);
       out.push({ name: `${name} pier`, ...pic });
     }
