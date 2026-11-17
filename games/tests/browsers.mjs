@@ -18,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(new URL('../../apps/web/package.json', import.meta.url));
 const { chromium, webkit, firefox, devices } = require('@playwright/test');
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// GAMES_ROOT plays another copy of games/ with these same cases (games-speed.yml: main's games, to compare frame times on one machine).
+const ROOT = process.env.GAMES_ROOT ?? fileURLToPath(new URL('..', import.meta.url));
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
   // (also under /games/, as on the site: a case standing in for the site's API loads it there)
