@@ -148,7 +148,8 @@ test('in whole races the rivals keep right of oncoming boats and let eights by: 
   let races = 0;
   let hits = 0;
   let boats = 0;
-  for (const [course, format] of [[raceRiver(), 'mass'], [await fromFile('reading'), 'mass']]) {
+  // (Hasler 7-9 goes round the clubs' stretch, where most boats met are eights.)
+  for (const [course, format] of [[raceRiver(), 'mass'], [await fromFile('reading'), 'mass'], [await fromFile('hasler79'), 'mass']]) {
     for (const seed of [2, 3, 5, 6]) {
       const race = createRace(course, { rivals: DIVISION_9, seed, format });
       // Straight off (this is about the river, not the start), at the course's speed.
@@ -175,6 +176,11 @@ test("a race's traffic is exactly as it was before outings could ask for a mix o
   const { readFile } = await import('node:fs/promises');
   const fp = (boats) => createHash('sha1').update(boats.map((b) => [b.kind, b.at.toFixed(2), b.s.toFixed(1), b.dir].join(':')).join('|')).digest('hex').slice(0, 16);
   assert.equal(fp(createTraffic(raceRiver(), 5).boats), 'b19213d67b7f2f3f');
+  // And an outing's on a river without stretches (the cruise along its route, the hired boat's river), as on main.
+  const river = raceRiver();
+  const cruise = { at: (t) => pointAt(river, Math.min(river.length, 100 + 2.2 * t)), seconds: (river.length - 100) / 2.2 };
+  assert.equal(fp(createTraffic(river, 5, { gap: 35, route: cruise }).boats), '5ed4a9a4fcfa5107');
+  assert.equal(fp(createTraffic(river, 5, { gap: 4, ambient: 7200, mix: { sculler: 0.45, kayaker: 0.3, pack: 0.35, eight: 0.3, cruiser: 0.15, motorboat: 0.2 } }).boats), '2cd55d83db1b85f8');
   const loop = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
   // The Loop's changed on purpose (2026-11-17): the real river's traffic now fits each stretch (the test above).
   assert.equal(fp(createTraffic(loop, 3).boats), 'b3b92f4e9ae971f5');
@@ -224,13 +230,56 @@ test('the traffic fits each stretch, as the footage shows: rowing by the clubs, 
   // (on the course that goes once up the whole river; the routes go round the lower islands more).
   const perKm = (i) => once[i] / ((stretches[i].to - (stretches[i - 1]?.to ?? 0)) / 1000);
   assert.ok(perKm(islands) < perKm(purley) / 4, `${perKm(islands).toFixed(0)} against ${perKm(purley).toFixed(0)} a km`);
-  // And as many boats a race as with no stretches (the owner's 120 s average, 2026-10-31).
-  let before = 0;
-  for (const course of [reading, await fromFile('loop'), await fromFile('hasler79')]) {
+  // And as many boats a race as with no stretches, course by course (the owner's
+  // 120 s average, 2026-10-31); Hasler 1-6 is the one through Purley's reach.
+  for (const id of ['reading', 'loop', 'hasler79', 'hasler16']) {
+    const course = await fromFile(id);
     const plain = { ...course, scenery: { ...course.scenery, traffic: undefined } };
-    for (let seed = 0; seed < 300; seed++) before += createTraffic(plain, seed).boats.length;
+    let now = 0;
+    let before = 0;
+    for (let seed = 0; seed < 400; seed++) {
+      now += createTraffic(course, seed).boats.length;
+      before += createTraffic(plain, seed).boats.length;
+    }
+    assert.ok(Math.abs(now / before - 1) < 0.08, `${id}: ${(now / 400).toFixed(2)} boats a race, ${(before / 400).toFixed(2)} before`);
   }
-  assert.ok(Math.abs(boats / before - 1) < 0.15, `${(boats / races).toFixed(2)} boats a race, ${(before / races).toFixed(2)} before`);
+});
+
+test("the course file's stretches are sound: in order to the river's end, and only kinds there are boats for", async () => {
+  for (const id of ['reading', 'loop', 'hasler79', 'hasler16', 'practice']) {
+    const course = await fromFile(id);
+    const stretches = course.scenery.traffic;
+    assert.ok(stretches.length > 0, `${id} has stretches`);
+    stretches.forEach((p, i) => {
+      assert.ok(i === 0 || p.to > stretches[i - 1].to, `${id}: "${p.where}" after the one before`);
+      assert.ok(p.busy > 0, `${id}: "${p.where}" has some traffic`);
+      assert.ok(Object.keys(p.mix).length > 0, `${id}: "${p.where}" has a mix`);
+      for (const kind of Object.keys(p.mix)) assert.ok(TRAFFIC[kind], `${id}: "${p.where}": a ${kind}?`);
+    });
+    assert.ok(stretches.at(-1).to >= course.scenery.river.length, `${id}: the stretches reach the river's end`);
+  }
+});
+
+test("the hired boat's river leans on each stretch: more rowers and kayakers, packs among them, as busy as before", async () => {
+  const { HIRE_MIX } = await import('../reading-thames/outing.js');
+  const course = await fromFile('reading');
+  const plain = { ...course, scenery: { ...course.scenery, traffic: undefined } };
+  const share = (boats, kinds) => boats.filter((b) => kinds.includes(b.kind)).length / boats.length;
+  let packs = 0;
+  let meetings = 0;
+  let before = 0;
+  for (let seed = 0; seed < 40; seed++) {
+    const hire = createTraffic(course, seed, { gap: 4, ambient: 7200, mix: HIRE_MIX }).boats;
+    const race = createTraffic(course, seed, { gap: 4, ambient: 7200 }).boats;
+    assert.ok(share(hire, ['sculler', 'kayaker', 'eight']) > share(race, ['sculler', 'kayaker', 'eight']), 'more rowers and kayakers');
+    packs += hire.filter((b) => b.pack?.lead === b).length;
+    // Meetings (a pack is one): as many as without stretches.
+    meetings += hire.filter((b) => !b.pack || b.pack.lead === b).length;
+    before += createTraffic(plain, seed, { gap: 4, ambient: 7200, mix: HIRE_MIX }).boats.filter((b) => !b.pack || b.pack.lead === b).length;
+  }
+  // Fewer packs than before stretches (the footage shows few kayakers: 7-35% of a stretch's boats), but some.
+  assert.ok(packs / 40 > 3, `${(packs / 40).toFixed(1)} packs an outing`);
+  assert.ok(Math.abs(meetings / before - 1) < 0.08, `${meetings} meetings against ${before}`);
 });
 
 test('a narrowboat under way keeps out of line with the moored ones: off its bank by a moored beam and more, wherever the river has room', async () => {

@@ -123,8 +123,9 @@ export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null
     if (Math.abs(near.lateral) > widthAt(river, near.s).half) continue;
     const along = Math.sign(p.tx * near.tx + p.tz * near.tz) || 1; // the race's way along the river there
     // An eight from behind stays "now and then" where a stretch has more eights:
-    // as often a boat met as with TRAFFIC's mix (more of them by the clubs tipped
-    // in rivals 10 times in 24 Hasler 7-9 races, against 3).
+    // no more often a boat met than with TRAFFIC's mix (more of them by the clubs
+    // tipped in rivals 10 times in 24 Hasler 7-9 races, against 3). Where eights
+    // are fewer it stays BEHIND of them, so over a race they're 25-30% rarer than before.
     const odds = parts ? Math.min(BEHIND, (BEHIND * EIGHTS) / shareOf(stretchAt(parts, near.s).mix, 'eight')) : BEHIND;
     const behind = kind === 'eight' && rand() < odds && t > BEHIND_FIRST && wide(river, near.s, k);
     add(kind, behind, behind ? along : -along, near.s, t);
