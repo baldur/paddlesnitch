@@ -849,15 +849,23 @@ function think(r, race) {
     lateral = fits(mine) || block.near < 15 * k ? mine : other;
   }
 
-  const strokes = [];
-  if (cadence && race.time >= ai.next) {
-    strokes.push(boat.lastSide === 'left' ? 'right' : 'left');
-    ai.next = race.time + ai.interval * (1 + (race.rand() - 0.5) * 0.05);
-  }
-
   // Look nearer ahead to swerve round a swan, or to get out of a boat's way.
   const swerve = swans.some((b) => b.pass || b.s - loc.s < 15 * k);
-  return { strokes, rudder: steer(r, course, lateral, (swerve ? 7 : 18) * Math.sqrt(k)), lean };
+  const ahead = (swerve ? 7 : 18) * Math.sqrt(k);
+  // Bow on the bank, nearly stopped, facing away from the way on: back off and
+  // swing round until it faces the way on (the rudder does nothing at a
+  // standstill, and paddling on only drove it into the bank again: rivals sat
+  // there for minutes).
+  const off = cornered(r, course, lateral, ahead);
+  const strokes = [];
+  if (cadence && race.time >= ai.next) {
+    strokes.push(off ? `back-${off}` : boat.lastSide === 'left' ? 'right' : 'left');
+    ai.next = race.time + ai.interval * (1 + (race.rand() - 0.5) * 0.05);
+  }
+  // (Backing off, the rudder helps the swing: going backwards it works the
+  // other way round, and steering for the aim undid each back stroke's swing.)
+  const help = off === 'left' ? -1 : 1;
+  return { strokes, rudder: off ? (boat.speed < 0 ? -help : help) : steer(r, course, lateral, ahead), lean };
 }
 
 // A rival coming up to a portage's beach: stop paddling well before it and
@@ -884,12 +892,63 @@ function beachAhead(r, race) {
 }
 
 // Rudder towards a point `ahead` metres down the river, `lateral` off the middle.
-function steer({ boat, loc }, course, lateral, ahead) {
-  const aim = pointAt(course, loc.s + ahead);
-  const ax = aim.x - aim.tz * lateral;
-  const az = aim.z + aim.tx * lateral;
+// On a real river, no further than there's water to it in a straight line:
+// round the end of an island the point 18 m on lies across the island, and a
+// rival steering for it sat with its bow in the bank, stroking, for minutes
+// (Fry's Island's end on the Hasler and Loop courses).
+function steer(r, course, lateral, ahead) {
+  const { boat } = r;
+  const [ax, az] = aimAt(r, course, lateral, ahead);
   const err = wrap(Math.atan2(ax - boat.x, -(az - boat.z)) - boat.heading);
   return clamp(err * 3 - boat.yawRate * 0.5);
+}
+
+const SLOW = 1; // m/s: slower than this, a rival looks for water it can see (aimAt)
+
+// The point a rival steers for: `ahead` metres down the course, `lateral` off
+// its line, or nearer where land is in the way of that. With nothing in sight
+// (up a side channel past an island, the course's line across it), the far
+// point still: sliding along the island's bank gets it through.
+function aimAt({ boat, loc }, course, lateral, ahead) {
+  const at = (d, l = lateral) => {
+    const aim = pointAt(course, loc.s + d);
+    return [aim.x - aim.tz * l, aim.z + aim.tx * l];
+  };
+  const far = at(ahead);
+  // (Only when it's all but stopped: under way, a rival steers as it always has.)
+  if (!course.shore || boat.speed > SLOW || inSight(course.shore, boat, far[0], far[1])) return far;
+  // Nearer on its own lane, then on the course's line (kept clear of the banks).
+  for (const l of lateral ? [lateral, 0] : [0]) {
+    for (let d = ahead * (l === lateral ? 0.7 : 1); d > 3; d *= 0.7) {
+      const p = at(d, l);
+      if (inSight(course.shore, boat, p[0], p[1])) return p;
+    }
+  }
+  return far;
+}
+
+// Which side to back-paddle on to get a boat off the bank it's nosed into
+// ('left' swings the bow left), or null if it isn't stuck. Once it starts, it
+// backs off until it faces the way on (`ai.backOff`).
+function cornered(r, course, lateral, ahead) {
+  const { boat, ai } = r;
+  if (!course.shore || (!ai.backOff && boat.speed > Math.min(0.4, SLOW))) return (ai.backOff = null);
+  const [ax, az] = aimAt(r, course, lateral, ahead);
+  const err = wrap(Math.atan2(ax - boat.x, -(az - boat.z)) - boat.heading);
+  if (ai.backOff) {
+    if (Math.abs(err) < 0.35 || boat.speed > 0.8) ai.backOff = null;
+    return ai.backOff;
+  }
+  const f = [Math.sin(boat.heading), -Math.cos(boat.heading)];
+  if (Math.abs(err) >= 1 && course.shore.dry(boat.x + f[0] * 4.5, boat.z + f[1] * 4.5)) ai.backOff = err < 0 ? 'left' : 'right';
+  return ai.backOff;
+}
+
+// Whether the water runs straight from the boat to (x, z): no land or moored boat in between.
+function inSight(shore, boat, x, z) {
+  const n = Math.ceil(Math.hypot(x - boat.x, z - boat.z) / 2);
+  for (let i = 1; i <= n; i++) if (shore.dry(boat.x + ((x - boat.x) * i) / n, boat.z + ((z - boat.z) * i) / n)) return false;
+  return true;
 }
 
 // Hulls as line segments from stern to bow. Overlapping boats are pushed

@@ -318,3 +318,26 @@ test("the Caversham Lady (the black trip boat along Piper's Island) stays off ev
   const hidden = Math.max(0, Math.min(Math.max(...her), Math.max(...bar)) - Math.max(Math.min(...her), Math.min(...bar)));
   assert.ok(hidden <= (Math.max(...bar) - Math.min(...bar)) / 10, `her ${Math.min(...her).toFixed(0)}–${Math.max(...her).toFixed(0)}°, the bar ${Math.min(...bar).toFixed(0)}–${Math.max(...bar).toFixed(0)}°`);
 });
+
+test("rivals don't sit with their bow in the bank at an island's end: Loop mass starts that never finished on main now do, with no one stuck a minute", async () => {
+  const course = courseFromFile(await data('loop'));
+  // Seed 7: on main one rival sat at St Mary's Island's end (1683 m) and another
+  // at 5428 m for the rest of the hour, stroking at 0.05 m/s.
+  for (const seed of [7]) {
+    const race = createRace(course, { rivals: DIVISION_9, seed, format: 'mass', easy: true });
+    const spot = new Map();
+    let stuck = '';
+    while (race.time < 900 && race.racers.some((r) => r.ai && r.finish === null)) {
+      stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+      for (const r of race.racers) {
+        if (!r.ai || r.finish !== null || r.boat.swim > 0) { spot.delete(r); continue; }
+        const was = spot.get(r);
+        if (!was || Math.abs(r.loc.s - was.s) > 3) spot.set(r, { s: r.loc.s, t: race.time });
+        else if (race.time - was.t > 60 && !stuck) stuck = `${r.name} at ${r.loc.s.toFixed(0)} m since ${was.t.toFixed(0)} s`;
+      }
+    }
+    const left = race.racers.filter((r) => r.ai && r.finish === null).map((r) => `${r.name} at ${r.loc.s.toFixed(0)} m`);
+    assert.deepEqual(left, [], `seed ${seed}: everyone finished`);
+    assert.equal(stuck, '', `seed ${seed}: stuck`);
+  }
+});
