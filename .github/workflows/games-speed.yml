@@ -1,0 +1,62 @@
+# Is a games change slower? WebKit frame times swing about 2x between GitHub's
+# runners (AMD EPYC 9V45, 9V74 and 7763 all serve the same image), so a pull
+# request's run and a separate main run can't be compared. This plays the same
+# WebKit cases twice on ONE runner, main's games then the pull request's, and
+# fails when the median frame time is over 1.15x of main's.
+name: games speed
+
+on:
+  pull_request:
+    paths: ['games/**']
+  workflow_dispatch:
+
+concurrency:
+  group: games-speed-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Explicit bash runs steps with pipefail, so `node … | tee` fails when node does.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  speed:
+    name: games speed against main (same machine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Install WebKit
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps webkit
+      - name: Which machine
+        run: |
+          echo "machine: $(lscpu | sed -n 's/^Model name: *//p'), $(nproc) cpus"
+      # Main's games, played by this branch's cases (a case main can't pass still
+      # reports its frame time; only cases both runs have are compared).
+      - name: Play main's games
+        env:
+          ENGINE: webkit
+        run: |
+          base=origin/${{ github.base_ref || 'main' }}
+          git worktree add "$RUNNER_TEMP/main" "$base"
+          GAMES_ROOT="$RUNNER_TEMP/main/games" node games/tests/browsers.mjs | tee "$RUNNER_TEMP/main.log" || true
+      - name: Play this branch's games
+        env:
+          ENGINE: webkit
+        run: node games/tests/browsers.mjs | tee "$RUNNER_TEMP/pr.log" || true
+      - name: Compare
+        run: node games/tests/frame-compare.mjs "$RUNNER_TEMP/main.log" "$RUNNER_TEMP/pr.log" | tee -a "$GITHUB_STEP_SUMMARY"
