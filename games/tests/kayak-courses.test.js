@@ -319,6 +319,40 @@ test("the Caversham Lady (the black trip boat along Piper's Island) stays off ev
   assert.ok(hidden <= (Math.max(...bar) - Math.min(...bar)) / 10, `her ${Math.min(...her).toFixed(0)}–${Math.max(...her).toFixed(0)}°, the bar ${Math.min(...bar).toFixed(0)}–${Math.max(...bar).toFixed(0)}°`);
 });
 
+test("rivals don't sit with their bow in the bank at an island's end: mass starts that never finished on main now do, with no one stuck a minute or backing off long", async () => {
+  // At this DT on main: Loop seed 13 left three rivals at St Mary's Island's end
+  // (1683 m) for the hour, seed 7 one at 4419 m; Hasler Div 1-6 seed 17 held
+  // two at Fry's Island's end for 65-133 s.
+  for (const [id, seed] of [['loop', 7], ['loop', 13], ['hasler16', 17]]) {
+    const course = courseFromFile(await data(id));
+    const race = createRace(course, { rivals: id === 'hasler16' ? DIVISION_3 : DIVISION_9, seed, format: 'mass', easy: true });
+    const spot = new Map();
+    const backing = new Map();
+    let stuck = '';
+    let backed = '';
+    while (race.time < 1500 && race.racers.some((r) => r.ai && r.finish === null)) {
+      stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+      for (const r of race.racers) {
+        if (!r.ai || r.finish !== null || r.boat.swim > 0 || r.portage) { spot.delete(r); backing.delete(r); continue; }
+        const was = spot.get(r);
+        if (!was || Math.abs(r.loc.s - was.s) > 3) spot.set(r, { s: r.loc.s, t: race.time });
+        else if (race.time - was.t > 60 && !stuck) stuck = `${r.name} at ${r.loc.s.toFixed(0)} m since ${was.t.toFixed(0)} s`;
+        // A back-off is short (BACK_OFF in race.js), and never far.
+        if (!r.ai.backOff) { backing.delete(r); continue; }
+        if (!backing.has(r)) backing.set(r, { t: race.time, s: r.loc.s });
+        const b = backing.get(r);
+        if (!backed && (race.time - b.t > 10 || b.s - r.loc.s > 20)) backed = `${r.name} backing ${(race.time - b.t).toFixed(0)} s, ${(b.s - r.loc.s).toFixed(0)} m at ${r.loc.s.toFixed(0)} m`;
+      }
+    }
+    const left = race.racers.filter((r) => r.ai && r.finish === null).map((r) => `${r.name} at ${r.loc.s.toFixed(0)} m`);
+    assert.deepEqual(left, [], `${id} seed ${seed}: everyone finished`);
+    assert.equal(stuck, '', `${id} seed ${seed}: stuck`);
+    assert.equal(backed, '', `${id} seed ${seed}: a long back-off`);
+    // A finished rival isn't left holding a back-off (and its rudder over).
+    assert.ok(race.racers.every((r) => !r.ai || r.finish === null || !r.ai.backOff), 'no back-off after the finish');
+  }
+});
+
 // Every moored boat's deck, as course.js moors it: at its `at` along `dir`, or against its bank.
 const BEAMS = { narrowboat: 2.1, cruiser: 3.4, 'trip-boat': 4.6, tatty: 3.4, houseboat: 4.6 };
 function decks(reading) {
