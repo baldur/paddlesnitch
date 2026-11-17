@@ -192,7 +192,9 @@ export function clubShots(course) {
   let bridge;
   let swan = null;
   if (bay) {
-    const { deck: d, half } = BRIDGE;
+    // The deck rises and falls along the road (world.js DECK_PROFILE): stand on it where the bay is.
+    const { half } = BRIDGE;
+    const d = bay.deck;
     const z = bay.e * (half - STANDING.back);
     const eye = bay.at(bay.t, d + STANDING.eye, z);
     // Straight out of the bay, level, so the lamps show either side and the
