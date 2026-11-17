@@ -430,7 +430,9 @@ test("the water mirrors the stretch's measured tree line: a wall of trees on the
   const p = pointAt(reading.scenery.river, 810);
   const [left, right] = bankWoods(reading, p.x, p.z, p.tx, p.tz);
   assert.ok(right >= 0.9, `Caversham bank ${right}`);
-  assert.ok(left <= 0.25, `rowing club bank ${left}`);
+  // (Woods are the trees' height in the water against 15 m, from the skyline since 2026-11-17: the club's
+  // bank is its hedge and the trees beyond it, which the footage mirrors, about 6 m; the wall opposite 15 m.)
+  assert.ok(left <= 0.5 && left < right / 2, `rowing club bank ${left}, Caversham bank ${right}`);
 });
 
 test('the game credits the Environment Agency for the lidar, as its licence asks, for the reach lidar.js covers', async () => {

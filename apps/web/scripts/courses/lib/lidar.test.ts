@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK, bankCanopy, bankEdge, blockValues, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import { BLOCK, bankCanopy, bankEdge, bankSkyline, blockValues, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -162,6 +162,25 @@ describe('groundBlocks', () => {
     const kept = new Set(['-5,-2'])
     for (const [x, z] of [[-1250, -500], [-1000, -500], [-1250, -250], [-1000, -250], [-1100, -250]]) expect(inBlocks(kept, x, z)).toBe(true)
     expect(inBlocks(kept, -1251, -300)).toBe(false)
+  })
+})
+
+describe('bankSkyline', () => {
+  it("is how high a bank's trees stand at its edge from 20 m out on the water: a 20 m tree 20 m back, behind a bare lawn, as 10 m", () => {
+    // The left bank: lawn (0) for its first 18 m, then 20 m trees; the right bank: 8 m trees at the edge; nothing past 300 m.
+    const above = (s: number, side: -1 | 1, d: number) => (s > 300 ? null : side < 0 ? (d >= 20 ? 20 : 0) : d <= 4 ? 8 : 0)
+    const [left, right] = bankSkyline(400, 50, above)
+    expect(left[2]).toBeCloseTo(10, 1) // 20 × 20 / (20 + 20)
+    expect(right[2]).toBeCloseTo(8, 1)
+    expect(left[8]).toBeNull()
+  })
+  it('takes the trees, not the gaps between them: the 80th percentile along 30 m either way', () => {
+    // Trees 15 m high at the edge on two stretches in five along the bank.
+    const above = (s: number, _side: -1 | 1, d: number) => (d === 0 && Math.floor(s / 6) % 5 < 2 ? 15 : 0)
+    const [left] = bankSkyline(200, 50, above)
+    expect(left[2]).toBe(15)
+    const [bare] = bankSkyline(200, 50, () => 0)
+    expect(bare[2]).toBe(0)
   })
 })
 

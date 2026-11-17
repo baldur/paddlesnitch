@@ -365,6 +365,34 @@ export function bankEdge(length: number, step: number, above: (s: number, side: 
 }
 
 /**
+ * How high each bank's trees stand as the water mirrors them, every `step`
+ * metres along each bank (null where not measured): from water `view` metres
+ * out, a crown h high d metres back from the edge stands as high at the edge
+ * as h * view / (view + d), so the tall trees behind a lawn or a clubhouse count
+ * too, not only the first belt. The highest out to 60 m back, the 80th percentile
+ * over 30 m either way (the reflection shows the trees, not the gaps between). Heights in metres over the bank. bankCanopy's share of the first 14 m
+ * set the trees' height in the water before: most banks mirrored 2-7 m trees,
+ * where the footage's reflections come right across to the boat.
+ */
+export function bankSkyline(length: number, step: number, above: (s: number, side: -1 | 1, d: number) => number | null, view = 20): Array<Array<number | null>> {
+  return ([-1, 1] as const).map((side) => Array.from({ length: Math.floor(length / step) + 1 }, (_, i) => {
+    const tops: number[] = []
+    for (let ds = -30; ds <= 30; ds += 3) {
+      let best: number | null = null
+      for (let d = 0; d <= 60; d += 2) {
+        const h = above(i * step + ds, side, d)
+        if (h === null) continue
+        best = Math.max(best ?? 0, (h * view) / (view + d))
+      }
+      if (best !== null) tops.push(best)
+    }
+    if (!tops.length) return null
+    tops.sort((a, b) => a - b)
+    return Math.round(tops[Math.floor(tops.length * 0.8)] * 10) / 10
+  }))
+}
+
+/**
  * The canopy's height `d` metres out from the water's edge on `side` (-1 left,
  * 1 right) at `s` along the river: null off the river or where the lidar
  * isn't kept, 0 on a building (a roof isn't canopy). The sampler bankCanopy takes.
@@ -382,7 +410,7 @@ export function canopyAt(
 }
 
 /** games/reading-thames/lidar.js. */
-export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }, edge?: { step: number; sides: Array<Array<number | null>> }): string {
+export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }, edge?: { step: number; sides: Array<Array<number | null>> }, skyline?: { step: number; sides: Array<Array<number | null>> }): string {
   const keys = Object.keys(blocks).sort((a, b) => { const [p, q] = [a, b].map((k) => k.split(',').map(Number)); return p[1] - q[1] || p[0] - q[0] })
   return `// The ground, buildings and trees ${where}, from Environment Agency lidar (the
 // 1 m composite: bare ground, and the first surface the laser met). © Environment
@@ -411,7 +439,11 @@ ${keys.map((k) => `      '${k}': '${blocks[k]}',`).join('\n')}
   woods: { step: ${woods.step}, sides: ${JSON.stringify(woods.sides)} },` : ''}${edge ? `
   // The leaves at the water's edge every \`step\` metres, [left, right]: the canopy's
   // height in the first 8 m (null: none, or not measured).
-  edge: { step: ${edge.step}, sides: ${JSON.stringify(edge.sides)} },` : ''}
+  edge: { step: ${edge.step}, sides: ${JSON.stringify(edge.sides)} },` : ''}${skyline ? `
+  // How high each bank's trees stand as the water mirrors them, every \`step\`
+  // metres, [left, right]: crowns out to 60 m back, each as high as it shows at
+  // the edge from 20 m out on the water (null: not measured).
+  skyline: { step: ${skyline.step}, sides: ${JSON.stringify(skyline.sides)} },` : ''}
 };
 `
 }

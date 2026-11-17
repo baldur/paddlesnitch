@@ -16,7 +16,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { projection, type XZ } from './lib/river'
-import { BLOCK, GROUND_CELL, bankCanopy, bankEdge, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
+import { BLOCK, GROUND_CELL, bankCanopy, bankEdge, bankSkyline, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
 import { courseFromFile, locate, pointAt, widthAt } from '../../../../games/reading-thames/course.js'
 import { waterMap } from '../../../../games/reading-thames/water.js'
 
@@ -117,5 +117,7 @@ const woods = bankCanopy(river.length, 10, atBank)
 // The leaves along the water's edge: only from the vegetation model (the first
 // surface there is boats and moorings as often as leaves).
 const edge = vom ? { step: 8, sides: bankEdge(river.length, 8, atBank) } : undefined
-fs.writeFileSync(out, lidarModule(blocks, heightsOut, trees, where, { step: 10, sides: woods }, edge))
+// And how high the trees stand as the water mirrors them, set-back ones too.
+const skyline = { step: 10, sides: bankSkyline(river.length, 10, atBank) }
+fs.writeFileSync(out, lidarModule(blocks, heightsOut, trees, where, { step: 10, sides: woods }, edge, skyline))
 console.log(`${out}: ${Object.keys(blocks).length} blocks of ${GROUND_CELL} m ground, ${heightsOut.length} buildings, ${trees.length} trees, ${(fs.statSync(out).size / 1024).toFixed(0)} KB`)
