@@ -386,6 +386,31 @@ test("both renderers' per-frame block has the same fields, the size main.js fill
   assert.match(main, /const WATER = \[[^\]]*, 0\];/);
 });
 
+test('the Thames looks like the footage\'s summer mornings: a mostly clear sky, still water that mirrors it, olive leaves', async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const main = await read('main.js');
+  // The footage is August mornings (06:00-07:00) under a mostly clear sky: a few
+  // fair-weather clouds, not the heavy cumulus of 0.8.
+  const cover = Number(main.match(/frameData\.set\(\[\.\.\.SKY_TOP, race\.course\.scenery \? ([\d.]+) : 0\]/)[1]);
+  assert.ok(cover >= 0.2 && cover <= 0.5, `cloud cover ${cover}`);
+  // Seen from above, the river's own colour is dark: what shows is what it mirrors.
+  const thames = JSON.parse(main.match(/const THAMES = (\[[^\]]*\]);/)[1]);
+  assert.ok(thames.slice(0, 3).every((v) => v <= 0.15), `the Thames's depths ${thames}`);
+  // Still water mirrors the sky even looking down into it (blue up to the bow in
+  // the footage), the trees and buildings more; the same in both renderers.
+  const blend = (src) => src.match(/mix\(frame\.water\.rgb, sky, (clamp\(.*\))\);/)[1];
+  const gpu = blend(await read('shaders.js'));
+  assert.equal(blend(await read('shaders-gl.js')), gpu, 'both renderers blend alike');
+  const [, sky, more] = gpu.match(/calm \* \(([\d.]+) \+ ([\d.]+) \* max\(tl\.x, fa\.a\)\)/).map(Number);
+  assert.ok(sky >= 0.15 && more > 0, `calm water mirrors the sky (${sky}) and the banks more (${more})`);
+  // Leaves and grass lean yellow-olive as in the footage, not blue-green.
+  const world = await read('world.js');
+  const greens = [...JSON.parse(world.match(/const LEAVES = (\[\[.*\]\]);/)[1]),
+    ...['grass', 'meadow', 'leaf', 'mown', 'willow'].map((k) => JSON.parse(world.match(new RegExp(`\\n  ${k}: (\\[[^\\]]*\\])`))[1]))];
+  for (const src of ['shaders.js', 'shaders-gl.js']) greens.push((await read(src)).match(/TREES = vec3f?\(([^)]*)\)/)[1].split(',').map(Number));
+  for (const [r, g, b] of greens) assert.ok(r >= 0.72 * g && b <= 0.46 * g, `olive, not blue-green: ${[r, g, b]}`);
+});
+
 test('Christchurch Bridge: its arched deck clears the water by at least 4 m all the way across', async () => {
   const course = courseFromFile(await data('reading'));
   const bridge = course.scenery.bridges.find((b) => b.style === 'cable-stayed');

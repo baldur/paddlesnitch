@@ -2162,7 +2162,7 @@ function simulate(dt) {
 const frameData = new Float32Array(236);
 // Deep water: a made-up river's, and the real Thames's olive green.
 const WATER = [0.07, 0.2, 0.24, 0];
-const THAMES = [0.19, 0.23, 0.16, 0.8]; // w: how calm (the shader's water.w): the Thames lies still between washes
+const THAMES = [0.1, 0.12, 0.1, 0.8]; // w: how calm (the shader's water.w): the Thames lies still between washes
 const SUN = normalize([0.35, 0.42, -0.84]);
 const SKY_TOP = [0.3, 0.52, 0.84];
 
@@ -2556,7 +2556,7 @@ function render(time) {
   frameData.set([...up, tanY], 24);
   frameData.set([...fwd, 0], 28);
   frameData.set([...SUN, 0], 32);
-  frameData.set([...SKY_TOP, race.course.scenery ? 0.8 : 0], 36); // w: cloud cover, on a real river's English sky
+  frameData.set([...SKY_TOP, race.course.scenery ? 0.4 : 0], 36); // w: cloud cover, on a real river's English sky
   frameData.set([0.78, 0.85, 0.9, 0.0016], 40);
   frameData.set(race.course.scenery ? THAMES : WATER, 44);
   // Wakes, for the racers and then the nearest other boats (placed so their bow

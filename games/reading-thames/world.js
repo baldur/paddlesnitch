@@ -13,11 +13,11 @@ import { SHEDS } from './sheds.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
-  grass: [0.36, 0.52, 0.25],
-  meadow: [0.45, 0.58, 0.3],
+  grass: [0.4, 0.48, 0.2],
+  meadow: [0.5, 0.53, 0.24],
   trunk: [0.35, 0.25, 0.17],
-  pine: [0.17, 0.36, 0.22],
-  leaf: [0.3, 0.47, 0.2],
+  pine: [0.19, 0.33, 0.18],
+  leaf: [0.33, 0.43, 0.16],
   hill: [0.38, 0.47, 0.42],
   post: [0.92, 0.92, 0.88],
   buoy: [0.98, 0.72, 0.1],
@@ -29,8 +29,8 @@ const COLORS = {
   brick: [0.6, 0.33, 0.24],
   coping: [0.72, 0.68, 0.6],
   boatHull: [0.08, 0.08, 0.09],
-  mown: [0.42, 0.6, 0.27],
-  willow: [0.5, 0.62, 0.25],
+  mown: [0.46, 0.55, 0.22],
+  willow: [0.55, 0.57, 0.2],
   timber: [0.45, 0.33, 0.22],
   white: [0.93, 0.93, 0.9],
   stone: [0.78, 0.75, 0.68],
@@ -71,9 +71,9 @@ const REAL_PROFILE = [...PROFILE, [320, 5]];
 // Real houses and flats: walls, and roofs for the pitched ones.
 // Riverside greens, from the frames: dark alders and oaks, brighter ash and
 // sycamore, and the odd yellow-green poplar.
-const LEAVES = [[0.2, 0.33, 0.13], [0.25, 0.4, 0.16], [0.3, 0.47, 0.2], [0.38, 0.52, 0.2], [0.17, 0.27, 0.12]];
+const LEAVES = [[0.22, 0.3, 0.1], [0.28, 0.37, 0.13], [0.33, 0.43, 0.16], [0.42, 0.48, 0.16], [0.19, 0.25, 0.1]];
 // The ground under riverside trees: rough grass in their shade.
-const SHADED = [0.25, 0.36, 0.17];
+const SHADED = [0.28, 0.33, 0.14];
 
 // Reading's red brick, buff brick and white render.
 const WALLS = [[0.62, 0.32, 0.24], [0.7, 0.42, 0.3], [0.86, 0.8, 0.68], [0.92, 0.9, 0.85], [0.55, 0.3, 0.25], [0.8, 0.68, 0.47]];

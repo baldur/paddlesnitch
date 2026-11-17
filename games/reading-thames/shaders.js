@@ -245,7 +245,7 @@ fn spots(p: vec2f, dist: f32) -> f32 {
 // the river (taken as straight from where you are) to the line of trees on the
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
-const TREES = vec3f(0.14, 0.2, 0.1);
+const TREES = vec3f(0.15, 0.18, 0.08);
 fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
   if (frame.banks.w < 0.5) { return vec2f(0.0); }
   let along = frame.river.zw;
@@ -331,8 +331,8 @@ fn facades(o: vec3f, d: vec3f) -> vec4f {
   let tl = treeline(p, still, in.woods);
   let fa = facades(vec3f(p.x, 0.0, p.y), still);
   let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
-  // Still water mirrors the trees and buildings even looking down into it (not the sky: there it shows its dark depths).
-  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * 0.3 * max(tl.x, fa.a), 0.0, 1.0));
+  // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
+  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.15 * max(tl.x, fa.a)), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   let foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2f(13.0, 9.0)) + t * 6.0));
