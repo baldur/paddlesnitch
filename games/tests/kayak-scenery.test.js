@@ -1086,6 +1086,25 @@ test("the water under Caversham Bridge mirrors the bridge's dark underside, not 
   }
 });
 
+test("the water under Caversham Bridge mirrors its piers in the deck's shadow: darker than its sides, not a pale grey wall", async () => {
+  const { mirror: m } = await mirror();
+  // The mean brightness of a picture's solid texels (premultiplied, so solid ones only).
+  const bright = (f) => {
+    const px = m.pixels.subarray(f.row * FACADE.h * m.width * 4, (f.row + 1) * FACADE.h * m.width * 4);
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 200) { sum += (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255; n++; }
+    return sum / n;
+  };
+  const sides = m.facades.filter((f) => f.name === 'Caversham Bridge side').map(bright);
+  const piers = m.facades.filter((f) => f.name === 'Caversham Bridge pier').map(bright);
+  assert.ok(piers.length >= 2, `${piers.length} piers`);
+  // (The sides' pictures hold their dark arches too. On 2026-11-17 a pier's was
+  // brighter than either, 0.46 against 0.26 and 0.31: lit as if in the open, a
+  // grey patch in the water under the bridge.)
+  for (const p of piers) assert.ok(p < (2 / 3) * Math.min(...sides), `a pier ${p.toFixed(2)} against the sides ${sides.map((s) => s.toFixed(2))}`);
+});
+
 test("the water mirrors each landmark and both bridges: a landmark from its front only, its picture standing where its walls are (the Island Bar mirrored twice its width from its footprint's edge)", async () => {
   const { course, mirror: m } = await mirror();
   const landmarks = course.scenery.buildings.filter((b) => LANDMARK_STYLES.includes(b.style)).map((b) => b.style);
