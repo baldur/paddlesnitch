@@ -778,7 +778,14 @@ async function play(c, page, errors) {
       window.kayak.show('Second instruction', { small: true, hold: 1.2 });
     });
     if ((await hint()) !== 'First instruction') errors.push(`a later hint wiped the first: "${await hint()}"`);
-    await page.waitForFunction(() => document.getElementById('hint').textContent === 'Second instruction', null, { timeout: 10_000 }).catch(async () => errors.push(`the waiting hint never showed: "${await hint()}"`));
+    // A hint's time passes in game time, at most 0.1 s a frame and slower still
+    // when the game slows its clock to the frames (main.js), so the first's 1.5 s
+    // took 16 to 36 frames in software Chromium: over 10 s at 285 ms frames, and
+    // CI's slowest runners (AMD EPYC 7763) draw 540-680 ms frames, where a 10 s
+    // wait failed. So wait 80 frames at the measured frame time, never under 10 s.
+    const frameMs = await page.evaluate(() => window.kayak.gpu.frameMs ?? 0);
+    const wait = Math.max(10_000, Math.round(frameMs * 80));
+    await page.waitForFunction(() => document.getElementById('hint').textContent === 'Second instruction', null, { timeout: wait }).catch(async () => errors.push(`the waiting hint never showed in ${wait} ms (${Math.round(frameMs)} ms frames): "${await hint()}"`));
     // Tipping over: the gauge warns in the red; then going in on your own says
     // so, and what keeps you up.
     await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));
