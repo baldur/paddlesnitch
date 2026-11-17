@@ -26,6 +26,8 @@ node --test --test-name-pattern="false start" games/tests/*.test.js   # one test
 for f in games/reading-thames/*.js; do node --input-type=module --check < "$f" || echo "$f"; done   # syntax, as a browser parses it
 ```
 
+**Running the browser cases on a Mac:** after a Playwright update (a dependency bump), its browsers have to be installed again for the new version (`pnpm --filter web exec playwright install chromium firefox webkit`), or every case fails to launch. Playwright's macOS WebKit can't click inside the menu dialog (every click reports `<html> intercepts pointer events`, WebGPU or `?webgl`, main too), so the WebKit cases run on CI's Linux only; `ONLY=<name>` runs one case, `--gpu` the real-Chrome ones.
+
 `node --check games/reading-thames/main.js` doesn't catch a syntax error in these files (a stray `else` went through it, and the page failed to load); `--input-type=module` reading the file on stdin does.
 
 `pnpm dev` (the Next app) doesn't serve the games; it does serve the `/games` index page.
