@@ -12,7 +12,7 @@
 import fs from 'fs'
 import path from 'path'
 import { cumulative, locate, placeOn, projection, type LatLng, type XZ } from './lib/river'
-import { courseFile, type Flock, type Observation, type Landmark, type RiverThing } from './lib/course-file'
+import { courseFile, type CourseFile, type Flock, type Observation, type Landmark, type RiverThing } from './lib/course-file'
 
 const id = process.argv[2]
 if (!id) throw new Error('usage: course:build <course-id>')
@@ -28,6 +28,8 @@ const config = JSON.parse(fs.readFileSync(path.join(DATA, 'course.json'), 'utf8'
   // A place named on screen: an OSM name (relabelled or not), or a label at a point.
   places?: Array<Landmark | { label: string; at: LatLng }>
   birds?: Flock[]; styles?: Record<string, string>
+  // Boats under way by stretch, from the footage: copied as they are.
+  traffic?: CourseFile['traffic']
   observations?: string // another course's observations, for the same water
 }
 const { items } = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'scripts/courses/data', config.observations ?? id, 'observations.json'), 'utf8')) as { items: Observation[] }
@@ -48,6 +50,8 @@ const out = courseFile({
   places: landmarks, birds: config.birds, styles: config.styles,
   observations: items, toXZ, place: placeOn(line, toXZ),
 })
+
+if (config.traffic) out.traffic = config.traffic
 
 const file = path.resolve(process.cwd(), '../../games/reading-thames/courses', `${id}.json`)
 fs.mkdirSync(path.dirname(file), { recursive: true })

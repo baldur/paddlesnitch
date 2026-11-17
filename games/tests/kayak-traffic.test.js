@@ -21,7 +21,8 @@ test('traffic is infrequent and varies a lot from race to race', () => {
   assert.ok(counts.filter((n) => n <= 1).length > 20, 'some races are quiet');
   assert.ok(Math.max(...counts) >= 6, 'and some are busy');
   const kinds = new Set(Array.from({ length: 300 }, (_, seed) => createTraffic(raceRiver(), seed).boats.map((b) => b.kind)).flat());
-  assert.deepEqual([...kinds].sort(), Object.keys(TRAFFIC).sort());
+  // (Narrowboats only where a course file's stretches put them: not on this made-up river.)
+  assert.deepEqual([...kinds].sort(), Object.keys(TRAFFIC).filter((k) => k !== 'narrowboat').sort());
 });
 
 test('scullers, cruisers and motorboats only come towards the race; an eight now and then from behind, faster than the pack', async () => {
@@ -175,7 +176,61 @@ test("a race's traffic is exactly as it was before outings could ask for a mix o
   const fp = (boats) => createHash('sha1').update(boats.map((b) => [b.kind, b.at.toFixed(2), b.s.toFixed(1), b.dir].join(':')).join('|')).digest('hex').slice(0, 16);
   assert.equal(fp(createTraffic(raceRiver(), 5).boats), 'b19213d67b7f2f3f');
   const loop = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
-  assert.equal(fp(createTraffic(loop, 3).boats), 'aecd4548d1bea4c9');
+  // The Loop's changed on purpose (2026-11-17): the real river's traffic now fits each stretch (the test above).
+  assert.equal(fp(createTraffic(loop, 3).boats), 'b3b92f4e9ae971f5');
+});
+
+test('the traffic fits each stretch, as the footage shows: rowing by the clubs, motor boats and narrowboats up the open reaches, little by the islands; a race meets as many boats as before', async () => {
+  const reading = await fromFile('reading');
+  const stretches = reading.scenery.traffic;
+  assert.equal(stretches.length, 5);
+  const named = (where) => stretches.findIndex((p) => p.where.startsWith(where));
+  // Every boat met, by stretch, over many races: where they're met, and what.
+  const met = stretches.map(() => ({ n: 0, kinds: {} }));
+  const once = stretches.map(() => 0); // on the course straight up the river, met once along it
+  let races = 0;
+  let boats = 0;
+  for (const course of [reading, await fromFile('loop'), await fromFile('hasler79')]) {
+    for (let seed = 0; seed < 300; seed++) {
+      const traffic = createTraffic(course, seed);
+      races++;
+      for (const b of traffic.boats) {
+        const i = stretches.findIndex((p) => b.meet < p.to);
+        const m = met[i < 0 ? stretches.length - 1 : i];
+        m.n++;
+        m.kinds[b.kind] = (m.kinds[b.kind] ?? 0) + 1;
+        if (course === reading) once[met.indexOf(m)]++;
+        boats++;
+      }
+    }
+  }
+  const share = (i, kind) => (met[i].kinds[kind] ?? 0) / met[i].n;
+  const clubs = named('the clubs');
+  const islands = named('Appletree');
+  const purley = named("Purley's");
+  const open = named('the open reach');
+  // Each stretch's kinds as its mix says (within sampling), and none it doesn't name.
+  for (const [i, p] of stretches.entries()) {
+    const total = Object.values(p.mix).reduce((a, w) => a + w, 0);
+    for (const kind of Object.keys(TRAFFIC)) {
+      const want = (p.mix[kind] ?? 0) / total;
+      if (!want) assert.equal(met[i].kinds[kind] ?? 0, 0, `no ${kind} on ${p.where}`);
+      else if (met[i].n > 150) assert.ok(Math.abs(share(i, kind) - want) < 0.08, `${p.where}: ${kind} ${share(i, kind).toFixed(2)} against ${want.toFixed(2)}`);
+    }
+  }
+  assert.ok(share(clubs, 'eight') > 2 * share(open, 'eight'), 'eights by the clubs');
+  assert.ok(share(purley, 'narrowboat') > 0.1 && !met[clubs].kinds.narrowboat, 'narrowboats up the open reach to Mapledurham, not by the clubs');
+  // How often: boats a kilometre of river, by the islands against Purley's reach
+  // (on the course that goes once up the whole river; the routes go round the lower islands more).
+  const perKm = (i) => once[i] / ((stretches[i].to - (stretches[i - 1]?.to ?? 0)) / 1000);
+  assert.ok(perKm(islands) < perKm(purley) / 4, `${perKm(islands).toFixed(0)} against ${perKm(purley).toFixed(0)} a km`);
+  // And as many boats a race as with no stretches (the owner's 120 s average, 2026-10-31).
+  let before = 0;
+  for (const course of [reading, await fromFile('loop'), await fromFile('hasler79')]) {
+    const plain = { ...course, scenery: { ...course.scenery, traffic: undefined } };
+    for (let seed = 0; seed < 300; seed++) before += createTraffic(plain, seed).boats.length;
+  }
+  assert.ok(Math.abs(boats / before - 1) < 0.15, `${(boats / races).toFixed(2)} boats a race, ${(before / races).toFixed(2)} before`);
 });
 
 test("motorboats and cruisers on the river wander a little and drift: the bow swings past where they're going; a sculler keeps its line", () => {

@@ -46,6 +46,7 @@ export const HIRE = HIRE_BOATS.launch; // (what the tests and the HUD knew as th
 // Ram a pack of kayakers or an eight and the boat sinks under you: SINK seconds, then back to the pier.
 export const SINK = 4;
 // The hired-boat outing sees more rowers and kayakers (owner, 2026-10-31), kayakers often in packs.
+// On the real river it leans on each stretch's own mix (traffic.js `weigh`).
 export const HIRE_MIX = { sculler: 0.45, kayaker: 0.3, pack: 0.35, eight: 0.3, cruiser: 0.15, motorboat: 0.2 };
 
 // Puts the race's one boat at the pier (`s` along the river line, upstream of
@@ -329,8 +330,15 @@ export function speedboatMesh() {
 // A narrowboat for hire: 18 m, a long cabin with windows, the roof at chest
 // height for you on the stern deck, steering with the tiller (and the bow far
 // ahead over the roof).
-export function narrowboatMesh() {
+// With `steerer`, someone stands at the tiller (a narrowboat under way on the
+// river: traffic.js).
+export function narrowboatMesh({ steerer = false } = {}) {
   const m = new MeshBuilder();
+  if (steerer) {
+    m.box([-0.2, 0.55, 8.1], [0.2, 1.05, 8.4], [0.2, 0.22, 0.28]); // legs
+    m.box([-0.24, 1.05, 8.08], [0.24, 1.6, 8.42], [0.55, 0.15, 0.15]); // a red jacket
+    m.sphere([0, 1.75, 8.25], 0.12, [0.8, 0.6, 0.45], 4, 7);
+  }
   const deck = 0.55;
   const half = 1.05;
   const outline = [[-half, 9], [half, 9], [half, -6.5], [0.7, -8.2], [0, -9], [-0.7, -8.2], [-half, -6.5]];
