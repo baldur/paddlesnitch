@@ -1,7 +1,7 @@
 // Teaching as you go (teach.js): each lesson once, the first time it matters.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY } from '../reading-thames/teach.js';
+import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING } from '../reading-thames/teach.js';
 
 const calm = { angle: 0, rhythm: 0.2, draft: 0, racing: true, time: 5, rate: 70, stamina: 1, sprinting: false, assist: false, scull: false, outing: false };
 const keys = howTo(false);
@@ -60,4 +60,17 @@ test('what has been taught is kept, and bad storage just teaches again', () => {
 
 test("the wash isn't taught on the start line, where boats drift up beside you", () => {
   assert.equal(nextLesson({ ...calm, racing: false, draft: 0.5 }, new Set(['lean']), keys), null);
+});
+
+test("an instruction waiting its turn isn't dropped when another comes: they wait in order, each once, a few at most", () => {
+  const first = { text: 'Second instruction', hold: 1.2 };
+  const wash = { text: 'Paddle quicker than 90 a minute to sprint onto their wash', hold: 2.5 };
+  // (With one slot, the wash hint arriving under "Stuck?" dropped the test's waiting instruction on a slow CI runner.)
+  let q = waitTurn([], first);
+  q = waitTurn(q, wash);
+  assert.deepEqual(q.map((h) => h.text), [first.text, wash.text]);
+  assert.equal(waitTurn(q, { ...wash }).length, 2, 'the same words wait once');
+  for (let i = 0; i < 5; i++) q = waitTurn(q, { text: `note ${i}`, hold: 1 });
+  assert.equal(q.length, WAITING);
+  assert.deepEqual(q.map((h) => h.text), ['note 2', 'note 3', 'note 4'], 'the oldest go first');
 });

@@ -59,3 +59,14 @@ export function howTo(phone) {
     ? { lean: 'turn the phone to lean' }
     : { lean: 'lean with A and D (or the right stick)' };
 }
+
+// Instructions waiting for the hint lane, oldest first (main.js show()): one
+// that comes while a longer hint is up waits its turn behind any already
+// waiting, not in place of them (with one slot, the race's own hints could
+// drop it unseen: a wash hint arriving under "Stuck?" took the slot). The same
+// words aren't queued twice, and at most WAITING wait (the oldest go first).
+export const WAITING = 3;
+export function waitTurn(queue, hint) {
+  if (queue.some((h) => h.text === hint.text)) return queue;
+  return [...queue, hint].slice(-WAITING);
+}

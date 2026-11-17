@@ -23,7 +23,7 @@ import { perspective, view, basis, multiply, translation, rotationX, rotationY, 
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
 import { tone, noise, isMuted, setMuted } from '../shared/audio.js';
 import { openDialog, gamepadDialogs, soundToggle } from '../shared/dialogs.js';
-import { nextLesson, loadTaught, saveTaught, howTo } from './teach.js';
+import { nextLesson, loadTaught, saveTaught, howTo, waitTurn } from './teach.js';
 
 const STEP = 1 / 120;
 const EYE_HEIGHT = 0.78;
@@ -1957,13 +1957,13 @@ function endLive() {
 // the low lane, clear of the boats ahead.
 let flashTimer = 0;
 let hintTimer = 0;
-let waiting = null; // a hint that came while a longer one was up: { text, hold }
+let waiting = []; // hints that came while a longer one was up, in turn: { text, hold } (teach.js waitTurn)
 function show(text, { small = false, hold = 0.8, now = false } = {}) {
   // One hint at a time: a shorter one doesn't wipe a longer one still up. A
   // moment's note ("Weak stroke") is dropped; an instruction waits its turn;
   // `now` (why you went in, a boat bearing down) goes straight up.
   if (small && !now && hintTimer > hold) {
-    if (hold >= 1) waiting = { text, hold };
+    if (hold >= 1) waiting = waitTurn(waiting, { text, hold });
     return;
   }
   const el = small ? els.hint : flash;
@@ -2733,9 +2733,9 @@ function updateHud(dt) {
     hintTimer -= dt;
     if (hintTimer <= 0) {
       els.hint.classList.remove('show');
-      if (waiting) {
-        const { text, hold } = waiting;
-        waiting = null;
+      if (waiting.length) {
+        const [{ text, hold }, ...rest] = waiting;
+        waiting = rest;
         show(text, { small: true, hold });
       }
     }
