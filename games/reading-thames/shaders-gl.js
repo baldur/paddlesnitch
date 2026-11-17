@@ -268,7 +268,7 @@ vec2 treeline(vec2 p, vec3 refl, vec2 woods) {
     float top = max(0.3, frame.banks.z * wood * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3)));
     // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     float leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
-    float cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.5, top * 1.6, reach * refl.y));
+    float cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.9, top * 1.6, reach * refl.y));
     mirrored += weight * vec2(cover, leaf);
   }
   return mirrored;
@@ -335,7 +335,7 @@ void main() {
   vec4 fa = facades(vec3(p.x, 0.0, p.y), still);
   vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
-  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.15 * max(tl.x, fa.a)), 0.0, 1.0));
+  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.45 * max(tl.x, fa.a)), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
   c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   float foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2(13.0, 9.0)) + t * 6.0));

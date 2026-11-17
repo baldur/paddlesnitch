@@ -2556,7 +2556,7 @@ function render(time) {
   frameData.set([...up, tanY], 24);
   frameData.set([...fwd, 0], 28);
   frameData.set([...SUN, 0], 32);
-  frameData.set([...SKY_TOP, race.course.scenery ? 0.4 : 0], 36); // w: cloud cover, on a real river's English sky
+  frameData.set([...SKY_TOP, race.course.scenery ? 0.5 : 0], 36); // w: cloud cover, on a real river's English sky
   frameData.set([0.78, 0.85, 0.9, 0.0016], 40);
   frameData.set(race.course.scenery ? THAMES : WATER, 44);
   // Wakes, for the racers and then the nearest other boats (placed so their bow

@@ -265,7 +265,7 @@ fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
     let top = max(0.3, frame.banks.z * wood * (0.85 + 0.2 * sin(a * 0.13) + 0.12 * sin(a * 0.047 + 1.3)));
     // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     let leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
-    let cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.5, top * 1.6, reach * refl.y));
+    let cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.9, top * 1.6, reach * refl.y));
     mirrored += weight * vec2f(cover, leaf);
   }
   return mirrored;
@@ -332,7 +332,7 @@ fn facades(o: vec3f, d: vec3f) -> vec4f {
   let fa = facades(vec3f(p.x, 0.0, p.y), still);
   let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
-  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.15 * max(tl.x, fa.a)), 0.0, 1.0));
+  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.45 * max(tl.x, fa.a)), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   let foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2f(13.0, 9.0)) + t * 6.0));
