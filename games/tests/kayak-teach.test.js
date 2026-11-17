@@ -1,7 +1,7 @@
 // Teaching as you go (teach.js): each lesson once, the first time it matters.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING } from '../reading-thames/teach.js';
+import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING, nextTurn, STALE } from '../reading-thames/teach.js';
 
 const calm = { angle: 0, rhythm: 0.2, draft: 0, racing: true, time: 5, rate: 70, stamina: 1, sprinting: false, assist: false, scull: false, outing: false };
 const keys = howTo(false);
@@ -73,4 +73,15 @@ test("an instruction waiting its turn isn't dropped when another comes: they wai
   for (let i = 0; i < 5; i++) q = waitTurn(q, { text: `note ${i}`, hold: 1 });
   assert.equal(q.length, WAITING);
   assert.deepEqual(q.map((h) => h.text), ['note 2', 'note 3', 'note 4'], 'the oldest go first');
+});
+
+test("a hint that waited too long for its moment is skipped, and the rest still come in turn", () => {
+  const start = { text: 'Your start in 10', hold: 1.5, at: 0 };
+  const swan = { text: "The swan won't move", hold: 1.5, at: 4 };
+  const q = [start, swan];
+  assert.deepEqual(nextTurn(q, 3), { next: start, rest: [swan] }, 'the oldest first while fresh');
+  const late = nextTurn(q, STALE + 1);
+  assert.equal(late.next, swan, `"${start.text}" ${STALE + 1} s late isn't shown`);
+  assert.deepEqual(late.rest, []);
+  assert.deepEqual(nextTurn(q, STALE + 5), { next: null, rest: [] }, 'nothing left to show');
 });

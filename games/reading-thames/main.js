@@ -23,7 +23,7 @@ import { perspective, view, basis, multiply, translation, rotationX, rotationY, 
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
 import { tone, noise, isMuted, setMuted } from '../shared/audio.js';
 import { openDialog, gamepadDialogs, soundToggle } from '../shared/dialogs.js';
-import { nextLesson, loadTaught, saveTaught, howTo, waitTurn } from './teach.js';
+import { nextLesson, loadTaught, saveTaught, howTo, waitTurn, nextTurn } from './teach.js';
 
 const STEP = 1 / 120;
 const EYE_HEIGHT = 0.78;
@@ -190,6 +190,10 @@ const BIRDS_DRAWN = 64; // of each kind
 // --- race flow ---------------------------------------------------------------
 
 function reset() {
+  // A new race starts with a clear hint lane: nothing left waiting from the last.
+  hintTimer = 0;
+  waiting = [];
+  els.hint.classList.remove('show');
   const f = form();
   race = createRace(mode.course, {
     rivals: mode.rivals,
@@ -1957,15 +1961,17 @@ function endLive() {
 // the low lane, clear of the boats ahead.
 let flashTimer = 0;
 let hintTimer = 0;
-let waiting = []; // hints that came while a longer one was up, in turn: { text, hold } (teach.js waitTurn)
+let waiting = []; // hints that came while a longer one was up, in turn: { text, hold, at } (teach.js waitTurn)
+let hintClock = 0; // game seconds, for how long a hint has waited
 function show(text, { small = false, hold = 0.8, now = false } = {}) {
   // One hint at a time: a shorter one doesn't wipe a longer one still up. A
   // moment's note ("Weak stroke") is dropped; an instruction waits its turn;
   // `now` (why you went in, a boat bearing down) goes straight up.
   if (small && !now && hintTimer > hold) {
-    if (hold >= 1) waiting = waitTurn(waiting, { text, hold });
+    if (hold >= 1) waiting = waitTurn(waiting, { text, hold, at: hintClock });
     return;
   }
+  if (small && now && !text) waiting = []; // clearing the lane clears what waits too
   const el = small ? els.hint : flash;
   el.textContent = text;
   el.classList.add('show');
@@ -2729,15 +2735,14 @@ function showTilt(dt) {
 function updateHud(dt) {
   showTilt(dt);
   if (state === 'racing') engines(dt);
+  hintClock += dt;
   if (hintTimer > 0) {
     hintTimer -= dt;
     if (hintTimer <= 0) {
       els.hint.classList.remove('show');
-      if (waiting.length) {
-        const [{ text, hold }, ...rest] = waiting;
-        waiting = rest;
-        show(text, { small: true, hold });
-      }
+      const { next, rest } = nextTurn(waiting, hintClock);
+      waiting = rest;
+      if (next) show(next.text, { small: true, hold: next.hold });
     }
   }
   if (flashTimer > 0) {
