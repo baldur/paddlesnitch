@@ -42,6 +42,8 @@ export type CourseFile = {
   features?: Array<{ style: string; at: XZ }>
   /** People fishing from the bank, a line out into the water each. */
   anglers?: Array<{ s: number; side: -1 | 1 }>
+  /** Boats under way, by stretch of the river line as the footage shows them (traffic.js): each to `to` metres, how busy against the river's average, and the kinds' weights. */
+  traffic?: Array<{ where?: string; to: number; busy: number; mix: Record<string, number> }>
   /** The water's outlines (rings of the river's areas and its islands), to shape the land. */
   water: XZ[][]
   /** A racing line that isn't `line` (a loop, round islands): every 5 m, with the open water each side. */

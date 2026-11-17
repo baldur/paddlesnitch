@@ -200,7 +200,12 @@ test('a pack races the true-size Reading Thames: lined up at true speed, then fo
   const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
   assert.ok(minutes[0] > 29 && minutes[0] < 34, `winner ${minutes[0]}`);
   assert.ok(minutes.at(-1) < 37, `last ${minutes.at(-1)}`);
-  assert.ok(rivals.every((r) => r.boat.capsizes === 0));
+  // No swims but from the river's traffic, and few of those: its rate over many
+  // races is kayak-traffic.test.js's (2026-11-17: with the traffic by stretch this
+  // seed's pack meets a sculler, which tips two in; on main it met none).
+  const tipped = (r) => race.traffic.boats.filter((b) => b.hit.includes(r)).length;
+  assert.ok(rivals.every((r) => r.boat.capsizes === tipped(r)), rivals.map((r) => `${r.name} ${r.boat.capsizes} (${tipped(r)} by traffic)`).join(', '));
+  assert.ok(rivals.reduce((n, r) => n + tipped(r), 0) <= 2, 'at most two tipped in by traffic');
   assert.ok(banked < 15, `rivals spent ${banked} s on the banks`); // a few brushes, swerving round swans
 });
 

@@ -24,6 +24,11 @@ export const TRAFFIC = {
   eight: { length: 17.5, hull: 0.32, oars: [0.12, 0.85, 3.2], speed: 5, wash: 0.55, weight: 0.22 },
   cruiser: { length: 11, hull: 1.75, speed: 1.8, wash: 0.3, weight: 0.2 },
   motorboat: { length: 6, hull: 1.2, speed: 2.2, wash: 0.8, weight: 0.28 },
+  // A narrowboat under way: 18 m, at a canal boat's 4 mph. Only where a course
+  // file's stretches put them (weight 0: the made-up rivers keep their mix).
+  // keep: its share of its half of the river from the middle (else 0.6): nearer
+  // the middle than the moored boats it would look like (design review).
+  narrowboat: { length: 18, hull: 1.05, speed: 1.8, wash: 0.25, weight: 0, keep: 0.35 },
 };
 // A motorboat isn't on rails (owner, 2026-11-03: "make the river motorboats
 // drift a little too"): it wanders across its lane, its track swinging up to
@@ -31,8 +36,10 @@ export const TRAFFIC = {
 // as a boat sliding through a turn does. From the race's clock and the boat's
 // own phase only, so every copy of a live race sees the same.
 // (owner, 2026-11-03: "make the cruisers drift too": a big, slow boat, more gently and over longer.)
-export const DRIFT = { motorboat: { track: 0.04, period: 10, crab: 1.8 }, cruiser: { track: 0.03, period: 16, crab: 2 } };
+export const DRIFT = { motorboat: { track: 0.04, period: 10, crab: 1.8 }, cruiser: { track: 0.03, period: 16, crab: 2 }, narrowboat: { track: 0.02, period: 20, crab: 2 } };
 const BEHIND = 0.35; // of the eights, the share that come up from behind
+const shareOf = (mix, kind) => (mix[kind] ?? 0) / Object.values(mix).reduce((a, w) => a + w, 0);
+const EIGHTS = shareOf(Object.fromEntries(Object.entries(TRAFFIC).map(([kind, t]) => [kind, t.weight])), 'eight'); // of the boats met, eights, with TRAFFIC's mix
 const MEAN_GAP = 120; // seconds of racing between boats, on average (gaps are random: some races are quiet; owner 2026-10-31: a little busier than the 150 it was)
 const PACE = 3.6; // m/s, a racing K1's, for when the pack will be where
 const FIRST = 60; // seconds into the race before the first meeting: the start has spread out by then
@@ -65,7 +72,6 @@ export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null
   const river = course.scenery?.river ?? course;
   const k = course.speedup ?? 1;
   const boats = [];
-  const gap = () => -Math.log(1 - rand()) * mean;
   const boat = (kind, behind, dir, s, t) => ({
     kind, behind, dir, meet: s, at: t,
     x: 0, z: 0, heading: 0, s, lateral: 0, on: false, warned: false, phase: rand() * 10, // phase: the oars' stroke
@@ -80,24 +86,80 @@ export function createTraffic(course, seed, { gap: mean = MEAN_GAP, route = null
     for (const slot of shape.slice(1)) boats.push({ ...boat('kayaker', false, dir, s, t), pack: { lead, slot } });
     lead.pack = { lead, slot: shape[0] };
   };
-  const choose = () => (mix ? pickFrom(rand, mix) : pick(rand));
-  if (ambient) {
-    for (let t = -AFTER; t < ambient; t += gap()) add(choose(), false, rand() < 0.5 ? 1 : -1, rand() * river.length, t);
-    return { river, boats, k };
-  }
+  // A course file's stretches (`stretchesOf`): where boats are met more or less
+  // often, and which kinds. Each stretch's `busy` is taken against the average
+  // along the way the race (or the cruise) goes, or the whole river for a boat
+  // that goes anywhere, so a race meets as many boats as before, more of them
+  // where it's busy. Candidates come as often as on the busiest stretch, each
+  // kept as often as its own is busy. Without stretches, the draws are exactly
+  // as they were.
   const racing = route ? route.seconds : (course.finish - course.start) / (PACE * k); // seconds, about
   const where = route ? route.at : (t) => pointAt(course, course.start + PACE * k * t);
-  for (let t = (route ? 10 : FIRST) + gap(); t < racing - 10; t += (route ? 5 : 15) + gap()) {
-    const kind = choose();
+  const parts = stretchesOf(course, river);
+  if (parts) {
+    const along = ambient ? null : Array.from({ length: Math.max(1, Math.floor(racing / 10)) }, (_, i) => stretchAt(parts, locate(river, where(i * 10 + 5).x, where(i * 10 + 5).z).s).busy);
+    const average = along ? along.reduce((a, b) => a + b, 0) / along.length : parts.reduce((a, p) => a + p.busy * (p.to - p.from), 0) / river.length;
+    for (const p of parts) p.rate = p.busy / average;
+  }
+  const most = parts ? Math.max(...parts.map((p) => p.rate)) : 1;
+  const gap = () => -Math.log(1 - rand()) * mean;
+  const quiet = (s) => parts && rand() * most >= stretchAt(parts, s).rate;
+  const choose = (s) => (parts ? pickFrom(rand, weigh(stretchAt(parts, s).mix, mix)) : mix ? pickFrom(rand, mix) : pick(rand));
+  if (ambient) {
+    for (let t = -AFTER; t < ambient; t += gap() / most) {
+      if (!parts) { add(choose(), false, rand() < 0.5 ? 1 : -1, rand() * river.length, t); continue; }
+      const s = rand() * river.length;
+      if (!quiet(s)) add(choose(s), false, rand() < 0.5 ? 1 : -1, s, t);
+    }
+    return { river, boats, k };
+  }
+  for (let t = (route ? 10 : FIRST) + gap() / most; t < racing - 10; t += ((route ? 5 : 15) + gap()) / most) {
     // Where the pack (or you) should be then, if in the main channel there.
     const p = where(t);
-    const at = locate(river, p.x, p.z);
-    if (Math.abs(at.lateral) > widthAt(river, at.s).half) continue;
-    const along = Math.sign(p.tx * at.tx + p.tz * at.tz) || 1; // the race's way along the river there
-    const behind = kind === 'eight' && rand() < BEHIND && t > BEHIND_FIRST && wide(river, at.s, k);
-    add(kind, behind, behind ? along : -along, at.s, t);
+    const at = parts ? locate(river, p.x, p.z) : null;
+    if (parts && quiet(at.s)) continue;
+    const kind = choose(at?.s);
+    const near = at ?? locate(river, p.x, p.z);
+    if (Math.abs(near.lateral) > widthAt(river, near.s).half) continue;
+    const along = Math.sign(p.tx * near.tx + p.tz * near.tz) || 1; // the race's way along the river there
+    // An eight from behind stays "now and then" where a stretch has more eights:
+    // no more often a boat met than with TRAFFIC's mix (more of them by the clubs
+    // tipped in rivals 10 times in 24 Hasler 7-9 races, against 3). Where eights
+    // are fewer it stays BEHIND of them, so over a race they're 25-30% rarer than before.
+    const odds = parts ? Math.min(BEHIND, (BEHIND * EIGHTS) / shareOf(stretchAt(parts, near.s).mix, 'eight')) : BEHIND;
+    const behind = kind === 'eight' && rand() < odds && t > BEHIND_FIRST && wide(river, near.s, k);
+    add(kind, behind, behind ? along : -along, near.s, t);
   }
   return { river, boats, k };
+}
+
+// A course file's `traffic` (from the footage): stretches of the river line in
+// order, each { to (metres), busy, mix: { kind: weight } }, the last to the
+// river's end. Null without them.
+function stretchesOf(course, river) {
+  const list = course.scenery?.traffic ?? course.traffic;
+  if (!list?.length) return null;
+  let from = 0;
+  return list.map((p, i) => {
+    const to = i === list.length - 1 ? river.length : Math.min(p.to, river.length);
+    const part = { from, to, busy: p.busy, mix: p.mix, rate: 1 };
+    from = to;
+    return part;
+  });
+}
+export const stretchAt = (parts, s) => parts.find((p) => s < p.to) ?? parts.at(-1);
+
+// A stretch's mix, with an outing's own (more rowers and kayakers, packs) as a
+// lean on it: each kind it names times how much more it wants it than a race
+// does (a pack counts as kayakers); kinds it doesn't name come as in a race.
+function weigh(stretch, outing) {
+  if (!outing) return stretch;
+  const out = { ...stretch };
+  for (const [kind, w] of Object.entries(outing)) {
+    const base = kind === 'pack' ? 'kayaker' : kind;
+    out[kind] = (stretch[base] ?? 0) * (w / TRAFFIC[base].weight);
+  }
+  return out;
 }
 
 // Kayakers out together hold a formation: slots [metres back from the lead,
@@ -197,7 +259,7 @@ export function lane(river, s, dir, T) {
   const w = widthAt(river, s);
   const open = dir > 0 ? w.right : w.left;
   const reach = Math.max(T.hull, T.oars?.[2] ?? 0);
-  return Math.max(0, Math.min(Math.max(open * 0.6, reach + 0.5), open - reach - 0.5));
+  return Math.max(0, Math.min(Math.max(open * (T.keep ?? 0.6), reach + 0.5), open - reach - 0.5));
 }
 
 // The parts of a boat a kayak can hit, as stretches of its length (from the
