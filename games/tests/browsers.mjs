@@ -778,14 +778,18 @@ async function play(c, page, errors) {
       window.kayak.show('Second instruction', { small: true, hold: 1.2 });
     });
     if ((await hint()) !== 'First instruction') errors.push(`a later hint wiped the first: "${await hint()}"`);
-    // A hint's time passes in game time, at most 0.1 s a frame and slower still
-    // when the game slows its clock to the frames (main.js), so the first's 1.5 s
-    // took 16 to 36 frames in software Chromium: over 10 s at 285 ms frames, and
-    // CI's slowest runners (AMD EPYC 7763) draw 540-680 ms frames, where a 10 s
-    // wait failed. So wait 80 frames at the measured frame time, never under 10 s.
-    const frameMs = await page.evaluate(() => window.kayak.gpu.frameMs ?? 0);
-    const wait = Math.max(10_000, Math.round(frameMs * 80));
-    await page.waitForFunction(() => document.getElementById('hint').textContent === 'Second instruction', null, { timeout: wait }).catch(async () => errors.push(`the waiting hint never showed in ${wait} ms (${Math.round(frameMs)} ms frames): "${await hint()}"`));
+    // A hint's time passes in game time, at most 0.1 s a frame (main.js), so the
+    // first's 1.5 s takes about 16 frames once they're slow: over 10 s on CI's
+    // slowest runners (AMD EPYC 7763, 540-680 ms frames), where a 10 s wait
+    // failed. So count frames in the page (either renderer, any frame time) and
+    // give up only after both 80 frames and 10 s (fast frames take far more than
+    // 80 for the 1.5 s).
+    const shown = await page.waitForFunction((t0) => {
+      window.__hintFrames ??= 0;
+      if (!window.__counting) { window.__counting = true; const tick = () => { window.__hintFrames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+      return document.getElementById('hint').textContent === 'Second instruction' || (window.__hintFrames >= 80 && Date.now() - t0 > 10_000);
+    }, Date.now(), { timeout: 300_000 }).then(() => hint()).catch(() => hint());
+    if (shown !== 'Second instruction') errors.push(`the waiting hint never showed in 80 frames and 10 s: "${shown}"`);
     // Tipping over: the gauge warns in the red; then going in on your own says
     // so, and what keeps you up.
     await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));
