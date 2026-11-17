@@ -12,6 +12,15 @@ import { WIDE, PLACES, START, cutBetween, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
+// The height of a triangle at (x, z), seen from above, or null if (x, z) isn't under it.
+function heightIn([a, b, c], x, z) {
+  const det = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+  if (Math.abs(det) < 1e-9) return null;
+  const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / det;
+  const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / det;
+  const l3 = 1 - l1 - l2;
+  return l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6 ? null : l1 * a[1] + l2 * b[1] + l3 * c[1];
+}
 
 test('every door leads to another place; both clubs open off the bridge, each with its rooms and a way to the water', () => {
   for (const [name, place] of Object.entries(PLACES)) {
@@ -194,6 +203,10 @@ test('the shots are on the real Reading river: the bridge view from Caversham Br
   assert.ok(Math.abs(path.eye[1] - bay.deck - STANDING.eye) < 1e-9, "standing on the deck, a person's eye height up");
   // The lidar's road beside the bay is 5.77 m over the water (it was a flat 6.5 m).
   assert.ok(Math.abs(bay.deck - 5.77) < 0.3, `the deck at the bay ${bay.deck.toFixed(2)} m`);
+  // And the bridge drawn under the eye is there: the road, 2 cm over the deck.
+  const road = worldOf(await data('reading')).filter(({ p, color }) => color.every((c, k) => Math.abs(c - [0.3, 0.3, 0.32][k]) < 0.002) && p.some((q) => Math.hypot(q[0] - path.eye[0], q[2] - path.eye[2]) < 30));
+  const under = road.map(({ p }) => heightIn(p, path.eye[0], path.eye[2])).filter((h) => h !== null);
+  assert.ok(under.length && Math.abs(path.eye[1] - STANDING.eye - Math.max(...under) + 0.02) < 0.01, `the road under the eye ${under.length ? Math.max(...under).toFixed(2) : 'none'} m`);
   const across = (p) => ((p[0] - bay.origin[0]) * bay.fwd[0] + (p[2] - bay.origin[2]) * bay.fwd[1]) * bay.e;
   assert.ok(across(path.eye) > 0 && across(path.eye) < BRIDGE.half - 2, 'on the upstream side of the bridge, back from the parapet');
   assert.ok(across(path.look) > across(path.eye) + 10, 'looking out over the parapet, through the bay');
@@ -278,6 +291,13 @@ test("the swan paces the viewing bay's paving in front of you, clear of its balu
   }
   const len = Math.hypot(shots.swan.to[0] - shots.swan.from[0], shots.swan.to[2] - shots.swan.from[2]);
   assert.ok(len > 3 && len < 8, `${len} m of paving`);
+  // The paving drawn under it is where the swan stands, not just the same number.
+  const paving = [0.72, 0.71, 0.68];
+  const tris = worldOf(await data('reading')).filter(({ p, color }) => color.every((c, k) => Math.abs(c - paving[k]) < 0.002) && p.some((q) => Math.hypot(q[0] - eye[0], q[2] - eye[2]) < 30));
+  for (const p of [shots.swan.from, shots.swan.to]) {
+    const hs = tris.map(({ p: t }) => heightIn(t, p[0], p[2])).filter((h) => h !== null);
+    assert.ok(hs.length && Math.abs(Math.max(...hs) - p[1]) < 0.01, `the paving under the swan ${hs.length ? Math.max(...hs).toFixed(2) : 'none'} m, the swan ${p[1].toFixed(2)} m`);
+  }
 });
 
 test('your paddler standing in the changing room has legs to the floor; the swan has legs too', async () => {
