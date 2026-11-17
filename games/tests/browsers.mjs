@@ -717,6 +717,23 @@ async function play(c, page, errors) {
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
   if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
+  // A camera held still mid-race (#debug, kayak.shoot: for comparing with the
+  // footage) keeps the race drawing: it once threw placing the club's door
+  // labels, which a race doesn't have, and froze on that frame.
+  if (c.course) {
+    const held = await page.evaluate(async () => {
+      const b = window.kayak.boat;
+      const t0 = window.kayak.race.time;
+      window.kayak.shoot({ eye: [b.x, 2, b.z], look: [b.x + 10 * Math.sin(b.heading), 1, b.z - 10 * Math.cos(b.heading)], wide: false });
+      let frames = 0;
+      await new Promise((done) => { const tick = () => (++frames >= 10 ? done() : requestAnimationFrame(tick)); requestAnimationFrame(tick); });
+      const t1 = window.kayak.race.time;
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+      window.kayak.shoot(null);
+      return { moved: window.kayak.race.time > t1 && t1 > t0 };
+    });
+    if (!held.moved) errors.push('the race stopped drawing with the camera held (kayak.shoot)');
+  }
   // A race's busiest moments: none of its messages on top of another, none under
   // Pause and Sound or off the screen, and no hidden bar showing. First the start
   // (the controls help, a hint and a big message), then mid-race (the place, the
