@@ -403,12 +403,18 @@ test('the Thames looks like the footage\'s summer mornings: a mostly clear sky, 
   assert.equal(blend(await read('shaders-gl.js')), gpu, 'both renderers blend alike');
   const [, sky, more] = gpu.match(/calm \* \(([\d.]+) \+ ([\d.]+) \* max\(tl\.x, fa\.a\)\)/).map(Number);
   assert.ok(sky >= 0.15 && more > 0, `calm water mirrors the sky (${sky}) and the banks more (${more})`);
+  assert.ok(sky + more <= 0.8, 'not a full mirror: looking down, the depths still show');
   // Leaves and grass lean yellow-olive as in the footage, not blue-green.
   const world = await read('world.js');
-  const greens = [...JSON.parse(world.match(/const LEAVES = (\[\[.*\]\]);/)[1]),
-    ...['grass', 'meadow', 'leaf', 'mown', 'willow'].map((k) => JSON.parse(world.match(new RegExp(`\\n  ${k}: (\\[[^\\]]*\\])`))[1]))];
-  for (const src of ['shaders.js', 'shaders-gl.js']) greens.push((await read(src)).match(/TREES = vec3f?\(([^)]*)\)/)[1].split(',').map(Number));
+  const colour = (k) => JSON.parse(world.match(new RegExp(`\\n  ${k}: (\\[[^\\]]*\\])`))[1]);
+  const trees = await Promise.all(['shaders.js', 'shaders-gl.js'].map(async (src) => (await read(src)).match(/TREES = vec3f?\(([^)]*)\)/)[1]));
+  assert.equal(trees[1], trees[0], 'both renderers mirror the trees in one colour');
+  const greens = [...JSON.parse(world.match(/const LEAVES = (\[\[.*\]\]);/)[1]), JSON.parse(world.match(/const SHADED = (\[[^\]]*\]);/)[1]),
+    ...['grass', 'meadow', 'leaf', 'mown', 'willow'].map(colour), trees[0].split(',').map(Number)];
   for (const [r, g, b] of greens) assert.ok(r >= 0.72 * g && b <= 0.46 * g, `olive, not blue-green: ${[r, g, b]}`);
+  // A conifer stays darker and bluer than a broadleaf, but not blue-green.
+  const [r, g, b] = colour('pine');
+  assert.ok(r >= 0.55 * g && b <= 0.58 * g, `pine ${[r, g, b]}`);
 });
 
 test('Christchurch Bridge: its arched deck clears the water by at least 4 m all the way across', async () => {
