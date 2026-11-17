@@ -3105,7 +3105,33 @@ function bridgeFrame(course, { s, ends }) {
 // (`e`, the upstream one, towards the clubs), with the bridge's frame.
 // 19 m wide, as the lidar measures it (owner, 2026-11-15: it was 13): `half` is
 // the balustrades' line, `width` the deck and its arches' faces.
-export const BRIDGE = { deck: 6.5, width: 19, half: 9, pavement: 3, bay: 3.2, out: 3, pedestal: 0.75 };
+export const BRIDGE = { width: 19, half: 9, pavement: 3, bay: 3.2, out: 3, pedestal: 0.75 };
+// Caversham Bridge's road, as the Environment Agency's lidar measures it (the
+// 1 m surface model's median across the carriageway, every 4 m along its road,
+// above the river's 36.46 m AOD; measured 2026-11-17, games/CLAUDE.md "Lidar"):
+// metres along the road from the bridge frame's origin, where it crosses the
+// river line (- towards Caversham, + towards Reading), and the road's height,
+// straight between. It rises from 4.0 m at the Caversham bank to 5.8 m by
+// Piper's Island and falls to 5.0 m at the Reading bank; each end runs on down
+// over the land to meet the ground (76 m and 60 m out). It was a flat 6.5 m.
+export const DECK_PROFILE = [[-76, 3.31], [-68, 3.66], [-60, 4.04], [-52, 4.41], [-44, 4.75], [-36, 5.09], [-28, 5.44], [-20, 5.68], [-12, 5.76], [-4, 5.75], [4, 5.69], [12, 5.58], [20, 5.3], [28, 5.02], [36, 4.7], [44, 4.3], [52, 3.86], [60, 3.44]];
+export function deckAt(x) {
+  const P = DECK_PROFILE;
+  if (x <= P[0][0]) return P[0][1];
+  for (let k = 1; k < P.length; k++) {
+    const [x1, y1] = P[k];
+    if (x <= x1) {
+      const [x0, y0] = P[k - 1];
+      return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+    }
+  }
+  return P.at(-1)[1];
+}
+// The stretches from x0 to x1 over which the deck is straight (cut at the profile's points).
+function deckPieces(x0, x1) {
+  const cuts = [x0, ...DECK_PROFILE.map(([x]) => x).filter((x) => x > x0 && x < x1), x1];
+  return cuts.slice(1).map((x, k) => [cuts[k], x]);
+}
 export function bridgeBay(course, bridge) {
   if (bridge?.name !== 'Caversham Bridge') return null;
   const { c, origin, right, fwd } = bridgeFrame(course, bridge);
@@ -3113,7 +3139,8 @@ export function bridgeBay(course, bridge) {
   const t = (target[0] - origin[0]) * right[0] + (target[1] - origin[2]) * right[1];
   const e = Math.sign(c.tx * fwd[0] + c.tz * fwd[1]) || 1;
   const at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
-  return { t, e, origin, right, fwd, at };
+  // The bay is level, at the road's height where it stands (`deck`).
+  return { t, e, origin, right, fwd, at, deck: deckAt(t) };
 }
 
 const STONE = [0.93, 0.92, 0.88];
@@ -3124,29 +3151,33 @@ const GLOBE = [0.93, 0.93, 0.9];
 
 // A stone balustrade from (x0, z0) to (x1, z1) in a bridge's frame: plinth,
 // coping, and balusters between (only near the bay: far off, a solid panel).
-function balustrade(m, f, [x0, z0], [x1, z1], balusters) {
-  const { deck } = BRIDGE;
+// It stands on the deck, `y(x)` high (along the road it slopes with it).
+function balustrade(m, f, [x0, z0], [x1, z1], balusters, y) {
   const len = Math.hypot(x1 - x0, z1 - z0);
   const u = [(x1 - x0) / len, (z1 - z0) / len];
   const v = [-u[1], u[0]];
   const box = (a0, a1, y0, y1, w, col) => {
     // A box along the run from a0 to a1, w either side of it.
     const c = [[a0, -w], [a1, -w], [a1, w], [a0, w]].map(([a, b]) => [x0 + u[0] * a + v[0] * b, z0 + u[1] * a + v[1] * b]);
-    const p = (q, y) => f.at(q[0], y, q[1]);
+    const p = (q, dy) => f.at(q[0], y(q[0]) + dy, q[1]);
     m.prism(c.map((q) => p(q, y0)), c.map((q) => p(q, y1)), col);
   };
-  box(0, len, deck, deck + 0.25, 0.25, STONE);
-  box(0, len, deck + 0.95, deck + 1.1, 0.27, STONE);
-  if (!balusters) return box(0, len, deck + 0.25, deck + 0.95, 0.16, mix(STONE, [0, 0, 0], 0.12));
+  // Cut where the deck's slope changes, so the plinth and coping follow it.
+  const runs = u[0] ? deckPieces(Math.min(x0, x1), Math.max(x0, x1)).map((r) => r.map((x) => (x - x0) / u[0]).sort((a, b) => a - b)) : [[0, len]];
+  for (const [a0, a1] of runs) {
+    box(a0, a1, 0, 0.25, 0.25, STONE);
+    box(a0, a1, 0.95, 1.1, 0.27, STONE);
+    if (!balusters) box(a0, a1, 0.25, 0.95, 0.16, mix(STONE, [0, 0, 0], 0.12));
+  }
+  if (!balusters) return;
   for (let a = 0.2; a < len - 0.1; a += 0.3) {
-    box(a - 0.06, a + 0.06, deck + 0.25, deck + 0.95, 0.06, STONE);
-    box(a - 0.09, a + 0.09, deck + 0.52, deck + 0.68, 0.09, STONE); // the swell
+    box(a - 0.06, a + 0.06, 0.25, 0.95, 0.06, STONE);
+    box(a - 0.09, a + 0.09, 0.52, 0.68, 0.09, STONE); // the swell
   }
 }
 
-// A green double lamp standard on a stone pedestal at (x, z).
-function lamp(m, f, x, z, along) {
-  const { deck } = BRIDGE;
+// A green double lamp standard on a stone pedestal at (x, z), on the deck `deck` high.
+function lamp(m, f, x, z, along, deck) {
   const p = f.at(x, deck, z);
   m.box([p[0] - 0.75, deck, p[2] - 0.75], [p[0] + 0.75, deck + 1.45, p[2] + 0.75], STONE);
   m.box([p[0] - 0.85, deck + 1.45, p[2] - 0.85], [p[0] + 0.85, deck + 1.6, p[2] + 0.85], STONE);
@@ -3194,65 +3225,100 @@ function bridgeArches(course, bridge) {
   return { lo, hi, arches };
 }
 
+// The deck's least depth over an arch's crown: where the measured road is low
+// (the Caversham arch), the arch's crown comes down to keep it.
+export const ARCH_DEPTH = 0.6;
+// How high the underside of a concrete bridge's arch from a to b (along its
+// road) is at x: a flat ellipse rising from 1.2 m at its piers to 4.8 m.
+function archUnder(a, b, x) {
+  const mid = (a + b) / 2;
+  const span = (b - a) / 2;
+  return Math.min(1.2 + 3.6 * Math.sqrt(Math.max(0, 1 - ((x - mid) / span) ** 2)), deckAt(x) - ARCH_DEPTH);
+}
+
+// A block in a bridge's frame from x0 to x1 along its road and z0 to z1
+// across, its bottom and top each a height or a function of x (sloping).
+function slab(m, f, [x0, x1], [z0, z1], bottom, top, color) {
+  const y = (h, x) => (typeof h === 'function' ? h(x) : h);
+  const ring = (h) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => f.at(x, y(h, x), z));
+  m.prism(ring(bottom), ring(top), color);
+}
+
 function concreteBridge(m, course, bridge) {
   const f = bridgeFrame(course, bridge);
   const { origin, right, fwd } = f;
   f.at = (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z];
-  const deck = BRIDGE.deck;
   const { lo, hi, arches } = bridgeArches(course, bridge);
+  // The deck runs over the measured road, out over the land to where it meets the ground.
+  const [xa, xb] = [Math.min(lo - 1, DECK_PROFILE[0][0]), Math.max(hi + 1, DECK_PROFILE.at(-1)[0])];
+  const W = BRIDGE.width / 2;
   for (const [a0, b0] of arches) {
     const [a, b] = [a0 - 1, b0 + 1];
-    const mid = (a + b) / 2;
-    const span = (b - a) / 2;
-    const under = (x) => 1.2 + 3.6 * Math.sqrt(Math.max(0, 1 - ((x - mid) / span) ** 2));
-    const n = Math.max(4, Math.round(span / 2));
+    const n = Math.max(4, Math.round((b - a) / 4));
     for (let k = 0; k < n; k++) {
       const x0 = a + ((b - a) * k) / n;
       const x1 = a + ((b - a) * (k + 1)) / n;
-      orientedBox(m, origin, right, fwd, [x0, x1], [under((x0 + x1) / 2), deck], [-BRIDGE.width / 2 + 0.5, BRIDGE.width / 2 - 0.5], COLORS.cream);
+      // Stepped underneath, as it always was, never closer than ARCH_DEPTH under the road.
+      const under = Math.min(archUnder(a, b, (x0 + x1) / 2), deckAt(x0) - ARCH_DEPTH, deckAt(x1) - ARCH_DEPTH);
+      slab(m, f, [x0, x1], [-W + 0.5, W - 0.5], under, deckAt, COLORS.cream);
     }
   }
   // Piers and the abutments: the deck carried solid over the land between.
   for (let k = 0; k <= arches.length; k++) {
-    const a = k ? arches[k - 1][1] + 1 : lo - 12;
-    const b = k < arches.length ? arches[k][0] - 1 : hi + 12;
-    if (b > a) orientedBox(m, origin, right, fwd, [a, b], [-0.5, deck], [-BRIDGE.width / 2, BRIDGE.width / 2], COLORS.cream);
+    const a = k ? arches[k - 1][1] + 1 : xa;
+    const b = k < arches.length ? arches[k][0] - 1 : xb;
+    for (const [x0, x1] of b > a ? deckPieces(a, b) : []) slab(m, f, [x0, x1], [-W, W], -0.5, deckAt, COLORS.cream);
   }
   const bay = bridgeBay(course, bridge);
   if (!bay) {
     for (const e of [-1, 1]) {
-      orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 1.1], e < 0 ? [-BRIDGE.half - 0.25, -BRIDGE.half + 0.25] : [BRIDGE.half - 0.25, BRIDGE.half + 0.25], COLORS.white);
+      for (const [x0, x1] of deckPieces(xa, xb)) slab(m, f, [x0, x1], e < 0 ? [-BRIDGE.half - 0.25, -BRIDGE.half + 0.25] : [BRIDGE.half - 0.25, BRIDGE.half + 0.25], deckAt, (x) => deckAt(x) + 1.1, COLORS.white);
       for (let x = lo; x <= hi; x += 12) {
-        const p = [origin[0] + right[0] * x + fwd[0] * e * BRIDGE.half, deck + 1.1, origin[2] + right[1] * x + fwd[1] * e * BRIDGE.half];
+        const p = [origin[0] + right[0] * x + fwd[0] * e * BRIDGE.half, deckAt(x) + 1.1, origin[2] + right[1] * x + fwd[1] * e * BRIDGE.half];
         m.cylinder(p, 0.08, 3.2, 5, COLORS.boatHull);
         m.sphere([p[0], p[1] + 3.3, p[2]], 0.25, COLORS.white, 2, 5);
       }
     }
     return;
   }
-  // The road and its pavements, a kerb up.
+  // The road and its pavements, a kerb up: their top faces and the kerbs only
+  // (the deck's under them), to keep the bridge in its share of triangles.
   const { half: H, pavement: P, bay: B, out: O } = BRIDGE;
-  orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 0.02], [-H + P, H - P], ROAD);
-  for (const e of [-1, 1]) orientedBox(m, origin, right, fwd, [lo - 12, hi + 12], [deck, deck + 0.14], e < 0 ? [-H, -H + P] : [H - P, H], PAVING);
+  const top = (x, dy, z) => f.at(x, deckAt(x) + dy, z);
+  for (const [x0, x1] of deckPieces(xa, xb)) {
+    m.quad(top(x0, 0.02, -H + P), top(x1, 0.02, -H + P), top(x1, 0.02, H - P), top(x0, 0.02, H - P), ROAD);
+    for (const e of [-1, 1]) {
+      m.quad(top(x0, 0.14, e * (H - P)), top(x1, 0.14, e * (H - P)), top(x1, 0.14, e * H), top(x0, 0.14, e * H), PAVING);
+      const kerb = [top(x0, 0.02, e * (H - P)), top(x1, 0.02, e * (H - P)), top(x1, 0.14, e * (H - P)), top(x0, 0.14, e * (H - P))];
+      const toRoad = [-fwd[0] * e, 0, -fwd[1] * e];
+      m.triFacing(kerb[0], kerb[1], kerb[2], PAVING, toRoad);
+      m.triFacing(kerb[0], kerb[2], kerb[3], PAVING, toRoad);
+    }
+  }
   // The balustrades, open (balusters) for 30 m either side of the bay on its
   // side, a panel elsewhere; a gap for the bay with a pedestal and lamp each side.
   const near = 30;
   for (const e of [-1, 1]) {
     const z = e * H;
-    const cuts = e === bay.e ? [[lo - 12, bay.t - near, false], [bay.t - near, bay.t - B - 0.75, true], [bay.t + B + 0.75, bay.t + near, true], [bay.t + near, hi + 12, false]] : [[lo - 12, hi + 12, false]];
-    for (const [x0, x1, open] of cuts) if (x1 > x0) balustrade(m, f, [x0, z], [x1, z], open);
+    const cuts = e === bay.e ? [[xa, bay.t - near, false], [bay.t - near, bay.t - B - 0.75, true], [bay.t + B + 0.75, bay.t + near, true], [bay.t + near, xb, false]] : [[xa, xb, false]];
+    for (const [x0, x1, open] of cuts) if (x1 > x0) balustrade(m, f, [x0, z], [x1, z], open, deckAt);
     // Lamp standards along it, every 24 m, clear of the bay.
-    for (let x = lo; x <= hi; x += 24) if (e !== bay.e || Math.abs(x - bay.t) > 12) lamp(m, f, x, z, right);
+    for (let x = lo; x <= hi; x += 24) if (e !== bay.e || Math.abs(x - bay.t) > 12) lamp(m, f, x, z, right, deckAt(x));
   }
-  // The bay: paved, out over the water, with its own balustrade round three sides.
+  // The bay: paved and level, out over the water, with its own balustrade round three sides.
+  const deck = bay.deck;
+  const level = () => deck;
   const z0 = bay.e * H;
   const z1 = bay.e * (H + O);
-  orientedBox(m, origin, right, fwd, [bay.t - B, bay.t + B], [deck - 0.7, deck + 0.14], bay.e < 0 ? [z1, z0] : [z0, z1], PAVING);
+  // (Its paving runs on under the pavement, the same stone: where the two met
+  // edge to edge, the sloping pavement left a dark seam across the walk's shot.)
+  const zp = bay.e * (H - P);
+  orientedBox(m, origin, right, fwd, [bay.t - B, bay.t + B], [deck - 0.7, deck + 0.14], bay.e < 0 ? [z1, zp] : [zp, z1], PAVING);
   orientedBox(m, origin, right, fwd, [bay.t - B, bay.t + B], [deck - 1.4, deck - 0.7], bay.e < 0 ? [z1 + 0.3, z0] : [z0, z1 - 0.3], COLORS.cream);
-  balustrade(m, f, [bay.t - B, z1], [bay.t + B, z1], true);
-  balustrade(m, f, [bay.t - B, z0], [bay.t - B, z1], true);
-  balustrade(m, f, [bay.t + B, z0], [bay.t + B, z1], true);
-  for (const side of [-1, 1]) lamp(m, f, bay.t + side * (B + 0.75), z0, right);
+  balustrade(m, f, [bay.t - B, z1], [bay.t + B, z1], true, level);
+  balustrade(m, f, [bay.t - B, z0], [bay.t - B, z1], true, level);
+  balustrade(m, f, [bay.t + B, z0], [bay.t + B, z1], true, level);
+  for (const side of [-1, 1]) lamp(m, f, bay.t + side * (B + 0.75), z0, right, deck);
 }
 
 // A railway on its embankment: a ballast bed with overhead-line portals.

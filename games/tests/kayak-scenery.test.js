@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED } from '../reading-thames/world.js';
+import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE } from '../reading-thames/world.js';
 const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -39,7 +39,8 @@ test("Caversham Bridge crosses at a slant along its road, so its deck is over th
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
   const land = waterMap(river.water);
-  const decks = (await world()).filter((t) => t.p.every(([, y]) => y > 6.3 && y < 7.7));
+  const { along } = caversham(river);
+  const decks = (await world()).filter((t) => t.p.every((q) => q[1] > deckAt(along(q)) - 0.01 && q[1] < deckAt(along(q)) + 0.2));
   // Every wet metre along the road, both channels, has deck over it.
   let wet = 0;
   for (let t = 0; t <= len; t += 1) {
@@ -49,6 +50,123 @@ test("Caversham Bridge crosses at a slant along its road, so its deck is over th
     assert.ok(decks.some((d) => under(d.p, x, z)), `no deck over the water ${t.toFixed(0)} m along the road`);
   }
   assert.ok(wet > 50, `${wet} m of water under it`);
+});
+
+// Caversham Bridge's frame (its viewing bay carries it): along its road from
+// where it crosses the river line (- towards Caversham), and across it.
+function caversham(river) {
+  const course = courseFromFile(river);
+  const bay = bridgeBay(course, course.bridges.find((b) => b.name === 'Caversham Bridge'));
+  const along = (q) => (q[0] - bay.origin[0]) * bay.right[0] + (q[2] - bay.origin[2]) * bay.right[1];
+  const across = (q) => (q[0] - bay.origin[0]) * bay.fwd[0] + (q[2] - bay.origin[2]) * bay.fwd[1];
+  return { course, bay, along, across };
+}
+// The height of a triangle at (x, z), seen from above, or null if (x, z) isn't under it.
+function heightIn([a, b, c], x, z) {
+  const det = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+  if (Math.abs(det) < 1e-9) return null;
+  const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / det;
+  const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / det;
+  const l3 = 1 - l1 - l2;
+  return l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6 ? null : l1 * a[1] + l2 * b[1] + l3 * c[1];
+}
+const same = (c, d) => c.every((v, k) => Math.abs(v - d[k]) < 0.002);
+const ROAD = [0.3, 0.3, 0.32];
+const CREAM = [0.9, 0.88, 0.81];
+const PAVING = [0.72, 0.71, 0.68];
+const STONE = [0.93, 0.92, 0.88];
+const BRONZE = [0.42, 0.6, 0.52];
+
+test("Caversham Bridge's road rises and falls as the lidar measures it (4 m at the Caversham bank, 5.8 m by Piper's Island, 5 m at the Reading bank), not a flat 6.5 m", async () => {
+  const { bay } = caversham(await data('reading'));
+  const tris = (await world()).filter((t) => same(t.color, ROAD));
+  // The EA lidar's road (1 m surface model, the median across the carriageway,
+  // above the river's 36.46 m AOD; measured 2026-11-17), every 8 m along the
+  // road, between the points the game's profile was made from.
+  const MEASURED = [[-64, 3.85], [-56, 4.22], [-48, 4.58], [-40, 4.92], [-32, 5.27], [-24, 5.58], [-16, 5.73], [-8, 5.77], [0, 5.73], [8, 5.63], [16, 5.45], [24, 5.17], [32, 4.87], [40, 4.51], [48, 4.08], [56, 3.64]];
+  for (const [x, lidar] of MEASURED) {
+    const [px, , pz] = bay.at(x, 0, 0);
+    const hs = tris.map((t) => heightIn(t.p, px, pz)).filter((h) => h !== null);
+    assert.ok(hs.length, `no road ${x} m along`);
+    const h = Math.max(...hs);
+    assert.ok(Math.abs(h - lidar) < 0.1, `${x} m along: the road ${h.toFixed(2)} m, the lidar ${lidar} m`);
+  }
+});
+
+test("Caversham Bridge stays clear over the water under its lower deck: the arches' crowns under the road, the river line's arch as high as before", async () => {
+  const river = await data('reading');
+  const { bay, along, across } = caversham(river);
+  const land = waterMap(river.water);
+  const cream = (await world()).filter((t) => same(t.color, CREAM) && t.p.every((q) => Math.abs(across(q)) < 10 && Math.abs(along(q)) < 90));
+  const arches = [];
+  for (let x = DECK_PROFILE[0][0]; x <= DECK_PROFILE.at(-1)[0]; x++) {
+    const [px, , pz] = bay.at(x, 0, 0);
+    if (!land.inside(px, pz)) continue;
+    const hs = cream.map((t) => heightIn(t.p, px, pz)).filter((h) => h !== null);
+    const [under, top] = [Math.min(...hs), Math.max(...hs)];
+    assert.ok(under > 1, `${x} m along: the arch springs from its pier, ${under.toFixed(2)} m up`);
+    // At least 0.6 m of deck over the arch: a road thinner than that over a 40 m span would read as paper.
+    assert.ok(top - under >= 0.59, `${x} m along: the arch ${under.toFixed(2)} m, its deck ${top.toFixed(2)} m`);
+    // (Under the road's surface, 2 cm up, so it never shows through; an arch's block is straight across a bend in the profile.)
+    assert.ok(top < deckAt(x) + 0.01 && top > deckAt(x) - 0.05, `${x} m along: the deck's top ${top.toFixed(3)} m, the road's ${deckAt(x).toFixed(3)} m`);
+    if (!arches.length || x - arches.at(-1).x > 3) arches.push({ x, crown: under });
+    arches.at(-1).x = x;
+    arches.at(-1).crown = Math.max(arches.at(-1).crown, under);
+  }
+  assert.equal(arches.length, 2, 'an arch over each channel');
+  // Over the river line (the race routes' and the traffic's channel): 4.8 m, as before.
+  assert.ok(arches[1].crown > 4.7, `the river line's arch ${arches[1].crown.toFixed(2)} m`);
+  // Over the Caversham channel the road is 4.9 m at the arch's middle, so its crown is lower than the old 4.8 m.
+  assert.ok(arches[0].crown > 4.4, `the Caversham arch ${arches[0].crown.toFixed(2)} m`);
+});
+
+test("Caversham Bridge's deck meets the ground at both ends, as the lidar's road does: no cliff, nothing floating past them", async () => {
+  const { bay } = caversham(await data('reading'));
+  const loop = courseFromFile(await data('loop'));
+  const road = (await world()).filter((t) => same(t.color, ROAD));
+  const roadAt = (x) => {
+    const [px, , pz] = bay.at(x, 0, 0);
+    const hs = road.map((t) => heightIn(t.p, px, pz)).filter((h) => h !== null);
+    return { h: hs.length ? Math.max(...hs) : null, g: groundAt(loop, px, pz) };
+  };
+  for (const [end, inward] of [[DECK_PROFILE[0][0], 1], [DECK_PROFILE.at(-1)[0], -1]]) {
+    const near = roadAt(end + inward);
+    assert.notEqual(near.h, null, `road 1 m inside the end at ${end} m`);
+    assert.ok(Math.abs(near.h - near.g) < 0.3, `${end + inward} m along: the road ${near.h.toFixed(2)} m, the ground ${near.g.toFixed(2)} m`);
+    assert.equal(roadAt(end - inward * 3).h, null, `no road 3 m past the end at ${end} m`);
+  }
+});
+
+test("Caversham Bridge's pavements, balustrades and lamps rise and fall with its road", async () => {
+  const { bay, along, across } = caversham(await data('reading'));
+  const { half: H, pavement: P } = BRIDGE;
+  const tris = (await world()).filter((t) => t.p.every((q) => Math.abs(along(q)) < 90 && Math.abs(across(q)) < 13));
+  const topAt = (color, x, z) => {
+    const [px, , pz] = bay.at(x, 0, z);
+    const hs = tris.filter((t) => same(t.color, color)).map((t) => heightIn(t.p, px, pz)).filter((h) => h !== null);
+    return hs.length ? Math.max(...hs) : null;
+  };
+  // Clear of the bay and the lamp standards (every 24 m from the Caversham end of the water).
+  for (const x of [-70, -50, -25, 0, 20, 40, 55]) {
+    for (const e of [-1, 1]) {
+      const pave = topAt(PAVING, x, e * (H - P / 2));
+      assert.ok(pave !== null && Math.abs(pave - deckAt(x) - 0.14) < 0.02, `${x} m along, side ${e}: the pavement ${pave?.toFixed(2)} m, the road ${deckAt(x).toFixed(2)} m`);
+      const coping = topAt(STONE, x, e * H);
+      assert.ok(coping !== null && Math.abs(coping - deckAt(x) - 1.1) < 0.03, `${x} m along, side ${e}: the balustrade's top ${coping?.toFixed(2)} m, the road ${deckAt(x).toFixed(2)} m`);
+    }
+  }
+  // Each lamp's bronze starts on its pedestal, 1.6 m over the road where it stands.
+  const bronze = tris.filter((t) => same(t.color, BRONZE));
+  const lamps = [];
+  for (const t of bronze) {
+    const x = along(t.p[0]);
+    const lamp = lamps.find((l) => Math.abs(l.x - x) < 1.5 && Math.sign(l.z) === Math.sign(across(t.p[0])));
+    const low = Math.min(...t.p.map((q) => q[1]));
+    if (lamp) lamp.low = Math.min(lamp.low, low);
+    else lamps.push({ x, z: across(t.p[0]), low });
+  }
+  assert.ok(lamps.length >= 8, `${lamps.length} lamps`);
+  for (const l of lamps) assert.ok(Math.abs(l.low - deckAt(l.x) - 1.6) < 0.05, `the lamp ${l.x.toFixed(0)} m along stands ${(l.low - deckAt(l.x)).toFixed(2)} m over the road`);
 });
 
 test('every feature and styled building on the river has a model of its own, and the scenery has no NaN', async () => {

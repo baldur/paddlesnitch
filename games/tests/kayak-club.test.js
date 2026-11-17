@@ -7,11 +7,20 @@ import { readFileSync } from 'node:fs';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { MeshBuilder, KAYAK_ERG_SIZE } from '../reading-thames/meshes.js';
-import { groundAt, bridgeBay, BRIDGE, bridgeTriangles, rowingEnd, ROWING_DOORS, buildWorld } from '../reading-thames/world.js';
+import { groundAt, bridgeBay, BRIDGE, bridgeTriangles, rowingEnd, ROWING_DOORS, buildWorld, deckAt, DECK_PROFILE } from '../reading-thames/world.js';
 import { WIDE, PLACES, START, cutBetween, HIRE_ORDER, HIRE_BANK, backFrom, DOOR_LABELS, ROOMS, STANDING, MY_ERG, MIRRORS, KAYAK_ERGS, MY_KERG, KERG_Z, mirrorMatrix, ergRoom, SWAN_LOOP, firstPlace, clubShots, clubMesh, glide, confusedSwan, legsMesh, swanLegsMesh, bridgeSwanMesh } from '../reading-thames/club.js';
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const loop = async () => courseFromFile(await data('loop'));
+// The height of a triangle at (x, z), seen from above, or null if (x, z) isn't under it.
+function heightIn([a, b, c], x, z) {
+  const det = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+  if (Math.abs(det) < 1e-9) return null;
+  const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / det;
+  const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / det;
+  const l3 = 1 - l1 - l2;
+  return l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6 ? null : l1 * a[1] + l2 * b[1] + l3 * c[1];
+}
 
 test('every door leads to another place; both clubs open off the bridge, each with its rooms and a way to the water', () => {
   for (const [name, place] of Object.entries(PLACES)) {
@@ -188,8 +197,16 @@ test('the shots are on the real Reading river: the bridge view from Caversham Br
   // On the bridge: above the water, by Caversham Bridge.
   const bridge = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge');
   assert.ok(Math.abs(locate(course.scenery.river, path.eye[0], path.eye[2]).s - bridge.s) < 15);
-  assert.ok(Math.abs(path.eye[1] - BRIDGE.deck - STANDING.eye) < 1e-9, "standing on the deck, a person's eye height up");
   const bay = bridgeBay(course.scenery.river, bridge);
+  // The deck rises and falls along the road (the lidar's): the eye is a person's height over it where the bay is.
+  assert.equal(bay.deck, deckAt(bay.t));
+  assert.ok(Math.abs(path.eye[1] - bay.deck - STANDING.eye) < 1e-9, "standing on the deck, a person's eye height up");
+  // The lidar's road beside the bay is 5.77 m over the water (it was a flat 6.5 m).
+  assert.ok(Math.abs(bay.deck - 5.77) < 0.3, `the deck at the bay ${bay.deck.toFixed(2)} m`);
+  // And the bridge drawn under the eye is there: the road, 2 cm over the deck.
+  const road = worldOf(await data('reading')).filter(({ p, color }) => color.every((c, k) => Math.abs(c - [0.3, 0.3, 0.32][k]) < 0.002) && p.some((q) => Math.hypot(q[0] - path.eye[0], q[2] - path.eye[2]) < 30));
+  const under = road.map(({ p }) => heightIn(p, path.eye[0], path.eye[2])).filter((h) => h !== null);
+  assert.ok(under.length && Math.abs(path.eye[1] - STANDING.eye - Math.max(...under) + 0.02) < 0.01, `the road under the eye ${under.length ? Math.max(...under).toFixed(2) : 'none'} m`);
   const across = (p) => ((p[0] - bay.origin[0]) * bay.fwd[0] + (p[2] - bay.origin[2]) * bay.fwd[1]) * bay.e;
   assert.ok(across(path.eye) > 0 && across(path.eye) < BRIDGE.half - 2, 'on the upstream side of the bridge, back from the parapet');
   assert.ok(across(path.look) > across(path.eye) + 10, 'looking out over the parapet, through the bay');
@@ -266,7 +283,7 @@ test("the swan paces the viewing bay's paving in front of you, clear of its balu
   const bay = bridgeBay(course.scenery.river, course.scenery.bridges.find((b) => b.name === 'Caversham Bridge'));
   const across = (p) => ((p[0] - bay.origin[0]) * bay.fwd[0] + (p[2] - bay.origin[2]) * bay.fwd[1]) * bay.e;
   for (const p of [shots.swan.from, shots.swan.to]) {
-    assert.ok(Math.abs(p[1] - BRIDGE.deck - 0.14) < 1e-9, 'on the paving');
+    assert.ok(Math.abs(p[1] - bay.deck - 0.14) < 1e-9, 'on the paving');
     assert.ok(across(p) > across(eye) + 2 && across(p) < BRIDGE.half + BRIDGE.out - 0.6, 'in the bay, clear of its front');
     assert.ok(Math.abs((p[0] - bay.origin[0]) * bay.right[0] + (p[2] - bay.origin[2]) * bay.right[1] - bay.t) < BRIDGE.bay - 0.6, 'and of its sides');
     const ahead = (p[0] - eye[0]) * (look[0] - eye[0]) + (p[2] - eye[2]) * (look[2] - eye[2]);
@@ -274,6 +291,13 @@ test("the swan paces the viewing bay's paving in front of you, clear of its balu
   }
   const len = Math.hypot(shots.swan.to[0] - shots.swan.from[0], shots.swan.to[2] - shots.swan.from[2]);
   assert.ok(len > 3 && len < 8, `${len} m of paving`);
+  // The paving drawn under it is where the swan stands, not just the same number.
+  const paving = [0.72, 0.71, 0.68];
+  const tris = worldOf(await data('reading')).filter(({ p, color }) => color.every((c, k) => Math.abs(c - paving[k]) < 0.002) && p.some((q) => Math.hypot(q[0] - eye[0], q[2] - eye[2]) < 30));
+  for (const p of [shots.swan.from, shots.swan.to]) {
+    const hs = tris.map(({ p: t }) => heightIn(t, p[0], p[2])).filter((h) => h !== null);
+    assert.ok(hs.length && Math.abs(Math.max(...hs) - p[1]) < 0.01, `the paving under the swan ${hs.length ? Math.max(...hs).toFixed(2) : 'none'} m, the swan ${p[1].toFixed(2)} m`);
+  }
 });
 
 test('your paddler standing in the changing room has legs to the floor; the swan has legs too', async () => {
@@ -392,7 +416,9 @@ test("Caversham Bridge is as wide as the lidar measures it, 19 m, and stands on 
   const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   // The deck's top, cream, over the river: how far it reaches either side of the road's line.
   const cream = [0.9, 0.88, 0.81];
-  const deck = worldOf(d).filter(({ p, color }) => color.every((c, k) => Math.abs(c - cream[k]) < 0.002) && p.every((q) => Math.abs(q[1] - BRIDGE.deck) < 0.01 && Math.hypot(q[0] - mid[0], q[2] - mid[1]) < 40));
+  const bay = bridgeBay(courseFromFile(d), d.bridges.find((x) => x.name === 'Caversham Bridge'));
+  const along = (q) => (q[0] - bay.origin[0]) * bay.right[0] + (q[2] - bay.origin[2]) * bay.right[1];
+  const deck = worldOf(d).filter(({ p, color }) => color.every((c, k) => Math.abs(c - cream[k]) < 0.002) && p.every((q) => Math.abs(q[1] - deckAt(along(q))) < 0.01 && Math.hypot(q[0] - mid[0], q[2] - mid[1]) < 40));
   const across = deck.flatMap(({ p }) => p.map((q) => (q[0] - a[0]) * v[0] + (q[2] - a[1]) * v[1]));
   assert.ok(deck.length > 10, `${deck.length} deck triangles`);
   assert.ok(Math.abs(Math.max(...across) - Math.min(...across) - 19) < 0.3, `${(Math.max(...across) - Math.min(...across)).toFixed(1)} m wide`);
@@ -414,10 +440,14 @@ test("nothing stands in Caversham Bridge's road: the glass restaurant's tower is
   const d = await data('reading');
   const [a, b] = d.bridges.find((x) => x.name === 'Caversham Bridge').ends;
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  const [u, v] = [[(b[0] - a[0]) / len, (b[1] - a[1]) / len], [-(b[1] - a[1]) / len, (b[0] - a[0]) / len]];
-  // The carriageway between the pavements, from end to end and 12 m on (where the deck runs onto the banks).
+  const v = [-(b[1] - a[1]) / len, (b[0] - a[0]) / len];
+  // The carriageway between the pavements, the whole length of the deck (it runs on over the banks to meet the ground).
   const road = BRIDGE.half - BRIDGE.pavement;
-  const on = ([x, , z]) => { const t = (x - a[0]) * u[0] + (z - a[1]) * u[1]; const c = (x - a[0]) * v[0] + (z - a[1]) * v[1]; return t > -12 && t < len + 12 && Math.abs(c) < road - 0.2; };
-  const standing = worldOf(d).filter(({ p }) => p.every(on) && p.some((q) => q[1] > BRIDGE.deck + 0.3));
+  const bay = bridgeBay(courseFromFile(d), d.bridges.find((x) => x.name === 'Caversham Bridge'));
+  const along = ([x, , z]) => (x - bay.origin[0]) * bay.right[0] + (z - bay.origin[2]) * bay.right[1];
+  const [first, last] = [DECK_PROFILE[0][0], DECK_PROFILE.at(-1)[0]];
+  assert.ok(first < along([a[0], 0, a[1]]) - 12 && last > along([b[0], 0, b[1]]) + 12, 'the deck runs on past both banks');
+  const on = (q) => { const c = (q[0] - a[0]) * v[0] + (q[2] - a[1]) * v[1]; return along(q) > first && along(q) < last && Math.abs(c) < road - 0.2; };
+  const standing = worldOf(d).filter(({ p }) => p.every(on) && p.some((q) => q[1] > deckAt(along(q)) + 0.3));
   assert.equal(standing.length, 0, `${standing.length} triangles stand in the road: ${JSON.stringify(standing.slice(0, 3).map(({ p, color }) => [p.map((q) => q.map((x) => +x.toFixed(1))), color.map((x) => +x.toFixed(2))]))}`);
 });
