@@ -174,6 +174,11 @@ describe('bankSkyline', () => {
     expect(right[2]).toBeCloseTo(8, 1)
     expect(left[8]).toBeNull()
   })
+  it("stops at the first building: trees behind a house don't show in the water", () => {
+    const above = (_s: number, _side: -1 | 1, d: number) => (d < 6 ? 0 : d < 16 ? -1 : 20)
+    const [left] = bankSkyline(200, 50, above)
+    expect(left[2]).toBe(0)
+  })
   it('takes the trees, not the gaps between them: the 80th percentile along 30 m either way', () => {
     // Trees 15 m high at the edge on two stretches in five along the bank.
     const above = (s: number, _side: -1 | 1, d: number) => (d === 0 && Math.floor(s / 6) % 5 < 2 ? 15 : 0)
@@ -260,8 +265,8 @@ describe('canopyAt', () => {
     canopyAt(river, at, (x, z) => (seen.push([x, z]), true), () => false, () => 9)(50, 1, 4)
     expect(seen).toEqual([[-14, -50], [14, -50]])
   })
-  it("counts a roof as open bank, and nothing off the river or where there's no lidar", () => {
-    expect(sample(35, -1, 4)).toBe(0)
+  it("counts a roof as open bank (-1: no canopy, and bankSkyline stops there), and nothing off the river or where there's no lidar", () => {
+    expect(sample(35, -1, 4)).toBe(-1)
     expect(sample(35, 1, 4)).toBe(9)
     expect(sample(120, 1, 4)).toBeNull()
     expect(canopyAt(river, at, () => false, building, () => 9)(50, 1, 4)).toBeNull()

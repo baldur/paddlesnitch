@@ -369,7 +369,7 @@ export function bankEdge(length: number, step: number, above: (s: number, side: 
  * metres along each bank (null where not measured): from water `view` metres
  * out, a crown h high d metres back from the edge stands as high at the edge
  * as h * view / (view + d), so the tall trees behind a lawn or a clubhouse count
- * too, not only the first belt. The highest out to 60 m back, the 80th percentile
+ * too, not only the first belt, up to the first building. The highest out to 60 m back, the 80th percentile
  * over 30 m either way (the reflection shows the trees, not the gaps between). Heights in metres over the bank. bankCanopy's share of the first 14 m
  * set the trees' height in the water before: most banks mirrored 2-7 m trees,
  * where the footage's reflections come right across to the boat.
@@ -382,6 +382,9 @@ export function bankSkyline(length: number, step: number, above: (s: number, sid
       for (let d = 0; d <= 60; d += 2) {
         const h = above(i * step + ds, side, d)
         if (h === null) continue
+        // A building: what stands behind it is hidden from the water (the game
+        // mirrors only landmark buildings, so a set-back tree showed under a house).
+        if (h < 0) { best ??= 0; break }
         best = Math.max(best ?? 0, (h * view) / (view + d))
       }
       if (best !== null) tops.push(best)
@@ -395,7 +398,9 @@ export function bankSkyline(length: number, step: number, above: (s: number, sid
 /**
  * The canopy's height `d` metres out from the water's edge on `side` (-1 left,
  * 1 right) at `s` along the river: null off the river or where the lidar
- * isn't kept, 0 on a building (a roof isn't canopy). The sampler bankCanopy takes.
+ * isn't kept, -1 on a building (a roof isn't canopy, and bankSkyline stops
+ * there: what stands behind a house doesn't show in the water). The sampler
+ * bankCanopy takes.
  */
 export function canopyAt(
   river: { length: number }, at: (s: number) => { x: number; z: number; tx: number; tz: number; half: number },
@@ -405,7 +410,7 @@ export function canopyAt(
     if (s < 0 || s > river.length) return null
     const c = at(s)
     const [x, z] = [c.x - c.tz * side * (c.half + d), c.z + c.tx * side * (c.half + d)]
-    return !kept(x, z) ? null : building(x, z) ? 0 : above(x, z)
+    return !kept(x, z) ? null : building(x, z) ? -1 : above(x, z)
   }
 }
 

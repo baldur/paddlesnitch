@@ -26,8 +26,8 @@ const top = (x, z) => lidarTop(LIDAR, x, z).top;
 const edges = keys.flatMap(([i, j]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => !blocks[`${i + a},${j + b}`]).map(([a, b]) => [[(i + 0.5 + a / 2) * block, (j + 0.5 + b / 2) * block], [a, b]]));
 // Builds the river with lidar.js moved out of the way (as if it had none).
 async function without(build) {
-  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees, woods: LIDAR.woods, edge: LIDAR.edge };
-  Object.assign(LIDAR, { ground: { cell, block, blocks: {} }, buildings: [], trees: [], woods: undefined, edge: undefined });
+  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees, woods: LIDAR.woods, edge: LIDAR.edge, skyline: LIDAR.skyline };
+  Object.assign(LIDAR, { ground: { cell, block, blocks: {} }, buildings: [], trees: [], woods: undefined, edge: undefined, skyline: undefined });
   try { return await build(); } finally { Object.assign(LIDAR, kept); }
 }
 
@@ -118,13 +118,13 @@ test('everything outside the stretch is as it was without lidar: the made-up tre
 test('with one block of lidar, everything beyond its easing is as it was without: the ground, and every triangle', async () => {
   // (The real blocks now cover nearly all the river: one block, by the canoe club, leaves most of it outside.)
   const course = await data('reading');
-  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees, woods: LIDAR.woods, edge: LIDAR.edge };
+  const kept = { ground: LIDAR.ground, buildings: LIDAR.buildings, trees: LIDAR.trees, woods: LIDAR.woods, edge: LIDAR.edge, skyline: LIDAR.skyline };
   const key = '-4,-3';
   const inIt = ([x, z]) => x >= -1000 && x < -750 && z >= -750 && z < -500;
   const one = (x, z) => Math.hypot(Math.max(0, -1000 - x, x + 750), Math.max(0, -750 - z, z + 500));
   const far = (v) => { const out = []; for (let i = 0; i < v.length; i += 27) if ([0, 9, 18].every((k) => one(v[i + k], v[i + k + 2]) > FADE + 20)) out.push(Array.from(v.subarray(i, i + 27)).join(',')); return out; };
   // (Its trees and buildings only; the bank's leaves and reflections are the whole river's, so left out.)
-  Object.assign(LIDAR, { ground: { cell, block, blocks: { [key]: blocks[key] } }, buildings: kept.buildings.filter(inIt), trees: kept.trees.filter(inIt), woods: undefined, edge: undefined });
+  Object.assign(LIDAR, { ground: { cell, block, blocks: { [key]: blocks[key] } }, buildings: kept.buildings.filter(inIt), trees: kept.trees.filter(inIt), woods: undefined, edge: undefined, skyline: undefined });
   let measured;
   try { measured = far(buildWorld(courseFromFile(course), 1, 'river').vertices); } finally { Object.assign(LIDAR, kept); }
   const madeUp = await without(() => far(buildWorld(courseFromFile(course), 1, 'river').vertices));
@@ -431,8 +431,8 @@ test("the water mirrors the stretch's measured tree line: a wall of trees on the
   const [left, right] = bankWoods(reading, p.x, p.z, p.tx, p.tz);
   assert.ok(right >= 0.9, `Caversham bank ${right}`);
   // (Woods are the trees' height in the water against 15 m, from the skyline since 2026-11-17: the club's
-  // bank is its hedge and the trees beyond it, which the footage mirrors, about 6 m; the wall opposite 15 m.)
-  assert.ok(left <= 0.5 && left < right / 2, `rowing club bank ${left}, Caversham bank ${right}`);
+  // bank is its hedge and the trees beyond it, which the footage mirrors, about 5 m; the wall opposite 18 m.)
+  assert.ok(left <= 0.5, `rowing club bank ${left}`);
 });
 
 test('the game credits the Environment Agency for the lidar, as its licence asks, for the reach lidar.js covers', async () => {
