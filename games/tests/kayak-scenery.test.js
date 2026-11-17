@@ -1130,6 +1130,22 @@ test("the water mirrors each landmark and both bridges: a landmark from its fron
   assert.match(await readFile(new URL('../reading-thames/main.js', import.meta.url), 'utf8'), /renderer\.setFacades\(mirror \?\?/);
 });
 
+test('the water at the glass house mirrors the weeping willow in front of it, not a dark box of the house behind', async () => {
+  const { course, mirror: m } = await mirror();
+  const fr = landmarkFrame(course, 'glass-house');
+  // The willow on the bank before it (the footage's frame there is all willow, in the water too).
+  const willow = course.scenery.features.filter((f) => f.style === 'willow')
+    .map((f) => ({ f, d: Math.hypot(f.at[0] - fr.origin[0], f.at[1] - fr.origin[2]) })).sort((a, b) => a.d - b.d)[0].f;
+  // From the water 30 m out from the willow, towards the middle of the river, looking back at it.
+  const o = [willow.at[0] + fr.fwd[0] * 30, 0, willow.at[1] + fr.fwd[1] * 30];
+  const slots = nearFacades(m, o[0], o[2]);
+  const toward = unit([willow.at[0] - o[0], 0, willow.at[1] - o[2]]);
+  const colors = [];
+  for (let up = 0.05; up <= 0.35; up += 0.05) colors.push(seen(o, unit([toward[0], up, toward[2]]), slots, m).color);
+  const green = colors.filter(([r, g, b, a]) => a > 0.5 && g > r && g > b * 1.4).length;
+  assert.ok(green >= 4, `leaves in ${green} of ${colors.length} rays: ${colors.map((c) => c.map((x) => x.toFixed(2)).join(' ')).join(' | ')}`);
+});
+
 test("drawing the facades for the water changes nothing in the world: the river is the same, built before or after them", async () => {
   const { vertices: plain } = buildWorld(courseFromFile(await data('reading')), 1, 'river');
   const first = courseFromFile(await data('reading'));

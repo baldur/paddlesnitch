@@ -3477,7 +3477,7 @@ function shed(m, course, { ring, height }, rand) {
 // at it a little (`TILT`), lit as the mesh shader lights it, clear where
 // there's nothing (the sky shows round a gable, through railings).
 // Returns { facades: [{ name, p, u, v, row }], width, height, pixels } or null.
-export const FACADE = { w: 256, h: 64, tilt: 0.26 };
+export const FACADE = { w: 256, h: 64, tilt: 0.26, frontTilt: 0.08 };
 export function mirrorFacades(course, sun, sky) {
   const real = course.scenery;
   if (!real) return null;
@@ -3504,7 +3504,19 @@ export function mirrorFacades(course, sun, sky) {
     const tris = m.build().vertices;
     // Its front: the footprint's water side, as wide and tall as the model.
     const box = bounds(tris, [cx, 0, cz], f.right, f.fwd);
-    out.push({ name: b.style, ...facade(tris, [cx, 0, cz], f.right, f.fwd, [box.x[0], box.x[1]], [0, box.y[1]], f.depth[1], sun, sky) });
+    // And the trees on the bank before it, in its picture (the willow hides the
+    // glass house in the footage, in the water too; without it the water showed
+    // a dark box of the house). The picture still stands at the house's walls.
+    const trees = new MeshBuilder();
+    for (const t of real.features ?? []) {
+      if (!FRONT_TREES.has(t.style)) continue;
+      const [dx, dz] = [t.at[0] - cx, t.at[1] - cz];
+      const [x, z] = [dx * f.right[0] + dz * f.right[1], dx * f.fwd[0] + dz * f.fwd[1]];
+      if (x > box.x[0] - 6 && x < box.x[1] + 6 && z > f.depth[0] && z < box.z[1] + 15) FEATURES[t.style](trees, river, spot(river, t.at));
+    }
+    const front = trees.build().vertices;
+    const wide = front.length ? bounds(concat(tris, front), [cx, 0, cz], f.right, f.fwd) : box;
+    out.push({ name: b.style, ...facade(tris, [cx, 0, cz], f.right, f.fwd, [wide.x[0], wide.x[1]], [0, wide.y[1]], f.depth[1], sun, sky, false, front) });
   }
   // Caversham Bridge only: Christchurch's deck is a thin line 6 m up, which the
   // ripples bent into a black snake across the water (design review).
@@ -3568,7 +3580,10 @@ function crown(tris, origin, right) {
 // right is the other way (the far side of a bridge).
 // The rectangle stands where most of what's seen of the model is (a footprint
 // can reach well in front of its walls: the Island Bar's mirrored twice its width).
-function facade(tris, origin, right, fwd, [x0, x1], [y0, y1], at, sun, sky, flip = false) {
+// `front`: things before it drawn over its picture (they don't place it), seen
+// at a shallower tilt: a ray off the water meets a tree 15 m out lower than the
+// walls' tilt would put it, which lifted the willow's curtain off the water.
+function facade(tris, origin, right, fwd, [x0, x1], [y0, y1], at, sun, sky, flip = false, front = null) {
   const r = flip ? [-right[0], -right[1]] : right;
   // Seen from the water in front, looking up at it a little.
   const view = [fwd[0] * Math.cos(FACADE.tilt), -Math.sin(FACADE.tilt), fwd[1] * Math.cos(FACADE.tilt)];
@@ -3578,8 +3593,18 @@ function facade(tris, origin, right, fwd, [x0, x1], [y0, y1], at, sun, sky, flip
   const first = bake(tris, corner(at), u, v, view, sun, sky);
   const p = corner(at + first.middle * Math.cos(FACADE.tilt));
   // (u × v must face the viewer: the shader only mirrors a face from its front.)
-  return orient({ p, u, v, pixels: bake(tris, p, u, v, view, sun, sky).pixels }, view);
+  const { pixels } = bake(tris, p, u, v, view, sun, sky);
+  if (front?.length) {
+    const low = [fwd[0] * Math.cos(FACADE.frontTilt), -Math.sin(FACADE.frontTilt), fwd[1] * Math.cos(FACADE.frontTilt)];
+    const over = bake(front, p, u, v, low, sun, sky).pixels;
+    for (let i = 0; i < over.length; i += 4) if (over[i + 3]) pixels.set(over.subarray(i, i + 4), i);
+  }
+  return orient({ p, u, v, pixels }, view);
 }
+
+// The trees a landmark's picture in the water takes in from before it.
+const FRONT_TREES = new Set(['willow', 'dead-tree']);
+const concat = (a, b) => { const c = new Float32Array(a.length + b.length); c.set(a); c.set(b, a.length); return c; };
 
 // A bridge's underside: level at `y`, over the model's extent, seen from below.
 function ceiling(tris, origin, right, fwd, box, y, sun, sky) {
