@@ -3133,7 +3133,7 @@ try {
     marks: new Map(),
     paddles: new Map(),
     // Room for the outings' busier river (outing.js BUSY): some 20 boats on the water at once.
-    traffic: { sculler: renderer.createMesh(scullerMesh(), 24), kayaker: renderer.createMesh(kayakerMesh(), 48), /* (packs: more kayakers out at once) */ eight: renderer.createMesh(eightMesh(), 24), cruiser: renderer.createMesh(cruiserMesh(), 24), motorboat: renderer.createMesh(motorboatMesh(), 24) },
+    traffic: { sculler: renderer.createMesh(scullerMesh(), 24), kayaker: renderer.createMesh(kayakerMesh(), 48), /* (packs: more kayakers out at once) */ eight: renderer.createMesh(eightMesh(), 24), cruiser: renderer.createMesh(cruiserMesh(), 24), motorboat: renderer.createMesh(motorboatMesh(), 24), narrowboat: renderer.createMesh(narrowboatMesh({ steerer: true }), 24) },
     oar: renderer.createMesh(oarMesh(), 256),
     trafficPaddle: renderer.createMesh(paddleMesh(RIVAL_PADDLE), 48),
     swimmer: renderer.createMesh(swimmerMesh(), 24),

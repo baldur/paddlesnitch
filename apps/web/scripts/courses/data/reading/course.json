@@ -55,5 +55,12 @@
   "styles": {
     "Reading Rowing Club": "rowing-club",
     "Reading Canoe Club": "canoe-club"
-  }
+  },
+  "traffic": [
+    { "where": "Fry's and Piper's islands to Caversham Bridge", "to": 700, "busy": 0.5, "mix": { "sculler": 0.35, "eight": 0.25, "kayaker": 0.2, "cruiser": 0.15, "motorboat": 0.05 } },
+    { "where": "the clubs, Caversham Bridge to Reading School", "to": 1600, "busy": 1, "mix": { "eight": 0.45, "sculler": 0.25, "kayaker": 0.15, "cruiser": 0.1, "motorboat": 0.05 } },
+    { "where": "the open reach to the railway bridge", "to": 3500, "busy": 0.8, "mix": { "sculler": 0.45, "cruiser": 0.3, "kayaker": 0.1, "motorboat": 0.1, "eight": 0.05 } },
+    { "where": "Appletree Eyot and Poplar Island", "to": 4200, "busy": 0.2, "mix": { "sculler": 0.35, "kayaker": 0.35, "cruiser": 0.15, "narrowboat": 0.15 } },
+    { "where": "Purley's reach to Mapledurham", "to": 6400, "busy": 1.5, "mix": { "sculler": 0.28, "cruiser": 0.24, "narrowboat": 0.17, "eight": 0.14, "motorboat": 0.1, "kayaker": 0.07 } }
+  ]
 }

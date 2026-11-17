@@ -46,6 +46,7 @@ export const HIRE = HIRE_BOATS.launch; // (what the tests and the HUD knew as th
 // Ram a pack of kayakers or an eight and the boat sinks under you: SINK seconds, then back to the pier.
 export const SINK = 4;
 // The hired-boat outing sees more rowers and kayakers (owner, 2026-10-31), kayakers often in packs.
+// On the real river it leans on each stretch's own mix (traffic.js `weigh`).
 export const HIRE_MIX = { sculler: 0.45, kayaker: 0.3, pack: 0.35, eight: 0.3, cruiser: 0.15, motorboat: 0.2 };
 
 // Puts the race's one boat at the pier (`s` along the river line, upstream of
@@ -329,18 +330,28 @@ export function speedboatMesh() {
 // A narrowboat for hire: 18 m, a long cabin with windows, the roof at chest
 // height for you on the stern deck, steering with the tiller (and the bow far
 // ahead over the roof).
-export function narrowboatMesh() {
+// With `steerer`, a narrowboat under way on the river (traffic.js): someone
+// standing at the tiller, head and shoulders over the roof (seen bow-on), a hand
+// on the tiller; and a cream livery with a maroon roof that no moored boat has
+// (world.js PAINT), so it doesn't read as one of them (design review).
+export function narrowboatMesh({ steerer = false } = {}) {
   const m = new MeshBuilder();
+  if (steerer) {
+    m.box([-0.5, 0.55, 8.1], [-0.12, 1.35, 8.4], [0.2, 0.22, 0.28]); // legs
+    m.box([-0.55, 1.35, 8.06], [-0.07, 2.0, 8.44], [0.55, 0.15, 0.15]); // a red jacket
+    m.sphere([-0.31, 2.13, 8.25], 0.12, [0.8, 0.6, 0.45], 4, 7);
+    m.box([-0.08, 1.15, 8.2], [0.0, 1.62, 8.32], [0.55, 0.15, 0.15]); // an arm down to the tiller
+  }
   const deck = 0.55;
   const half = 1.05;
   const outline = [[-half, 9], [half, 9], [half, -6.5], [0.7, -8.2], [0, -9], [-0.7, -8.2], [-half, -6.5]];
   hull(m, outline, deck, [0.25, 0.4], { hull: [0.08, 0.08, 0.09], band: [0.75, 0.6, 0.15], deck: [0.35, 0.18, 0.15] });
   // The cabin: green sides, a red roof, windows along each side, from behind the bow to the stern deck.
-  const green = [0.1, 0.32, 0.2];
+  const green = steerer ? [0.82, 0.76, 0.6] : [0.1, 0.32, 0.2];
   m.box([-0.95, deck, -6.2], [0.95, 1.75, 7.3], green);
   // The roof as you see it from the tiller: grey, its wooden slide hatch by
   // you, the vents and the stove's chimney, a pot plant, a pole along it.
-  m.box([-1, 1.75, -6.3], [1, 1.82, 7.4], [0.36, 0.37, 0.38]);
+  m.box([-1, 1.75, -6.3], [1, 1.82, 7.4], steerer ? [0.4, 0.1, 0.12] : [0.36, 0.37, 0.38]);
   m.box([-0.45, 1.82, 5.6], [0.45, 1.95, 7.3], [0.55, 0.36, 0.2]);
   for (const z of [-3.5, 0.5, 3.5]) m.cylinder([0, 1.82, z], 0.12, 0.1, 6, [0.75, 0.62, 0.25]);
   m.cylinder([0.55, 1.82, -1.6], 0.07, 0.55, 6, [0.12, 0.12, 0.12]);
@@ -350,7 +361,10 @@ export function narrowboatMesh() {
   for (let z = -5.5; z < 7; z += 1.6) for (const x of [-0.955, 0.955]) m.box([x - 0.01, 1.05, z], [x + 0.01, 1.45, z + 0.8], [0.6, 0.72, 0.78]);
   // The stern deck where you stand, its rail, and the tiller.
   m.box([-0.9, 0.5, 7.3], [0.9, 0.55, 8.9], [0.3, 0.2, 0.12]);
-  m.box([-0.04, 1.0, 8.5], [0.04, 1.06, 9.6], [0.75, 0.6, 0.2]); // the tiller arm
+  // The tiller arm: from the rudder post forward to the steerer's hand, or (the
+  // hire boat, from your eye on the deck) back over the stern.
+  if (steerer) m.box([-0.04, 1.1, 8.2], [0.04, 1.16, 8.95], [0.75, 0.6, 0.2]);
+  else m.box([-0.04, 1.0, 8.5], [0.04, 1.06, 9.6], [0.75, 0.6, 0.2]);
   m.box([-0.06, 0.55, 8.85], [0.06, 1.05, 8.95], [0.2, 0.2, 0.2]);
   // Fenders at the bow.
   m.box([-0.15, 0.2, -9.05], [0.15, 0.45, -8.85], [0.25, 0.2, 0.15]);
