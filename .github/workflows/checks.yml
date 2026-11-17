@@ -214,6 +214,11 @@ jobs:
         if: steps.changed.outputs.yes == 'true'
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps ${{ matrix.engine }}
+      # Frame times vary about 2x between runners of the same image, so say
+      # which machine this was: compare frame times only between like machines.
+      - name: Which machine
+        if: steps.changed.outputs.yes == 'true'
+        run: echo "machine: $(lscpu | sed -n 's/^Model name: *//p'), $(nproc) cpus"
       # Each game played in Chromium, WebKit and Firefox, desktop and phone,
       # with and without WebGPU and other optional features (games/tests/browsers.mjs).
       - name: Play the games
