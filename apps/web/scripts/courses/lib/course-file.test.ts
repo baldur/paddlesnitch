@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bridges, courseFile, crossing, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
+import { afloat, bridges, courseFile, crossing, mooringRow, places, routePlaces, sides, spaceOut, widths, type RiverThing } from './course-file'
 import type { XZ } from './river'
 
 describe('widths', () => {
@@ -57,6 +57,22 @@ describe('crossing', () => {
   })
 })
 
+describe('afloat', () => {
+  // A river 40 m wide on the line, due north up x = 0, but mapped only 30 m wide.
+  const line: XZ[] = Array.from({ length: 21 }, (_, i) => [0, -i * 10])
+  const width = line.map(() => 40)
+  const water: XZ[][] = [[[-15, 10], [15, 10], [15, -210], [-15, -210], [-15, 10]]]
+  it("moves a boat moored on the mapped land in until its middle and both ends are on the water, and leaves one already afloat", () => {
+    const [moved] = afloat([{ s: 100, length: 20, side: 1, kind: 'narrowboat' }], line, width, water)
+    expect(moved.at).toBeDefined()
+    expect(moved.at![0] + 2.1 / 2).toBeLessThanOrEqual(15) // its bank side on the water
+    expect(moved.at![0]).toBeGreaterThan(12) // still by its bank
+    expect(moved.dir).toEqual([0, -1])
+    const [kept] = afloat([{ s: 100, length: 20, side: 1, kind: 'narrowboat' }], line, width, [[[-25, 10], [25, 10], [25, -210], [-25, -210], [-25, 10]]])
+    expect(kept.at).toBeUndefined()
+  })
+})
+
 describe('mooringRow', () => {
   const rand = () => 0.5
   it("makes narrowboats where the footage leaves a choice (owner, 2026-11-15), and gives every boat a row's crew", () => {
@@ -106,8 +122,8 @@ describe('courseFile', () => {
   })
 
   it('lays each row of boats and each stretch of anglers from its own draws: adding a row moves nothing else', () => {
-    const row = (from: number, to: number) => ({ kind: 'moorings', boats: 'cruiser', side: 'left', from: { at: [from, 0] as [number, number], heading: 0 }, to: { at: [to, 0] as [number, number], heading: 0 } })
-    const anglers = { kind: 'anglers', count: 3, side: 'right', from: { at: [600, 0] as [number, number], heading: 0 }, to: { at: [800, 0] as [number, number], heading: 0 } }
+    const row = (from: number, to: number) => ({ kind: 'moorings' as const, boats: 'cruiser', side: 'left' as const, from: { at: [from, 0] as [number, number], heading: 0 }, to: { at: [to, 0] as [number, number], heading: 0 } })
+    const anglers = { kind: 'anglers' as const, count: 3, side: 'right' as const, from: { at: [600, 0] as [number, number], heading: 0 }, to: { at: [800, 0] as [number, number], heading: 0 } }
     const before = courseFile({ ...base, observations: [row(300, 400), anglers] })
     const after = courseFile({ ...base, observations: [row(100, 200), row(300, 400), anglers] })
     expect(after.moorings.filter((m) => m.s > 250)).toEqual(before.moorings)

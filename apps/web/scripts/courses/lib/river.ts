@@ -29,6 +29,26 @@ export function cumulative(line: XZ[]): number[] {
 }
 
 /** Nearest point on a polyline: distance along it, and signed offset (right of travel is +). */
+/**
+ * Where a point seen from a camera lies on the line: its distance along, and
+ * whether the camera, heading `heading` (degrees from north), was going the
+ * line's way, judged on the segment the point lies by. (It once took the
+ * segment as s over the first segment's length: past a few hundred metres
+ * that read the wrong place, and flipped left and right for 3 km of river.)
+ */
+export function placeOn(line: XZ[], toXZ: (at: LatLng) => XZ) {
+  const cum = cumulative(line)
+  return (at: LatLng, heading: number): { s: number; same: boolean } => {
+    const hit = locate(line, cum, toXZ(at))
+    let i = 0
+    while (i < line.length - 2 && cum[i + 1] < hit.s) i++
+    const t = [line[i + 1][0] - line[i][0], line[i + 1][1] - line[i][1]]
+    const courseHeading = (Math.atan2(t[0], -t[1]) * 180) / Math.PI
+    const diff = Math.abs(((heading - courseHeading + 540) % 360) - 180)
+    return { s: hit.s, same: diff < 90 }
+  }
+}
+
 export function locate(line: XZ[], cum: number[], p: XZ): { s: number; lateral: number; d: number } {
   let best = { s: 0, lateral: 0, d: Infinity }
   for (let i = 0; i < line.length - 1; i++) {
