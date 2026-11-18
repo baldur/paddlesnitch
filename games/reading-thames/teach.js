@@ -72,6 +72,15 @@ export function waitTurn(queue, hint) {
   if (queue.some((h) => h.text === hint.text)) return queue;
   return [...queue, hint].slice(-WAITING);
 }
+// A longer hint going straight up cuts off the instruction that's up (`up`:
+// its words and the seconds `left`): it waits at the front for the rest of its
+// time, from `now`, rather than being lost unseen (the race's wash hint once
+// covered a waiting instruction the frame it came off the queue). One with
+// under half a second left has been read, and isn't kept.
+export function cutShort(queue, up, now) {
+  if (!up || up.left < 0.5 || queue.some((h) => h.text === up.text)) return queue;
+  return [{ text: up.text, hold: up.left, at: now }, ...queue].slice(0, WAITING);
+}
 // The next to show at game time `now`, skipping any that waited past STALE
 // seconds ("Your start in 10" or "The swan won't move" are about a moment).
 export const STALE = 10;
