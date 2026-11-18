@@ -64,7 +64,9 @@ decide() { # path branch head locked admin -> prints "REMOVE|KEEP <reason>"
   done
   if [ -d "$path" ]; then
     # `commondir` is written once, when the worktree is added.
-    created=$(stat -f %m "$admin/commondir" 2>/dev/null || stat -c %Y "$admin/commondir" 2>/dev/null || echo "$now")
+    # GNU stat first: on Linux `stat -f` means file-system status and succeeds.
+    created=$(stat -c %Y "$admin/commondir" 2>/dev/null || stat -f %m "$admin/commondir" 2>/dev/null || true)
+    case "$created" in ''|*[!0-9]*) created=$now ;; esac
     [ $(( now - created )) -ge "$min_age_s" ] || { echo "KEEP made less than $(( min_age_s / 3600 )) h ago"; return; }
     if printf '%s\n' "$cwds" | grep -qxF -e "$path" || printf '%s\n' "$cwds" | grep -qF -e "$path/"; then
       echo "KEEP a running process is using it"; return
