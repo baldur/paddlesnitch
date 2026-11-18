@@ -54,6 +54,19 @@ describe('cookie notice vs the floating report button', () => {
   })
 })
 
+describe('cookie notice: a named landmark', () => {
+  // axe's region rule flagged the notice's text and OK button as outside every
+  // landmark, on every page, because the notice renders on every page.
+  it('holds its text and OK button inside a region named "Cookie notice"', async () => {
+    await mount(<CookieNotice />)
+    const region = container.querySelector('[role="region"]')!
+    expect(region).toBeTruthy()
+    expect(region.getAttribute('aria-label')).toBe('Cookie notice')
+    expect(region.textContent).toContain('We use cookies')
+    expect([...region.querySelectorAll('button')].some(b => b.textContent?.trim() === 'OK')).toBe(true)
+  })
+})
+
 describe('cookie notice: shown until acknowledged', () => {
   const notice = () => [...container.querySelectorAll('div')].find(d => d.textContent?.includes('We use cookies'))
 

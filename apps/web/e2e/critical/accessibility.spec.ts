@@ -20,6 +20,9 @@ const PAGES = [
   '/help',
   '/signin',
   '/terms',
+  // The night-shift sweep found /games clean of axe problems (signed out); lock
+  // it in so a future regression is caught here, not just in the sweep.
+  '/games',
 ]
 
 async function axeProblems(page: Page, url: string) {

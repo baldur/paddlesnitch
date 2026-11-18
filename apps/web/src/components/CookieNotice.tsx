@@ -38,7 +38,12 @@ export default function CookieNotice() {
   // (bottom-4, z-[1100]), which otherwise covers the OK button. Phones don't
   // show that button, so the notice sits at the bottom. z clears Leaflet's panes.
   return (
-    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-16 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[1100] rounded-control border border-border-strong bg-surface shadow-lg p-4 text-sm text-fg flex flex-col gap-3">
+    // A named landmark: axe's region rule flags content outside every landmark,
+    // and the notice shows on every page.
+    <div
+      role="region"
+      aria-label="Cookie notice"
+      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-16 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[1100] rounded-control border border-border-strong bg-surface shadow-lg p-4 text-sm text-fg flex flex-col gap-3">
       <p>
         We use cookies only to keep you signed in. We count page views without cookies and
         without linking them to you. No ads, no third-party trackers.{' '}
