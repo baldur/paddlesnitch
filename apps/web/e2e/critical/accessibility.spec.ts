@@ -7,8 +7,9 @@ import { signUpFlow } from '../helpers'
 // test per page, so a failure names the page.
 
 const AXE = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8')
-// Always failures, whatever impact axe gives them.
-const ALWAYS = new Set(['button-name', 'link-name', 'label', 'image-alt', 'landmark-one-main', 'aria-required-children', 'aria-valid-attr-value'])
+// Always failures, whatever impact axe gives them. `region` (all content inside
+// a landmark) is moderate; it's here so the cookie notice stays in its region.
+const ALWAYS = new Set(['button-name', 'link-name', 'label', 'image-alt', 'landmark-one-main', 'aria-required-children', 'aria-valid-attr-value', 'region'])
 
 const PAGES = [
   '/',
@@ -20,6 +21,7 @@ const PAGES = [
   '/help',
   '/signin',
   '/terms',
+  '/games',
 ]
 
 async function axeProblems(page: Page, url: string) {
