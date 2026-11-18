@@ -1095,23 +1095,44 @@ function inside(poly, x, z) {
 
 // A weeping willow: a domed crown, and a curtain of leaves falling from it
 // almost straight down to the water.
-function willowTree(m, x, y, z, rand, size = 1) {
-  const h = (10 + rand() * 6) * size;
-  m.cylinder([x, y - 0.3, z], 0.45, h * 0.6, 5, COLORS.trunk);
+// `spread`: a measured willow (a feature): `height` tall, its crown a dome out
+// to `spread` from the trunk (the lidar's crowns are about two thirds as wide
+// each way as they're tall), its curtain flaring to `WILLOW.flare` times that,
+// its hem just over whatever is under it (`hem(x, z)`: the water or the
+// bank). The same draws either way.
+function willowTree(m, x, y, z, rand, size = 1, height = null, spread = null, hem = null) {
+  const drawn = (10 + rand() * 6) * size;
+  const h = height ?? drawn;
+  m.cylinder([x, y - 0.3, z], 0.45, h * (spread ? 0.5 : 0.6), 5, COLORS.trunk);
   const color = shade(COLORS.willow, rand, 0.1);
-  const top = y + h * 0.74;
-  m.sphere([x, top, z], h * 0.3, color, 3, 8);
+  const top = y + h * (spread ? 0.72 : 0.74);
+  if (spread) {
+    // The crown: a low dome from its rim up to the top.
+    const k = 14;
+    for (let i = 0; i < k; i++) {
+      const [a0, a1] = [(i / k) * Math.PI * 2, ((i + 1) / k) * Math.PI * 2];
+      const rim = (a) => [x + Math.cos(a) * spread, top, z + Math.sin(a) * spread];
+      const mid = (a) => [x + Math.cos(a) * spread * 0.62, y + h * 0.94, z + Math.sin(a) * spread * 0.62];
+      const out = [Math.cos((a0 + a1) / 2), 0.6, Math.sin((a0 + a1) / 2)];
+      m.triFacing(rim(a0), rim(a1), mid(a1), color, out);
+      m.triFacing(rim(a0), mid(a1), mid(a0), color, out);
+      m.triFacing(mid(a0), mid(a1), [x, y + h, z], color.map((v) => v * 1.04), [out[0] * 0.3, 1, out[2] * 0.3]);
+    }
+  } else m.sphere([x, top, z], h * 0.3, color, 3, 8);
   // The curtain: fronds hanging from the crown's rim, spreading a little as
   // they fall, ragged where they stop just above the water.
   const n = 14;
-  const rt = h * 0.29;
-  const rb = h * 0.42;
-  const yt = top - h * 0.04;
+  // (A measured one's starts just inside and above its crown's rim: a gap there showed as a bright ring.)
+  const rt = spread ? spread * 0.96 : h * 0.29;
+  const rb = spread ? spread * WILLOW.flare : h * 0.42;
+  const yt = spread ? top + 0.1 : top - h * 0.04;
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2;
     const a1 = ((i + 1) / n) * Math.PI * 2;
-    const yb = y + 0.3 + rand() * 1.8;
+    const drop = rand();
     const p = (a, r, py) => [x + Math.cos(a) * r, py, z + Math.sin(a) * r];
+    const under = hem ? hem(...[x + Math.cos(a1) * rb, z + Math.sin(a1) * rb]) : y;
+    const yb = hem ? under + 0.2 + drop * 0.6 : y + 0.3 + drop * 1.8;
     const out = [Math.cos((a0 + a1) / 2), -0.2, Math.sin((a0 + a1) / 2)];
     const c = color.map((v) => v * (i % 2 ? 0.92 : 0.8));
     m.triFacing(p(a0, rt, yt), p(a1, rt, yt), p(a1, rb, yb), c, out);
@@ -2759,8 +2780,33 @@ function marina(m, course, f) {
 }
 
 // A big weeping willow at the water.
+// A weeping willow pointed out in the footage, as the lidar measures them
+// (2026-11-18, the glass house's in recording 0104): as tall as the tallest
+// measured tree within 10 m of its point (lidar.js; `WILLOW.height` where none
+// was), its crown `spread` times that out from the trunk and its curtain
+// flaring `flare` times further (design review: two thirds as wide as the
+// footage's at first), the hem hanging `over` m out over the water, just above
+// it. Drawn 14-22 m tall and narrow, set 6 m back from the water, they stood
+// like bells behind the bank.
+export const WILLOW = { height: 12, spread: 0.65, flare: 1.25, over: 3 };
+// How far ahead the water starts, along a line `wet(d)` says is water or not
+// at d metres: the first wet half metre ahead, or, from a point already in the
+// water, minus how far back the water goes; `max` either way.
+export function shoreAhead(wet, max = 20) {
+  let d = 0;
+  if (wet(0)) while (d > -max && wet(d - 0.5)) d -= 0.5;
+  else while (d < max && !wet(d)) d += 0.5;
+  return d;
+}
 function willow(m, course, f) {
-  willowTree(m, ...f.at(0, Math.max(0.3, f.ground(0, -6)), -6), f.rand, 1.4);
+  const [x, , z] = f.origin;
+  const measured = (course.lidar?.trees ?? []).filter(([tx, tz]) => Math.hypot(tx - x, tz - z) < 10).map(([, , h]) => h);
+  const h = measured.length ? Math.max(...measured) : WILLOW.height;
+  const r = h * WILLOW.spread * WILLOW.flare; // (its curtain's hem, out from the trunk)
+  // From its point straight out to the water (with no mapped water, 6 m in, as before).
+  const shore = course.land?.rings ? shoreAhead((d) => { const q = f.at(0, 0, d); return course.land.inside(q[0], q[2]); }) : 6;
+  const back = Math.min(-0.5, shore - (r - WILLOW.over)); // (its trunk on the bank)
+  willowTree(m, ...f.at(0, Math.max(0.3, f.ground(0, back)), back), f.rand, 1.4, h, h * WILLOW.spread, (px, pz) => Math.max(0, ground(course, px, pz).y));
 }
 
 // An old concrete wharf at the water (below the festival field): a low
