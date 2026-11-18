@@ -332,7 +332,7 @@ function narrowboat(m, course, boat, [paint, trim]) {
   const chimney = at(0.3, 1.78, half - 4.5);
   m.cylinder(chimney, 0.08, 0.6, 6, COLORS.boatHull);
   if (crew === 'statues') statues(m, (x, y, z) => at(x, y, z), right, fwd, half - 3.7);
-  // Laid up under covers, as on the island across from the boatyard: a canvas
+  // Laid up under covers (a narrowboat's `crew`; none moored so now): a canvas
   // hood with a pitched top over the stern well, proud of the cabin roof; a tarp
   // over the back of the roof, down the sides; a cratch cover sloping from the
   // cabin front to the bow. Grey canvas on a dark boat, navy on a light one, so
