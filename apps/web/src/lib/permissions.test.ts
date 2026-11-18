@@ -221,6 +221,10 @@ describe('managing a trial', () => {
     expect(canManageTrial(makeTrial('public'), other)).toBe(false)
     expect(canManageTrial(makeTrial('private'), other)).toBe(false)
   })
+  it('an unauthenticated visitor cannot manage a trial', () => {
+    expect(canManageTrial(makeTrial('public'), null)).toBe(false)
+    expect(canManageTrial(makeTrial('private'), null)).toBe(false)
+  })
 })
 
 describe('submitting to a public trial', () => {
@@ -388,10 +392,22 @@ describe('managing a group', () => {
     expect(canManageGroup(makeGroup(), other)).toBe(false)
   })
 
+  it('an unauthenticated visitor cannot manage a group', () => {
+    expect(canManageGroup(makeGroup(), null)).toBe(false)
+  })
+
   it('only the owner can delete', () => {
     const admin: AuthUser = { id: 'admin-1', email: 'a@x', displayName: 'A' }
     expect(canDeleteGroup(makeGroup(), owner)).toBe(true)
     expect(canDeleteGroup(makeGroup(), admin)).toBe(false)
+  })
+
+  it('the group owner and its admins can view it', () => {
+    // The owner is not necessarily an admin or member, so this pins the
+    // `owner || admin || member` OR-chain: each role is sufficient on its own.
+    expect(canViewGroup(makeGroup(), owner)).toBe(true)
+    const admin: AuthUser = { id: 'admin-1', email: 'a@x', displayName: 'A' }
+    expect(canViewGroup(makeGroup(), admin)).toBe(true)
   })
 
   it('any member can view a group', () => {
@@ -443,7 +459,17 @@ describe('listing courses and trials', () => {
   it('a private course is hidden from non-owners in the listing', () => {
     expect(isListedForViewer(makeCourse('private'), other)).toBe(false)
   })
+  it('a private course is hidden from an unauthenticated visitor in the listing', () => {
+    expect(isListedForViewer(makeCourse('private'), null)).toBe(false)
+  })
   it('a private course appears in the listing for its owner', () => {
     expect(isListedForViewer(makeCourse('private'), owner)).toBe(true)
+  })
+  it('a group-scoped course is listed only for members of its group', () => {
+    const groupId = 'group-1'
+    const course = makeCourseGroup(groupId)
+    expect(isListedForViewer(course, other, new Set([groupId]))).toBe(true)
+    expect(isListedForViewer(course, other, new Set())).toBe(false)
+    expect(isListedForViewer(course, null)).toBe(false)
   })
 })
