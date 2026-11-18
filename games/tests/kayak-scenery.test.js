@@ -1218,13 +1218,19 @@ test('the water at the glass house mirrors the weeping willow in front of it, no
   for (let up = 0.05; up <= 0.26; up += 0.05) colors.push(seen(o, unit([toward[0], up, toward[2]]), slots, m).color);
   const green = colors.filter(([r, g, b, a]) => a > 0.5 && g > r && g > b * 1.4).length;
   assert.ok(green >= 3, `leaves in ${green} of ${colors.length} rays: ${colors.map((c) => c.map((x) => x.toFixed(2)).join(' ')).join(' | ')}`);
-  // Its picture stands at the willow (its trunk is 6 m in from its point), not at the house's
-  // walls 15 m behind, where its reflection slid off the tree as the view turned (design review).
+  // Its picture stands at the willow, not at the house's walls 15 m behind,
+  // where its reflection slid off the tree as the view turned (design review).
   const pic = m.facades.find((f) => f.name === 'glass-house willow');
   assert.ok(pic, 'the willow has a picture of its own');
   const depth = (q) => (q[0] - fr.origin[0]) * fr.fwd[0] + (q[q.length - 1] - fr.origin[2]) * fr.fwd[1];
-  const trunk = depth(willow.at) - 6;
-  assert.ok(Math.abs(depth(pic.p) - trunk) < 6, `the willow's picture ${depth(pic.p).toFixed(1)} m out, its trunk ${trunk.toFixed(1)} m`);
+  // (Its trunk: the middle of its crown and curtain, which are round it.)
+  const isWillow = ([r, g, b]) => g > 0.2 && Math.abs(r / g - 0.965) < 0.06 && Math.abs(b / g - 0.35) < 0.05;
+  const leaves = (await world()).filter(({ color, p }) => isWillow(color) && Math.hypot(p[0][0] - willow.at[0], p[0][2] - willow.at[1]) < 16).flatMap(({ p }) => p);
+  assert.ok(leaves.length, 'the willow is built');
+  const trunk = leaves.reduce((s, q) => s + depth([q[0], q[2]]), 0) / leaves.length;
+  // (Within its curtain, which hangs 8-9 m out from the trunk.)
+  const { WILLOW } = await import('../reading-thames/world.js');
+  assert.ok(Math.abs(depth(pic.p) - trunk) < 11 * WILLOW.spread * WILLOW.flare, `the willow's picture ${depth(pic.p).toFixed(1)} m out, its trunk ${trunk.toFixed(1)} m`);
   assert.ok(depth(m.facades.find((f) => f.name === 'glass-house').p) < trunk - 6, "the house's picture is behind it");
   // Only trees: no landmark took in a quay, a jetty or a boat shed.
   for (const f of m.facades) if (/ /.test(f.name) && !/ (side|underside|pier)$/.test(f.name)) assert.match(f.name, / (willow|dead-tree)$/);
@@ -1253,7 +1259,10 @@ test('a pointed-out willow is as tall as the measured tree at it, wider than tal
     const top = Math.max(...pts.map((q) => q[1])) - ground;
     const r = Math.max(...pts.map((q) => Math.hypot(q[0] - cx, q[2] - cz)));
     assert.ok(Math.abs(top - h) < 0.3, `${top.toFixed(1)} m tall (measured ${h.toFixed(1)} m)`);
-    assert.ok(Math.abs(r - h * WILLOW.spread) < 0.4 && 2 * r > top, `${r.toFixed(1)} m out from its trunk`);
+    assert.ok(Math.abs(r - h * WILLOW.spread * WILLOW.flare) < 0.4 && 2 * r > top, `${r.toFixed(1)} m out from its trunk at the hem`);
+    // Its hem just over what's under it, not hanging in the air over the water.
+    const hem = pts.filter((q) => land.inside(q[0], q[2]) && Math.hypot(q[0] - cx, q[2] - cz) > r - 0.5);
+    assert.ok(hem.length && Math.min(...hem.map((q) => q[1])) < 1, `its hem over the water ${Math.min(...hem.map((q) => q[1])).toFixed(1)} m up`);
     const over = Math.max(...pts.filter((q) => land.inside(q[0], q[2])).map((q) => land.shore(q[0], q[2])), 0);
     assert.ok(Math.abs(over - WILLOW.over) < 1, `its curtain ${over.toFixed(1)} m out over the water`);
   }
