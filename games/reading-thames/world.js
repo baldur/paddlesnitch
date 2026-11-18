@@ -2419,16 +2419,17 @@ function clapboardFront(m, course, f, height) {
 // gable and 7 m at the end nearest the water. Glass all round the ground
 // floor in a dark frame, a balcony with glass rails round the first floor, a
 // glass rail round the flat roof upstream, the gable glazed to its peak, and
-// at the end nearest the water white render and a white chimney. A white
+// at the end nearest the water a white rendered chimney wall, nearly as tall
+// as the gable (design review: a whole white end read wrong from upstream). A white
 // parasol on the lawn, a big round tree upstream, and at the water a long pale
 // concrete quay under timber plank coping.
 export const GLASS = {
-  clad: [0.15, 0.15, 0.16], seam: [0.1, 0.1, 0.11], glass: [0.2, 0.25, 0.29], upper: [0.19, 0.19, 0.2], fascia: [0.24, 0.24, 0.25],
-  rail: [0.62, 0.7, 0.74], quay: [0.74, 0.72, 0.67], cap: [0.6, 0.52, 0.42], parasol: [0.93, 0.93, 0.9], render: [0.9, 0.9, 0.87],
+  clad: [0.15, 0.15, 0.16], seam: [0.1, 0.1, 0.11], glass: [0.38, 0.45, 0.51], upper: [0.19, 0.19, 0.2], fascia: [0.24, 0.24, 0.25],
+  rail: [0.5, 0.57, 0.62], quay: [0.74, 0.72, 0.67], cap: [0.6, 0.52, 0.42], parasol: [0.93, 0.93, 0.9], render: [0.9, 0.9, 0.87],
 };
 // Its size and heights over its ground, from the lidar (dsm less dtm, 2 m grid).
 // `shift`: where the lidar has it from the map's outline (along it, out of its front).
-export const GLASS_HOUSE = { length: 26, depth: 10, shift: [-1, 0.7], upstream: 6.2, gable: 10, downstream: 7, chimney: 9.2 };
+export const GLASS_HOUSE = { length: 26, depth: 10, shift: [-1, 0.7], upstream: 6.2, gable: 10, downstream: 7, chimney: 9.6 };
 // A frame along a landmark's own footprint: x along its longest side (+x the
 // end nearer the water), z out of its front (the side towards the water).
 function ownFrame(f, [along, out] = [0, 0]) {
@@ -2485,11 +2486,13 @@ function glassHouse(m, course, f) {
   for (const [z, e] of [[hf + 0.02, 1], [hb + 0.58, -1]]) {
     m.triFacing(h.at(w1, top, z), h.at(e0, top, z), h.at(mid, H.gable - 0.15, z), e > 0 ? C.glass : C.upper, [h.fwd[0] * e, 0, h.fwd[1] * e]);
   }
-  // The downstream end: white render to its roof, a dark edge, the chimney.
-  h.box(m, [e0, x1], [-1, H.downstream - 0.3], [hb, hf], C.render);
+  // The downstream end: dark and glazed like the rest to a flat roof, its end
+  // wall white render, and the white chimney stack rising from it.
+  h.box(m, [e0, x1 - 0.5], [-1, H.downstream - 0.3], [hb, hf], C.clad);
+  for (let y = 0.4; y < 6; y += 3.2) h.box(m, [e0 + 0.3, x1 - 0.8], [y, y + 2.4], [hf, hf + 0.06], C.glass);
+  h.box(m, [x1 - 0.5, x1], [-1, H.downstream - 0.3], [hb, hf], C.render);
   h.box(m, [e0 - 0.2, x1 + 0.2], [H.downstream - 0.3, H.downstream], [hb - 0.2, hf + 0.2], C.fascia);
-  h.box(m, [x1 - 1.6, x1 - 0.2], [H.downstream, H.chimney], [-1.2, 0.4], C.render);
-  for (let y = 0.6; y < 6; y += 3.2) h.box(m, [e0 + 0.6, e0 + 2], [y, y + 1.8], [hf, hf + 0.06], C.glass);
+  h.box(m, [x1 - 1.4, x1], [-1, H.chimney], [-1.6, 0.2], C.render);
   // The lawn to the water, a parasol on it, and the quay: pale concrete, timber plank coping (in the river's frame, as before).
   const half = Math.min(11, Math.max(6, (f.along[1] - f.along[0]) / 2));
   const front = Math.min(f.depth[1], f.edge - 8);
