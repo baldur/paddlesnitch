@@ -211,10 +211,24 @@
     {
       "kind": "moorings",
       "side": "right",
+      "boats": "narrowboat",
+      "length": 18,
+      "paint": "navy",
+      "at": [
+        51.466745,
+        -1.014461
+      ],
+      "heading": 274,
+      "frame": "0093-p0-03400",
+      "note": "one navy narrowboat at the downstream end of the moorings across from the boatyard, on every pass from 2026-08-09 to 2026-11-18 (14 passes; recording 0104 went past it a metre off)"
+    },
+    {
+      "kind": "moorings",
+      "side": "right",
       "from": {
         "at": [
-          51.466745,
-          -1.014461
+          51.466751,
+          -1.014614
         ],
         "heading": 274,
         "frame": "0093-p0-03400"
@@ -227,9 +241,8 @@
         "heading": 276,
         "frame": "0093-p0-03500"
       },
-      "boats": "mixed",
-      "note": "narrowboats under covers along the island across from the boatyard (footage 2026-08-14; owner, 2026-11-15)",
-      "crew": "covers"
+      "boats": "cruiser",
+      "note": "cruisers upstream of it to the end of the moorings, some under navy or green covers, on every pass from 2026-08-09 to 2026-11-18 (14 passes; recording 0104): not the row of narrowboats the 2026-11-15 note made of them"
     },
     {
       "kind": "bank",
