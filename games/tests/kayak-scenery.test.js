@@ -650,6 +650,43 @@ test('upstream of Mapledurham: the dead tree, the white river sign and the sand 
   assert.ok(reading.features.some((f) => f.style === 'beach' && Math.hypot(f.at[0] + 4711, f.at[1] + 2438) < 10), 'the beach at r1');
 });
 
+// Recording 0104 went a metre or two off the banks: where a row of the land
+// under the water joined one up the bank, the ground rose out of the water
+// metres before the shore, and the boat looked down on a lawn (2,176 m² of
+// ground over the water more than 1 m out from the shore; 717 m² now).
+test('the ground leaves the water at the mapped shore, not part-way to the next row of the land', async () => {
+  const course = courseFromFile(await data('reading'));
+  const land = waterMap(course.scenery.water);
+  const onGround = (q) => Math.abs(q[1] - groundAt(course, q[0], q[2])) < 0.02 || (q[1] < 0 && groundAt(course, q[0], q[2]) === 0);
+  let area = 0;
+  for (const { p } of await world()) {
+    const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+    if (cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1 || !p.every(onGround)) continue;
+    area += Math.abs((p[1][0] - p[0][0]) * (p[2][2] - p[0][2]) - (p[2][0] - p[0][0]) * (p[1][2] - p[0][2])) / 2;
+  }
+  assert.ok(area < 1000, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore`);
+});
+
+// By a wooded bank the footage's water is dark (about 42 of 255 near the boat,
+// 0104's close passes); it mirrored the leaves and read as a lawn (54, and twice
+// as green). A ray that meets a bank low sees its dark foot, not its leaves; one
+// that meets it high (from mid-river) still sees the canopy (#969's reach kept).
+test("the water mirrors a bank's dark foot where a reflected ray meets it low, in both renderers", async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const [gpu, gl] = [await read('shaders.js'), await read('shaders-gl.js')];
+  const num = (src, re) => src.match(re)[1].split(',').map(Number);
+  const [under, low, trees] = [num(gpu, /const UNDER = vec3f\(([^)]*)\)/), num(gpu, /const LOW = vec3f\(([^)]*)\)/), num(gpu, /const TREES = vec3f\(([^)]*)\)/)];
+  assert.deepEqual(num(gl, /const vec3 UNDER = vec3\(([^)]*)\)/), under);
+  assert.deepEqual(num(gl, /const vec3 LOW = vec3\(([^)]*)\)/), low);
+  const lum = ([r, g, b]) => 0.3 * r + 0.59 * g + 0.11 * b;
+  assert.ok(lum(under) < 0.5 * lum(trees) && under[1] >= under[2], 'darker than the leaves, still a little green');
+  assert.ok(low[0] >= 0.5 && low[1] <= 6 && low[2] > 0.5 && low[2] <= 1, 'the bank\'s foot: the first metres over the water');
+  for (const src of [gpu, gl]) {
+    assert.match(src, /cover \* \(1\.0 - smoothstep\(LOW\.x, LOW\.y, reach \* refl\.y\)\)/, 'where the ray meets the bank, how high');
+    assert.match(src, /leaves = mix\(TREES \* \(0\.75 \+ 0\.7 \* tl\.y\), UNDER, clamp\(tl\.z \/ max\(tl\.x, 0\.001\), 0\.0, 1\.0\) \* LOW\.z\)/);
+  }
+});
+
 test('both renderers mirror the banks with the same treeline(), line for line', async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
   // WGSL's select(f, t, c) as GLSL's c ? t : f, then without types, brackets or spaces.
@@ -682,7 +719,7 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
       .map((l) => l.replace(/[()\s]/g, ''));
   };
   const gpu = body(await read('shaders.js'), 'fn treeline(');
-  const gl = body(await read('shaders-gl.js'), 'vec2 treeline(');
+  const gl = body(await read('shaders-gl.js'), 'vec3 treeline(');
   assert.ok(gpu.length >= 10, `${gpu.length} lines`);
   assert.deepEqual(gl, gpu);
   // And woodAt(), which reads the woods strip.
