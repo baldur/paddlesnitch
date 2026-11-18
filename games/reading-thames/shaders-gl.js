@@ -249,13 +249,16 @@ float spots(vec2 p, float dist) {
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
 const vec3 TREES = vec3(0.15, 0.18, 0.08);
-vec2 treeline(vec2 p, vec3 refl, vec2 woods) {
-  if (frame.banks.w < 0.5) return vec2(0.0);
+// The foot of a bank, mirrored where a ray meets it low (LOW.x to LOW.y m up, at most LOW.z of the way).
+const vec3 UNDER = vec3(0.06, 0.065, 0.045);
+const vec3 LOW = vec3(1.0, 4.0, 0.8);
+vec3 treeline(vec2 p, vec3 refl, vec2 woods) {
+  if (frame.banks.w < 0.5) return vec3(0.0);
   vec2 along = frame.river.zw;
   vec2 across = vec2(-along.y, along.x);
   float l = dot(p - frame.river.xy, across);
   float rl = dot(refl.xz, across);
-  vec2 mirrored = vec2(0.0);
+  vec3 mirrored = vec3(0.0);
   // Both banks, blended as the ray turns from one to the other (no seam where it's along the river).
   for (int k = 0; k < 2; k++) {
     float e = float(k) * 2.0 - 1.0;
@@ -269,7 +272,8 @@ vec2 treeline(vec2 p, vec3 refl, vec2 woods) {
     // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     float leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
     float cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.9, top * 1.6, reach * refl.y));
-    mirrored += weight * vec2(cover, leaf);
+    // (low: how much of it is the foot of the bank, up to LOW.y m over the water: shaded undergrowth and mud, not leaves.)
+    mirrored += weight * vec3(cover, leaf, cover * (1.0 - smoothstep(LOW.x, LOW.y, reach * refl.y)));
   }
   return mirrored;
 }
@@ -331,9 +335,11 @@ void main() {
   // The banks are mirrored off a calmer surface than the ripples: real river
   // water holds the tree line's reflection whole until a wash breaks it.
   vec3 still = reflect(-v, normalize(vec3(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
-  vec2 tl = treeline(p, still, vWoods);
+  vec3 tl = treeline(p, still, vWoods);
   vec4 fa = facades(vec3(p.x, 0.0, p.y), still);
-  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
+  // Near a bank the water mirrors the bank's dark foot, not its leaves (the footage: dark water up to a wooded bank; it read as a lawn).
+  vec3 leaves = mix(TREES * (0.75 + 0.7 * tl.y), UNDER, clamp(tl.z / max(tl.x, 0.001), 0.0, 1.0) * LOW.z);
+  vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), leaves, tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
   vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.45 * max(tl.x, fa.a)), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).

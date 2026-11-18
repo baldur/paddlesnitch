@@ -686,6 +686,75 @@ test('upstream of Mapledurham: the dead tree, the white river sign and the sand 
   assert.ok(reading.features.some((f) => f.style === 'beach' && Math.hypot(f.at[0] + 4711, f.at[1] + 2438) < 10), 'the beach at r1');
 });
 
+// Recording 0104 went a metre or two off the banks: where a row of the land
+// under the water joined one up the bank, the ground rose out of the water
+// metres before the shore, and the boat looked down on a lawn (2,176 m² of
+// ground over the water more than 1 m out from the shore; 717 m² now).
+// The land's triangles: a shade of mud, meadow, mown grass or the shaded bank (realLand's colours).
+const LAND = [[0.42, 0.36, 0.27], [0.5, 0.53, 0.24], [0.46, 0.55, 0.22], [0.28, 0.33, 0.14]];
+const isLand = (color) => LAND.some((b) => { const k = color[1] / b[1]; return k > 0.9 && k < 1.1 && color.every((x, i) => Math.abs(x - b[i] * k) < 0.004); });
+test('the ground leaves the water at the mapped shore, not part-way to the next row of the land', async () => {
+  const course = courseFromFile(await data('reading'));
+  const land = waterMap(course.scenery.water);
+  let area = 0;
+  for (const { p, color, n } of await world()) {
+    if (n[1] < 0.2 || !isLand(color)) continue;
+    const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+    if (cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1) continue;
+    area += Math.abs((p[1][0] - p[0][0]) * (p[2][2] - p[0][2]) - (p[2][0] - p[0][0]) * (p[1][2] - p[0][2])) / 2;
+  }
+  assert.ok(area < 800, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore`);
+});
+
+// Splitting a land quad at the shore must split the edge it shares with the
+// next quad the same way, or the bank opens a slit (tester review: a split
+// point placed at the ground's height off a neighbour's straight edge made 312
+// slits over 30 cm above the water; main has 58, from where the side channels'
+// finer land meets the rest).
+test('the land along the shore has no new slits where its quads are split', async () => {
+  const tris = (await world()).filter(({ color, n }) => n[1] >= 0.2 && isLand(color)).map(({ p }) => p);
+  const cell = 2;
+  const grid = new Map();
+  for (const t of tris) for (const q of t) { const k = `${Math.floor(q[0] / cell)},${Math.floor(q[2] / cell)}`; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(q); }
+  const slits = new Set();
+  for (const t of tris) for (let e = 0; e < 3; e++) {
+    const [a, b] = [t[e], t[(e + 1) % 3]];
+    const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+    const len2 = dx * dx + dz * dz;
+    if (len2 < 1e-4) continue;
+    for (let gx = Math.floor(Math.min(a[0], b[0]) / cell); gx <= Math.floor(Math.max(a[0], b[0]) / cell); gx++) {
+      for (let gz = Math.floor(Math.min(a[2], b[2]) / cell); gz <= Math.floor(Math.max(a[2], b[2]) / cell); gz++) {
+        for (const q of grid.get(`${gx},${gz}`) ?? []) {
+          const f = ((q[0] - a[0]) * dx + (q[2] - a[2]) * dz) / len2;
+          if (f <= 0.01 || f >= 0.99 || Math.abs((q[0] - a[0]) * dz - (q[2] - a[2]) * dx) / Math.sqrt(len2) > 0.01) continue;
+          if (q[1] > 0 && Math.abs(q[1] - (a[1] + (b[1] - a[1]) * f)) > 0.3) slits.add(q.map((x) => x.toFixed(2)).join());
+        }
+      }
+    }
+  }
+  assert.ok(slits.size <= 75, `${slits.size} slits over 30 cm above the water (main 58; 73 with the split)`);
+});
+
+// By a wooded bank the footage's water is dark (about 42 of 255 near the boat,
+// 0104's close passes); it mirrored the leaves and read as a lawn (54, and twice
+// as green). A ray that meets a bank low sees its dark foot, not its leaves; one
+// that meets it high (from mid-river) still sees the canopy (#969's reach kept).
+test("the water mirrors a bank's dark foot where a reflected ray meets it low, in both renderers", async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const [gpu, gl] = [await read('shaders.js'), await read('shaders-gl.js')];
+  const num = (src, re) => src.match(re)[1].split(',').map(Number);
+  const [under, low, trees] = [num(gpu, /const UNDER = vec3f\(([^)]*)\)/), num(gpu, /const LOW = vec3f\(([^)]*)\)/), num(gpu, /const TREES = vec3f\(([^)]*)\)/)];
+  assert.deepEqual(num(gl, /const vec3 UNDER = vec3\(([^)]*)\)/), under);
+  assert.deepEqual(num(gl, /const vec3 LOW = vec3\(([^)]*)\)/), low);
+  const lum = ([r, g, b]) => 0.3 * r + 0.59 * g + 0.11 * b;
+  assert.ok(lum(under) < 0.5 * lum(trees) && under[1] >= under[2], 'darker than the leaves, still a little green');
+  assert.ok(low[0] >= 0.5 && low[1] <= 6 && low[2] > 0.5 && low[2] <= 1, 'the bank\'s foot: the first metres over the water');
+  for (const src of [gpu, gl]) {
+    assert.match(src, /cover \* \(1\.0 - smoothstep\(LOW\.x, LOW\.y, reach \* refl\.y\)\)/, 'where the ray meets the bank, how high');
+    assert.match(src, /leaves = mix\(TREES \* \(0\.75 \+ 0\.7 \* tl\.y\), UNDER, clamp\(tl\.z \/ max\(tl\.x, 0\.001\), 0\.0, 1\.0\) \* LOW\.z\)/);
+  }
+});
+
 test('both renderers mirror the banks with the same treeline(), line for line', async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
   // WGSL's select(f, t, c) as GLSL's c ? t : f, then without types, brackets or spaces.
@@ -718,7 +787,7 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
       .map((l) => l.replace(/[()\s]/g, ''));
   };
   const gpu = body(await read('shaders.js'), 'fn treeline(');
-  const gl = body(await read('shaders-gl.js'), 'vec2 treeline(');
+  const gl = body(await read('shaders-gl.js'), 'vec3 treeline(');
   assert.ok(gpu.length >= 10, `${gpu.length} lines`);
   assert.deepEqual(gl, gpu);
   // And woodAt(), which reads the woods strip.

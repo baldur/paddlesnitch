@@ -757,7 +757,50 @@ function realLand(m, river, real, rand) {
       const point = (s, d) => {
         const [x, z] = at(s, side, d);
         const g = ground(river, x, z, d);
-        return { p: [x, g.y, z], d: g.d };
+        return { p: [x, g.y, z], d: g.d, r: d };
+      };
+      // A quad from one row to the next, split at the mapped shore where an
+      // edge crosses it (and 1.5 m in, where the measured bank tops out): drawn
+      // whole, a quad from a row under the water to one up the bank rose out
+      // of the water metres before the shore, and read as a lawn over the water
+      // from a boat by the bank (recording 0104). One colour for all of it, so
+      // no draws change.
+      const span = (u, v, prev, next, color) => {
+        const cuts = [u, v].map((s, i) => shoreCut(s, prev[i], next[i]));
+        if (!cuts[0] && !cuts[1]) return m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
+        // An edge that doesn't cross is cut at the same fractions as the one that
+        // does, along its straight line, so it stays on its neighbour's edge (the
+        // next quad along shares it whole): no slit in the bank.
+        const i0 = cuts[0] ? 0 : 1;
+        const ts = cuts[i0].map((r) => (r - prev[i0].r) / (next[i0].r - prev[i0].r));
+        const along = (i, t) => ({ p: prev[i].p.map((c, k) => c + (next[i].p[k] - c) * t) });
+        const rows = [prev];
+        ts.forEach((t, j) => rows.push([0, 1].map((i) => (cuts[i] ? point(i ? v : u, cuts[i][j]) : along(i, t)))));
+        rows.push(next);
+        // (A part with no length on either edge, where a short edge's cuts clamp together, is left out.)
+        const same = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 0.01;
+        for (let k = 1; k < rows.length; k++) {
+          if (same(rows[k - 1][0].p, rows[k][0].p) && same(rows[k - 1][1].p, rows[k][1].p)) continue;
+          m.quad(rows[k - 1][0].p, rows[k - 1][1].p, rows[k][1].p, rows[k][0].p, color);
+        }
+      };
+      // Where an edge from p to q (rows across at s) crosses the mapped shore:
+      // the shore and 1.5 m up the bank from it (where `measured` has the bank
+      // reach its top: a vertex there keeps the step), in order from p; null if
+      // it doesn't. The same edge is cut the same way from the quads either side.
+      const shoreCut = (s, p, q) => {
+        if ((p.d < 0) === (q.d < 0)) return null;
+        let [lo, hi] = [p.r, q.r];
+        for (let i = 0; i < 12; i++) {
+          const mid = (lo + hi) / 2;
+          const [x, z] = at(s, side, mid);
+          if ((ground(river, x, z, mid).d < 0) === (p.d < 0)) lo = mid; else hi = mid;
+        }
+        const shore = (lo + hi) / 2;
+        const inside = (r) => Math.min(Math.max(r, Math.min(p.r, q.r) + 0.05), Math.max(p.r, q.r) - 0.05);
+        const dir = Math.sign(q.r - p.r);
+        const top = inside(p.d < 0 ? shore + 1.5 * dir : shore - 1.5 * dir);
+        return p.d < 0 ? [inside(shore + 0.05 * dir), top] : [top, inside(shore - 0.05 * dir)];
       };
       const rows = fineRows(n);
       if (rows) {
@@ -775,7 +818,7 @@ function realLand(m, river, real, rand) {
             const next = [point(u, rows[k]), point(v, rows[k])];
             const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
             const green = near < 7 ? SHADED : COLORS.meadow;
-            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? edgeColor(prev, next) : shade(green, fine, 0.08));
+            span(u, v, prev, next, near < 1 ? edgeColor(prev, next) : shade(green, fine, 0.08));
             prev = next;
           }
         }
@@ -787,7 +830,7 @@ function realLand(m, river, real, rand) {
         const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
         const green = near < 7 && (cover === 'park' || cover === 'gardens') ? COLORS.mown : near < 7 ? SHADED : COLORS.meadow;
         const color = near < 1 ? edgeColor(prev, next) : shade(green, rand, 0.08);
-        m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
+        span(a, b, prev, next, color);
         prev = next;
       }
     }
