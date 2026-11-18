@@ -543,7 +543,8 @@ test('the glass house as the footage and lidar show it: dark and glazed, a glass
   assert.ok([GLASS.clad, GLASS.upper].every((c) => Math.max(...c) < 0.3), 'both dark');
   assert.ok(clad.top < upper.top, 'one over the other');
   assert.ok((await landmarkParts('glass-house', GLASS.rail)).top > roof.top, 'a glass rail round the roof');
-  assert.ok(clad.f.edge - Math.max(...clad.zs) > 8, `set back ${(clad.f.edge - Math.max(...clad.zs)).toFixed(1)} m from the water`);
+  assert.ok(Math.max(...upper.zs) < Math.max(...clad.zs) - 1, 'the upper floor set back over the balcony');
+  assert.ok(clad.f.edge - Math.max(...clad.zs) > 14, `set back ${(clad.f.edge - Math.max(...clad.zs)).toFixed(1)} m from the water`);
   assert.ok((await landmarkParts('glass-house', GLASS.quay)).pts.length && Math.min(...GLASS.quay) > 0.6, 'the pale quay');
 });
 
@@ -559,10 +560,11 @@ test('the glass house stands along its own footprint, turned to the river, at th
   const long = Math.atan2(b[1] - a[1], b[0] - a[0]);
   const clad = await landmarkParts('glass-house', GLASS.clad);
   const angle = (u, v) => { const d = Math.abs(u - v) % Math.PI; return (Math.min(d, Math.PI - d) * 180) / Math.PI; };
+  // (A premise, from the data: the model's own turn is tested by the spans below.)
   const turned = angle(long, Math.atan2(clad.f.right[1], clad.f.right[0]));
   assert.ok(turned > 25, `the footprint is turned ${turned.toFixed(0)}° to the river`);
-  // Its ground floor, seen from above: as long as the lidar's house along the footprint's long side, no deeper than it across.
-  const pts = (await world()).filter(({ color, p }) => color.every((v, i) => Math.abs(v - GLASS.clad[i]) < 1e-3) && Math.hypot(p[0][0] - clad.f.origin[0], p[0][2] - clad.f.origin[2]) < 40)
+  // Its walls, seen from above: as long as the lidar's house along the footprint's long side, no deeper than it across.
+  const pts = (await world()).filter(({ color, p }) => [GLASS.clad, GLASS.render].some((c) => color.every((v, i) => Math.abs(v - c[i]) < 1e-3)) && Math.hypot(p[0][0] - clad.f.origin[0], p[0][2] - clad.f.origin[2]) < 40)
     .flatMap(({ p }) => p.map((q) => [q[0], q[2]]));
   const span = (f) => Math.max(...pts.map(f)) - Math.min(...pts.map(f));
   const along = span(([x, z]) => x * Math.cos(long) + z * Math.sin(long));
@@ -575,6 +577,11 @@ test('the glass house stands along its own footprint, turned to the river, at th
   const render = await landmarkParts('glass-house', GLASS.render);
   assert.ok(Math.abs(gable.top - ground - H.gable) < 0.3, `the gable's peak ${(gable.top - ground).toFixed(1)} m up (lidar: ${H.gable} m)`);
   assert.ok(Math.abs(render.top - ground - H.chimney) < 0.3, `the white chimney ${(render.top - ground).toFixed(1)} m up`);
+  // The flat roofs: the upstream one under its glass rail, the one at the water's end.
+  const roof = await landmarkParts('glass-house', GLASS.fascia);
+  const rail = await landmarkParts('glass-house', GLASS.rail);
+  assert.ok(Math.abs(roof.top - ground - H.downstream) < 0.3, `the roof by the water ${(roof.top - ground).toFixed(1)} m up (lidar: ${H.downstream} m)`);
+  assert.ok(Math.abs(rail.top - ground - (H.upstream + 1.2)) < 0.3, `the upstream roof's rail ${(rail.top - ground).toFixed(1)} m up, over a roof at ${H.upstream} m`);
   const mean = (v) => v.reduce((s, x) => s + x, 0) / v.length;
   assert.ok(mean(render.zs) > mean(clad.zs), 'the white end is the end nearer the water');
 });

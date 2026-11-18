@@ -2459,24 +2459,24 @@ function glassHouse(m, course, f) {
   const [x0, x1] = [-H.length / 2, H.length / 2];
   const [hb, hf] = [-H.depth / 2, H.depth / 2]; // (and the balcony 2 m out from its front)
   const [w1, e0] = [x0 + 10, x1 - 4]; // the upstream part, the gable between, the downstream part
-  // The ground floor: glass all round in a dark frame.
-  h.box(m, [x0, x1], [-1, 3.1], [hb, hf], C.clad);
+  // The ground floor: glass all round in a dark frame (up to the white end wall: sharing its faces, they'd flicker).
+  h.box(m, [x0, x1 - 0.5], [-1, 3.1], [hb, hf], C.clad);
   for (let x = x0 + 0.4; x < e0 - 2; x += 2.4) h.box(m, [x, x + 2.2], [0.25, 2.9], [hf, hf + 0.06], C.glass);
   // The balcony round the first floor: a dark slab over the terrace, glass rails on it.
   h.box(m, [x0 - 0.3, e0], [3.1, 3.4], [hb - 0.3, hf + 2], C.fascia);
   h.box(m, [x0 - 0.3, e0], [3.4, 4.4], [hf + 1.92, hf + 2], C.rail);
   h.box(m, [x0 - 0.3, x0 - 0.22], [3.4, 4.4], [hb, hf + 2], C.rail);
   // The first floor, set back from the balcony: glass in a dark frame.
-  h.box(m, [x0 + 0.6, e0], [3.4, 6.2], [hb, hf - 0.5], C.upper);
+  h.box(m, [x0 + 0.6, e0], [3.4, H.upstream], [hb, hf - 0.5], C.upper);
   for (let x = x0 + 1; x < e0 - 2; x += 2.4) h.box(m, [x, x + 2.2], [3.6, 6], [hf - 0.5, hf - 0.44], C.glass);
   // Upstream, a flat roof with a dark edge and a glass rail round it.
-  h.box(m, [x0 + 0.4, w1], [6.2, 6.5], [hb - 0.2, hf - 0.3], C.fascia);
-  h.box(m, [x0 + 0.4, w1], [6.5, 7.4], [hf - 0.38, hf - 0.3], C.rail);
-  h.box(m, [x0 + 0.4, x0 + 0.48], [6.5, 7.4], [hb - 0.2, hf - 0.3], C.rail);
+  h.box(m, [x0 + 0.4, w1], [H.upstream, H.upstream + 0.3], [hb - 0.2, hf - 0.3], C.fascia);
+  h.box(m, [x0 + 0.4, w1], [H.upstream + 0.3, H.upstream + 1.2], [hf - 0.38, hf - 0.3], C.rail);
+  h.box(m, [x0 + 0.4, x0 + 0.48], [H.upstream + 0.3, H.upstream + 1.2], [hb - 0.2, hf - 0.3], C.rail);
   // The gable: a glass storey under a pitched roof, its ridge running back from the front, glazed to the peak.
   const top = H.upstream + 1.2;
-  h.box(m, [w1, e0], [6.2, top], [hb + 1, hf - 0.5], C.upper);
-  h.box(m, [w1 + 0.4, e0 - 0.4], [6.4, top - 0.2], [hf - 0.5, hf - 0.44], C.glass);
+  h.box(m, [w1, e0], [H.upstream, top], [hb + 1, hf - 0.5], C.upper);
+  h.box(m, [w1 + 0.4, e0 - 0.4], [H.upstream + 0.2, top - 0.2], [hf - 0.5, hf - 0.44], C.glass);
   const mid = (w1 + e0) / 2;
   for (const [a, b] of [[w1 - 0.4, mid], [e0 + 0.4, mid]]) {
     const slope = [h.at(a, top, hb + 0.6), h.at(a, top, hf), h.at(b, H.gable, hf), h.at(b, H.gable, hb + 0.6)];
