@@ -465,10 +465,11 @@ describe('listing courses and trials', () => {
   it('a private course appears in the listing for its owner', () => {
     expect(isListedForViewer(makeCourse('private'), owner)).toBe(true)
   })
-  it('a group-scoped course is listed only for members of its group', () => {
+  it('a group-scoped course is listed for members of its group, not of another group', () => {
     const groupId = 'group-1'
     const course = makeCourseGroup(groupId)
     expect(isListedForViewer(course, other, new Set([groupId]))).toBe(true)
+    expect(isListedForViewer(course, other, new Set(['some-other-group']))).toBe(false)
     expect(isListedForViewer(course, other, new Set())).toBe(false)
     expect(isListedForViewer(course, null)).toBe(false)
   })
