@@ -2688,20 +2688,23 @@ function marina(m, course, f) {
 // it. Drawn 14-22 m tall and narrow, set 6 m back from the water, they stood
 // like bells behind the bank.
 export const WILLOW = { height: 12, spread: 0.65, flare: 1.25, over: 3 };
+// How far ahead the water starts, along a line `wet(d)` says is water or not
+// at d metres: the first wet half metre ahead, or, from a point already in the
+// water, minus how far back the water goes; `max` either way.
+export function shoreAhead(wet, max = 20) {
+  let d = 0;
+  if (wet(0)) while (d > -max && wet(d - 0.5)) d -= 0.5;
+  else while (d < max && !wet(d)) d += 0.5;
+  return d;
+}
 function willow(m, course, f) {
   const [x, , z] = f.origin;
   const measured = (course.lidar?.trees ?? []).filter(([tx, tz]) => Math.hypot(tx - x, tz - z) < 10).map(([, , h]) => h);
   const h = measured.length ? Math.max(...measured) : WILLOW.height;
   const r = h * WILLOW.spread * WILLOW.flare; // (its curtain's hem, out from the trunk)
-  // From its point straight out to the water (on a made-up river, 6 m in, as before).
-  let shore = 6;
-  if (course.land?.rings) {
-    const wet = (d) => { const q = f.at(0, 0, d); return course.land.inside(q[0], q[2]); };
-    shore = 0;
-    if (wet(0)) while (shore > -20 && wet(shore - 0.5)) shore -= 0.5;
-    else while (shore < 20 && !wet(shore)) shore += 0.5;
-  }
-  const back = Math.min(-1.5, shore - (r - WILLOW.over));
+  // From its point straight out to the water (with no mapped water, 6 m in, as before).
+  const shore = course.land?.rings ? shoreAhead((d) => { const q = f.at(0, 0, d); return course.land.inside(q[0], q[2]); }) : 6;
+  const back = Math.min(-0.5, shore - (r - WILLOW.over)); // (its trunk on the bank)
   willowTree(m, ...f.at(0, Math.max(0.3, f.ground(0, back)), back), f.rand, 1.4, h, h * WILLOW.spread, (px, pz) => Math.max(0, ground(course, px, pz).y));
 }
 
