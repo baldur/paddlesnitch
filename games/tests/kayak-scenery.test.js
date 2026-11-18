@@ -1214,9 +1214,10 @@ test('the water at the glass house mirrors the weeping willow in front of it, no
   const slots = nearFacades(m, o[0], o[2]);
   const toward = unit([willow.at[0] - o[0], 0, willow.at[1] - o[2]]);
   const colors = [];
-  for (let up = 0.05; up <= 0.35; up += 0.05) colors.push(seen(o, unit([toward[0], up, toward[2]]), slots, m).color);
+  // (Up to its top: it's 11 m tall, as the lidar measured it.)
+  for (let up = 0.05; up <= 0.26; up += 0.05) colors.push(seen(o, unit([toward[0], up, toward[2]]), slots, m).color);
   const green = colors.filter(([r, g, b, a]) => a > 0.5 && g > r && g > b * 1.4).length;
-  assert.ok(green >= 4, `leaves in ${green} of ${colors.length} rays: ${colors.map((c) => c.map((x) => x.toFixed(2)).join(' ')).join(' | ')}`);
+  assert.ok(green >= 3, `leaves in ${green} of ${colors.length} rays: ${colors.map((c) => c.map((x) => x.toFixed(2)).join(' ')).join(' | ')}`);
   // Its picture stands at the willow (its trunk is 6 m in from its point), not at the house's
   // walls 15 m behind, where its reflection slid off the tree as the view turned (design review).
   const pic = m.facades.find((f) => f.name === 'glass-house willow');
@@ -1227,6 +1228,35 @@ test('the water at the glass house mirrors the weeping willow in front of it, no
   assert.ok(depth(m.facades.find((f) => f.name === 'glass-house').p) < trunk - 6, "the house's picture is behind it");
   // Only trees: no landmark took in a quay, a jetty or a boat shed.
   for (const f of m.facades) if (/ /.test(f.name) && !/ (side|underside|pier)$/.test(f.name)) assert.match(f.name, / (willow|dead-tree)$/);
+});
+
+// The willows the footage points out, as the lidar measures them (2026-11-18):
+// drawn 14-22 m tall and narrow, set 6 m back, they stood like bells behind the
+// bank (their tops 7.2 m off the lidar's, the median of nine; 0.5 m now).
+test('a pointed-out willow is as tall as the measured tree at it, wider than tall, its curtain over the water', async () => {
+  const { WILLOW } = await import('../reading-thames/world.js');
+  const raw = await data('reading');
+  const course = courseFromFile(raw);
+  const land = waterMap(course.scenery.water);
+  const { LIDAR } = await import('../reading-thames/lidar.js');
+  const isWillow = ([r, g, b]) => g > 0.2 && Math.abs(r / g - 0.965) < 0.06 && Math.abs(b / g - 0.35) < 0.05;
+  const tris = (await world()).filter(({ color }) => isWillow(color));
+  // The glass house's, and one with no measured tree by it (Caversham Court).
+  for (const [at, want] of [[[-2566.6, -792.4], null], [[-1617.8, -762.6], WILLOW.height]]) {
+    const f = raw.features.find((x) => x.style === 'willow' && Math.hypot(x.at[0] - at[0], x.at[1] - at[1]) < 0.5);
+    assert.ok(f, `a willow at ${at}`);
+    const measured = LIDAR.trees.filter(([x, z]) => Math.hypot(x - at[0], z - at[1]) < 10).map(([, , h]) => h);
+    const h = want ?? Math.max(...measured);
+    const pts = tris.flatMap(({ p }) => p).filter((q) => Math.hypot(q[0] - at[0], q[2] - at[1]) < 16);
+    const [cx, cz] = [0, 2].map((i) => pts.reduce((s, q) => s + q[i], 0) / pts.length);
+    const ground = groundAt(course, cx, cz);
+    const top = Math.max(...pts.map((q) => q[1])) - ground;
+    const r = Math.max(...pts.map((q) => Math.hypot(q[0] - cx, q[2] - cz)));
+    assert.ok(Math.abs(top - h) < 0.3, `${top.toFixed(1)} m tall (measured ${h.toFixed(1)} m)`);
+    assert.ok(Math.abs(r - h * WILLOW.spread) < 0.4 && 2 * r > top, `${r.toFixed(1)} m out from its trunk`);
+    const over = Math.max(...pts.filter((q) => land.inside(q[0], q[2])).map((q) => land.shore(q[0], q[2])), 0);
+    assert.ok(Math.abs(over - WILLOW.over) < 1, `its curtain ${over.toFixed(1)} m out over the water`);
+  }
 });
 
 test("a landmark takes in only the trees before it: not one behind it, off to the side or far out, and not a quay", async () => {
