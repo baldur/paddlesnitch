@@ -654,17 +654,49 @@ test('upstream of Mapledurham: the dead tree, the white river sign and the sand 
 // under the water joined one up the bank, the ground rose out of the water
 // metres before the shore, and the boat looked down on a lawn (2,176 m² of
 // ground over the water more than 1 m out from the shore; 717 m² now).
+// The land's triangles: a shade of mud, meadow, mown grass or the shaded bank (realLand's colours).
+const LAND = [[0.42, 0.36, 0.27], [0.5, 0.53, 0.24], [0.46, 0.55, 0.22], [0.28, 0.33, 0.14]];
+const isLand = (color) => LAND.some((b) => { const k = color[1] / b[1]; return k > 0.9 && k < 1.1 && color.every((x, i) => Math.abs(x - b[i] * k) < 0.004); });
 test('the ground leaves the water at the mapped shore, not part-way to the next row of the land', async () => {
   const course = courseFromFile(await data('reading'));
   const land = waterMap(course.scenery.water);
-  const onGround = (q) => Math.abs(q[1] - groundAt(course, q[0], q[2])) < 0.02 || (q[1] < 0 && groundAt(course, q[0], q[2]) === 0);
   let area = 0;
-  for (const { p } of await world()) {
+  for (const { p, color, n } of await world()) {
+    if (n[1] < 0.2 || !isLand(color)) continue;
     const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
-    if (cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1 || !p.every(onGround)) continue;
+    if (cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1) continue;
     area += Math.abs((p[1][0] - p[0][0]) * (p[2][2] - p[0][2]) - (p[2][0] - p[0][0]) * (p[1][2] - p[0][2])) / 2;
   }
-  assert.ok(area < 1000, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore`);
+  assert.ok(area < 800, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore`);
+});
+
+// Splitting a land quad at the shore must split the edge it shares with the
+// next quad the same way, or the bank opens a slit (tester review: a split
+// point placed at the ground's height off a neighbour's straight edge made 312
+// slits over 30 cm above the water; main has 58, from where the side channels'
+// finer land meets the rest).
+test('the land along the shore has no new slits where its quads are split', async () => {
+  const tris = (await world()).filter(({ color, n }) => n[1] >= 0.2 && isLand(color)).map(({ p }) => p);
+  const cell = 2;
+  const grid = new Map();
+  for (const t of tris) for (const q of t) { const k = `${Math.floor(q[0] / cell)},${Math.floor(q[2] / cell)}`; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(q); }
+  const slits = new Set();
+  for (const t of tris) for (let e = 0; e < 3; e++) {
+    const [a, b] = [t[e], t[(e + 1) % 3]];
+    const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+    const len2 = dx * dx + dz * dz;
+    if (len2 < 1e-4) continue;
+    for (let gx = Math.floor(Math.min(a[0], b[0]) / cell); gx <= Math.floor(Math.max(a[0], b[0]) / cell); gx++) {
+      for (let gz = Math.floor(Math.min(a[2], b[2]) / cell); gz <= Math.floor(Math.max(a[2], b[2]) / cell); gz++) {
+        for (const q of grid.get(`${gx},${gz}`) ?? []) {
+          const f = ((q[0] - a[0]) * dx + (q[2] - a[2]) * dz) / len2;
+          if (f <= 0.01 || f >= 0.99 || Math.abs((q[0] - a[0]) * dz - (q[2] - a[2]) * dx) / Math.sqrt(len2) > 0.01) continue;
+          if (q[1] > 0 && Math.abs(q[1] - (a[1] + (b[1] - a[1]) * f)) > 0.3) slits.add(q.map((x) => x.toFixed(2)).join());
+        }
+      }
+    }
+  }
+  assert.ok(slits.size <= 75, `${slits.size} slits over 30 cm above the water (main 58; 73 with the split)`);
 });
 
 // By a wooded bank the footage's water is dark (about 42 of 255 near the boat,

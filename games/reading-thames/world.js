@@ -768,15 +768,26 @@ function realLand(m, river, real, rand) {
       const span = (u, v, prev, next, color) => {
         const cuts = [u, v].map((s, i) => shoreCut(s, prev[i], next[i]));
         if (!cuts[0] && !cuts[1]) return m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
-        // An edge that doesn't cross is cut at the same fractions as the one that does.
-        const ts = (cuts[0] ? cuts[0].map((r) => (r - prev[0].r) / (next[0].r - prev[0].r)) : cuts[1].map((r) => (r - prev[1].r) / (next[1].r - prev[1].r)));
+        // An edge that doesn't cross is cut at the same fractions as the one that
+        // does, along its straight line, so it stays on its neighbour's edge (the
+        // next quad along shares it whole): no slit in the bank.
+        const i0 = cuts[0] ? 0 : 1;
+        const ts = cuts[i0].map((r) => (r - prev[i0].r) / (next[i0].r - prev[i0].r));
+        const along = (i, t) => ({ p: prev[i].p.map((c, k) => c + (next[i].p[k] - c) * t) });
         const rows = [prev];
-        ts.forEach((t, j) => rows.push([0, 1].map((i) => point(i ? v : u, cuts[i] ? cuts[i][j] : prev[i].r + (next[i].r - prev[i].r) * t))));
+        ts.forEach((t, j) => rows.push([0, 1].map((i) => (cuts[i] ? point(i ? v : u, cuts[i][j]) : along(i, t)))));
         rows.push(next);
-        for (let k = 1; k < rows.length; k++) m.quad(rows[k - 1][0].p, rows[k - 1][1].p, rows[k][1].p, rows[k][0].p, color);
+        // (A part with no length on either edge, where a short edge's cuts clamp together, is left out.)
+        const same = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 0.01;
+        for (let k = 1; k < rows.length; k++) {
+          if (same(rows[k - 1][0].p, rows[k][0].p) && same(rows[k - 1][1].p, rows[k][1].p)) continue;
+          m.quad(rows[k - 1][0].p, rows[k - 1][1].p, rows[k][1].p, rows[k][0].p, color);
+        }
       };
       // Where an edge from p to q (rows across at s) crosses the mapped shore:
-      // the shore and 1.5 m up the bank from it, in order from p; null if it doesn't.
+      // the shore and 1.5 m up the bank from it (where `measured` has the bank
+      // reach its top: a vertex there keeps the step), in order from p; null if
+      // it doesn't. The same edge is cut the same way from the quads either side.
       const shoreCut = (s, p, q) => {
         if ((p.d < 0) === (q.d < 0)) return null;
         let [lo, hi] = [p.r, q.r];
