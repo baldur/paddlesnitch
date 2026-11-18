@@ -141,6 +141,19 @@ The games serve on 8000/8001 (`pnpm games`, `pnpm games:site`).
 running, even if another worktree started it. If sign-in behaves oddly, check
 which folder owns it: `lsof -iTCP:9229 -sTCP:LISTEN`, then `lsof -p <pid> | grep cwd`.
 
+## Cleaning up worktrees
+
+Every task gets a worktree, so they pile up. `bash scripts/agents/clean-worktrees.sh`
+lists each one as REMOVE or KEEP with the reason, and changes nothing;
+`--apply` removes the REMOVE ones and their local branches. It removes a
+worktree only when its work is on `main` (its commit is on `origin/main`, or its
+branch's PR was merged into `main` with nothing committed after), it has
+nothing uncommitted, it is more than 24 hours old, no running process is in it,
+it isn't a role's home folder, and it isn't locked. Gitignored files
+(`.env.local`, `.local-data/`, build output) are not checked and go with the
+folder, so a folder that must survive while nothing is running in it (a server
+you restart, a tool's data) needs `git worktree lock --reason "<why>" <path>`.
+
 ## Changing this setup
 
 Edit `.claude/agents/<role>.md` (the brief; its `description` line is what
