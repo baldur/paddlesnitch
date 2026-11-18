@@ -757,7 +757,50 @@ function realLand(m, river, real, rand) {
       const point = (s, d) => {
         const [x, z] = at(s, side, d);
         const g = ground(river, x, z, d);
-        return { p: [x, g.y, z], d: g.d };
+        return { p: [x, g.y, z], d: g.d, r: d };
+      };
+      // A quad from one row to the next, split at the mapped shore where an
+      // edge crosses it (and 1.5 m in, where the measured bank tops out): drawn
+      // whole, a quad from a row under the water to one up the bank rose out
+      // of the water metres before the shore, and read as a lawn over the water
+      // from a boat by the bank (recording 0104). One colour for all of it, so
+      // no draws change.
+      const span = (u, v, prev, next, color) => {
+        const cuts = [u, v].map((s, i) => shoreCut(s, prev[i], next[i]));
+        if (!cuts[0] && !cuts[1]) return m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
+        // An edge that doesn't cross is cut at the same fractions as the one that
+        // does, along its straight line, so it stays on its neighbour's edge (the
+        // next quad along shares it whole): no slit in the bank.
+        const i0 = cuts[0] ? 0 : 1;
+        const ts = cuts[i0].map((r) => (r - prev[i0].r) / (next[i0].r - prev[i0].r));
+        const along = (i, t) => ({ p: prev[i].p.map((c, k) => c + (next[i].p[k] - c) * t) });
+        const rows = [prev];
+        ts.forEach((t, j) => rows.push([0, 1].map((i) => (cuts[i] ? point(i ? v : u, cuts[i][j]) : along(i, t)))));
+        rows.push(next);
+        // (A part with no length on either edge, where a short edge's cuts clamp together, is left out.)
+        const same = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 0.01;
+        for (let k = 1; k < rows.length; k++) {
+          if (same(rows[k - 1][0].p, rows[k][0].p) && same(rows[k - 1][1].p, rows[k][1].p)) continue;
+          m.quad(rows[k - 1][0].p, rows[k - 1][1].p, rows[k][1].p, rows[k][0].p, color);
+        }
+      };
+      // Where an edge from p to q (rows across at s) crosses the mapped shore:
+      // the shore and 1.5 m up the bank from it (where `measured` has the bank
+      // reach its top: a vertex there keeps the step), in order from p; null if
+      // it doesn't. The same edge is cut the same way from the quads either side.
+      const shoreCut = (s, p, q) => {
+        if ((p.d < 0) === (q.d < 0)) return null;
+        let [lo, hi] = [p.r, q.r];
+        for (let i = 0; i < 12; i++) {
+          const mid = (lo + hi) / 2;
+          const [x, z] = at(s, side, mid);
+          if ((ground(river, x, z, mid).d < 0) === (p.d < 0)) lo = mid; else hi = mid;
+        }
+        const shore = (lo + hi) / 2;
+        const inside = (r) => Math.min(Math.max(r, Math.min(p.r, q.r) + 0.05), Math.max(p.r, q.r) - 0.05);
+        const dir = Math.sign(q.r - p.r);
+        const top = inside(p.d < 0 ? shore + 1.5 * dir : shore - 1.5 * dir);
+        return p.d < 0 ? [inside(shore + 0.05 * dir), top] : [top, inside(shore - 0.05 * dir)];
       };
       const rows = fineRows(n);
       if (rows) {
@@ -775,7 +818,7 @@ function realLand(m, river, real, rand) {
             const next = [point(u, rows[k]), point(v, rows[k])];
             const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
             const green = near < 7 ? SHADED : COLORS.meadow;
-            m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, near < 1 ? edgeColor(prev, next) : shade(green, fine, 0.08));
+            span(u, v, prev, next, near < 1 ? edgeColor(prev, next) : shade(green, fine, 0.08));
             prev = next;
           }
         }
@@ -787,7 +830,7 @@ function realLand(m, river, real, rand) {
         const near = Math.min(prev[0].d, prev[1].d, next[0].d, next[1].d);
         const green = near < 7 && (cover === 'park' || cover === 'gardens') ? COLORS.mown : near < 7 ? SHADED : COLORS.meadow;
         const color = near < 1 ? edgeColor(prev, next) : shade(green, rand, 0.08);
-        m.quad(prev[0].p, prev[1].p, next[1].p, next[0].p, color);
+        span(a, b, prev, next, color);
         prev = next;
       }
     }
@@ -1052,23 +1095,44 @@ function inside(poly, x, z) {
 
 // A weeping willow: a domed crown, and a curtain of leaves falling from it
 // almost straight down to the water.
-function willowTree(m, x, y, z, rand, size = 1) {
-  const h = (10 + rand() * 6) * size;
-  m.cylinder([x, y - 0.3, z], 0.45, h * 0.6, 5, COLORS.trunk);
+// `spread`: a measured willow (a feature): `height` tall, its crown a dome out
+// to `spread` from the trunk (the lidar's crowns are about two thirds as wide
+// each way as they're tall), its curtain flaring to `WILLOW.flare` times that,
+// its hem just over whatever is under it (`hem(x, z)`: the water or the
+// bank). The same draws either way.
+function willowTree(m, x, y, z, rand, size = 1, height = null, spread = null, hem = null) {
+  const drawn = (10 + rand() * 6) * size;
+  const h = height ?? drawn;
+  m.cylinder([x, y - 0.3, z], 0.45, h * (spread ? 0.5 : 0.6), 5, COLORS.trunk);
   const color = shade(COLORS.willow, rand, 0.1);
-  const top = y + h * 0.74;
-  m.sphere([x, top, z], h * 0.3, color, 3, 8);
+  const top = y + h * (spread ? 0.72 : 0.74);
+  if (spread) {
+    // The crown: a low dome from its rim up to the top.
+    const k = 14;
+    for (let i = 0; i < k; i++) {
+      const [a0, a1] = [(i / k) * Math.PI * 2, ((i + 1) / k) * Math.PI * 2];
+      const rim = (a) => [x + Math.cos(a) * spread, top, z + Math.sin(a) * spread];
+      const mid = (a) => [x + Math.cos(a) * spread * 0.62, y + h * 0.94, z + Math.sin(a) * spread * 0.62];
+      const out = [Math.cos((a0 + a1) / 2), 0.6, Math.sin((a0 + a1) / 2)];
+      m.triFacing(rim(a0), rim(a1), mid(a1), color, out);
+      m.triFacing(rim(a0), mid(a1), mid(a0), color, out);
+      m.triFacing(mid(a0), mid(a1), [x, y + h, z], color.map((v) => v * 1.04), [out[0] * 0.3, 1, out[2] * 0.3]);
+    }
+  } else m.sphere([x, top, z], h * 0.3, color, 3, 8);
   // The curtain: fronds hanging from the crown's rim, spreading a little as
   // they fall, ragged where they stop just above the water.
   const n = 14;
-  const rt = h * 0.29;
-  const rb = h * 0.42;
-  const yt = top - h * 0.04;
+  // (A measured one's starts just inside and above its crown's rim: a gap there showed as a bright ring.)
+  const rt = spread ? spread * 0.96 : h * 0.29;
+  const rb = spread ? spread * WILLOW.flare : h * 0.42;
+  const yt = spread ? top + 0.1 : top - h * 0.04;
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2;
     const a1 = ((i + 1) / n) * Math.PI * 2;
-    const yb = y + 0.3 + rand() * 1.8;
+    const drop = rand();
     const p = (a, r, py) => [x + Math.cos(a) * r, py, z + Math.sin(a) * r];
+    const under = hem ? hem(...[x + Math.cos(a1) * rb, z + Math.sin(a1) * rb]) : y;
+    const yb = hem ? under + 0.2 + drop * 0.6 : y + 0.3 + drop * 1.8;
     const out = [Math.cos((a0 + a1) / 2), -0.2, Math.sin((a0 + a1) / 2)];
     const c = color.map((v) => v * (i % 2 ? 0.92 : 0.8));
     m.triFacing(p(a0, rt, yt), p(a1, rt, yt), p(a1, rb, yb), c, out);
@@ -1280,7 +1344,7 @@ export function landmarkFrame(course, style) {
 }
 // The one place a landmark's frame is made, for building it and for landmarkFrame.
 function landmarkFacing(river, style, ring, cx, cz, g) {
-  return facing(river, ring, cx, cz, g, BANKED.has(style));
+  return { ...facing(river, ring, cx, cz, g, BANKED.has(style)), ring };
 }
 const BANKED = new Set(['rowing-club', 'canoe-club', 'boatyard']); // landmarks squared to their bank (see facing)
 
@@ -2411,33 +2475,91 @@ function clapboardFront(m, course, f, height) {
   for (const z of [f.edge, f.edge + 3.8]) for (const e of [-1, 1]) f.box(m, [jx + e * 0.9 - 0.1, jx + e * 0.9 + 0.1], [sea - 0.8, sea + 0.9], [z - 0.1, z + 0.1], COLORS.timber);
 }
 
-// A modern flat-roofed house (owner's point, below the marina), as the footage
-// and the lidar show it: set back 17 m behind a big weeping willow (the
-// `willow` feature) and a lawn, low and dark. A ground floor clad in black
-// boards with big dark windows, an upper floor set back over it, black too,
-// with a glass band (the lidar: 6-7 m), a flat roof with a dark edge and a
-// glass rail round it; a white parasol on the lawn, a big round tree upstream,
-// and at the water a long pale concrete quay under timber plank coping.
+// A modern house (owner's point, below the marina), as the footage (recording
+// 0104 went past it a metre off the bank) and the lidar show it, behind a big
+// weeping willow (the `willow` feature) and a lawn. It stands along its own
+// footprint, turned some 40° to the river, not square to it: the lidar has it
+// 26 m by 10 m (and a balcony), 6 m tall at its upstream end, 10 m at the glass
+// gable and 7 m at the end nearest the water. Glass all round the ground
+// floor in a dark frame, a balcony with glass rails round the first floor, a
+// glass rail round the flat roof upstream, the gable glazed to its peak, and
+// at the end nearest the water a white rendered chimney wall, nearly as tall
+// as the gable (design review: a whole white end read wrong from upstream). A white
+// parasol on the lawn, a big round tree upstream, and at the water a long pale
+// concrete quay under timber plank coping.
 export const GLASS = {
-  clad: [0.15, 0.15, 0.16], seam: [0.1, 0.1, 0.11], glass: [0.2, 0.25, 0.29], upper: [0.19, 0.19, 0.2], fascia: [0.24, 0.24, 0.25],
-  rail: [0.62, 0.7, 0.74], quay: [0.74, 0.72, 0.67], cap: [0.6, 0.52, 0.42], parasol: [0.93, 0.93, 0.9],
+  clad: [0.15, 0.15, 0.16], seam: [0.1, 0.1, 0.11], glass: [0.38, 0.45, 0.51], upper: [0.19, 0.19, 0.2], fascia: [0.24, 0.24, 0.25],
+  rail: [0.5, 0.57, 0.62], quay: [0.74, 0.72, 0.67], cap: [0.6, 0.52, 0.42], parasol: [0.93, 0.93, 0.9], render: [0.9, 0.9, 0.87],
 };
+// Its size and heights over its ground, from the lidar (dsm less dtm, 2 m grid).
+// `shift`: where the lidar has it from the map's outline (along it, out of its front).
+export const GLASS_HOUSE = { length: 26, depth: 10, shift: [-1, 0.7], upstream: 6.2, gable: 10, downstream: 7, chimney: 9.6 };
+// A frame along a landmark's own footprint: x along its longest side (+x the
+// end nearer the water), z out of its front (the side towards the water).
+function ownFrame(f, [along, out] = [0, 0]) {
+  const ring = f.ring;
+  let u = [1, 0];
+  let best = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [a, b] = [ring[i], ring[(i + 1) % ring.length]];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len > best) [best, u] = [len, [(b[0] - a[0]) / len, (b[1] - a[1]) / len]];
+  }
+  if (u[0] * f.fwd[0] + u[1] * f.fwd[1] < 0) u = [-u[0], -u[1]];
+  let n = [-u[1], u[0]];
+  if (n[0] * f.fwd[0] + n[1] * f.fwd[1] < 0) n = [-n[0], -n[1]];
+  const [cx, cz] = [f.origin[0] + u[0] * along + n[0] * out, f.origin[2] + u[1] * along + n[1] * out];
+  const origin = [cx, f.origin[1], cz];
+  return {
+    origin, right: u, fwd: n,
+    at: (x, y, z) => [cx + u[0] * x + n[0] * z, origin[1] + y, cz + u[1] * x + n[1] * z],
+    box: (m, xr, yr, zr, color) => orientedBox(m, origin, u, n, xr, yr, zr, color),
+  };
+}
 function glassHouse(m, course, f) {
   const C = GLASS;
+  const H = GLASS_HOUSE;
+  const h = ownFrame(f, H.shift);
+  const [x0, x1] = [-H.length / 2, H.length / 2];
+  const [hb, hf] = [-H.depth / 2, H.depth / 2]; // (and the balcony 2 m out from its front)
+  const [w1, e0] = [x0 + 10, x1 - 4]; // the upstream part, the gable between, the downstream part
+  // The ground floor: glass all round in a dark frame (up to the white end wall: sharing its faces, they'd flicker).
+  h.box(m, [x0, x1 - 0.5], [-1, 3.1], [hb, hf], C.clad);
+  for (let x = x0 + 0.4; x < e0 - 2; x += 2.4) h.box(m, [x, x + 2.2], [0.25, 2.9], [hf, hf + 0.06], C.glass);
+  // The balcony round the first floor: a dark slab over the terrace, glass rails on it.
+  h.box(m, [x0 - 0.3, e0], [3.1, 3.4], [hb - 0.3, hf + 2], C.fascia);
+  h.box(m, [x0 - 0.3, e0], [3.4, 4.4], [hf + 1.92, hf + 2], C.rail);
+  h.box(m, [x0 - 0.3, x0 - 0.22], [3.4, 4.4], [hb, hf + 2], C.rail);
+  // The first floor, set back from the balcony: glass in a dark frame.
+  h.box(m, [x0 + 0.6, e0], [3.4, H.upstream], [hb, hf - 0.5], C.upper);
+  for (let x = x0 + 1; x < e0 - 2; x += 2.4) h.box(m, [x, x + 2.2], [3.6, 6], [hf - 0.5, hf - 0.44], C.glass);
+  // Upstream, a flat roof with a dark edge and a glass rail round it.
+  h.box(m, [x0 + 0.4, w1], [H.upstream, H.upstream + 0.3], [hb - 0.2, hf - 0.3], C.fascia);
+  h.box(m, [x0 + 0.4, w1], [H.upstream + 0.3, H.upstream + 1.2], [hf - 0.38, hf - 0.3], C.rail);
+  h.box(m, [x0 + 0.4, x0 + 0.48], [H.upstream + 0.3, H.upstream + 1.2], [hb - 0.2, hf - 0.3], C.rail);
+  // The gable: a glass storey under a pitched roof, its ridge running back from the front, glazed to the peak.
+  const top = H.upstream + 1.2;
+  h.box(m, [w1, e0], [H.upstream, top], [hb + 1, hf - 0.5], C.upper);
+  h.box(m, [w1 + 0.4, e0 - 0.4], [H.upstream + 0.2, top - 0.2], [hf - 0.5, hf - 0.44], C.glass);
+  const mid = (w1 + e0) / 2;
+  for (const [a, b] of [[w1 - 0.4, mid], [e0 + 0.4, mid]]) {
+    const slope = [h.at(a, top, hb + 0.6), h.at(a, top, hf), h.at(b, H.gable, hf), h.at(b, H.gable, hb + 0.6)];
+    m.tri(slope[0], slope[1], slope[2], C.upper);
+    m.tri(slope[0], slope[2], slope[3], C.upper);
+  }
+  for (const [z, e] of [[hf + 0.02, 1], [hb + 0.58, -1]]) {
+    m.triFacing(h.at(w1, top, z), h.at(e0, top, z), h.at(mid, H.gable - 0.15, z), e > 0 ? C.glass : C.upper, [h.fwd[0] * e, 0, h.fwd[1] * e]);
+  }
+  // The downstream end: dark and glazed like the rest to a flat roof, its end
+  // wall white render, and the white chimney stack rising from it.
+  h.box(m, [e0, x1 - 0.5], [-1, H.downstream - 0.3], [hb, hf], C.clad);
+  for (let y = 0.4; y < 6; y += 3.2) h.box(m, [e0 + 0.3, x1 - 0.8], [y, y + 2.4], [hf, hf + 0.06], C.glass);
+  h.box(m, [x1 - 0.5, x1], [-1, H.downstream - 0.3], [hb, hf], C.render);
+  h.box(m, [e0 - 0.2, x1 + 0.2], [H.downstream - 0.3, H.downstream], [hb - 0.2, hf + 0.2], C.fascia);
+  h.box(m, [x1 - 1.4, x1], [-1, H.chimney], [-1.6, 0.2], C.render);
+  // The lawn to the water, a parasol on it, and the quay: pale concrete, timber plank coping (in the river's frame, as before).
   const half = Math.min(11, Math.max(6, (f.along[1] - f.along[0]) / 2));
   const front = Math.min(f.depth[1], f.edge - 8);
-  const back = Math.max(f.depth[0], front - 12);
-  // The ground floor: black boards, big dark windows.
-  f.box(m, [-half, half], [-1, 3.1], [back, front], C.clad);
-  for (let x = -half + 0.3; x < half; x += 0.6) f.box(m, [x, x + 0.04], [0, 3.1], [front, front + 0.06], C.seam);
-  for (const [x0, x1] of [[-half + 1.5, -half + 6], [-3, 3.5], [5, half - 1.5]]) f.box(m, [x0, x1], [0.3, 2.7], [front, front + 0.1], C.glass);
-  f.box(m, [-half - 0.3, half + 0.3], [3.1, 3.4], [back - 0.3, front + 0.3], C.fascia);
-  // The upper floor, set back, its band of glass, a glass rail round the roof.
-  f.box(m, [-half + 3, half - 2], [3.4, 6.2], [back, front - 2], C.upper);
-  f.box(m, [-half + 3.6, half - 2.6], [4.1, 5.5], [front - 2, front - 1.9], C.glass);
-  f.box(m, [-half + 2.8, half - 1.8], [6.2, 6.5], [back - 0.2, front - 1.8], C.fascia);
-  f.box(m, [-half + 2.8, half - 1.8], [6.5, 7.4], [front - 1.9, front - 1.82], C.rail);
-  // The lawn to the water, a parasol on it, and the quay: pale concrete, timber plank coping.
   const sea = -f.origin[1];
   f.box(m, [-half - 8, half + 8], [sea + 0.5, sea + 0.75], [front, f.edge - 0.5], COLORS.mown);
   m.cylinder(f.at(half - 3, sea + 0.75, front + 4), 0.04, 2, 3, C.fascia);
@@ -2658,8 +2780,33 @@ function marina(m, course, f) {
 }
 
 // A big weeping willow at the water.
+// A weeping willow pointed out in the footage, as the lidar measures them
+// (2026-11-18, the glass house's in recording 0104): as tall as the tallest
+// measured tree within 10 m of its point (lidar.js; `WILLOW.height` where none
+// was), its crown `spread` times that out from the trunk and its curtain
+// flaring `flare` times further (design review: two thirds as wide as the
+// footage's at first), the hem hanging `over` m out over the water, just above
+// it. Drawn 14-22 m tall and narrow, set 6 m back from the water, they stood
+// like bells behind the bank.
+export const WILLOW = { height: 12, spread: 0.65, flare: 1.25, over: 3 };
+// How far ahead the water starts, along a line `wet(d)` says is water or not
+// at d metres: the first wet half metre ahead, or, from a point already in the
+// water, minus how far back the water goes; `max` either way.
+export function shoreAhead(wet, max = 20) {
+  let d = 0;
+  if (wet(0)) while (d > -max && wet(d - 0.5)) d -= 0.5;
+  else while (d < max && !wet(d)) d += 0.5;
+  return d;
+}
 function willow(m, course, f) {
-  willowTree(m, ...f.at(0, Math.max(0.3, f.ground(0, -6)), -6), f.rand, 1.4);
+  const [x, , z] = f.origin;
+  const measured = (course.lidar?.trees ?? []).filter(([tx, tz]) => Math.hypot(tx - x, tz - z) < 10).map(([, , h]) => h);
+  const h = measured.length ? Math.max(...measured) : WILLOW.height;
+  const r = h * WILLOW.spread * WILLOW.flare; // (its curtain's hem, out from the trunk)
+  // From its point straight out to the water (with no mapped water, 6 m in, as before).
+  const shore = course.land?.rings ? shoreAhead((d) => { const q = f.at(0, 0, d); return course.land.inside(q[0], q[2]); }) : 6;
+  const back = Math.min(-0.5, shore - (r - WILLOW.over)); // (its trunk on the bank)
+  willowTree(m, ...f.at(0, Math.max(0.3, f.ground(0, back)), back), f.rand, 1.4, h, h * WILLOW.spread, (px, pz) => Math.max(0, ground(course, px, pz).y));
 }
 
 // An old concrete wharf at the water (below the festival field): a low

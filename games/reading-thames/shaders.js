@@ -246,13 +246,16 @@ fn spots(p: vec2f, dist: f32) -> f32 {
 // bank it's heading for: if it meets them below their tops, it sees leaves.
 // Rays heading up or down the river see the sky over the next reach.
 const TREES = vec3f(0.15, 0.18, 0.08);
-fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
-  if (frame.banks.w < 0.5) { return vec2f(0.0); }
+// The foot of a bank, mirrored where a ray meets it low (LOW.x to LOW.y m up, at most LOW.z of the way).
+const UNDER = vec3f(0.06, 0.065, 0.045);
+const LOW = vec3f(1.0, 4.0, 0.8);
+fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec3f {
+  if (frame.banks.w < 0.5) { return vec3f(0.0); }
   let along = frame.river.zw;
   let across = vec2f(-along.y, along.x);
   let l = dot(p - frame.river.xy, across);
   let rl = dot(refl.xz, across);
-  var mirrored = vec2f(0.0);
+  var mirrored = vec3f(0.0);
   // Both banks, blended as the ray turns from one to the other (no seam where it's along the river).
   for (var k = 0; k < 2; k++) {
     let e = f32(k) * 2.0 - 1.0;
@@ -266,7 +269,8 @@ fn treeline(p: vec2f, refl: vec3f, woods: vec2f) -> vec2f {
     // (leaf: how light the leaves are, crown by crown; a little sky shows between the darkest.)
     let leaf = 0.5 + 0.5 * sin(a * 0.29) * sin(a * 0.071 + 0.6);
     let cover = 0.9 * (0.65 + 0.35 * smoothstep(0.05, 0.3, leaf)) * (1.0 - smoothstep(top * 0.9, top * 1.6, reach * refl.y));
-    mirrored += weight * vec2f(cover, leaf);
+    // (low: how much of it is the foot of the bank, up to LOW.y m over the water: shaded undergrowth and mud, not leaves.)
+    mirrored += weight * vec3f(cover, leaf, cover * (1.0 - smoothstep(LOW.x, LOW.y, reach * refl.y)));
   }
   return mirrored;
 }
@@ -330,7 +334,9 @@ fn facades(o: vec3f, d: vec3f) -> vec4f {
   let still = reflect(-v, normalize(vec3f(-dx * 0.5 - r.x * 0.4, 1.0, -dz * 0.5 - r.y * 0.4)));
   let tl = treeline(p, still, in.woods);
   let fa = facades(vec3f(p.x, 0.0, p.y), still);
-  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), TREES * (0.75 + 0.7 * tl.y), tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
+  // Near a bank the water mirrors the bank's dark foot, not its leaves (the footage: dark water up to a wooded bank; it read as a lawn).
+  let leaves = mix(TREES * (0.75 + 0.7 * tl.y), UNDER, clamp(tl.z / max(tl.x, 0.001), 0.0, 1.0) * LOW.z);
+  let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), leaves, tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
   var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.45 * max(tl.x, fa.a)), 0.0, 1.0));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).

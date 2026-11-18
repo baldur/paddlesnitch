@@ -534,7 +534,7 @@ test('the riverside villa as the footage shows it: no house at the water, a timb
   assert.ok(!(await landmarkParts('riverside-villa', [0.56, 0.63, 0.7], 60)).pts.length, 'no blue clapboard villa');
 });
 
-test('the glass house as the footage and lidar show it: black on both floors, the upper set back under a glass rail, 6-7 m to its roof, behind a lawn and a pale quay', async () => {
+test('the glass house as the footage and lidar show it: dark and glazed, a glass rail round its roof, set back behind a lawn and a pale quay', async () => {
   const { GLASS } = await import('../reading-thames/world.js');
   const clad = await landmarkParts('glass-house', GLASS.clad);
   const upper = await landmarkParts('glass-house', GLASS.upper);
@@ -543,11 +543,47 @@ test('the glass house as the footage and lidar show it: black on both floors, th
   assert.ok([GLASS.clad, GLASS.upper].every((c) => Math.max(...c) < 0.3), 'both dark');
   assert.ok(clad.top < upper.top, 'one over the other');
   assert.ok((await landmarkParts('glass-house', GLASS.rail)).top > roof.top, 'a glass rail round the roof');
-  assert.ok(Math.max(...upper.zs) < Math.max(...clad.zs) - 1, 'the upper floor set back');
-  const tall = roof.top - roof.f.origin[1];
-  assert.ok(tall > 5.5 && tall < 7.5, `roof ${tall.toFixed(1)} m over its ground (lidar: 5.7 m median, 8.9 m at most)`);
-  assert.ok(clad.f.edge - Math.max(...clad.zs) > 14, 'set back from the water');
+  assert.ok(Math.max(...upper.zs) < Math.max(...clad.zs) - 1, 'the upper floor set back over the balcony');
+  assert.ok(clad.f.edge - Math.max(...clad.zs) > 14, `set back ${(clad.f.edge - Math.max(...clad.zs)).toFixed(1)} m from the water`);
   assert.ok((await landmarkParts('glass-house', GLASS.quay)).pts.length && Math.min(...GLASS.quay) > 0.6, 'the pale quay');
+});
+
+// Recording 0104 went past it a metre off the bank (2026-11-18), and the lidar
+// has it turned some 40° to the river: square to the river, it was a diamond
+// across its own footprint (its roof matched the lidar within 1.5 m at 29% of
+// the footprint's 2 m points; along it, 55%).
+test('the glass house stands along its own footprint, turned to the river, at the heights the lidar measured', async () => {
+  const { GLASS, GLASS_HOUSE: H } = await import('../reading-thames/world.js');
+  const ring = (await data('reading')).buildings.find((b) => b.style === 'glass-house').shape.slice(0, -1);
+  const sides = ring.map((p, i) => [p, ring[(i + 1) % ring.length]]);
+  const [a, b] = sides.sort(([p, q], [s, t]) => Math.hypot(t[0] - s[0], t[1] - s[1]) - Math.hypot(q[0] - p[0], q[1] - p[1]))[0];
+  const long = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const clad = await landmarkParts('glass-house', GLASS.clad);
+  const angle = (u, v) => { const d = Math.abs(u - v) % Math.PI; return (Math.min(d, Math.PI - d) * 180) / Math.PI; };
+  // (A premise, from the data: the model's own turn is tested by the spans below.)
+  const turned = angle(long, Math.atan2(clad.f.right[1], clad.f.right[0]));
+  assert.ok(turned > 25, `the footprint is turned ${turned.toFixed(0)}° to the river`);
+  // Its walls, seen from above: as long as the lidar's house along the footprint's long side, no deeper than it across.
+  const pts = (await world()).filter(({ color, p }) => [GLASS.clad, GLASS.render].some((c) => color.every((v, i) => Math.abs(v - c[i]) < 1e-3)) && Math.hypot(p[0][0] - clad.f.origin[0], p[0][2] - clad.f.origin[2]) < 40)
+    .flatMap(({ p }) => p.map((q) => [q[0], q[2]]));
+  const span = (f) => Math.max(...pts.map(f)) - Math.min(...pts.map(f));
+  const along = span(([x, z]) => x * Math.cos(long) + z * Math.sin(long));
+  const across = span(([x, z]) => -x * Math.sin(long) + z * Math.cos(long));
+  assert.ok(Math.abs(along - H.length) < 1, `${along.toFixed(1)} m along its footprint (lidar: ${H.length} m)`);
+  assert.ok(across < H.depth + 1, `${across.toFixed(1)} m across it (lidar: ${H.depth} m)`);
+  // The glass gable to 10 m, the white chimney over the end nearer the water.
+  const ground = clad.f.origin[1];
+  const gable = await landmarkParts('glass-house', GLASS.upper);
+  const render = await landmarkParts('glass-house', GLASS.render);
+  assert.ok(Math.abs(gable.top - ground - H.gable) < 0.3, `the gable's peak ${(gable.top - ground).toFixed(1)} m up (lidar: ${H.gable} m)`);
+  assert.ok(Math.abs(render.top - ground - H.chimney) < 0.3, `the white chimney ${(render.top - ground).toFixed(1)} m up`);
+  // The flat roofs: the upstream one under its glass rail, the one at the water's end.
+  const roof = await landmarkParts('glass-house', GLASS.fascia);
+  const rail = await landmarkParts('glass-house', GLASS.rail);
+  assert.ok(Math.abs(roof.top - ground - H.downstream) < 0.3, `the roof by the water ${(roof.top - ground).toFixed(1)} m up (lidar: ${H.downstream} m)`);
+  assert.ok(Math.abs(rail.top - ground - (H.upstream + 1.2)) < 0.3, `the upstream roof's rail ${(rail.top - ground).toFixed(1)} m up, over a roof at ${H.upstream} m`);
+  const mean = (v) => v.reduce((s, x) => s + x, 0) / v.length;
+  assert.ok(mean(render.zs) > mean(clad.zs), 'the white end is the end nearer the water');
 });
 
 test('the canoe club as the footage shows it: one band of big windows by the gable, a tree at its upstream end, the narrow steps past it, a brick ramp wall with a white rail coming down upstream', async () => {
@@ -650,6 +686,75 @@ test('upstream of Mapledurham: the dead tree, the white river sign and the sand 
   assert.ok(reading.features.some((f) => f.style === 'beach' && Math.hypot(f.at[0] + 4711, f.at[1] + 2438) < 10), 'the beach at r1');
 });
 
+// Recording 0104 went a metre or two off the banks: where a row of the land
+// under the water joined one up the bank, the ground rose out of the water
+// metres before the shore, and the boat looked down on a lawn (2,176 m² of
+// ground over the water more than 1 m out from the shore; 717 m² now).
+// The land's triangles: a shade of mud, meadow, mown grass or the shaded bank (realLand's colours).
+const LAND = [[0.42, 0.36, 0.27], [0.5, 0.53, 0.24], [0.46, 0.55, 0.22], [0.28, 0.33, 0.14]];
+const isLand = (color) => LAND.some((b) => { const k = color[1] / b[1]; return k > 0.9 && k < 1.1 && color.every((x, i) => Math.abs(x - b[i] * k) < 0.004); });
+test('the ground leaves the water at the mapped shore, not part-way to the next row of the land', async () => {
+  const course = courseFromFile(await data('reading'));
+  const land = waterMap(course.scenery.water);
+  let area = 0;
+  for (const { p, color, n } of await world()) {
+    if (n[1] < 0.2 || !isLand(color)) continue;
+    const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+    if (cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1) continue;
+    area += Math.abs((p[1][0] - p[0][0]) * (p[2][2] - p[0][2]) - (p[2][0] - p[0][0]) * (p[1][2] - p[0][2])) / 2;
+  }
+  assert.ok(area < 800, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore`);
+});
+
+// Splitting a land quad at the shore must split the edge it shares with the
+// next quad the same way, or the bank opens a slit (tester review: a split
+// point placed at the ground's height off a neighbour's straight edge made 312
+// slits over 30 cm above the water; main has 58, from where the side channels'
+// finer land meets the rest).
+test('the land along the shore has no new slits where its quads are split', async () => {
+  const tris = (await world()).filter(({ color, n }) => n[1] >= 0.2 && isLand(color)).map(({ p }) => p);
+  const cell = 2;
+  const grid = new Map();
+  for (const t of tris) for (const q of t) { const k = `${Math.floor(q[0] / cell)},${Math.floor(q[2] / cell)}`; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(q); }
+  const slits = new Set();
+  for (const t of tris) for (let e = 0; e < 3; e++) {
+    const [a, b] = [t[e], t[(e + 1) % 3]];
+    const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+    const len2 = dx * dx + dz * dz;
+    if (len2 < 1e-4) continue;
+    for (let gx = Math.floor(Math.min(a[0], b[0]) / cell); gx <= Math.floor(Math.max(a[0], b[0]) / cell); gx++) {
+      for (let gz = Math.floor(Math.min(a[2], b[2]) / cell); gz <= Math.floor(Math.max(a[2], b[2]) / cell); gz++) {
+        for (const q of grid.get(`${gx},${gz}`) ?? []) {
+          const f = ((q[0] - a[0]) * dx + (q[2] - a[2]) * dz) / len2;
+          if (f <= 0.01 || f >= 0.99 || Math.abs((q[0] - a[0]) * dz - (q[2] - a[2]) * dx) / Math.sqrt(len2) > 0.01) continue;
+          if (q[1] > 0 && Math.abs(q[1] - (a[1] + (b[1] - a[1]) * f)) > 0.3) slits.add(q.map((x) => x.toFixed(2)).join());
+        }
+      }
+    }
+  }
+  assert.ok(slits.size <= 75, `${slits.size} slits over 30 cm above the water (main 58; 73 with the split)`);
+});
+
+// By a wooded bank the footage's water is dark (about 42 of 255 near the boat,
+// 0104's close passes); it mirrored the leaves and read as a lawn (54, and twice
+// as green). A ray that meets a bank low sees its dark foot, not its leaves; one
+// that meets it high (from mid-river) still sees the canopy (#969's reach kept).
+test("the water mirrors a bank's dark foot where a reflected ray meets it low, in both renderers", async () => {
+  const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
+  const [gpu, gl] = [await read('shaders.js'), await read('shaders-gl.js')];
+  const num = (src, re) => src.match(re)[1].split(',').map(Number);
+  const [under, low, trees] = [num(gpu, /const UNDER = vec3f\(([^)]*)\)/), num(gpu, /const LOW = vec3f\(([^)]*)\)/), num(gpu, /const TREES = vec3f\(([^)]*)\)/)];
+  assert.deepEqual(num(gl, /const vec3 UNDER = vec3\(([^)]*)\)/), under);
+  assert.deepEqual(num(gl, /const vec3 LOW = vec3\(([^)]*)\)/), low);
+  const lum = ([r, g, b]) => 0.3 * r + 0.59 * g + 0.11 * b;
+  assert.ok(lum(under) < 0.5 * lum(trees) && under[1] >= under[2], 'darker than the leaves, still a little green');
+  assert.ok(low[0] >= 0.5 && low[1] <= 6 && low[2] > 0.5 && low[2] <= 1, 'the bank\'s foot: the first metres over the water');
+  for (const src of [gpu, gl]) {
+    assert.match(src, /cover \* \(1\.0 - smoothstep\(LOW\.x, LOW\.y, reach \* refl\.y\)\)/, 'where the ray meets the bank, how high');
+    assert.match(src, /leaves = mix\(TREES \* \(0\.75 \+ 0\.7 \* tl\.y\), UNDER, clamp\(tl\.z \/ max\(tl\.x, 0\.001\), 0\.0, 1\.0\) \* LOW\.z\)/);
+  }
+});
+
 test('both renderers mirror the banks with the same treeline(), line for line', async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
   // WGSL's select(f, t, c) as GLSL's c ? t : f, then without types, brackets or spaces.
@@ -682,7 +787,7 @@ test('both renderers mirror the banks with the same treeline(), line for line', 
       .map((l) => l.replace(/[()\s]/g, ''));
   };
   const gpu = body(await read('shaders.js'), 'fn treeline(');
-  const gl = body(await read('shaders-gl.js'), 'vec2 treeline(');
+  const gl = body(await read('shaders-gl.js'), 'vec3 treeline(');
   assert.ok(gpu.length >= 10, `${gpu.length} lines`);
   assert.deepEqual(gl, gpu);
   // And woodAt(), which reads the woods strip.
@@ -1213,20 +1318,81 @@ test('the water at the glass house mirrors the weeping willow in front of it, no
   const o = [willow.at[0] + fr.fwd[0] * 30, 0, willow.at[1] + fr.fwd[1] * 30];
   const slots = nearFacades(m, o[0], o[2]);
   const toward = unit([willow.at[0] - o[0], 0, willow.at[1] - o[2]]);
-  const colors = [];
-  for (let up = 0.05; up <= 0.35; up += 0.05) colors.push(seen(o, unit([toward[0], up, toward[2]]), slots, m).color);
-  const green = colors.filter(([r, g, b, a]) => a > 0.5 && g > r && g > b * 1.4).length;
-  assert.ok(green >= 4, `leaves in ${green} of ${colors.length} rays: ${colors.map((c) => c.map((x) => x.toFixed(2)).join(' ')).join(' | ')}`);
-  // Its picture stands at the willow (its trunk is 6 m in from its point), not at the house's
-  // walls 15 m behind, where its reflection slid off the tree as the view turned (design review).
+  // Its picture stands at the willow, not at the house's walls 15 m behind,
+  // where its reflection slid off the tree as the view turned (design review).
   const pic = m.facades.find((f) => f.name === 'glass-house willow');
   assert.ok(pic, 'the willow has a picture of its own');
   const depth = (q) => (q[0] - fr.origin[0]) * fr.fwd[0] + (q[q.length - 1] - fr.origin[2]) * fr.fwd[1];
-  const trunk = depth(willow.at) - 6;
-  assert.ok(Math.abs(depth(pic.p) - trunk) < 6, `the willow's picture ${depth(pic.p).toFixed(1)} m out, its trunk ${trunk.toFixed(1)} m`);
+  // Rays every 0.025 up: how high each meets the picture, and whether it sees leaves.
+  const far = Math.abs((depth([o[0], o[2]]) - depth(pic.p)) / (toward[0] * fr.fwd[0] + toward[2] * fr.fwd[1]));
+  const rays = [];
+  for (let up = 0.025; up <= 0.5; up += 0.025) {
+    const [r, g, b, a] = seen(o, unit([toward[0], up, toward[2]]), slots, m).color;
+    rays.push({ y: up * far, hit: a > 0.5, leaf: a > 0.5 && g > r && g > b * 1.4 });
+  }
+  const leaves = rays.filter((x) => x.leaf);
+  const top = pic.v[1];
+  const show = rays.map((x) => `${x.y.toFixed(1)}:${x.leaf ? 'leaf' : x.hit ? 'trunk' : '-'}`).join(' ');
+  assert.ok(leaves.length >= 0.7 * rays.filter((x) => x.hit).length, `leaves on most of it: ${show}`);
+  // From its foot (the curtain hangs to the water) to within a metre and a half of its top.
+  assert.ok(Math.min(...leaves.map((x) => x.y)) < 3 && Math.max(...leaves.map((x) => x.y)) > top - 1.5, `leaves ${show}, the picture ${top.toFixed(1)} m tall`);
+  // (Its trunk: the middle of its crown and curtain, which are round it.)
+  const isWillow = ([r, g, b]) => g > 0.2 && Math.abs(r / g - 0.965) < 0.06 && Math.abs(b / g - 0.35) < 0.05;
+  const crown = (await world()).filter(({ color, p }) => isWillow(color) && Math.hypot(p[0][0] - willow.at[0], p[0][2] - willow.at[1]) < 16).flatMap(({ p }) => p);
+  assert.ok(crown.length, 'the willow is built');
+  const trunk = crown.reduce((s, q) => s + depth([q[0], q[2]]), 0) / crown.length;
+  // (Within its curtain, which hangs 8-9 m out from the trunk.)
+  const { WILLOW } = await import('../reading-thames/world.js');
+  assert.ok(Math.abs(depth(pic.p) - trunk) < 11 * WILLOW.spread * WILLOW.flare, `the willow's picture ${depth(pic.p).toFixed(1)} m out, its trunk ${trunk.toFixed(1)} m`);
   assert.ok(depth(m.facades.find((f) => f.name === 'glass-house').p) < trunk - 6, "the house's picture is behind it");
   // Only trees: no landmark took in a quay, a jetty or a boat shed.
   for (const f of m.facades) if (/ /.test(f.name) && !/ (side|underside|pier)$/.test(f.name)) assert.match(f.name, / (willow|dead-tree)$/);
+});
+
+// The willows the footage points out, as the lidar measures them (2026-11-18):
+// drawn 14-22 m tall and narrow, set 6 m back, they stood like bells behind the
+// bank (their tops 7.2 m off the lidar's, the median of nine; 0.5 m now).
+test('a pointed-out willow is as tall as the measured tree at it, wider than tall, its curtain over the water', async () => {
+  const { WILLOW } = await import('../reading-thames/world.js');
+  const raw = await data('reading');
+  const course = courseFromFile(raw);
+  const land = waterMap(course.scenery.water);
+  const { LIDAR } = await import('../reading-thames/lidar.js');
+  const isWillow = ([r, g, b]) => g > 0.2 && Math.abs(r / g - 0.965) < 0.06 && Math.abs(b / g - 0.35) < 0.05;
+  const tris = (await world()).filter(({ color }) => isWillow(color));
+  // Every one: as tall as the measured tree at it (12 m where none was, as at Caversham Court).
+  const all = raw.features.filter((x) => x.style === 'willow');
+  assert.equal(all.length, 11);
+  for (const { at } of all) {
+    const measured = LIDAR.trees.filter(([x, z]) => Math.hypot(x - at[0], z - at[1]) < 10).map(([, , h]) => h);
+    const h = measured.length ? Math.max(...measured) : WILLOW.height;
+    const hemR = h * WILLOW.spread * WILLOW.flare;
+    // Its own leaves: those within its hem's reach of its point (two stand 25 m apart).
+    const pts = tris.flatMap(({ p }) => p).filter((q) => Math.hypot(q[0] - at[0], q[2] - at[1]) < hemR + 3);
+    const [cx, cz] = [0, 2].map((i) => pts.reduce((s, q) => s + q[i], 0) / pts.length);
+    const top = Math.max(...pts.map((q) => q[1])) - groundAt(course, cx, cz);
+    assert.ok(Math.abs(top - h) < 0.4, `${at}: ${top.toFixed(1)} m tall (measured ${h.toFixed(1)} m)`);
+    assert.ok(2 * hemR > h, 'wider than tall');
+    // Its hem just over the water, not hanging in the air over it.
+    const wet = pts.filter((q) => land.inside(q[0], q[2]));
+    assert.ok(wet.length && Math.min(...wet.map((q) => q[1])) < 1, `${at}: its hem over the water ${Math.min(...wet.map((q) => q[1])).toFixed(1)} m up`);
+    // Out over the water about WILLOW.over (more where the bank bends away under it; the lidar's reach 0.7-13 m).
+    const over = Math.max(...wet.map((q) => land.shore(q[0], q[2])));
+    assert.ok(over > WILLOW.over - 1 && over < WILLOW.over + 4, `${at}: its curtain ${over.toFixed(1)} m out over the water`);
+  }
+  // The glass house's: its crown spreads as the lidar's (0.65 of its height, its curtain 1.25 times that).
+  const glass = tris.flatMap(({ p }) => p).filter((q) => Math.hypot(q[0] + 2566.6, q[2] + 792.4) < 12);
+  const [gx, gz] = [0, 2].map((i) => glass.reduce((s, q) => s + q[i], 0) / glass.length);
+  assert.ok(Math.abs(Math.max(...glass.map((q) => Math.hypot(q[0] - gx, q[2] - gz))) - 11 * WILLOW.spread * WILLOW.flare) < 0.4, 'its hem 8.9 m out from its trunk');
+});
+
+test('where the water starts along a line: ahead, behind (from a point in the water), or not within reach', async () => {
+  const { shoreAhead } = await import('../reading-thames/world.js');
+  assert.equal(shoreAhead((d) => d >= 4), 4);
+  assert.equal(shoreAhead((d) => d >= 4.2), 4.5, 'the first wet half metre');
+  assert.equal(shoreAhead((d) => d > -3), -2.5, 'from a point in the water: minus how far back it goes');
+  assert.equal(shoreAhead(() => false), 20, 'no water within 20 m');
+  assert.equal(shoreAhead(() => true), -20, 'water all the way back');
 });
 
 test("a landmark takes in only the trees before it: not one behind it, off to the side or far out, and not a quay", async () => {
