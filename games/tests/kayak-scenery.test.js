@@ -534,7 +534,7 @@ test('the riverside villa as the footage shows it: no house at the water, a timb
   assert.ok(!(await landmarkParts('riverside-villa', [0.56, 0.63, 0.7], 60)).pts.length, 'no blue clapboard villa');
 });
 
-test('the glass house as the footage and lidar show it: black on both floors, the upper set back under a glass rail, 6-7 m to its roof, behind a lawn and a pale quay', async () => {
+test('the glass house as the footage and lidar show it: dark and glazed, a glass rail round its roof, set back behind a lawn and a pale quay', async () => {
   const { GLASS } = await import('../reading-thames/world.js');
   const clad = await landmarkParts('glass-house', GLASS.clad);
   const upper = await landmarkParts('glass-house', GLASS.upper);
@@ -543,11 +543,40 @@ test('the glass house as the footage and lidar show it: black on both floors, th
   assert.ok([GLASS.clad, GLASS.upper].every((c) => Math.max(...c) < 0.3), 'both dark');
   assert.ok(clad.top < upper.top, 'one over the other');
   assert.ok((await landmarkParts('glass-house', GLASS.rail)).top > roof.top, 'a glass rail round the roof');
-  assert.ok(Math.max(...upper.zs) < Math.max(...clad.zs) - 1, 'the upper floor set back');
-  const tall = roof.top - roof.f.origin[1];
-  assert.ok(tall > 5.5 && tall < 7.5, `roof ${tall.toFixed(1)} m over its ground (lidar: 5.7 m median, 8.9 m at most)`);
-  assert.ok(clad.f.edge - Math.max(...clad.zs) > 14, 'set back from the water');
+  assert.ok(clad.f.edge - Math.max(...clad.zs) > 8, `set back ${(clad.f.edge - Math.max(...clad.zs)).toFixed(1)} m from the water`);
   assert.ok((await landmarkParts('glass-house', GLASS.quay)).pts.length && Math.min(...GLASS.quay) > 0.6, 'the pale quay');
+});
+
+// Recording 0104 went past it a metre off the bank (2026-11-18), and the lidar
+// has it turned some 40° to the river: square to the river, it was a diamond
+// across its own footprint (its roof matched the lidar within 1.5 m at 29% of
+// the footprint's 2 m points; along it, 55%).
+test('the glass house stands along its own footprint, turned to the river, at the heights the lidar measured', async () => {
+  const { GLASS, GLASS_HOUSE: H } = await import('../reading-thames/world.js');
+  const ring = (await data('reading')).buildings.find((b) => b.style === 'glass-house').shape.slice(0, -1);
+  const sides = ring.map((p, i) => [p, ring[(i + 1) % ring.length]]);
+  const [a, b] = sides.sort(([p, q], [s, t]) => Math.hypot(t[0] - s[0], t[1] - s[1]) - Math.hypot(q[0] - p[0], q[1] - p[1]))[0];
+  const long = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const clad = await landmarkParts('glass-house', GLASS.clad);
+  const angle = (u, v) => { const d = Math.abs(u - v) % Math.PI; return (Math.min(d, Math.PI - d) * 180) / Math.PI; };
+  const turned = angle(long, Math.atan2(clad.f.right[1], clad.f.right[0]));
+  assert.ok(turned > 25, `the footprint is turned ${turned.toFixed(0)}° to the river`);
+  // Its ground floor, seen from above: as long as the lidar's house along the footprint's long side, no deeper than it across.
+  const pts = (await world()).filter(({ color, p }) => color.every((v, i) => Math.abs(v - GLASS.clad[i]) < 1e-3) && Math.hypot(p[0][0] - clad.f.origin[0], p[0][2] - clad.f.origin[2]) < 40)
+    .flatMap(({ p }) => p.map((q) => [q[0], q[2]]));
+  const span = (f) => Math.max(...pts.map(f)) - Math.min(...pts.map(f));
+  const along = span(([x, z]) => x * Math.cos(long) + z * Math.sin(long));
+  const across = span(([x, z]) => -x * Math.sin(long) + z * Math.cos(long));
+  assert.ok(Math.abs(along - H.length) < 1, `${along.toFixed(1)} m along its footprint (lidar: ${H.length} m)`);
+  assert.ok(across < H.depth + 1, `${across.toFixed(1)} m across it (lidar: ${H.depth} m)`);
+  // The glass gable to 10 m, the white chimney over the end nearer the water.
+  const ground = clad.f.origin[1];
+  const gable = await landmarkParts('glass-house', GLASS.upper);
+  const render = await landmarkParts('glass-house', GLASS.render);
+  assert.ok(Math.abs(gable.top - ground - H.gable) < 0.3, `the gable's peak ${(gable.top - ground).toFixed(1)} m up (lidar: ${H.gable} m)`);
+  assert.ok(Math.abs(render.top - ground - H.chimney) < 0.3, `the white chimney ${(render.top - ground).toFixed(1)} m up`);
+  const mean = (v) => v.reduce((s, x) => s + x, 0) / v.length;
+  assert.ok(mean(render.zs) > mean(clad.zs), 'the white end is the end nearer the water');
 });
 
 test('the canoe club as the footage shows it: one band of big windows by the gable, a tree at its upstream end, the narrow steps past it, a brick ramp wall with a white rail coming down upstream', async () => {
