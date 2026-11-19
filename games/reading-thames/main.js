@@ -23,7 +23,7 @@ import { perspective, view, basis, multiply, translation, rotationX, rotationY, 
 import { Controls, BUTTON, TILT_REFLEX, TILT_FULL, TILT_SETTLE } from './controls.js';
 import { tone, noise, isMuted, setMuted } from '../shared/audio.js';
 import { openDialog, gamepadDialogs, soundToggle } from '../shared/dialogs.js';
-import { nextLesson, loadTaught, saveTaught, howTo, waitTurn, nextTurn, cutShort } from './teach.js';
+import { nextLesson, loadTaught, saveTaught, howTo, waitTurn, nextTurn, waits } from './teach.js';
 
 const STEP = 1 / 120;
 const EYE_HEIGHT = 0.78;
@@ -1963,23 +1963,21 @@ let flashTimer = 0;
 let hintTimer = 0;
 let waiting = []; // hints that came while a longer one was up, in turn: { text, hold, at } (teach.js waitTurn)
 let hintClock = 0; // game seconds, for how long a hint has waited
-let hintWords = null; // the instruction up in the hint lane, if one is
+let hintUp = { text: '', hold: 0, at: 0 }; // what went up in the hint lane, and when (game seconds)
 function show(text, { small = false, hold = 0.8, now = false } = {}) {
-  // One hint at a time: a shorter one doesn't wipe a longer one still up. A
-  // moment's note ("Weak stroke") is dropped; an instruction waits its turn;
-  // `now` (why you went in, a boat bearing down) goes straight up.
-  if (small && !now && hintTimer > hold) {
+  // One hint at a time (teach.js waits): a shorter one doesn't wipe a longer
+  // one still up, and none covers an instruction just up. A moment's note
+  // ("Weak stroke") is dropped; an instruction waits its turn; `now` (why you
+  // went in, a boat bearing down) goes straight up.
+  if (small && waits({ text, hold, now }, { ...hintUp, left: hintTimer, up: hintClock - hintUp.at })) {
     if (hold >= 1) waiting = waitTurn(waiting, { text, hold, at: hintClock });
     return;
   }
   if (small && now && !text) waiting = []; // clearing the lane clears what waits too
-  // An instruction cut off by this one waits for the rest of its time (teach.js cutShort).
-  else if (small && hintWords && text !== hintWords) waiting = cutShort(waiting, { text: hintWords, left: hintTimer }, hintClock);
-  if (small) hintWords = hold >= 1 ? text : null;
   const el = small ? els.hint : flash;
   el.textContent = text;
   el.classList.add('show');
-  if (small) hintTimer = hold;
+  if (small) [hintTimer, hintUp] = [hold, { text, hold, at: hintClock }];
   else flashTimer = hold;
   if (!small) hud.classList.add('flashing');
   if (!small) flash.classList.toggle('big', text.length <= 4); // a count, Go!: bigger on a phone

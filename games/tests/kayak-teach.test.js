@@ -1,7 +1,24 @@
 // Teaching as you go (teach.js): each lesson once, the first time it matters.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING, nextTurn, STALE, cutShort } from '../reading-thames/teach.js';
+import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING, nextTurn, STALE, waits, READ } from '../reading-thames/teach.js';
+
+test("a hint doesn't go up over an instruction the frame it came up, so it's seen: it waits its turn", () => {
+  // (The race's sprint hint covered "Second instruction" the frame it came off the queue: games in webkit, 7d000bad.)
+  const second = { text: 'Second instruction', hold: 1.2 };
+  const wash = { text: 'Paddle quicker than 90 a minute to sprint onto their wash', hold: 2.5 };
+  const up = (hint, t) => ({ ...hint, left: hint.hold - t, up: t });
+  assert.equal(waits(wash, up(second, 0)), true, 'just up: the wash waits');
+  assert.equal(waits(wash, up(second, READ - 0.01)), true);
+  assert.equal(waits(wash, up(second, READ)), false, 'read: a longer hint goes up, as before');
+  assert.equal(waits({ ...wash, now: true }, up(second, 0)), false, 'a `now` (a boat bearing down) still goes straight up');
+  assert.equal(waits(wash, up({ text: 'Weak stroke', hold: 0.5 }, 0)), false, "a moment's note isn't kept up");
+  assert.equal(waits(second, up(wash, 2)), false, 'nothing longer up: it goes up');
+  assert.equal(waits(second, up(wash, 0.5)), true, 'a shorter one waits behind a longer, as before');
+  assert.equal(waits(wash, up(wash, 0.1)), false, 'the same words again start it over');
+  assert.equal(waits(wash, null), false, 'a clear lane');
+  assert.equal(waits(wash, { ...second, left: 0, up: 0.1 }), false, 'its time up');
+});
 
 const calm = { angle: 0, rhythm: 0.2, draft: 0, racing: true, time: 5, rate: 70, stamina: 1, sprinting: false, assist: false, scull: false, outing: false };
 const keys = howTo(false);
@@ -73,20 +90,6 @@ test("an instruction waiting its turn isn't dropped when another comes: they wai
   for (let i = 0; i < 5; i++) q = waitTurn(q, { text: `note ${i}`, hold: 1 });
   assert.equal(q.length, WAITING);
   assert.deepEqual(q.map((h) => h.text), ['note 2', 'note 3', 'note 4'], 'the oldest go first');
-});
-
-test("an instruction cut off by a longer hint waits at the front for the rest of its time, not lost unseen", () => {
-  // (The race's wash hint went straight up over "Second instruction" the frame
-  // it came off the queue, so it never showed: games in webkit, 7d000bad.)
-  const wash = { text: 'Paddle quicker than 90 a minute to sprint onto their wash', hold: 2.5, at: 1 };
-  const q = cutShort([wash], { text: 'Second instruction', left: 1.1 }, 5);
-  assert.deepEqual(q, [{ text: 'Second instruction', hold: 1.1, at: 5 }, wash], 'first in line, with what was left, waiting from now');
-  assert.equal(nextTurn(q, 5).next.text, 'Second instruction');
-  assert.equal(cutShort([], { text: 'Nearly done', left: 0.4 }, 5).length, 0, 'one nearly done has been read');
-  assert.equal(cutShort([], null, 5).length, 0, 'nothing up');
-  assert.deepEqual(cutShort(q, { text: 'Second instruction', left: 1 }, 6), q, 'the same words wait once');
-  const full = [1, 2, 3].map((i) => ({ text: `note ${i}`, hold: 1, at: 0 }));
-  assert.deepEqual(cutShort(full, { text: 'cut', left: 1 }, 5).map((h) => h.text), ['cut', 'note 1', 'note 2'], 'a few at most');
 });
 
 test("a hint that waited too long for its moment is skipped, and the rest still come in turn", () => {
