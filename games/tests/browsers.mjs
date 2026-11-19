@@ -812,7 +812,12 @@ async function play(c, page, errors) {
     // its turn if the first has only just come up, teach.js waits) and another
     // while it's up. The second instruction still gets its turn.
     await page.evaluate(() => {
-      window.kayak.show('Stuck? Hold ↓ and paddle to go backwards and turn', { small: true, hold: 3.5 });
+      // (The device's own words, as the game's stuck hint has them: on a phone the
+      // desktop text didn't count as the same hint, so the game's own, when the
+      // idle paddler got stuck, made a fourth waiting and pushed the second
+      // instruction out of the queue: small iPhone at 580 ms frames, f500b91e.)
+      const phone = matchMedia('(pointer: coarse)').matches;
+      window.kayak.show(phone ? 'Stuck? Swipe down to paddle backwards and turn' : 'Stuck? Hold ↓ and paddle to go backwards and turn', { small: true, hold: 3.5 });
       window.kayak.show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 2.5 });
     });
     // A hint's time passes in game time, at most 0.1 s a frame (main.js), so the
