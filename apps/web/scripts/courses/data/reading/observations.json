@@ -822,15 +822,15 @@
       "note": "a sculling club on the lawn: sculls and oars on racks beside a tall stone memorial pillar"
     },
     {
-      "kind": "feature",
-      "style": "glass-restaurant",
+      "kind": "landmark",
+      "style": "bridge-restaurant",
       "at": [
-        51.466331,
-        -0.977362
+        51.466516,
+        -0.977171
       ],
-      "heading": 323,
-      "frame": "0095-p1 near (owner point 10)",
-      "note": "a glass-fronted restaurant at the water with a white round tower; 10 m west of the point taken, where the lidar has its tower: with Caversham Bridge where it really is, the tower stood in the road (2026-11-15)"
+      "heading": 59,
+      "frame": "0104 GS01 990 s, looking back across the north channel (owner point 10)",
+      "note": "the restaurant on the Caversham bank by the bridge: a low pavilion of dark glass at the water, a cream round tower with a dark cap, a red-brick block with big windows behind, a tall red-brick house with white-gabled dormers by the bridge; placed by the lidar on its footprint (it was a feature 10 m out in the channel, where 0104 paddled: 2026-11-18)"
     },
     {
       "kind": "feature",
