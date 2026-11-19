@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE } from '../reading-thames/world.js';
+import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE, BRIDGE_RESTAURANT } from '../reading-thames/world.js';
 const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -703,7 +703,51 @@ test('the ground leaves the water at the mapped shore, not part-way to the next 
     if (cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1) continue;
     area += Math.abs((p[1][0] - p[0][0]) * (p[2][2] - p[0][2]) - (p[2][0] - p[0][0]) * (p[1][2] - p[0][2])) / 2;
   }
-  assert.ok(area < 800, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore`);
+  assert.ok(area < 450, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore (717 before the strips were split where the shore runs across them, 374 after)`);
+});
+
+// The restaurant on the Caversham bank by Caversham Bridge, from recording
+// 0104 (which went up the north channel 10 m off it) and the lidar: it was a
+// feature whose glass and terrace stood 10 m out over the channel's water.
+test("the restaurant by Caversham Bridge stands on its bank in the lidar's parts, none of it out in the north channel", async () => {
+  const C = BRIDGE_RESTAURANT;
+  // Heights over the river, as the lidar measures them: the brick block's roof, the tower's cap, the house's ridge, the building behind.
+  assert.deepEqual([C.block.top, C.tower.top, C.house.ridge, C.back.top], [7.5, 9.9, 15, 12.5]);
+  // The pavilion's glass roof gives the lidar no return: one storey under the block's upper floor, along the river edge of its footprint.
+  assert.ok(C.pavilion.height < 5 && C.pavilion.along[1] - C.pavilion.along[0] > 20, 'long and low');
+  const course = courseFromFile(await data('reading'));
+  const land = waterMap(course.scenery.water);
+  const own = [C.glass, C.frame, C.cream, C.brick, C.paving];
+  const ours = (color) => own.some((c) => c.every((v, i) => Math.abs(v - color[i]) < 0.002));
+  const f = landmarkFrame(course, 'bridge-restaurant');
+  let n = 0;
+  for (const { p, color } of await world()) {
+    const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+    if (Math.hypot(cx - f.origin[0], cz - f.origin[2]) > 30 || !ours(color)) continue;
+    n++;
+    assert.ok(!land.inside(cx, cz) || land.shore(cx, cz) < 0.5, `part of it ${land.shore(cx, cz).toFixed(1)} m out over the water at ${cx.toFixed(0)}, ${cz.toFixed(0)}`);
+  }
+  assert.ok(n > 100, `${n} triangles of it`);
+  assert.ok(!course.scenery.features?.some((x) => x.style === 'glass-restaurant'), 'no glass-restaurant feature left over the water');
+});
+
+// Under Caversham Bridge's Caversham arch the shore runs across the land's
+// strips (the abutment), so a row there is water at one end and land at the
+// other: drawn whole, its quads rose from the water to the land over 18 m and
+// lay over the arch's water like a lawn, where recording 0104 paddled through
+// (76 m² within 25 m of the bridge's Caversham end).
+test("the land doesn't lie over the water under Caversham Bridge's Caversham arch", async () => {
+  const course = courseFromFile(await data('reading'));
+  const land = waterMap(course.scenery.water);
+  const [ex, ez] = (await data('reading')).bridges.find((b) => b.name === 'Caversham Bridge').ends[0];
+  let area = 0;
+  for (const { p, color, n } of await world()) {
+    if (n[1] < 0.2 || !isLand(color)) continue;
+    const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
+    if (Math.hypot(cx - ex, cz - ez) > 25 || cy <= 0.1 || !land.inside(cx, cz) || land.shore(cx, cz) <= 1) continue;
+    area += Math.abs((p[1][0] - p[0][0]) * (p[2][2] - p[0][2]) - (p[2][0] - p[0][0]) * (p[1][2] - p[0][2])) / 2;
+  }
+  assert.ok(area < 10, `${area.toFixed(1)} m² of land over the arch's water`);
 });
 
 // Splitting a land quad at the shore must split the edge it shares with the
@@ -732,7 +776,7 @@ test('the land along the shore has no new slits where its quads are split', asyn
       }
     }
   }
-  assert.ok(slits.size <= 75, `${slits.size} slits over 30 cm above the water (main 58; 73 with the split)`);
+  assert.ok(slits.size <= 80, `${slits.size} slits over 30 cm above the water (58; 73 with the split at the shore; 79 with the strips split where the shore runs across them, where two strips' rows differ)`);
 });
 
 // By a wooded bank the footage's water is dark (about 42 of 255 near the boat,
