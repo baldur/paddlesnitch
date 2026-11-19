@@ -64,14 +64,17 @@ export function howTo(phone) {
 // that comes while a longer hint is up waits its turn behind any already
 // waiting, not in place of them (with one slot, the race's own hints could
 // drop it unseen: a wash hint arriving under "Stuck?" took the slot). The same
-// words aren't queued twice, and at most WAITING wait (the oldest go first).
-// Only the waiting keep their order: a hint no shorter than what's left of the
-// one up goes straight up, unless that one is an instruction just up (`waits`).
-// `at` is when it came, in game seconds.
+// words aren't queued twice, and at most WAITING wait: when they're full, the
+// newest is left out (owner via lead, 2026-11-19: an instruction the player
+// hasn't seen matters more than a hint that will come again; dropping the
+// oldest pushed one out unseen). A `now` hint never waits, so is never left
+// out. Only the waiting keep their order: a hint no shorter than what's left
+// of the one up goes straight up, unless that one is an instruction just up
+// (`waits`). `at` is when it came, in game seconds.
 export const WAITING = 3;
 export function waitTurn(queue, hint) {
-  if (queue.some((h) => h.text === hint.text)) return queue;
-  return [...queue, hint].slice(-WAITING);
+  if (queue.length >= WAITING || queue.some((h) => h.text === hint.text)) return queue;
+  return [...queue, hint];
 }
 // Whether a hint (`hold` seconds, `now` or not) waits rather than going up over
 // the one in the lane (`lane`: its `left` seconds, its `hold` and how long it's
