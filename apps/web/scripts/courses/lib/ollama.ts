@@ -63,11 +63,12 @@ export async function checkOllama(endpoint: string, model: string, fetchFn = fet
   if (details.remote_host || details.remote_model) throw new Error(`refusing ${model}: it runs on ${String(details.remote_host ?? 'a remote host')}, and frames must stay on this machine`)
 }
 
-/** One streamed chat with an image. Anything other than a model reply throws OllamaDown. */
+/** One streamed chat with an image. Anything other than a model reply throws OllamaDown.
+ *  Thinking is off unless the caller asks: qwen3.8 thinks by default and a look then takes minutes, not seconds. */
 export async function chat(endpoint: string, body: Record<string, unknown>, fetchFn = fetch): Promise<string> {
   let res: Response
   try {
-    res = await fetchFn(`${endpoint}/api/chat`, { method: 'POST', signal: AbortSignal.timeout(10 * 60_000), body: JSON.stringify({ ...body, stream: true }) })
+    res = await fetchFn(`${endpoint}/api/chat`, { method: 'POST', signal: AbortSignal.timeout(10 * 60_000), body: JSON.stringify({ think: false, ...body, stream: true }) })
   } catch (e) {
     throw new OllamaDown(`Ollama at ${endpoint}: ${(e as Error).message}`)
   }

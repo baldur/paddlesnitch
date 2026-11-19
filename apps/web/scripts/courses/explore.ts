@@ -3,7 +3,7 @@
 // pinned on the pictures, and mark whether it was right. Or pick any point on
 // the map for every pass's sharp pictures there ("Footage here").
 //
-//   pnpm --filter web course:explore [--port 3201] [--model qwen2.5vl:32b]   then open http://localhost:3201
+//   pnpm --filter web course:explore [--port 3201] [--model qwen3.8:27b-q4_K_M]   then open http://localhost:3201
 //
 // Reads the course:look store (lib/footage-db.ts) and can run while course:look
 // is looking. The pictures are cut from the clips when first opened and kept in
@@ -23,7 +23,7 @@ import { runDetached } from './lib/proc'
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined }
 const PORT = Number(arg('port') ?? 3201)
 if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) { console.error('stopped: --port must be 1024–65535'); process.exit(1) }
-const MODEL = arg('model') ?? 'qwen2.5vl:32b'
+const MODEL = arg('model') ?? 'qwen3.8:27b-q4_K_M'
 
 const db = openStore()
 const viewDir = path.join(STORE, 'views')

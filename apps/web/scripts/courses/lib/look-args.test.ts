@@ -4,8 +4,8 @@ import { parseLookArgs } from './look-args'
 const parse = (s: string) => parseLookArgs(s ? s.split(' ') : [], (p) => `/abs/${p}`)
 
 describe('parseLookArgs', () => {
-  it('defaults: look, no folders (the caller uses ~/Movies), qwen2.5vl:32b, four levels', () => {
-    expect(parse('')).toEqual({ mode: 'look', folders: [], model: 'qwen2.5vl:32b', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false })
+  it('defaults: look, no folders (the caller uses ~/Movies), qwen3.8:27b-q4_K_M, four levels', () => {
+    expect(parse('')).toEqual({ mode: 'look', folders: [], model: 'qwen3.8:27b-q4_K_M', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false })
   })
   it('folders are what is not a flag or a flag value, in either flag form', () => {
     const a = parse('--model qwen2.5vl:7b Paddling --levels=5 Fotage --minutes 60')

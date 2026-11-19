@@ -18,7 +18,7 @@ const VALUE_FLAGS = new Set(['model', 'base', 'levels', 'minutes'])
 const BARE_FLAGS = new Set(['scan', 'status', 'export', 'allow-remote', 'areas'])
 
 export function parseLookArgs(argv: string[], resolve: (p: string) => string): LookArgs {
-  const out: LookArgs = { mode: 'look', folders: [], model: 'qwen2.5vl:32b', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false }
+  const out: LookArgs = { mode: 'look', folders: [], model: 'qwen3.8:27b-q4_K_M', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false }
   const num = (name: string, v: string, ok: (n: number) => boolean) => {
     const n = Number(v)
     if (!Number.isFinite(n) || !ok(n)) throw new Error(`--${name} ${v}: not a valid value`)
