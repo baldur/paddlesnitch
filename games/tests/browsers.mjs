@@ -808,8 +808,9 @@ async function play(c, page, errors) {
       window.kayak.show('Second instruction', { small: true, hold: 1.2 });
     });
     if ((await hint()) !== 'First instruction') errors.push(`a later hint wiped the first: "${await hint()}"`);
-    // Then, as on a slow CI runner, the race's own: a longer one takes over and
-    // another comes while it's up. The second instruction still gets its turn.
+    // Then, as on a slow CI runner, the race's own: a longer one (which waits
+    // its turn if the first has only just come up, teach.js waits) and another
+    // while it's up. The second instruction still gets its turn.
     await page.evaluate(() => {
       window.kayak.show('Stuck? Hold ↓ and paddle to go backwards and turn', { small: true, hold: 3.5 });
       window.kayak.show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 2.5 });
@@ -828,11 +829,10 @@ async function play(c, page, errors) {
       if (!window.__counting) { window.__counting = true; const tick = () => { window.__hintFrames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
       return document.getElementById('hint').textContent === 'Second instruction' || (window.__hintFrames >= 150 && Date.now() - t0 > 10_000);
     }, Date.now(), { timeout: 300_000 }).then(() => hint()).catch(() => hint());
-    if (shown !== 'Second instruction') errors.push(`the waiting hint never showed in 150 frames and 10 s: "${shown}"`);
-    else {
-      const covered = await page.evaluate(() => window.__covered);
-      if (covered !== 'Second instruction') errors.push(`a longer hint went up over the second instruction the frame it came up: "${covered}"`);
-    }
+    // (Checked first: a hint covered in its own frame is never seen by the frame-by-frame wait either.)
+    const covered = await page.evaluate(() => window.__covered);
+    if (covered !== undefined && covered !== 'Second instruction') errors.push(`a longer hint went up over the second instruction the frame it came up: "${covered}"`);
+    else if (shown !== 'Second instruction') errors.push(`the waiting hint never showed in 150 frames and 10 s: "${shown}"`);
     // Tipping over: the gauge warns in the red; then going in on your own says
     // so, and what keeps you up.
     await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));

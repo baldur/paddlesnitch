@@ -66,7 +66,8 @@ export function howTo(phone) {
 // drop it unseen: a wash hint arriving under "Stuck?" took the slot). The same
 // words aren't queued twice, and at most WAITING wait (the oldest go first).
 // Only the waiting keep their order: a hint no shorter than what's left of the
-// one up goes straight up, as before. `at` is when it came, in game seconds.
+// one up goes straight up, unless that one is an instruction just up (`waits`).
+// `at` is when it came, in game seconds.
 export const WAITING = 3;
 export function waitTurn(queue, hint) {
   if (queue.some((h) => h.text === hint.text)) return queue;

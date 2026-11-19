@@ -13,6 +13,7 @@ test("a hint doesn't go up over an instruction the frame it came up, so it's see
   assert.equal(waits(wash, up(second, READ)), false, 'read: a longer hint goes up, as before');
   assert.equal(waits({ ...wash, now: true }, up(second, 0)), false, 'a `now` (a boat bearing down) still goes straight up');
   assert.equal(waits(wash, up({ text: 'Weak stroke', hold: 0.5 }, 0)), false, "a moment's note isn't kept up");
+  assert.equal(waits(wash, up({ text: 'Your start in 10', hold: 1 }, 0)), true, 'a hint of 1 s is an instruction too');
   assert.equal(waits(second, up(wash, 2)), false, 'nothing longer up: it goes up');
   assert.equal(waits(second, up(wash, 0.5)), true, 'a shorter one waits behind a longer, as before');
   assert.equal(waits(wash, up(wash, 0.1)), false, 'the same words again start it over');
