@@ -71,10 +71,13 @@ export function howTo(phone) {
 // out. Only the waiting keep their order: a hint no shorter than what's left
 // of the one up goes straight up, unless that one is an instruction just up
 // (`waits`). `at` is when it came, in game seconds.
+// (Those past their moment are dropped first, by the newcomer's time: three
+// stale ones held the places and turned a fresh one away.)
 export const WAITING = 3;
 export function waitTurn(queue, hint) {
-  if (queue.length >= WAITING || queue.some((h) => h.text === hint.text)) return queue;
-  return [...queue, hint];
+  const fresh = queue.filter((h) => !(hint.at - h.at > STALE));
+  if (fresh.length >= WAITING || fresh.some((h) => h.text === hint.text)) return fresh;
+  return [...fresh, hint];
 }
 // Whether a hint (`hold` seconds, `now` or not) waits rather than going up over
 // the one in the lane (`lane`: its `left` seconds, its `hold` and how long it's

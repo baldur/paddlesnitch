@@ -96,6 +96,14 @@ test("an instruction waiting its turn isn't dropped when another comes: they wai
   assert.deepEqual(q.map((h) => h.text), [first.text, wash.text, 'note 0'], 'the first to come keep their places; the newest is left out');
 });
 
+test("a full queue of hints past their moment doesn't turn a fresh one away", () => {
+  // (Left out when full, the fresh hint was lost while three stale ones held
+  // the places, and nextTurn then dropped those too: tester review.)
+  let q = ['a', 'b', 'c'].map((text, i) => ({ text, hold: 1, at: i * 0.5 }));
+  q = waitTurn(q, { text: 'fresh', hold: 1, at: 12 });
+  assert.equal(nextTurn(q, 13).next?.text, 'fresh');
+});
+
 test("a hint that waited too long for its moment is skipped, and the rest still come in turn", () => {
   const start = { text: 'Your start in 10', hold: 1.5, at: 0 };
   const swan = { text: "The swan won't move", hold: 1.5, at: 4 };
