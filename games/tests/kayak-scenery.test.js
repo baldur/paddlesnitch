@@ -717,7 +717,7 @@ test("the restaurant by Caversham Bridge stands on its bank in the lidar's parts
   assert.ok(C.pavilion.height < 5 && C.pavilion.along[1] - C.pavilion.along[0] > 20, 'long and low');
   const course = courseFromFile(await data('reading'));
   const land = waterMap(course.scenery.water);
-  const own = [C.glass, C.frame, C.cream, C.brick, C.paving];
+  const own = [C.glass, C.frame, C.cream, C.brick, C.deck];
   const ours = (color) => own.some((c) => c.every((v, i) => Math.abs(v - color[i]) < 0.002));
   const f = landmarkFrame(course, 'bridge-restaurant');
   let n = 0;
@@ -725,7 +725,8 @@ test("the restaurant by Caversham Bridge stands on its bank in the lidar's parts
     const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
     if (Math.hypot(cx - f.origin[0], cz - f.origin[2]) > 30 || !ours(color)) continue;
     n++;
-    assert.ok(!land.inside(cx, cz) || land.shore(cx, cz) < 0.5, `part of it ${land.shore(cx, cz).toFixed(1)} m out over the water at ${cx.toFixed(0)}, ${cz.toFixed(0)}`);
+    // (The pavilion's deck at the water's line, just over it, as the footage shows; nothing further out.)
+    assert.ok(!land.inside(cx, cz) || land.shore(cx, cz) < 1, `part of it ${land.shore(cx, cz).toFixed(1)} m out over the water at ${cx.toFixed(0)}, ${cz.toFixed(0)}`);
   }
   assert.ok(n > 100, `${n} triangles of it`);
   assert.ok(!course.scenery.features?.some((x) => x.style === 'glass-restaurant'), 'no glass-restaurant feature left over the water');
