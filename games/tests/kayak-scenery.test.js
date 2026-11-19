@@ -711,24 +711,27 @@ test('the ground leaves the water at the mapped shore, not part-way to the next 
 // feature whose glass and terrace stood 10 m out over the channel's water.
 test("the restaurant by Caversham Bridge stands on its bank in the lidar's parts, none of it out in the north channel", async () => {
   const C = BRIDGE_RESTAURANT;
-  // Heights over the river, as the lidar measures them: the brick block's roof, the tower's cap, the house's ridge, the building behind.
-  assert.deepEqual([C.block.top, C.tower.top, C.house.ridge, C.back.top], [7.5, 9.9, 15, 12.5]);
-  // The pavilion's glass roof gives the lidar no return: one storey under the block's upper floor, along the river edge of its footprint.
-  assert.ok(C.pavilion.height < 5 && C.pavilion.along[1] - C.pavilion.along[0] > 20, 'long and low');
   const course = courseFromFile(await data('reading'));
   const land = waterMap(course.scenery.water);
-  const own = [C.glass, C.frame, C.cream, C.brick, C.deck];
-  const ours = (color) => own.some((c) => c.every((v, i) => Math.abs(v - color[i]) < 0.002));
   const f = landmarkFrame(course, 'bridge-restaurant');
-  let n = 0;
-  for (const { p, color } of await world()) {
-    const [cx, cy, cz] = [0, 1, 2].map((i) => (p[0][i] + p[1][i] + p[2][i]) / 3);
-    if (Math.hypot(cx - f.origin[0], cz - f.origin[2]) > 30 || !ours(color)) continue;
-    n++;
-    // (The pavilion's deck at the water's line, just over it, as the footage shows; nothing further out.)
-    assert.ok(!land.inside(cx, cz) || land.shore(cx, cz) < 1, `part of it ${land.shore(cx, cz).toFixed(1)} m out over the water at ${cx.toFixed(0)}, ${cz.toFixed(0)}`);
+  const colours = Object.values(C).filter((c) => Array.isArray(c) && c.length === 3 && typeof c[0] === 'number');
+  const is = (c, color) => c.every((v, i) => Math.abs(v - color[i]) < 0.002);
+  const ours = (await world()).filter(({ p, color }) => colours.some((c) => is(c, color)) && p.every((q) => Math.hypot(q[0] - f.origin[0], q[2] - f.origin[2]) < 30));
+  assert.ok(ours.length > 200, `${ours.length} triangles of it`);
+  // Nothing of it above the water further out than the pavilion's deck, which stands just over the water's line, as the footage shows.
+  for (const { p } of ours) for (const q of p) {
+    if (q[1] > 0 && land.inside(q[0], q[2])) assert.ok(land.shore(q[0], q[2]) < 1, `part of it ${land.shore(q[0], q[2]).toFixed(1)} m out over the water at ${q[0].toFixed(0)}, ${q[2].toFixed(0)}`);
   }
-  assert.ok(n > 100, `${n} triangles of it`);
+  // Each part as high as the lidar measures it, in the mesh: the brick block's roof, the tower's cap, the house's ridge, the building behind.
+  const top = (colour, [dx, dz], r) => Math.max(...ours.filter(({ color, p }) => is(colour, color) && Math.hypot((p[0][0] + p[1][0] + p[2][0]) / 3 - f.origin[0] - dx, (p[0][2] + p[1][2] + p[2][2]) / 3 - f.origin[2] - dz) < r).flatMap(({ p }) => p.map((q) => q[1])));
+  for (const [name, got, want] of [
+    ['the brick block', top(C.brick, C.block.at, 4), 7.5],
+    ['the tower', top(C.cap, C.tower.at, 3), 9.9],
+    ['the house', top(C.slate, C.house.at, 8), 15],
+    ['the building behind', top(C.dark, C.back.at, 5), 12.5],
+  ]) assert.ok(Math.abs(got - want) < 0.3, `${name} ${got.toFixed(1)} m over the river, the lidar ${want} m`);
+  // The pavilion's glass roof gives the lidar no return: one storey, long, along the footprint's river edge.
+  assert.ok(C.pavilion.height < 5 && C.pavilion.along[1] - C.pavilion.along[0] > 20, 'long and low');
   assert.ok(!course.scenery.features?.some((x) => x.style === 'glass-restaurant'), 'no glass-restaurant feature left over the water');
 });
 
@@ -777,7 +780,7 @@ test('the land along the shore has no new slits where its quads are split', asyn
       }
     }
   }
-  assert.ok(slits.size <= 80, `${slits.size} slits over 30 cm above the water (58; 73 with the split at the shore; 79 with the strips split where the shore runs across them, where two strips' rows differ)`);
+  assert.ok(slits.size <= 77, `${slits.size} slits over 30 cm above the water (58; 73 with the split at the shore; 77 with the strips split where the shore runs across them: where two strips' rows differ, and four by Christchurch Bridge)`);
 });
 
 // By a wooded bank the footage's water is dark (about 42 of 255 near the boat,

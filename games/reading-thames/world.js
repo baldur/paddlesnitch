@@ -775,7 +775,11 @@ function realLand(m, river, real, rand) {
         const ts = cuts[i0].map((r) => (r - prev[i0].r) / (next[i0].r - prev[i0].r));
         const along = (i, t) => ({ p: prev[i].p.map((c, k) => c + (next[i].p[k] - c) * t) });
         const rows = [prev];
-        ts.forEach((t, j) => rows.push([0, 1].map((i) => (cuts[i] ? point(i ? v : u, cuts[i][j]) : along(i, t)))));
+        // (An edge with an end on a strip's straight line, inside a strip drawn
+        // sample by sample, is cut along its own straight line too: a cut at the
+        // ground's height there opened slits.)
+        const on = (i, r) => (prev[i].flat || next[i].flat ? along(i, (r - prev[i].r) / (next[i].r - prev[i].r)) : point(i ? v : u, r));
+        ts.forEach((t, j) => rows.push([0, 1].map((i) => (cuts[i] ? on(i, cuts[i][j]) : along(i, t)))));
         rows.push(next);
         // (A part with no length on either edge, where a short edge's cuts clamp together, is left out.)
         const same = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 0.01;
@@ -845,7 +849,7 @@ function realLand(m, river, real, rand) {
       const last = across.length - 1;
       const split = ends[0].map((p, k) => k > 0 && k < last && (p.d < 0) !== (ends[1][k].d < 0));
       const steps = split.some(Boolean) ? samples.slice(n * stride, (n + 1) * stride + 1) : [a, b];
-      const lerp = (k, t) => ({ p: ends[0][k].p.map((c, i) => c + (ends[1][k].p[i] - c) * t), d: ends[0][k].d + (ends[1][k].d - ends[0][k].d) * t, r: across[k] });
+      const lerp = (k, t) => ({ p: ends[0][k].p.map((c, i) => c + (ends[1][k].p[i] - c) * t), d: ends[0][k].d + (ends[1][k].d - ends[0][k].d) * t, r: across[k], flat: true });
       // (A sample's ground no higher than the strip's ends there: under a
       // bridge it read the abutment's top and stood up as a green spike.)
       const capped = (k, q) => ({ ...q, p: [q.p[0], Math.min(q.p[1], Math.max(ends[0][k].p[1], ends[1][k].p[1]) + 0.3), q.p[2]] });
