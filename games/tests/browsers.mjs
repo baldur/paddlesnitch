@@ -684,8 +684,9 @@ async function play(c, page, errors) {
       for (const r of race.racers) r.release -= by;
     }
     // Out of the start queue by the bank, into the middle half of the river (the
-    // test doesn't steer), where it's clearest of the rivals alongside: dropped
-    // mid-river it landed 2 m from one, and now and then got stuck on it (small
+    // test doesn't steer), where it's clearest of the rivals alongside (1.5 m at
+    // the least over 100 seeds): dropped mid-river it landed 2 m from one, and
+    // now and then got stuck on it, most likely in the first seconds (small
     // iphone, Hasler Div 7-9: 'the rhythm bar never said "building"', 'boat still
     // on the start line', and 'Stuck? Swipe down' showing).
     if (race.racers.length > 1) {
@@ -698,7 +699,8 @@ async function play(c, page, errors) {
       let best = { across: 0, clear: -1 };
       for (let across = -a.left / 2; across <= a.right / 2; across += 0.25) {
         const clear = Math.min(99, ...near.map((r) => Math.abs(r.across - across)));
-        if (clear > best.clear) best = { across, clear };
+        // (The clearest; between equals, the nearer the middle: with no rival near, mid-river as before.)
+        if (clear > best.clear + 1e-9 || (Math.abs(clear - best.clear) < 1e-9 && Math.abs(across) < Math.abs(best.across))) best = { across, clear };
       }
       // (Across the river line to its right is (-tz, tx), as course.js places a boat.)
       const [x, z] = [a.x - t[1] * best.across, a.z + t[0] * best.across];
@@ -714,8 +716,18 @@ async function play(c, page, errors) {
   // winding course the boat can reach a bank (and stop) by the last stroke.
   await page.evaluate(() => {
     window.__best = 0;
+    // What a stalled boat ran into, for the failures below: each new touch with
+    // a rival, a swim, and its heading from now.
+    const { race, boat } = window.kayak;
+    const me = String(race.racers.indexOf(race.player));
+    let touching = new Set();
+    window.__stall = { bumps: 0, swam: false, heading: boat.heading };
     const tick = () => {
       window.__best = Math.max(window.__best, window.kayak.boat.speed);
+      const now = new Set([...race.contacts].filter((k) => k.split('-').includes(me)));
+      for (const k of now) if (!touching.has(k)) window.__stall.bumps++;
+      touching = now;
+      window.__stall.swam ||= boat.swim > 0;
       window.__building ||= document.getElementById('flow').textContent === 'building';
       requestAnimationFrame(tick);
     };
@@ -730,13 +742,23 @@ async function play(c, page, errors) {
     const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
     await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
   }
-  const { speed, ms, s, start } = await page.evaluate(() => ({ speed: window.__best, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start }));
-  if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling`);
+  const { speed, ms, s, start, why } = await page.evaluate(() => {
+    const { race, boat } = window.kayak;
+    const st = window.__stall;
+    const near = Math.min(99, ...race.racers.filter((r) => r !== race.player).map((r) => Math.hypot(r.boat.x - boat.x, r.boat.z - boat.z)));
+    const turned = (((boat.heading - st.heading) * 180) / Math.PI + 540) % 360 - 180;
+    return {
+      speed: window.__best, ms: window.kayak.gpu.frameMs ?? window.kayak.gpu.gpuMs, s: window.kayak.loc.s, start: window.kayak.course.start,
+      why: `${st.bumps} ${st.bumps === 1 ? 'bump' : 'bumps'} with a rival, ${st.swam ? 'a swim' : 'no swim'}, turned ${turned.toFixed(0)}°, the nearest rival ${near.toFixed(1)} m off`,
+    };
+  });
+  // (Each with what it ran into: on CI these three came together, and didn't say why.)
+  if (!(speed > 1)) errors.push(`boat at ${speed.toFixed(2)} m/s after paddling (${why})`);
   // An even beat fills the rhythm bar, and it says so while it does.
-  if (!c.row && !c.outing && !(await page.evaluate(() => window.__building))) errors.push('the rhythm bar never said "building"');
+  if (!c.row && !c.outing && !(await page.evaluate(() => window.__building))) errors.push(`the rhythm bar never said "building" (${why})`);
   const format = await page.evaluate(() => window.kayak.race.format ?? 'mass');
   if (c.format && format !== c.format) errors.push(`raced as ${format}, picked ${c.format}`);
-  if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start})`);
+  if (!(s > start + 2)) errors.push(`boat still on the start line (${s.toFixed(1)} m along, start at ${start}; ${why})`);
   // A camera held still mid-race (#debug, kayak.shoot: for comparing with the
   // footage) keeps the race drawing: it once threw placing the club's door
   // labels, which a race doesn't have, and froze on that frame.
