@@ -234,16 +234,13 @@ export function moveTraffic(traffic, time) {
       b.s = lead.s - b.dir * back;
       b.on = lead.on && b.s > T.length && b.s < river.length - T.length;
       if (!b.on) continue;
-      b.lateral = lead.lateral + b.dir * right;
-      // (Under a bridge, in the room its own lane has: its slot can be further out than its lead.)
-      const room = roomAt(river, b.kind, b.s, Math.sign(b.lateral) || b.dir);
-      if (room !== null) b.lateral = Math.sign(b.lateral) * Math.min(Math.abs(b.lateral), Math.max(0, room - Math.max(T.hull, T.oars?.[2] ?? 0)));
+      b.lateral = lead.lateral + b.dir * right; // (under a bridge, the lead keeps room for its slot: roomAt)
     } else {
       b.s = b.meet + b.dir * T.speed * k * (time - b.at);
       b.on = (b.behind || time > b.at - BEFORE) && time < b.at + AFTER && b.s > T.length && b.s < river.length - T.length;
       if (!b.on) continue;
       const width = widthAt(river, b.s);
-      const room = roomAt(river, b.kind, b.s, b.dir);
+      const room = roomAt(river, b.kind, b.s, b.dir, b.pack ? PACK : undefined);
       b.lateral = b.dir * lane(river, b.s, b.dir, T, room === null ? null : Math.min(room, b.dir > 0 ? width.right : width.left));
     }
     // Wandering, within its half of the open water; the bow ahead of the track (turning right is + heading).
@@ -253,7 +250,7 @@ export function moveTraffic(traffic, time) {
       const w = (2 * Math.PI) / D.period;
       const a = w * time + b.phase;
       const width = widthAt(river, b.s);
-      const open = roomAt(river, b.kind, b.s, b.dir);
+      const open = roomAt(river, b.kind, b.s, b.dir, b.pack ? PACK : undefined);
       const room = Math.min(b.dir > 0 ? width.right : width.left, open ?? Infinity) - Math.max(T.hull, T.oars?.[2] ?? 0);
       const by = (Math.tan(D.track) * T.speed * k) / w; // metres either way (through the world, `k` times as fast)
       b.lateral = b.dir * Math.max(0, Math.min(room, b.dir * b.lateral + by * Math.sin(a)));
@@ -285,9 +282,12 @@ export function lane(river, s, dir, T, open = null) {
 // a bridge. Worked out once per river: the water (the costly part) for all
 // kinds, then each kind's arches; createTraffic does it before the race starts.
 const REACH = 40;
-const STEP = 0.25;
+const STEP = 0.5;
 function bridgeWater(river) {
   if (river.bridgeWater) return river.bridgeWater;
+  // (Not kept without the water map: worked out before it, it would stay empty.
+  // createTraffic sets it first.)
+  if (!river.land?.rings) return [];
   const out = [];
   for (const b of river.bridges ?? []) {
     if (b?.style !== 'concrete-arch' || !river.land?.rings) continue;
@@ -317,6 +317,7 @@ function bridgeWater(river) {
   return (river.bridgeWater = out);
 }
 export function bridgeRoom(river, kind, height) {
+  if (!river.land?.rings) return [];
   river.bridgeRoom ??= {};
   if (river.bridgeRoom[kind]) return river.bridgeRoom[kind];
   return (river.bridgeRoom[kind] = bridgeWater(river).map(({ from, arches, rows }) => {
@@ -332,23 +333,31 @@ export function bridgeRoom(river, kind, height) {
     return { from, left: rows.left.map(room), right: rows.right.map(room) };
   }));
 }
-// The room a boat of kind `kind` at `s` has on its side (`dir`), over its whole
-// length (the least near a bridge), or null where no bridge is near. Less the
-// swing of its ends as it wanders (DRIFT's crab: a cruiser's ends 0.3 m out),
-// and 0.2 m for the river line's bend along it.
-export function roomAt(river, kind, s, dir) {
+// The room a boat of kind `kind` at `s` has on its side (`dir`), or null far
+// from any bridge: the least over its length, eased along the river at EASE
+// metres a metre either way, so its lane comes over smoothly (a step in the room
+// moved a boat up to 12 m sideways in a frame: tester); less the swing of its
+// ends as it wanders (DRIFT's crab: a cruiser's ends 0.3 m out) and 0.2 m for
+// the river line's bend along it. A pack's lead (`pack`) keeps room for the
+// pack: its length behind and its slots' reach out to the side.
+const EASE = 0.15;
+const PACK = { behind: Math.max(...Object.values(PACKS).flat().map(([back]) => back)), out: Math.max(...Object.values(PACKS).flat().map(([, right]) => right)) };
+export function roomAt(river, kind, s, dir, pack = { behind: 0, out: 0 }) {
   const T = TRAFFIC[kind];
-  let least = null;
+  // Its length, and its pack's behind it, along the river line.
+  const [lo, hi] = dir > 0 ? [s - T.length / 2 - pack.behind, s + T.length / 2] : [s - T.length / 2, s + T.length / 2 + pack.behind];
+  let least = Infinity;
   for (const room of bridgeRoom(river, kind, T.height)) {
     const list = dir > 0 ? room.right : room.left;
-    for (let x = Math.ceil(s - T.length / 2); x <= s + T.length / 2; x++) {
-      const v = list[x - room.from];
-      if (v !== undefined) least = Math.min(least ?? Infinity, v);
+    if (lo > room.from + list.length + 200 || hi < room.from - 200) continue;
+    for (let i = 0; i < list.length; i++) {
+      const x = room.from + i;
+      least = Math.min(least, list[i] + EASE * Math.max(0, lo - x, x - hi));
     }
   }
-  if (least === null) return null;
+  if (least === Infinity) return null;
   const D = DRIFT[kind];
-  return Math.max(0, least - (D ? Math.sin(D.crab * D.track) * (T.length / 2) : 0) - 0.2);
+  return Math.max(0, least - pack.out - (D ? Math.sin(D.crab * D.track) * (T.length / 2) : 0) - 0.2);
 }
 
 // The parts of a boat a kayak can hit, as stretches of its length (from the
