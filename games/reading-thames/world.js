@@ -3089,7 +3089,62 @@ function boardwalk(m, course, f) {
   for (let x = x0; x <= x1; x += 1.375) f.box(m, [x - 0.05, x + 0.05], [deck, deck + 1.2], [2.08, 2.24], timber.map((v) => v * 0.75));
 }
 
+// The long timber staging along the moorings across from the boatyard, where
+// the boats tie up (recording 0104 and the passes since August): a weathered
+// deck about half a metre over the water on piles every 4 m, a plank along its
+// edge, dark under it against the bank, and upstream of it a pale floating
+// pontoon with a white ladder. The lidar measures a strip 2 m wide at 0.6 to
+// 0.9 m over the river for 69 m, then a lower one for 22 m. Its point is the
+// middle of the timber, on the water's edge; it stands on the bank's side of
+// the water line, so the moored boats lie along its edge as they did the bank's.
+// It is laid along the bank, not the river line (4 degrees off it here: square
+// to the river line, its ends stood 2.3 m out in the water and up the bank):
+// along the water's edge 20 m either side of its point. The timber starts 2 m
+// short of the lidar's downstream end, where the bank bends away and a moored
+// cruiser lies; the pontoon follows the bank's bend in 2 m pieces, as the boats
+// along it do.
+export const STAGING = { timber: [-32.5, 34.5], pontoon: [34.5, 56.5], deep: 2, deck: 0.6, float: 0.3, pile: 4, piece: 2 };
+function staging(m, course, f) {
+  const { timber: [x0, x1], pontoon: [p0, p1], deep, deck, float, pile, piece } = STAGING;
+  // Where the water ends at x along a frame, coming in from out on the river (a
+  // wet point, then a dry one), or 0 with no water map.
+  const edgeIn = (g, x) => {
+    if (!course.land) return 0;
+    const wet = (z) => course.land.inside(...[0, 2].map((i) => g.at(x, 0, z)[i]));
+    for (let z = 8; z > -8; z -= 0.1) if (wet(z) && !wet(z - 0.1)) return z - 0.1;
+    return 0;
+  };
+  // The bank's frame: x along the water's edge, z out to the water from it.
+  const [A, B] = [f.at(-20, 0, edgeIn(f, -20)), f.at(20, 0, edgeIn(f, 20))];
+  const len = Math.hypot(B[0] - A[0], B[2] - A[2]) || 1;
+  const right = [(B[0] - A[0]) / len, (B[2] - A[2]) / len];
+  const fwd = [-right[1], right[0]].map((v) => v * Math.sign(-right[1] * f.fwd[0] + right[0] * f.fwd[1] || 1));
+  const t = (f.origin[0] - A[0]) * right[0] + (f.origin[2] - A[2]) * right[1];
+  const origin = [A[0] + right[0] * t, 0, A[2] + right[1] * t];
+  const g = {
+    at: (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z],
+    box: (xr, yr, zr, color) => orientedBox(m, origin, right, fwd, xr, yr, zr, color),
+  };
+  const wood = [0.55, 0.47, 0.36];
+  g.box([x0, x1], [deck - 0.1, deck], [-deep, 0], wood);
+  g.box([x0, x1], [deck - 0.35, deck], [-0.02, 0.06], wood.map((v) => v * 0.85)); // the plank along its edge
+  for (let x = x0 + 0.2; x <= x1; x += pile) g.box([x - 0.12, x + 0.12], [-0.6, deck - 0.1], [-0.1, 0.12], wood.map((v) => v * 0.65));
+  // Dark under it, back to the bank (from the water you see into the shadow under the deck, not the bank).
+  g.box([x0, x1], [-0.4, deck - 0.1], [-deep, -deep + 0.1], [0.1, 0.11, 0.09]);
+  // The floating pontoon, pale, along the water's edge where it is, and its ladder
+  // up the bank at its downstream end.
+  for (let a = p0; a < p1 - 0.01; a += piece) {
+    const b = Math.min(p1, a + piece);
+    const e = Math.min(edgeIn(g, a), edgeIn(g, b), edgeIn(g, (a + b) / 2));
+    g.box([a, b], [-0.1, float], [e - deep, e], COLORS.pontoon);
+  }
+  const e0 = edgeIn(g, p0 + 2.4);
+  for (const x of [p0 + 2, p0 + 2.8]) g.box([x - 0.04, x + 0.04], [float, float + 1.1], [e0 - deep + 0.3, e0 - deep + 0.38], COLORS.white);
+  for (let y = float + 0.3; y < float + 1.15; y += 0.35) g.box([p0 + 2, p0 + 2.8], [y - 0.03, y + 0.03], [e0 - deep + 0.3, e0 - deep + 0.38], COLORS.white);
+}
+
 const FEATURES = {
+  staging,
   'boat-shed': boatShed, 'ivy-boathouse': ivyBoathouse, quay, truss, wharf, jetty, beach, landing: (m, course, f) => beach(m, course, f, 6, 7), sandbags, 'channel-sign': channelSign, mailbox, gazebo, 'sculling-club': scullingClub,
   'ferry-landing': ferryLanding, marina, willow, boardwalk, 'deck-boathouse': deckBoathouse, 'dead-tree': deadTree, 'river-sign': riverSign,
 };
