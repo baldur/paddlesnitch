@@ -239,9 +239,7 @@ export function moveTraffic(traffic, time) {
       b.s = b.meet + b.dir * T.speed * k * (time - b.at);
       b.on = (b.behind || time > b.at - BEFORE) && time < b.at + AFTER && b.s > T.length && b.s < river.length - T.length;
       if (!b.on) continue;
-      const width = widthAt(river, b.s);
-      const room = roomAt(river, b.kind, b.s, b.dir, b.pack ? PACK : undefined);
-      b.lateral = b.dir * lane(river, b.s, b.dir, T, room === null ? null : Math.min(room, b.dir > 0 ? width.right : width.left));
+      b.lateral = b.dir * lane(river, b.s, b.dir, T, openAt(river, b.kind, b.s, b.dir, b.pack ? PACK : undefined));
     }
     // Wandering, within its half of the open water; the bow ahead of the track (turning right is + heading).
     const D = DRIFT[b.kind];
@@ -249,9 +247,7 @@ export function moveTraffic(traffic, time) {
     if (D && !lead) {
       const w = (2 * Math.PI) / D.period;
       const a = w * time + b.phase;
-      const width = widthAt(river, b.s);
-      const open = roomAt(river, b.kind, b.s, b.dir, b.pack ? PACK : undefined);
-      const room = Math.min(b.dir > 0 ? width.right : width.left, open ?? Infinity) - Math.max(T.hull, T.oars?.[2] ?? 0);
+      const room = openAt(river, b.kind, b.s, b.dir, b.pack ? PACK : undefined) - Math.max(T.hull, T.oars?.[2] ?? 0);
       const by = (Math.tan(D.track) * T.speed * k) / w; // metres either way (through the world, `k` times as fast)
       b.lateral = b.dir * Math.max(0, Math.min(room, b.dir * b.lateral + by * Math.sin(a)));
       yaw = D.crab * D.track * Math.cos(a);
@@ -477,4 +473,43 @@ function mulberry32(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+// The open water a boat has on its side (`dir`) at `s`: the river line's width
+// there, eased along the river at EASE metres a metre as roomAt's is, the least
+// over its length (and its pack's), and under a bridge, its room there. The
+// width steps from one 2 m sample to the next (by 7 m where a moored boat or a
+// bank's bend narrows it), and a boat's lane jumped sideways with it (#984).
+export function openAt(river, kind, s, dir, pack = { behind: 0, out: 0 }) {
+  const T = TRAFFIC[kind];
+  const eased = easedWidth(river)[dir > 0 ? 'right' : 'left'];
+  const [lo, hi] = dir > 0 ? [s - T.length / 2 - pack.behind, s + T.length / 2] : [s - T.length / 2, s + T.length / 2 + pack.behind];
+  const step = river.length / (eased.length - 1 || 1);
+  let least = Infinity;
+  // Every sample along it, and the eased width between them, straight from one to the next.
+  const at = (x) => {
+    const f = Math.max(0, Math.min(eased.length - 1, x / step));
+    const i = Math.floor(f);
+    return i >= eased.length - 1 ? eased[eased.length - 1] : eased[i] + (eased[i + 1] - eased[i]) * (f - i);
+  };
+  least = Math.min(at(lo), at(hi));
+  for (let i = Math.ceil(lo / step); i * step <= hi; i++) if (i >= 0 && i < eased.length) least = Math.min(least, eased[i]);
+  const room = roomAt(river, kind, s, dir, pack);
+  return Math.min(least - pack.out, room ?? Infinity);
+}
+// The river line's width each side at every sample, eased so it never changes by
+// more than EASE metres a metre along the river (only ever narrowed: a boat comes
+// over before the water narrows, not after). Worked out once per river.
+function easedWidth(river) {
+  if (river.easedWidth) return river.easedWidth;
+  const out = {};
+  const n = river.samples.length;
+  const step = river.length / (n - 1 || 1);
+  for (const side of ['left', 'right']) {
+    const e = Float64Array.from(river.samples, (p) => p[side]);
+    for (let i = 1; i < n; i++) e[i] = Math.min(e[i], e[i - 1] + EASE * step);
+    for (let i = n - 2; i >= 0; i--) e[i] = Math.min(e[i], e[i + 1] + EASE * step);
+    out[side] = e;
+  }
+  return (river.easedWidth = out);
 }
