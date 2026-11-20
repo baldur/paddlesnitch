@@ -1,7 +1,25 @@
 // Teaching as you go (teach.js): each lesson once, the first time it matters.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING, nextTurn, STALE } from '../reading-thames/teach.js';
+import { LESSONS, nextLesson, loadTaught, saveTaught, howTo, TAUGHT_KEY, waitTurn, WAITING, nextTurn, STALE, waits, READ } from '../reading-thames/teach.js';
+
+test("a hint doesn't go up over an instruction the frame it came up, so it's seen: it waits its turn", () => {
+  // (The race's sprint hint covered "Second instruction" the frame it came off the queue: games in webkit, 7d000bad.)
+  const second = { text: 'Second instruction', hold: 1.2 };
+  const wash = { text: 'Paddle quicker than 90 a minute to sprint onto their wash', hold: 2.5 };
+  const up = (hint, t) => ({ ...hint, left: hint.hold - t, up: t });
+  assert.equal(waits(wash, up(second, 0)), true, 'just up: the wash waits');
+  assert.equal(waits(wash, up(second, READ - 0.01)), true);
+  assert.equal(waits(wash, up(second, READ)), false, 'read: a longer hint goes up, as before');
+  assert.equal(waits({ ...wash, now: true }, up(second, 0)), false, 'a `now` (a boat bearing down) still goes straight up');
+  assert.equal(waits(wash, up({ text: 'Weak stroke', hold: 0.5 }, 0)), false, "a moment's note isn't kept up");
+  assert.equal(waits(wash, up({ text: 'Your start in 10', hold: 1 }, 0)), true, 'a hint of 1 s is an instruction too');
+  assert.equal(waits(second, up(wash, 2)), false, 'nothing longer up: it goes up');
+  assert.equal(waits(second, up(wash, 0.5)), true, 'a shorter one waits behind a longer, as before');
+  assert.equal(waits(wash, up(wash, 0.1)), false, 'the same words again start it over');
+  assert.equal(waits(wash, null), false, 'a clear lane');
+  assert.equal(waits(wash, { ...second, left: 0, up: 0.1 }), false, 'its time up');
+});
 
 const calm = { angle: 0, rhythm: 0.2, draft: 0, racing: true, time: 5, rate: 70, stamina: 1, sprinting: false, assist: false, scull: false, outing: false };
 const keys = howTo(false);

@@ -66,11 +66,23 @@ export function howTo(phone) {
 // drop it unseen: a wash hint arriving under "Stuck?" took the slot). The same
 // words aren't queued twice, and at most WAITING wait (the oldest go first).
 // Only the waiting keep their order: a hint no shorter than what's left of the
-// one up goes straight up, as before. `at` is when it came, in game seconds.
+// one up goes straight up, unless that one is an instruction just up (`waits`).
+// `at` is when it came, in game seconds.
 export const WAITING = 3;
 export function waitTurn(queue, hint) {
   if (queue.some((h) => h.text === hint.text)) return queue;
   return [...queue, hint].slice(-WAITING);
+}
+// Whether a hint (`hold` seconds, `now` or not) waits rather than going up over
+// the one in the lane (`lane`: its `left` seconds, its `hold` and how long it's
+// been `up`; null when the lane is clear). A shorter one never wipes a longer;
+// and nothing but a `now` covers an instruction (`hold` ≥ 1) in its first READ
+// seconds: the race's sprint hint once went up over a waiting instruction the
+// frame it came off the queue, so it was never seen (games in webkit, 7d000bad).
+export const READ = 0.5;
+export function waits({ text, hold, now }, lane) {
+  if (now || !lane || lane.left <= 0) return false;
+  return lane.left > hold || (lane.hold >= 1 && lane.up < READ && lane.text !== text);
 }
 // The next to show at game time `now`, skipping any that waited past STALE
 // seconds ("Your start in 10" or "The swan won't move" are about a moment).

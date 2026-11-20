@@ -790,16 +790,34 @@ async function play(c, page, errors) {
     // (Cleared first, in the same frame: the race's own lessons can fill the
     // slot for longer than a test should wait, on CI's slow software drawing.)
     await page.evaluate(() => {
+      // The frame the second instruction comes up, the race's sprint hint (2.5 s,
+      // longer) comes too: on 7d000bad it went straight over it, unseen, only
+      // when a rival happened to be ahead then. Sent here every time (a
+      // MutationObserver runs in that frame, before it's drawn); the second
+      // instruction must still be up after it.
+      const el = document.getElementById('hint');
+      new MutationObserver((_, obs) => {
+        if (el.textContent !== 'Second instruction') return;
+        obs.disconnect();
+        window.kayak.show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 2.5 });
+        window.__covered = el.textContent;
+      }).observe(el, { childList: true, characterData: true, subtree: true });
       window.kayak.show('', { small: true, now: true, hold: 0 });
       window.kayak.show('First instruction', { small: true, hold: 1.5 });
       window.kayak.show('Weak stroke', { small: true, hold: 0.5 });
       window.kayak.show('Second instruction', { small: true, hold: 1.2 });
     });
     if ((await hint()) !== 'First instruction') errors.push(`a later hint wiped the first: "${await hint()}"`);
-    // Then, as on a slow CI runner, the race's own: a longer one takes over and
-    // another comes while it's up. The second instruction still gets its turn.
+    // Then, as on a slow CI runner, the race's own: a longer one (which waits
+    // its turn if the first has only just come up, teach.js waits) and another
+    // while it's up. The second instruction still gets its turn.
     await page.evaluate(() => {
-      window.kayak.show('Stuck? Hold ↓ and paddle to go backwards and turn', { small: true, hold: 3.5 });
+      // (The device's own words, as the game's stuck hint has them: on a phone the
+      // desktop text didn't count as the same hint, so the game's own, when the
+      // idle paddler got stuck, made a fourth waiting and pushed the second
+      // instruction out of the queue: small iPhone at 580 ms frames, f500b91e.)
+      const phone = matchMedia('(pointer: coarse)').matches;
+      window.kayak.show(phone ? 'Stuck? Swipe down to paddle backwards and turn' : 'Stuck? Hold ↓ and paddle to go backwards and turn', { small: true, hold: 3.5 });
       window.kayak.show('Paddle quicker than 90 a minute to sprint onto their wash', { small: true, hold: 2.5 });
     });
     // A hint's time passes in game time, at most 0.1 s a frame (main.js), so the
@@ -816,7 +834,10 @@ async function play(c, page, errors) {
       if (!window.__counting) { window.__counting = true; const tick = () => { window.__hintFrames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
       return document.getElementById('hint').textContent === 'Second instruction' || (window.__hintFrames >= 150 && Date.now() - t0 > 10_000);
     }, Date.now(), { timeout: 300_000 }).then(() => hint()).catch(() => hint());
-    if (shown !== 'Second instruction') errors.push(`the waiting hint never showed in 150 frames and 10 s: "${shown}"`);
+    // (Checked first: a hint covered in its own frame is never seen by the frame-by-frame wait either.)
+    const covered = await page.evaluate(() => window.__covered);
+    if (covered !== undefined && covered !== 'Second instruction') errors.push(`a longer hint went up over the second instruction the frame it came up: "${covered}"`);
+    else if (shown !== 'Second instruction') errors.push(`the waiting hint never showed in 150 frames and 10 s: "${shown}"`);
     // Tipping over: the gauge warns in the red; then going in on your own says
     // so, and what keeps you up.
     await page.evaluate(() => Object.assign(window.kayak.boat, { roll: 0.6, rollRate: 0 }));

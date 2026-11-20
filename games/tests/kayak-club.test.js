@@ -425,15 +425,35 @@ test("Caversham Bridge is as wide as the lidar measures it, 19 m, and stands on 
   assert.ok(Math.abs(Math.max(...across) + Math.min(...across)) < 0.3, 'centred on its road');
 });
 
-test('the narrowboats across from the boatyard are laid up under covers, as in the footage', async () => {
+// The moorings across from the boatyard, on every pass filmed there (14, from
+// August to the owner's close pass in recording 0104 on 2026-11-18): one navy
+// narrowboat at their downstream end, then cruisers. The row of narrowboats
+// (2026-11-15) put four nose to tail where the footage never shows more than one.
+test('across from the boatyard: one navy narrowboat at the downstream end of the moorings, cruisers upstream of it', async () => {
   const d = await data('reading');
-  const covered = d.moorings.filter((m) => m.crew === 'covers');
-  assert.ok(covered.length >= 3 && covered.every((m) => m.kind === 'narrowboat'), `${covered.length} covered`);
+  // (Below it, the surveyed tower boat at 3452 m; above 3550 m the surveyed row, which this one stops short of.)
+  const row = d.moorings.filter((m) => m.side === 1 && m.s > 3458 && m.s < 3552).sort((a, b) => a.s - b.s);
+  const narrow = row.filter((m) => m.kind === 'narrowboat');
+  assert.equal(narrow.length, 1, `${narrow.length} narrowboats along it`);
+  assert.equal(narrow[0], row[0], 'the narrowboat at its downstream end');
+  assert.equal(narrow[0].paint, 'navy');
+  assert.equal(narrow[0].length, 18);
+  assert.ok(row.length >= 6 && row.slice(1).every((m) => m.kind === 'cruiser'), `${row.length - 1} boats upstream of it, all cruisers`);
+  // The surveyed row upstream starts where the survey cast it, not pushed on by this one.
+  const surveyed = d.moorings.filter((m) => m.side === 1 && m.s >= 3552 && m.s < 3590).map((m) => m.s);
+  assert.deepEqual(surveyed, [3559.5, 3574], 'the surveyed cruisers where the survey put them');
+});
+
+// Covers are still drawn for any narrowboat given them (no moorings use them
+// now). Every narrowboat paint is dark, so only the grey canvas can show.
+test('a narrowboat laid up under covers gets a stern hood and a cratch cover', async () => {
+  const d = await data('reading');
+  const boat = d.moorings.find((m) => m.kind === 'narrowboat' && m.paint === 'navy' && m.side === 1 && m.s > 3458 && m.s < 3552);
   const canvas = [[0.12, 0.16, 0.3], [0.42, 0.44, 0.45]];
   const count = (w) => w.filter(({ color }) => canvas.some((c) => c.every((v, k) => Math.abs(v - color[k]) < 0.002))).length;
-  const bare = structuredClone(d);
-  for (const m of bare.moorings) if (m.crew === 'covers') delete m.crew;
-  assert.ok(count(worldOf(d)) - count(worldOf(bare)) >= covered.length * 16, 'a stern hood and a cratch cover on each');
+  const covered = structuredClone(d);
+  covered.moorings.find((m) => m.s === boat.s && m.side === boat.side).crew = 'covers';
+  assert.ok(count(worldOf(covered)) - count(worldOf(d)) >= 16, 'a stern hood and a cratch cover');
 });
 
 test("nothing stands in Caversham Bridge's road: the glass restaurant's tower is beside it, not on it", async () => {
