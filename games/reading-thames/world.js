@@ -3374,7 +3374,7 @@ function cableStayedBridge(m, course, { s, mast = -1 }) {
 // stone face, balustrades and lamp posts.
 // A bridge's frame: `origin` on the river line's crossing, `right` along its
 // road, `fwd` across it (horizontal unit vectors as [x, z]).
-function bridgeFrame(course, { s, ends }) {
+export function bridgeFrame(course, { s, ends }) {
   const c = pointAt(course, s);
   let right = [-c.tz, c.tx];
   let fwd = [c.tx, c.tz];

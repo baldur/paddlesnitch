@@ -343,3 +343,98 @@ test("motorboats and cruisers on the river wander a little and drift: the bow sw
   assert.ok(seen.cruiser.bow < seen.motorboat.bow, `cruiser ${deg(seen.cruiser.bow).toFixed(1)}, motorboat ${deg(seen.motorboat.bow).toFixed(1)} degrees`);
   assert.ok(deg(seen.sculler.bow) < 0.01, 'a sculler keeps its line');
 });
+
+// Under Caversham Bridge (#981): the river line's width runs on over Piper's
+// Island, so boats on their lane went through its pier, and with the arches
+// curving down to their piers (#980) the tallest could touch an arch near one.
+// Every kind, both ways, at ten points of its drift, and a pack of kayakers of
+// each shape, all the way through: every part of each boat under the deck (its
+// hull, its oars or paddle out to their reach) is under an arch, and the arch
+// is over its top; no boat moves sideways faster than it could steer (a step
+// in the room under the bridge moved boats up to 12 m in a frame); and a pack's
+// boats stay apart.
+test("every boat under Caversham Bridge goes through an arch with the arch over its top, never through a pier, coming over smoothly", async () => {
+  const { buildWorld, bridgeFrame, bridgeArches, archUnder, BRIDGE } = await import('../reading-thames/world.js');
+  const { scullerMesh, kayakerMesh, eightMesh, cruiserMesh, motorboatMesh } = await import('../reading-thames/meshes.js');
+  const { narrowboatMesh } = await import('../reading-thames/outing.js');
+  const { PACKS } = await import('../reading-thames/traffic.js');
+  // Each kind's height is its model's.
+  const top = (mesh) => { const v = mesh.build ? mesh.build().vertices : mesh.vertices; let h = 0; for (let i = 1; i < v.length; i += 9) h = Math.max(h, v[i]); return h; };
+  const MODELS = { sculler: scullerMesh(), kayaker: kayakerMesh(), eight: eightMesh(), cruiser: cruiserMesh(), motorboat: motorboatMesh(), narrowboat: narrowboatMesh({ steerer: true }) };
+  for (const [kind, mesh] of Object.entries(MODELS)) assert.ok(TRAFFIC[kind].height >= top(mesh) - 0.01, `${kind}: ${TRAFFIC[kind].height} m, its model ${top(mesh).toFixed(2)} m`);
+
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
+  buildWorld(course, 1, 'river');
+  const river = course.scenery.river;
+  const bridge = river.bridges.find((b) => b.name === 'Caversham Bridge');
+  const { origin, right, fwd } = bridgeFrame(river, bridge);
+  const { arches } = bridgeArches(river, bridge);
+  const k = course.speedup ?? 1;
+  const DT = 1 / 60;
+  let checked = 0;
+  // A boat's parts as points: its hull, and its oars (or paddle) out to their reach, with how high each is.
+  const points = (b) => {
+    const T = TRAFFIC[b.kind];
+    const f = [Math.sin(b.heading), -Math.cos(b.heading)];
+    const at = (a, c) => [b.x + f[0] * a - f[1] * c, b.z + f[1] * a + f[0] * c];
+    const out = [];
+    for (let a = -T.length / 2; a <= T.length / 2; a += 0.5) for (const c of [-T.hull, 0, T.hull]) out.push([...at(a, c), T.height]);
+    if (T.oars) for (let a = T.oars[0] * T.length; a <= T.oars[1] * T.length; a += 0.5) for (const c of [-T.oars[2], T.oars[2]]) out.push([...at(a - T.length / 2, c), 0.5]);
+    return out;
+  };
+  const check = (b, what) => {
+    for (const [x, z, h] of points(b)) {
+      const [dx, dz] = [x - origin[0], z - origin[2]];
+      if (Math.abs(dx * fwd[0] + dz * fwd[1]) > BRIDGE.width / 2) continue;
+      checked++;
+      const along = dx * right[0] + dz * right[1];
+      const arch = arches.find(([a0, b0]) => along > a0 - 1 && along < b0 + 1);
+      assert.ok(arch, `${what} through a pier, ${along.toFixed(1)} m along the road`);
+      const over = archUnder(arch[0] - 1, arch[1] + 1, along);
+      assert.ok(over >= h, `${what}: ${h} m tall under the arch at ${over.toFixed(2)} m, ${along.toFixed(1)} m along the road`);
+    }
+  };
+  // Sideways no faster than it could steer: a quarter of its speed (14 degrees off its
+  // course). (Where the river line's width steps, boats jump on main too, along the
+  // whole river: a matter of its own, so not checked here.)
+  // (A pack's boats keep to their lead's lane: where its width steps.)
+  const side = (b) => { const l = b.pack?.lead ?? b; const w = widthAt(river, l.s); return l.dir > 0 ? w.right : w.left; };
+  const steady = (b, prev, what) => {
+    if (prev === null || Math.abs(side(b) - prev.side) > 0.01) return;
+    const step = Math.abs(b.lateral - prev.lateral);
+    assert.ok(step <= TRAFFIC[b.kind].speed * k * DT * 0.25 + 0.01, `${what} moved ${step.toFixed(2)} m sideways in a frame at ${(b.s - bridge.s).toFixed(0)} m from the bridge`);
+  };
+  const boat = (kind, dir, phase) => ({ kind, behind: false, dir, meet: bridge.s, at: 0, x: 0, z: 0, heading: 0, s: bridge.s, lateral: 0, on: false, warned: false, phase, hit: [] });
+  const through = (boats, T, what) => {
+    const prev = boats.map(() => null);
+    // Met at the bridge at t = 0, coming from 120 m off.
+    for (let t = -120 / (T.speed * k); t <= 120 / (T.speed * k); t += DT) {
+      moveTraffic({ river, boats, k }, t);
+      boats.forEach((b, i) => {
+        if (!b.on) return void (prev[i] = null);
+        check(b, what(b));
+        steady(b, prev[i], what(b));
+        prev[i] = { lateral: b.lateral, side: side(b) };
+      });
+      // A pack's boats alongside each other keep their slots' 1.8 m apart (clamped into the room, two were drawn one inside the other).
+      for (let i = 0; i < boats.length; i++) for (let j = i + 1; j < boats.length; j++) {
+        const [a, c] = [boats[i], boats[j]];
+        if (a.on && c.on && Math.abs(a.s - c.s) < T.length) assert.ok(Math.abs(a.lateral - c.lateral) > 1.75, `${what(a)}: two of the pack ${Math.abs(a.lateral - c.lateral).toFixed(2)} m apart at ${(a.s - bridge.s).toFixed(0)} m from the bridge`);
+      }
+    }
+  };
+  for (const [kind, T] of Object.entries(TRAFFIC)) {
+    for (const dir of [-1, 1]) {
+      for (let phase = 0; phase < 10; phase++) through([boat(kind, dir, phase)], T, () => `a ${kind} going ${dir > 0 ? 'up' : 'down'} (drift ${phase})`);
+    }
+  }
+  for (const [shape, slots] of Object.entries(PACKS)) {
+    for (const dir of [-1, 1]) {
+      const lead = boat('kayaker', dir, 0);
+      lead.pack = { lead, slot: slots[0] };
+      const pack = [lead, ...slots.slice(1).map((slot) => ({ ...boat('kayaker', dir, 0), pack: { lead, slot } }))];
+      through(pack, TRAFFIC.kayaker, (b) => `a ${shape} pack's kayaker (slot ${b.pack.slot}) going ${dir > 0 ? 'up' : 'down'}`);
+    }
+  }
+  assert.ok(checked > 10000, `${checked} points under the deck`);
+});
