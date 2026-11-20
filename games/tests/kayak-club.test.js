@@ -314,8 +314,12 @@ test('your paddler standing in the changing room has legs to the floor; the swan
 test("Caversham Bridge with its bay, balustrade and lamps stays inside its own share of the river's triangles", async () => {
   const course = await loop();
   const bridge = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge');
+  // Built as the game builds it, over its mapped water: both arches and the
+  // abutment. Without the map it drew one arch over the whole river and no
+  // abutment (on main before the arches' rebuild: 7784 counted, 8612 drawn).
+  buildWorld(course, 1, 'river');
   const n = bridgeTriangles(course.scenery.river, bridge);
-  assert.ok(n < 9000, `${n} triangles`);
+  assert.ok(n > 8500 && n < 9000, `${n} triangles`);
 });
 
 test("a glide blends a shot's wider view into the next, and adds none between two ordinary shots", async () => {
