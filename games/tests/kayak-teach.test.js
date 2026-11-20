@@ -90,7 +90,18 @@ test("an instruction waiting its turn isn't dropped when another comes: they wai
   assert.equal(waitTurn(q, { ...wash }).length, 2, 'the same words wait once');
   for (let i = 0; i < 5; i++) q = waitTurn(q, { text: `note ${i}`, hold: 1 });
   assert.equal(q.length, WAITING);
-  assert.deepEqual(q.map((h) => h.text), ['note 2', 'note 3', 'note 4'], 'the oldest go first');
+  // (Full, the newest is the one left out: an instruction not yet seen matters
+  // more than a hint that will come again. The oldest went first, and a fourth
+  // pushed the second instruction out unseen: games in webkit, f500b91e.)
+  assert.deepEqual(q.map((h) => h.text), [first.text, wash.text, 'note 0'], 'the first to come keep their places; the newest is left out');
+});
+
+test("a full queue of hints past their moment doesn't turn a fresh one away", () => {
+  // (Left out when full, the fresh hint was lost while three stale ones held
+  // the places, and nextTurn then dropped those too: tester review.)
+  let q = ['a', 'b', 'c'].map((text, i) => ({ text, hold: 1, at: i * 0.5 }));
+  q = waitTurn(q, { text: 'fresh', hold: 1, at: 12 });
+  assert.equal(nextTurn(q, 13).next?.text, 'fresh');
 });
 
 test("a hint that waited too long for its moment is skipped, and the rest still come in turn", () => {
