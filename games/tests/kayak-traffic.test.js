@@ -343,3 +343,55 @@ test("motorboats and cruisers on the river wander a little and drift: the bow sw
   assert.ok(seen.cruiser.bow < seen.motorboat.bow, `cruiser ${deg(seen.cruiser.bow).toFixed(1)}, motorboat ${deg(seen.motorboat.bow).toFixed(1)} degrees`);
   assert.ok(deg(seen.sculler.bow) < 0.01, 'a sculler keeps its line');
 });
+
+// Under Caversham Bridge (#981): the river line's width runs on over Piper's
+// Island, so boats on their lane went through its pier, and with the arches
+// curving down to their piers (#980) the tallest could touch an arch near one.
+// Every kind, both ways, at ten points of its drift, all the way through: every
+// part of it under the deck is under an arch, and the arch is over its top.
+test("every boat under Caversham Bridge goes through an arch with the arch over its top, never through a pier", async () => {
+  const { buildWorld, bridgeFrame, bridgeArches, archUnder, BRIDGE } = await import('../reading-thames/world.js');
+  const { scullerMesh, kayakerMesh, eightMesh, cruiserMesh, motorboatMesh } = await import('../reading-thames/meshes.js');
+  const { narrowboatMesh } = await import('../reading-thames/outing.js');
+  // Each kind's height is its model's.
+  const top = (mesh) => { const v = mesh.build ? mesh.build().vertices : mesh.vertices; let h = 0; for (let i = 1; i < v.length; i += 9) h = Math.max(h, v[i]); return h; };
+  const MODELS = { sculler: scullerMesh(), kayaker: kayakerMesh(), eight: eightMesh(), cruiser: cruiserMesh(), motorboat: motorboatMesh(), narrowboat: narrowboatMesh({ steerer: true }) };
+  for (const [kind, mesh] of Object.entries(MODELS)) assert.ok(TRAFFIC[kind].height >= top(mesh) - 0.01, `${kind}: ${TRAFFIC[kind].height} m, its model ${top(mesh).toFixed(2)} m`);
+
+  const course = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
+  buildWorld(course, 1, 'river');
+  const river = course.scenery.river;
+  const bridge = river.bridges.find((b) => b.name === 'Caversham Bridge');
+  const { origin, right, fwd } = bridgeFrame(river, bridge);
+  const { arches } = bridgeArches(river, bridge);
+  const k = course.speedup ?? 1;
+  let checked = 0;
+  for (const [kind, T] of Object.entries(TRAFFIC)) {
+    for (const dir of [-1, 1]) {
+      for (let phase = 0; phase < 10; phase++) {
+        // Met at the bridge at t = 0, coming from 40 m off.
+        const b = { kind, behind: false, dir, meet: bridge.s, at: 0, x: 0, z: 0, heading: 0, s: bridge.s, lateral: 0, on: false, warned: false, phase, hit: [] };
+        const traffic = { river, boats: [b], k };
+        for (let t = -40 / (T.speed * k); t <= 40 / (T.speed * k); t += 0.05) {
+          moveTraffic(traffic, t);
+          if (!b.on) continue;
+          const f = [Math.sin(b.heading), -Math.cos(b.heading)];
+          for (let a = -T.length / 2; a <= T.length / 2; a += 0.5) {
+            for (const c of [-T.hull, 0, T.hull]) {
+              const [x, z] = [b.x + f[0] * a - f[1] * c, b.z + f[1] * a + f[0] * c];
+              const [dx, dz] = [x - origin[0], z - origin[2]];
+              if (Math.abs(dx * fwd[0] + dz * fwd[1]) > BRIDGE.width / 2) continue;
+              checked++;
+              const along = dx * right[0] + dz * right[1];
+              const arch = arches.find(([a0, b0]) => along > a0 - 1 && along < b0 + 1);
+              assert.ok(arch, `a ${kind} going ${dir > 0 ? 'up' : 'down'} (drift ${phase}) through a pier, ${along.toFixed(1)} m along the road`);
+              const over = archUnder(arch[0] - 1, arch[1] + 1, along);
+              assert.ok(over >= T.height, `a ${kind} going ${dir > 0 ? 'up' : 'down'} (drift ${phase}): ${T.height} m tall under the arch at ${over.toFixed(2)} m, ${along.toFixed(1)} m along the road`);
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked > 10000, `${checked} points under the deck`);
+});

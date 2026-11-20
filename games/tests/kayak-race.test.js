@@ -250,8 +250,15 @@ test('the time trial loop: round St Mary\'s and Fry\'s islands and back, everyon
   assert.ok(rivals.every((r) => r.finish !== null), 'everyone finished');
   const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
   assert.ok(minutes[0] > 24 && minutes.at(-1) < 33, `${minutes[0]}-${minutes.at(-1)} minutes`);
-  const swims = rivals.reduce((n, r) => n + r.boat.capsizes, 0);
-  assert.ok(swims <= 1 && rivals.every((r) => r.boat.capsizes <= 1), rivals.filter((r) => r.boat.capsizes).map((r) => `${r.name} ${r.boat.capsizes}`).join(', '));
+  // (The river's traffic counts on its own, as in the race above: with the boats
+  // under Caversham Bridge kept to its arches (#981), this seed's pack meets an
+  // eight by the start a little differently, which tips two in. Over 20 seeds the
+  // rest are the same race for race: 29 swims on main, 31 with it, all the
+  // difference this seed's eight. Measured 2026-11-20.)
+  const tipped = (r) => race.traffic.boats.filter((b) => b.hit.includes(r)).length;
+  const own = rivals.reduce((n, r) => n + r.boat.capsizes - tipped(r), 0);
+  assert.ok(own <= 1 && rivals.every((r) => r.boat.capsizes <= 1), rivals.filter((r) => r.boat.capsizes).map((r) => `${r.name} ${r.boat.capsizes} (${tipped(r)} by traffic)`).join(', '));
+  assert.ok(rivals.reduce((n, r) => n + tipped(r), 0) <= 2, 'at most two tipped in by traffic');
 });
 
 test('a live race: everyone on the line, the host runs the starter, the others follow its calls', () => {
