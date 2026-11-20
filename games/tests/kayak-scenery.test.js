@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE, BRIDGE_RESTAURANT } from '../reading-thames/world.js';
+import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE, BRIDGE_RESTAURANT, bridgeArches, ARCH, ABUTMENT } from '../reading-thames/world.js';
 const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -76,6 +76,8 @@ const CREAM = [0.9, 0.88, 0.81];
 const PAVING = [0.72, 0.71, 0.68];
 const STONE = [0.93, 0.92, 0.88];
 const BRONZE = [0.42, 0.6, 0.52];
+const ARCH_RING = [0.82, 0.8, 0.74];
+const RECESS = [0.34, 0.35, 0.34];
 
 test("Caversham Bridge's road rises and falls as the lidar measures it (4 m at the Caversham bank, 5.8 m by Piper's Island, 5 m at the Reading bank), not a flat 6.5 m", async () => {
   const { bay } = caversham(await data('reading'));
@@ -118,6 +120,75 @@ test("Caversham Bridge stays clear over the water under its lower deck: the arch
   assert.ok(arches[1].crown > 4.7, `the river line's arch ${arches[1].crown.toFixed(2)} m`);
   // Over the Caversham channel the road is 4.9 m at the arch's middle, so its crown is lower than the old 4.8 m.
   assert.ok(arches[0].crown > 4.4, `the Caversham arch ${arches[0].crown.toFixed(2)} m`);
+});
+
+test("Caversham Bridge's arches are smooth, low curves springing from their piers at an angle, not flat 4 m steps that read as beams (spot 1, 0104)", async () => {
+  const river = await data('reading');
+  const { along, across, bay } = caversham(river);
+  const land = waterMap(river.water);
+  const cream = (await world()).filter((t) => same(t.color, CREAM) && t.p.every((q) => Math.abs(across(q)) < 10 && Math.abs(along(q)) < 90));
+  const ring = (await world()).filter((t) => same(t.color, ARCH_RING) && t.p.every((q) => Math.abs(along(q)) < 90));
+  const underAt = (x) => {
+    const [px, , pz] = bay.at(x, 0, 0);
+    const hs = cream.map((t) => heightIn(t.p, px, pz)).filter((h) => h !== null);
+    return hs.length ? Math.min(...hs) : null;
+  };
+  let arches = 0;
+  let prev = null;
+  for (let x = DECK_PROFILE[0][0]; x <= DECK_PROFILE.at(-1)[0]; x += 0.5) {
+    const [px, , pz] = bay.at(x, 0, 0);
+    const h = land.inside(px, pz) ? underAt(x) : null;
+    if (h !== null && prev !== null) {
+      // (The old steps jumped up to a metre where one met the next.)
+      assert.ok(Math.abs(h - prev) < 0.25, `${x} m along: the arch's underside jumps from ${prev.toFixed(2)} to ${h.toFixed(2)} m`);
+    }
+    if (h !== null && prev === null) arches++;
+    prev = h;
+  }
+  assert.equal(arches, 2, 'an arch over each channel');
+  // Springing at an angle (a segment of a circle), not straight up as an ellipse does:
+  // 2 m in from each pier it is still low.
+  const course = courseFromFile(river);
+  buildWorld(course, 1, 'river');
+  const built = course.scenery?.river ?? course;
+  for (const [a0, b0] of bridgeArches(built, built.bridges.find((b) => b.name === 'Caversham Bridge')).arches) {
+    for (const x of [a0 + 1, b0 - 1]) {
+      const h = underAt(x);
+      assert.ok(h !== null && h < ARCH.spring + 1, `2 m in from a pier at ${x} m along: the arch ${h?.toFixed(2)} m up`);
+    }
+  }
+  // A ring round each arch on both faces, standing proud of the face.
+  for (const e of [-1, 1]) {
+    const out = ring.filter((t) => t.p.every((q) => Math.abs(across(q) - e * (BRIDGE.width / 2 + ARCH.proud)) < 0.01));
+    assert.ok(out.length > 20, `side ${e}: ${out.length} ring triangles`);
+  }
+});
+
+test("Caversham Bridge's abutment stands at the Caversham bank end of each face, about 2 m over its road as the lidar measures it, with windows; Piper's Island's pier has its recessed panels", async () => {
+  const { along, across } = caversham(await data('reading'));
+  const W = BRIDGE.width / 2;
+  const tris = (await world()).filter((t) => t.p.every((q) => along(q) > -80 && along(q) < 40 && Math.abs(across(q)) < 11.5));
+  for (const e of [-1, 1]) {
+    // Its top: the highest cream out past the balustrade's line on that face.
+    const block = tris.filter((t) => same(t.color, CREAM) && t.p.every((q) => e * across(q) > W - ABUTMENT.inset - 0.01 && e * across(q) < W + ABUTMENT.proud + 0.01 && along(q) < -40));
+    assert.ok(block.length, `side ${e}: an abutment`);
+    const ys = block.flatMap((t) => t.p.map((q) => q[1]));
+    const xs = block.flatMap((t) => t.p.filter((q) => q[1] > deckAt(along(q)) + 1.2).map(along));
+    const top = Math.max(...ys);
+    const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+    const over = top - deckAt((x0 + x1) / 2);
+    // The lidar on the downstream face: 1.7 to 2.3 m over the road, for 11 m along it.
+    assert.ok(over > 1.7 && over < 2.5, `side ${e}: ${over.toFixed(2)} m over the road`);
+    assert.ok(x1 - x0 > 9 && x1 - x0 < 13, `side ${e}: ${(x1 - x0).toFixed(1)} m along the road`);
+    assert.ok(x0 > -75 && x1 < -45, `side ${e}: from ${x0.toFixed(1)} to ${x1.toFixed(1)} m along, at the Caversham bank`);
+    // Over the balustrade, which runs into it.
+    assert.ok(top > deckAt(x1) + 1.1 + 0.5, `side ${e}: its top ${top.toFixed(2)} m, the balustrade ${(deckAt(x1) + 1.1).toFixed(2)} m`);
+    const windows = tris.filter((t) => same(t.color, RECESS) && t.p.every((q) => along(q) > x0 - 0.5 && along(q) < x1 + 0.5 && e * across(q) > W - ABUTMENT.inset - 0.1));
+    assert.ok(windows.length >= 6, `side ${e}: ${windows.length} window triangles`);
+    // Piper's Island's pier, between the arches (from 18 to 9 m towards Caversham from the river line).
+    const panels = tris.filter((t) => same(t.color, RECESS) && t.p.every((q) => along(q) > -19 && along(q) < -10 && Math.abs(across(q) - e * (W + 0.02)) < 0.01));
+    assert.ok(panels.length >= 4, `side ${e}: ${panels.length} panel triangles on the island's pier`);
+  }
 });
 
 test("Caversham Bridge's deck meets the ground at both ends, as the lidar's road does: no cliff, nothing floating past them", async () => {
@@ -1279,8 +1350,8 @@ test("Caversham Bridge's piers are drawn in the deck's shadow: each face into an
   buildWorld(course, 1, 'river');
   const river = course.scenery?.river ?? course;
   const shaded = (await world()).filter((t) => t.color.every((v, i) => Math.abs(v - PIER_SHADE[i]) < 1e-3));
-  // Two faces an arch (one each side), each its middle and the two half-metre strips up to the deck: six triangles.
-  assert.ok(shaded.length >= 24 && shaded.length % 12 === 0, `${shaded.length} shaded triangles`);
+  // Two faces an arch (one each side), each its full width up to where the arch springs: two triangles.
+  assert.ok(shaded.length >= 8 && shaded.length % 4 === 0, `${shaded.length} shaded triangles`);
   for (const t of shaded) {
     const c = [0, 1, 2].map((i) => (t.p[0][i] + t.p[1][i] + t.p[2][i]) / 3);
     assert.ok(Math.abs(t.n[1]) < 0.01, 'an upright face');

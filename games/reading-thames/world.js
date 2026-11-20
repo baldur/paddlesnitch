@@ -3503,7 +3503,7 @@ export function bridgeTriangles(course, bridge) {
 
 // Where a concrete bridge's arches are, along its road from its frame's origin
 // ([from, to] over the water), and how far its deck runs (lo to hi).
-function bridgeArches(course, bridge) {
+export function bridgeArches(course, bridge) {
   const { origin, right } = bridgeFrame(course, bridge);
   const half = widthAt(course, bridge.s).half;
   const wet = (x) => (course.land?.rings ? course.land.inside(origin[0] + right[0] * x, origin[2] + right[1] * x) : Math.abs(x) < half);
@@ -3530,12 +3530,27 @@ function bridgeArches(course, bridge) {
 // (the Caversham arch), the arch's crown comes down to keep it.
 export const ARCH_DEPTH = 0.6;
 // How high the underside of a concrete bridge's arch from a to b (along its
-// road) is at x: a flat ellipse rising from 1.2 m at its piers to 4.8 m.
-function archUnder(a, b, x) {
-  const mid = (a + b) / 2;
-  const span = (b - a) / 2;
-  return Math.min(1.2 + 3.6 * Math.sqrt(Math.max(0, 1 - ((x - mid) / span) ** 2)), deckAt(x) - ARCH_DEPTH);
+// road) is at x: a segment of a circle, springing from its piers 1.2 m up at
+// an angle and rising to 4.8 m, as the footage shows Caversham Bridge's wide,
+// low arches (it was a flat ellipse in 4 m steps, which read as beams).
+export const ARCH = { spring: 1.2, crown: 4.8, slice: 1.75, ring: 0.9, proud: 0.12 };
+export function archUnder(a, b, x) {
+  const s = (b - a) / 2;
+  const rise = ARCH.crown - ARCH.spring;
+  const r = (s * s + rise * rise) / (2 * rise);
+  const h = ARCH.crown - r + Math.sqrt(Math.max(0, r * r - (x - (a + b) / 2) ** 2));
+  return Math.min(h, deckAt(x) - ARCH_DEPTH);
 }
+// Its arch ring, a band of stone round the arch a shade darker than its face;
+// the recessed panels in a pier's face and the abutment's windows, dark.
+const ARCH_RING = [0.82, 0.8, 0.74];
+const RECESS = [0.34, 0.35, 0.34];
+// Caversham Bridge's abutment on its Caversham bank: a stone block at the bank
+// end of each face, standing about 2 m over the road (the lidar: 6.1 to 6.7 m
+// over the river on the downstream face, 1.7 to 2.3 m over its road, for 11 m
+// along it, where the water begins), a little proud of the face, with a cornice
+// and recessed windows, as the footage shows it beside the Caversham arch.
+export const ABUTMENT = { back: 8, out: 3, over: 2.1, proud: 0.8, inset: 1.2 };
 
 // A block in a bridge's frame from x0 to x1 along its road and z0 to z1
 // across, its bottom and top each a height or a function of x (sloping).
@@ -3553,15 +3568,33 @@ function concreteBridge(m, course, bridge) {
   // The deck runs over the measured road, out over the land to where it meets the ground.
   const [xa, xb] = [Math.min(lo - 1, DECK_PROFILE[0][0]), Math.max(hi + 1, DECK_PROFILE.at(-1)[0])];
   const W = BRIDGE.width / 2;
+  // A face of four corners, its normal `out` (tri() would turn an underside's up).
+  const face = (q, color, out) => {
+    m.triFacing(q[0], q[1], q[2], color, out);
+    m.triFacing(q[0], q[2], q[3], color, out);
+  };
+  const down = [0, -1, 0];
+  const side = (e) => [fwd[0] * e, 0, fwd[1] * e];
   for (const [a0, b0] of arches) {
     const [a, b] = [a0 - 1, b0 + 1];
-    const n = Math.max(4, Math.round((b - a) / 4));
+    const under = (x) => archUnder(a, b, x);
+    // Its top, the road's (under the road's own), in the road's straight pieces.
+    for (const [x0, x1] of deckPieces(a, b)) face([f.at(x0, deckAt(x0), -W), f.at(x1, deckAt(x1), -W), f.at(x1, deckAt(x1), W), f.at(x0, deckAt(x0), W)], COLORS.cream, [0, 1, 0]);
+    // In slices along the road, each its underside sloping with the curve (out
+    // under the ring too) and its faces flush with the piers'.
+    const n = Math.max(8, Math.round((b - a) / ARCH.slice));
+    const R = W + ARCH.proud;
     for (let k = 0; k < n; k++) {
       const x0 = a + ((b - a) * k) / n;
       const x1 = a + ((b - a) * (k + 1)) / n;
-      // Stepped underneath, as it always was, never closer than ARCH_DEPTH under the road.
-      const under = Math.min(archUnder(a, b, (x0 + x1) / 2), deckAt(x0) - ARCH_DEPTH, deckAt(x1) - ARCH_DEPTH);
-      slab(m, f, [x0, x1], [-W + 0.5, W - 0.5], under, deckAt, COLORS.cream);
+      face([f.at(x0, under(x0), -R), f.at(x1, under(x1), -R), f.at(x1, under(x1), R), f.at(x0, under(x0), R)], COLORS.cream, down);
+      for (const e of [-1, 1]) {
+        const z = e * W;
+        face([f.at(x0, under(x0), z), f.at(x1, under(x1), z), f.at(x1, deckAt(x1), z), f.at(x0, deckAt(x0), z)], COLORS.cream, side(e));
+        // The ring: a band round the arch, standing proud of the face.
+        const ring = (x) => Math.min(under(x) + ARCH.ring, deckAt(x) - 0.15);
+        face([f.at(x0, under(x0), e * R), f.at(x1, under(x1), e * R), f.at(x1, ring(x1), e * R), f.at(x0, ring(x0), e * R)], ARCH_RING, side(e));
+      }
     }
   }
   // Piers and the abutments: the deck carried solid over the land between.
@@ -3569,29 +3602,56 @@ function concreteBridge(m, course, bridge) {
     const a = k ? arches[k - 1][1] + 1 : xa;
     const b = k < arches.length ? arches[k][0] - 1 : xb;
     for (const [x0, x1] of b > a ? deckPieces(a, b) : []) slab(m, f, [x0, x1], [-W, W], -0.5, deckAt, COLORS.cream);
+    // A pier between two arches (Piper's Island's): a row of tall recessed panels
+    // in each face, under the deck, as the footage shows beside the Caversham arch.
+    if (!k || k === arches.length) continue;
+    const count = Math.min(6, Math.floor((b - a - 1) / 2.4));
+    for (let i = 0; i < count; i++) {
+      const x = (a + b) / 2 + (i - (count - 1) / 2) * 2.4;
+      const [y0, y1] = [deckAt(x) - 2.6, deckAt(x) - 0.8];
+      for (const e of [-1, 1]) {
+        const z = e * (W + 0.02);
+        face([f.at(x - 0.45, y0, z), f.at(x + 0.45, y0, z), f.at(x + 0.45, y1, z), f.at(x - 0.45, y1, z)], RECESS, side(e));
+      }
+    }
   }
   // Under the deck the piers' faces are in its shadow (the footage: a shaded
   // grey wall either side of each arch, its reflection darker still), so each
-  // face into an arch is shaded, 2 cm proud (1 cm could flicker from 100 m):
-  // up to the arch's first step, and up to the deck in the half metre each side
-  // where the pier is wider than the arch's steps (a cream sliver otherwise).
-  // Lit as the open sides were, it read as a pale grey wall, and its picture in
-  // the water (mirrorFacades) a bright patch under the bridge.
+  // face into an arch is shaded, 2 cm proud (1 cm could flicker from 100 m),
+  // its full width, up to where the arch springs from it. Lit as the open sides
+  // were, it read as a pale grey wall, and its picture in the water
+  // (mirrorFacades) a bright patch under the bridge.
   for (const [a0, b0] of arches) {
     const [a, b] = [a0 - 1, b0 + 1];
-    const step = (b - a) / Math.max(4, Math.round((b - a) / 4));
     for (const [x, into] of [[a, 1], [b, -1]]) {
-      const top = Math.min(archUnder(a, b, x + (into * step) / 2), deckAt(x) - ARCH_DEPTH, deckAt(x + into * step) - ARCH_DEPTH);
       const p = x + into * 0.02;
-      const towards = [right[0] * into, 0, right[1] * into];
-      const rect = ([z0, z1], y1) => {
-        const q = [f.at(p, -0.5, z0), f.at(p, -0.5, z1), f.at(p, y1, z1), f.at(p, y1, z0)];
-        m.triFacing(q[0], q[1], q[2], PIER_SHADE, towards);
-        m.triFacing(q[0], q[2], q[3], PIER_SHADE, towards);
-      };
-      rect([-W + 0.5, W - 0.5], top);
-      rect([-W, -W + 0.5], deckAt(x));
-      rect([W - 0.5, W], deckAt(x));
+      const top = archUnder(a, b, x);
+      face([f.at(p, -0.5, -W), f.at(p, -0.5, W), f.at(p, top, W), f.at(p, top, -W)], PIER_SHADE, [right[0] * into, 0, right[1] * into]);
+    }
+  }
+  // The abutment on the Caversham bank (the first arch's bank end): a block at
+  // the end of each face, from ABUTMENT.back metres over the bank to ABUTMENT.out
+  // over the water where that face's water begins (the bridge crosses the bank
+  // at a slant, so each face's is its own), level on top.
+  if (bridge.name === 'Caversham Bridge' && arches.length) {
+    const { back, out, over, proud, inset } = ABUTMENT;
+    for (const e of [-1, 1]) {
+      const zo = e * (W + proud);
+      const wetAt = (x) => course.land?.inside(...[0, 2].map((i) => f.at(x, 0, zo)[i]));
+      let w = lo;
+      while (w < arches[0][1] && !wetAt(w)) w += 0.5;
+      const [x0, x1] = [w - back, w + out];
+      const top = deckAt(w) + over;
+      const zs = e < 0 ? [zo, -W + inset] : [W - inset, zo];
+      orientedBox(m, origin, right, fwd, [x0, x1], [-0.5, top], zs, COLORS.cream);
+      // The cornice: a flat cap a little wider all round.
+      orientedBox(m, origin, right, fwd, [x0 - 0.2, x1 + 0.2], [top, top + 0.3], e < 0 ? [zo - 0.2, zs[1]] : [zs[0], zo + 0.2], ARCH_RING);
+      // Two tall windows in its face, and one in its end towards the water.
+      const zw = zo + e * 0.02;
+      for (const x of [x0 + back * 0.35, x0 + back * 0.7]) face([f.at(x - 0.5, top - 3.2, zw), f.at(x + 0.5, top - 3.2, zw), f.at(x + 0.5, top - 0.8, zw), f.at(x - 0.5, top - 0.8, zw)], RECESS, side(e));
+      const ze = (zs[0] + zs[1]) / 2;
+      const xe = x1 + 0.02;
+      face([f.at(xe, top - 3.2, ze - 0.5), f.at(xe, top - 3.2, ze + 0.5), f.at(xe, top - 0.8, ze + 0.5), f.at(xe, top - 0.8, ze - 0.5)], RECESS, [right[0], 0, right[1]]);
     }
   }
   const bay = bridgeBay(course, bridge);
