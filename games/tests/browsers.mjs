@@ -129,13 +129,17 @@ async function play(c, page, errors) {
   // on the site, until the case has looked at the page before it (`answer()`): held
   // a fixed 4 s, CI's slow bridge or menu was sometimes later still, and the case
   // failed its own precondition ('the site answered before the bridge drew', #982).
-  // (Two minutes at most, so a case that never gets there doesn't hang.)
+  // (Two minutes at most, so a case that never gets there doesn't hang; the
+  // timer cleared once answered, or node waited it out after the last case.)
   let answer = () => {};
-  const held = new Promise((ok) => { answer = ok; setTimeout(ok, 120_000); });
+  const held = c.slowMe ? new Promise((ok) => {
+    const late = setTimeout(ok, 120_000);
+    answer = () => { clearTimeout(late); ok(); };
+  }) : null;
   if (c.site) {
     await page.route('**/api/trpc/**', async (r) => {
       const me = r.request().url().includes('/api/trpc/me');
-      if (me && c.slowMe) await held;
+      if (me && held) await held;
       await r.fulfill({ json: { result: { data: me ? { user: c.signedOut ? null : { id: 'test', displayName: 'Pat R.' } } : null } } });
     }).catch(() => {});
   }
@@ -300,9 +304,14 @@ async function play(c, page, errors) {
     // (The first pick goes in before the answer, which comes half a second later:
     // the pick waits for it, then goes to sign in.)
     setTimeout(answer, 500);
+    let first = true;
     for (const pick of ['practice', 'drill-start']) {
-      await Promise.all([page.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), page.evaluate((v) => document.getElementById('menu').close(v), pick)])
+      // (The first pick checks it really went in before the answer: after it, it would go to sign in too.)
+      const pickBefore = (v) => { const unanswered = !document.getElementById('account').textContent; document.getElementById('menu').close(v); return unanswered; };
+      const picked = page.evaluate(pickBefore, pick).then((unanswered) => { if (first && !unanswered) errors.push('the first pick went in after the site answered'); });
+      await Promise.all([page.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), picked])
         .catch(async () => errors.push(`a guest's ${pick} went to ${await page.evaluate(() => `${location.pathname} (${window.kayak?.mode?.key})`)}, not sign in`));
+      first = false;
       await page.goBack();
       await page.waitForFunction(() => document.getElementById('menu')?.open && document.getElementById('account').textContent, null, { timeout: 30_000 });
     }
