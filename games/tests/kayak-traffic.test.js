@@ -442,29 +442,47 @@ test("every boat under Caversham Bridge goes through an arch with the arch over 
 // The river line's width steps from one 2 m sample to the next (by 7 m where a
 // moored boat or a bank's bend narrows it), and a boat's lane jumped sideways
 // with it (#984). Every kind, both ways, along the whole river at two points of
-// its drift: it never moves sideways faster than it could steer.
+// its drift, and a pack: it never moves sideways faster than it could steer, and
+// stays on the water, ends and oars and all (it didn't, before: an eight's oars
+// 12 m over a bank).
 test("river traffic comes over smoothly where the river narrows or widens, all along the river", async () => {
   const course = courseFromFile(JSON.parse(await readFile(new URL('../reading-thames/courses/loop.json', import.meta.url), 'utf8')));
+  createTraffic(course, 1); // (as a race does: the water map, and the room under Caversham Bridge)
   const river = course.scenery.river;
   const k = course.speedup ?? 1;
   const DT = 1 / 30;
-  for (const [kind, T] of Object.entries(TRAFFIC)) {
-    for (const dir of [-1, 1]) {
-      for (const phase of [0, 5]) {
-        // From one end of the river to the other: met at the far end at t = 0; one
-        // "from behind" is on the water all the way there.
-        const meet = dir > 0 ? river.length - T.length - 1 : T.length + 1;
-        const b = { kind, behind: true, dir, meet, at: 0, x: 0, z: 0, heading: 0, s: meet, lateral: 0, on: false, warned: false, phase, hit: [] };
-        let prev = null;
-        let worst = { step: 0 };
-        for (let t = -(river.length - 2 * T.length - 2) / (T.speed * k); t <= 0; t += DT) {
-          moveTraffic({ river, boats: [b], k }, t);
-          if (!b.on) { prev = null; continue; }
-          if (prev !== null && Math.abs(b.lateral - prev) > worst.step) worst = { step: Math.abs(b.lateral - prev), s: b.s };
-          prev = b.lateral;
+  const { PACKS } = await import('../reading-thames/traffic.js');
+  const boat = (kind, dir, phase, meet) => ({ kind, behind: true, dir, meet, at: 0, x: 0, z: 0, heading: 0, s: meet, lateral: 0, on: false, warned: false, phase, hit: [] });
+  // Each kind on its own, and a diamond of kayakers.
+  const runs = [];
+  for (const [kind, T] of Object.entries(TRAFFIC)) for (const dir of [-1, 1]) for (const phase of [0, 5]) runs.push({ kind, dir, what: `a ${kind} going ${dir > 0 ? 'up' : 'down'} (drift ${phase})`, make: (meet) => [boat(kind, dir, phase, meet)] });
+  for (const dir of [-1, 1]) runs.push({ kind: 'kayaker', dir, what: `a diamond of kayakers going ${dir > 0 ? 'up' : 'down'}`, make: (meet) => {
+    const lead = boat('kayaker', dir, 0, meet);
+    lead.pack = { lead, slot: PACKS.diamond[0] };
+    return [lead, ...PACKS.diamond.slice(1).map((slot) => ({ ...boat('kayaker', dir, 0, meet), pack: { lead, slot } }))];
+  } });
+  for (const { kind, dir, what, make } of runs) {
+    const T = TRAFFIC[kind];
+    const reach = Math.max(T.hull, T.oars?.[2] ?? 0);
+    // From one end of the river to the other: met at the far end at t = 0; one
+    // "from behind" is on the water all the way there.
+    const boats = make(dir > 0 ? river.length - T.length - 10 : T.length + 10);
+    const prev = boats.map(() => null);
+    let worst = { step: 0 };
+    for (let t = -(river.length - 2 * T.length - 20) / (T.speed * k); t <= 0; t += DT) {
+      moveTraffic({ river, boats, k }, t);
+      boats.forEach((b, i) => {
+        if (!b.on) return void (prev[i] = null);
+        if (prev[i] !== null && Math.abs(b.lateral - prev[i]) > worst.step) worst = { step: Math.abs(b.lateral - prev[i]), s: b.s };
+        prev[i] = b.lateral;
+        // On the water, ends and all: its side (and oars) inside the river's width wherever it lies.
+        for (const a of [-T.length / 2, 0, T.length / 2]) {
+          const w = widthAt(river, b.s + a);
+          const side = b.lateral >= 0 ? w.right : w.left;
+          assert.ok(Math.abs(b.lateral) + reach <= side + 0.01, `${what}: ${(Math.abs(b.lateral) + reach - side).toFixed(2)} m over the bank at ${(b.s + a).toFixed(0)} m`);
         }
-        assert.ok(worst.step <= T.speed * k * DT * 0.25 + 0.01, `a ${kind} going ${dir > 0 ? 'up' : 'down'} (drift ${phase}) moved ${worst.step.toFixed(2)} m sideways in a frame at ${worst.s?.toFixed(0)} m`);
-      }
+      });
     }
+    assert.ok(worst.step <= T.speed * k * DT * 0.25 + 0.01, `${what} moved ${worst.step.toFixed(2)} m sideways in a frame at ${worst.s?.toFixed(0)} m`);
   }
 });
