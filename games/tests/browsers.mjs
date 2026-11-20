@@ -125,11 +125,21 @@ const CASES = [
 async function play(c, page, errors) {
   let moorings = null; // the hire boats', read on the bank
   // A case with the site: under /games/, signed in as a stand-in player (the game only asks who's signed in).
+  // slowMe: the first answer to who's signed in held back, as a slow first request
+  // on the site, until the case has looked at the page before it (`answer()`): held
+  // a fixed 4 s, CI's slow bridge or menu was sometimes later still, and the case
+  // failed its own precondition ('the site answered before the bridge drew', #982).
+  // (Two minutes at most, so a case that never gets there doesn't hang; the
+  // timer cleared once answered, or node waited it out after the last case.)
+  let answer = () => {};
+  const held = c.slowMe ? new Promise((ok) => {
+    const late = setTimeout(ok, 120_000);
+    answer = () => { clearTimeout(late); ok(); };
+  }) : null;
   if (c.site) {
-    // (slowMe: the answer to who's signed in held back, as a slow first request on the site.)
     await page.route('**/api/trpc/**', async (r) => {
       const me = r.request().url().includes('/api/trpc/me');
-      if (me && c.slowMe) await new Promise((ok) => setTimeout(ok, 4000));
+      if (me && held) await held;
       await r.fulfill({ json: { result: { data: me ? { user: c.signedOut ? null : { id: 'test', displayName: 'Pat R.' } } : null } } });
     }).catch(() => {});
   }
@@ -226,6 +236,7 @@ async function play(c, page, errors) {
       if (before.asked) errors.push('the site answered before the bridge drew: this case needs the bridge first');
       else if (before.shown !== 'hidden') errors.push('before the site answered, the bridge showed its cards');
     }
+    answer();
     await page.locator('#clubCards .signin-box').waitFor({ timeout: 60_000 });
     // Keyboard focus starts on the cruise.
     const focused = await page.evaluate(() => document.activeElement?.querySelector?.('.name')?.textContent ?? document.activeElement?.tagName);
@@ -290,9 +301,17 @@ async function play(c, page, errors) {
     await page.waitForFunction(() => document.getElementById('menu').open, null, { timeout: 30_000 });
     const early = await page.evaluate(() => !document.getElementById('account').textContent);
     if (!early) errors.push('the site answered before the pick: this case needs the pick first');
+    // (The first pick goes in before the answer, which comes half a second later:
+    // the pick waits for it, then goes to sign in.)
+    setTimeout(answer, 500);
+    let first = true;
     for (const pick of ['practice', 'drill-start']) {
-      await Promise.all([page.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), page.evaluate((v) => document.getElementById('menu').close(v), pick)])
+      // (The first pick checks it really went in before the answer: after it, it would go to sign in too.)
+      const pickBefore = (v) => { const unanswered = !document.getElementById('account').textContent; document.getElementById('menu').close(v); return unanswered; };
+      const picked = page.evaluate(pickBefore, pick).then((unanswered) => { if (first && !unanswered) errors.push('the first pick went in after the site answered'); });
+      await Promise.all([page.waitForURL(/\/signin\?next=\/games\/reading-thames\//, { timeout: 15_000 }), picked])
         .catch(async () => errors.push(`a guest's ${pick} went to ${await page.evaluate(() => `${location.pathname} (${window.kayak?.mode?.key})`)}, not sign in`));
+      first = false;
       await page.goBack();
       await page.waitForFunction(() => document.getElementById('menu')?.open && document.getElementById('account').textContent, null, { timeout: 30_000 });
     }

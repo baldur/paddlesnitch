@@ -597,10 +597,11 @@ function carPark(course) {
   lidarFor(course);
   if (river.pads) return;
   river.pads = [];
+  for (const s of course.scenery?.features ?? []) if (s.style === 'staging') river.pads.push(...stagingPads(river, spot(river, s.at)));
   const f = course.scenery && landmarkFrame(course, 'rowing-club');
   if (!f) return;
   const p = rowingPlan(river, f);
-  river.pads = [{ origin: xz(f.origin), right: f.right, fwd: f.fwd, x: [p.x0 - 2, p.east + PARK.long + 6], z: [p.zb - 8, p.wall], y: f.origin[1] + p.floor, margin: 6 }];
+  river.pads.push({ origin: xz(f.origin), right: f.right, fwd: f.fwd, x: [p.x0 - 2, p.east + PARK.long + 6], z: [p.zb - 8, p.wall], y: f.origin[1] + p.floor, margin: 6 });
   const c = landmarkFrame(course, 'canoe-club');
   if (!c) return;
   const { lo, hi, back } = canoePlan(c);
@@ -946,6 +947,8 @@ function realScenery(m, course, real, rand) {
   const nowhere = new MeshBuilder();
   // And so are the things pointed out in the footage (a beach, a club's lawn).
   const clearings = (real.features ?? []).filter((f) => CLEAR[f.style]).map((f) => [...f.at, CLEAR[f.style]]);
+  // (A staging is long and along its bank: kept clear along its length, not round its point.)
+  for (const f of real.features ?? []) if (f.style === 'staging') clearings.push(...stagingClearings(course, spot(course, f.at)));
   // And the boat with figures on its roof, so no riverside tree stands over them.
   for (const b of real.moorings ?? []) {
     if (b.crew !== 'statues' || b.at) continue;
@@ -3089,7 +3092,107 @@ function boardwalk(m, course, f) {
   for (let x = x0; x <= x1; x += 1.375) f.box(m, [x - 0.05, x + 0.05], [deck, deck + 1.2], [2.08, 2.24], timber.map((v) => v * 0.75));
 }
 
+// The long timber staging along the moorings across from the boatyard, where
+// the boats tie up (recording 0104 and the passes since August): a weathered
+// deck about half a metre over the water on piles every 4 m, a plank along its
+// edge, dark under it against the bank, and upstream of it a pale floating
+// pontoon with a white ladder. The lidar measures a strip 2 m wide at 0.6 to
+// 0.9 m over the river for 69 m, then a lower one for 22 m. Its point is the
+// middle of the timber, on the water's edge; it stands on the bank's side of
+// the water line, so the moored boats lie along its edge as they did the bank's.
+// It is laid along the bank, not the river line (4 degrees off it here: square
+// to the river line, its ends stood 2.3 m out in the water and up the bank):
+// along the water's edge 20 m either side of its point. The timber starts 2 m
+// short of the lidar's downstream end, where the bank bends away and a moored
+// cruiser lies; the pontoon follows the bank's bend in 2 m pieces, as the boats
+// along it do.
+// Its colours: pale grey weathered timber (the footage's plank stands out against
+// the green bank; a browner one read as a dark rail from the river, its face in
+// shade), darker piles, and the pontoon a warmer grey than the white hulls moored
+// along it (in the same pale it read as part of them), darker at the waterline.
+export const STAGING = {
+  timber: [-32.5, 34.5], pontoon: [34.5, 56.5], deep: 2, deck: 0.6, float: 0.3, pile: 4, piece: 2, ladder: 7,
+  wood: [0.66, 0.62, 0.54], pile_: [0.38, 0.33, 0.27], float_: [0.62, 0.62, 0.6], waterline: [0.4, 0.4, 0.39],
+};
+// The staging's frame along its bank: x along the water's edge, z out to the
+// water from it (`edge(x)` where the water ends, off that line).
+function stagingFrame(course, f) {
+  // Where the water ends at x along a frame, coming in from out on the river (a
+  // wet point, then a dry one), or 0 with no water map.
+  const edgeIn = (g, x) => {
+    if (!course.land) return 0;
+    const wet = (z) => course.land.inside(...[0, 2].map((i) => g.at(x, 0, z)[i]));
+    for (let z = 8; z > -8; z -= 0.1) if (wet(z) && !wet(z - 0.1)) return z - 0.1;
+    return 0;
+  };
+  const [A, B] = [f.at(-20, 0, edgeIn(f, -20)), f.at(20, 0, edgeIn(f, 20))];
+  const len = Math.hypot(B[0] - A[0], B[2] - A[2]) || 1;
+  const right = len > 1 ? [(B[0] - A[0]) / len, (B[2] - A[2]) / len] : f.right;
+  const fwd = [-right[1], right[0]].map((v) => v * Math.sign(-right[1] * f.fwd[0] + right[0] * f.fwd[1] || 1));
+  const t = (f.origin[0] - A[0]) * right[0] + (f.origin[2] - A[2]) * right[1];
+  const origin = [A[0] + right[0] * t, 0, A[2] + right[1] * t];
+  const g = { origin, right, fwd, at: (x, y, z) => [origin[0] + right[0] * x + fwd[0] * z, y, origin[2] + right[1] * x + fwd[1] * z] };
+  g.edge = (x) => edgeIn(g, x);
+  return g;
+}
+// The ground under it, cut down to the water (carPark's pads): the lidar's ground
+// model has the staging in it, so the bank rose through the deck and over most
+// of the pontoon (tester). Under the timber, and under the pontoon from the
+// water's edge at its one end to its other, eased into the bank behind over 1.5 m.
+export const STAGING_FLOOR = 0.1;
+function stagingPads(course, f) {
+  const g = stagingFrame(course, f);
+  const { timber: [x0, x1], pontoon: [p0, p1], deep } = STAGING;
+  const pads = [{ origin: [g.origin[0], g.origin[2]], right: g.right, fwd: g.fwd, x: [x0, x1], z: [-deep, 0], y: STAGING_FLOOR, margin: 1.5 }];
+  const [qa, qb] = [g.at(p0, 0, g.edge(p0)), g.at(p1, 0, g.edge(p1))];
+  const len = Math.hypot(qb[0] - qa[0], qb[2] - qa[2]) || 1;
+  const r = [(qb[0] - qa[0]) / len, (qb[2] - qa[2]) / len];
+  const out = [-r[1], r[0]].map((v) => v * Math.sign(-r[1] * g.fwd[0] + r[0] * g.fwd[1] || 1));
+  // (The bank bends between its ends: a little wider, so its middle is cut too.)
+  pads.push({ origin: [qa[0], qa[2]], right: r, fwd: out, x: [0, len], z: [-deep - 0.8, 0.4], y: STAGING_FLOOR, margin: 1.5 });
+  return pads;
+}
+// Where it stands, as clearings for the bank's trees and scrub ([x, z, r] every 3 m along
+// its middle): scrub stood on its deck and over the open join of timber and pontoon.
+function stagingClearings(course, f) {
+  const g = stagingFrame(course, f);
+  const { timber: [x0], pontoon: [, p1], deep } = STAGING;
+  const out = [];
+  for (let x = x0; x <= p1; x += 3) {
+    const q = g.at(x, 0, Math.min(0, g.edge(x)) - deep / 2);
+    out.push([q[0], q[2], 2.5]);
+  }
+  return out;
+}
+function staging(m, course, f) {
+  const { timber: [x0, x1], pontoon: [p0, p1], deep, deck, float, pile, piece, ladder, wood, pile_, float_, waterline } = STAGING;
+  const g = stagingFrame(course, f);
+  const box = (xr, yr, zr, color) => orientedBox(m, g.origin, g.right, g.fwd, xr, yr, zr, color);
+  box([x0, x1], [deck - 0.1, deck], [-deep, 0], wood);
+  box([x0, x1], [deck - 0.35, deck], [-0.02, 0.06], wood); // the plank along its edge
+  for (let x = x0 + 0.2; x <= x1; x += pile) box([x - 0.12, x + 0.12], [-0.6, deck - 0.1], [-0.1, 0.12], pile_);
+  // Dark under it, back to the bank (from the water you see into the shadow under the deck, not the bank).
+  box([x0, x1], [-0.4, deck - 0.1], [-deep, -deep + 0.1], [0.1, 0.11, 0.09]);
+  // The floating pontoon along the water's edge where it is: each 2 m piece laid
+  // between the edge at its two ends, so the bend runs on (each square to the
+  // frame, it stepped in and out by tenths of a metre: design review).
+  for (let a = p0; a < p1 - 0.01; a += piece) {
+    const b = Math.min(p1, a + piece);
+    const [qa, qb] = [g.at(a, 0, g.edge(a)), g.at(b, 0, g.edge(b))];
+    const len = Math.hypot(qb[0] - qa[0], qb[2] - qa[2]) || 1;
+    const r = [(qb[0] - qa[0]) / len, (qb[2] - qa[2]) / len];
+    const out = [-r[1], r[0]].map((v) => v * Math.sign(-r[1] * g.fwd[0] + r[0] * g.fwd[1] || 1));
+    orientedBox(m, qa, r, out, [0, len], [-0.1, float], [-deep, 0], float_);
+    orientedBox(m, qa, r, out, [0, len], [-0.1, float - 0.08], [0, 0.03], waterline);
+  }
+  // Its ladder up the bank, where no moored boat or bank bush hides it.
+  const e0 = g.edge(p0 + ladder + 0.4);
+  for (const x of [p0 + ladder, p0 + ladder + 0.8]) box([x - 0.04, x + 0.04], [float, float + 1.1], [e0 - deep + 0.3, e0 - deep + 0.38], COLORS.white);
+  for (let y = float + 0.3; y < float + 1.15; y += 0.35) box([p0 + ladder, p0 + ladder + 0.8], [y - 0.03, y + 0.03], [e0 - deep + 0.3, e0 - deep + 0.38], COLORS.white);
+}
+
 const FEATURES = {
+  staging,
   'boat-shed': boatShed, 'ivy-boathouse': ivyBoathouse, quay, truss, wharf, jetty, beach, landing: (m, course, f) => beach(m, course, f, 6, 7), sandbags, 'channel-sign': channelSign, mailbox, gazebo, 'sculling-club': scullingClub,
   'ferry-landing': ferryLanding, marina, willow, boardwalk, 'deck-boathouse': deckBoathouse, 'dead-tree': deadTree, 'river-sign': riverSign,
 };
@@ -3374,7 +3477,7 @@ function cableStayedBridge(m, course, { s, mast = -1 }) {
 // stone face, balustrades and lamp posts.
 // A bridge's frame: `origin` on the river line's crossing, `right` along its
 // road, `fwd` across it (horizontal unit vectors as [x, z]).
-function bridgeFrame(course, { s, ends }) {
+export function bridgeFrame(course, { s, ends }) {
   const c = pointAt(course, s);
   let right = [-c.tz, c.tx];
   let fwd = [c.tx, c.tz];

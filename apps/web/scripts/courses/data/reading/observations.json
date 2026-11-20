@@ -657,6 +657,13 @@
       "note": "a white and green wakeboard boat with a tower, at a pontoon across from the marina"
     },
     {
+      "kind": "feature",
+      "style": "staging",
+      "at": [51.466767, -1.014111],
+      "heading": 272,
+      "note": "the long timber staging the moorings across from the boatyard tie up to: a weathered deck about half a metre over the water on piles, then a pale floating pontoon with a white ladder upstream (recording 0104 and the passes since August; the lidar: a strip 2 m wide at 0.6-0.9 m over the river for 69 m, then a lower one for 22 m). Its point is the middle of the timber, on the water's edge"
+    },
+    {
       "kind": "wall",
       "style": "brick",
       "side": "left",

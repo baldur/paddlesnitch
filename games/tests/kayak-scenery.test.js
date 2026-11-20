@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { courseFromFile, pointAt, widthAt } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
-import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE, BRIDGE_RESTAURANT, bridgeArches, ARCH, ABUTMENT } from '../reading-thames/world.js';
+import { buildWorld, groundAt, FEATURE_STYLES, LANDMARK_STYLES, mirrorFacades, nearFacades, landmarkFrame, FACADE, SHED, bridgeBay, deckAt, DECK_PROFILE, BRIDGE, PIER_SHADE, BRIDGE_RESTAURANT, bridgeArches, ARCH, ABUTMENT, STAGING } from '../reading-thames/world.js';
 const SHED_ROOFS = SHED.roofs;
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
@@ -803,6 +803,77 @@ test('the ground leaves the water at the mapped shore, not part-way to the next 
   assert.ok(area < 450, `${area.toFixed(0)} m² of ground over the water more than 1 m out from the shore (717 before the strips were split where the shore runs across them, 374 after)`);
 });
 
+test("the moorings across from the boatyard tie up to a long timber staging half a metre over the water, then a pale pontoon, along the bank's edge, in sight and under no moored boat", async () => {
+  const river = await data('reading');
+  const land = waterMap(river.water);
+  const feature = river.features.find((f) => f.style === 'staging');
+  assert.ok(feature, 'the staging is in the course');
+  const near = (q) => Math.hypot(q[0] - feature.at[0], q[2] - feature.at[1]) < 70;
+  const tris = (await world()).filter((t) => t.p.every(near));
+  // Their tops (facing up). (The pontoon on its own bank, the north side: the same grey is used across the river.)
+  const decks = tris.filter((t) => same(t.color, STAGING.wood) && t.n[1] > 0.9 && t.p.every((q) => q[1] > 0.3));
+  const floats = tris.filter((t) => same(t.color, STAGING.float_) && t.n[1] > 0.9 && t.p.every((q) => q[2] < feature.at[1] + 1));
+  assert.ok(decks.length && floats.length, `${decks.length} deck and ${floats.length} pontoon triangles`);
+  // As the lidar measures them: the timber 0.6-0.9 m over the river, the pontoon lower.
+  const ys = (ts) => ts.flatMap((t) => t.p.map((q) => q[1]));
+  assert.ok(Math.min(...ys(decks)) > 0.5 && Math.max(...ys(decks)) < 0.9, `the deck ${Math.min(...ys(decks)).toFixed(2)}-${Math.max(...ys(decks)).toFixed(2)} m up`);
+  assert.ok(Math.max(...ys(floats)) < Math.min(...ys(decks)) - 0.15 && Math.min(...ys(floats)) > 0.15, `the pontoon ${Math.max(...ys(floats)).toFixed(2)} m up`);
+  // Its length along the bank (the river runs east-west here): the timber 67 m (the
+  // lidar's 69, less 2 m short of a moored cruiser), then the pontoon's 22 m upstream (west).
+  const span = (ts) => { const xs = ts.flatMap((t) => t.p.map((q) => q[0])); return [Math.min(...xs), Math.max(...xs)]; };
+  const [d0, d1] = span(decks);
+  const [f0, f1] = span(floats);
+  assert.ok(Math.abs(d1 - d0 - 67) < 2, `the timber ${(d1 - d0).toFixed(1)} m along`);
+  assert.ok(Math.abs(f1 - f0 - 22) < 2 && f1 < d0 + 1, `the pontoon from ${f0.toFixed(0)} to ${f1.toFixed(0)}, the timber from ${d0.toFixed(0)}`);
+  // On the bank's side of the water line, mostly (the lidar's strip, 2 m wide): at
+  // its downstream end the bank bends away and it stands over the water, as there.
+  const mid = (t) => [0, 1, 2].map((i) => (t.p[0][i] + t.p[1][i] + t.p[2][i]) / 3);
+  const onBank = (ts) => ts.filter((t) => !land.inside(mid(t)[0], mid(t)[2])).length / ts.length;
+  assert.ok(onBank(decks) > 0.75 && onBank(floats) > 0.9, `on the bank's side: the timber ${onBank(decks).toFixed(2)}, the pontoon ${onBank(floats).toFixed(2)}`);
+  // In sight: nothing facing up stands over its top, neither the bank (the lidar's
+  // ground has the staging in it, and the grass rose through the deck and over most
+  // of the pontoon) nor the bank's scrub (which stood on the deck).
+  const others = tris.filter((t) => t.n[1] > 0.5 && !same(t.color, STAGING.wood) && !same(t.color, STAGING.float_));
+  for (const [name, ts] of [['the deck', decks], ['the pontoon', floats]]) {
+    // Every half metre across its top.
+    const xs = ts.flatMap((t) => t.p.map((q) => q[0]));
+    const zs = ts.flatMap((t) => t.p.map((q) => q[2]));
+    let [seen, hidden, where] = [0, 0, null];
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x += 0.5) {
+      for (let z = Math.min(...zs); z <= Math.max(...zs); z += 0.5) {
+        const top = ts.map((t) => heightIn(t.p, x, z)).find((h) => h !== null);
+        if (top === undefined) continue;
+        seen++;
+        if (others.some((o) => { const h = heightIn(o.p, x, z); return h !== null && h > top + 0.02; })) { hidden++; where ??= [x, z]; }
+      }
+    }
+    assert.ok(seen > 100 && hidden <= seen * 0.03, `${name}: ${hidden} of ${seen} points under something, e.g. (${where?.map((v) => v.toFixed(1))})`);
+  }
+  // The boats moored along it lie beside it, not on it (their sides 0.3 m in).
+  const BEAMS = { narrowboat: 2.1, cruiser: 3.4 };
+  for (const b of river.moorings.filter((b) => b.at && Math.hypot(b.at[0] - feature.at[0], b.at[1] - feature.at[1]) < 70)) {
+    const [hl, hb] = [b.length / 2 - 0.3, (BEAMS[b.kind] ?? 3.4) / 2 - 0.3];
+    for (const [a, c] of [[-hl, -hb], [-hl, hb], [hl, -hb], [hl, hb], [0, -hb], [0, hb]]) {
+      const [x, z] = [b.at[0] + b.dir[0] * a - b.dir[1] * c, b.at[1] + b.dir[1] * a + b.dir[0] * c];
+      const on = [...decks, ...floats].find((t) => under(t.p, x, z));
+      assert.ok(!on, `the ${b.kind} at (${b.at.map((v) => v.toFixed(0))}) lies on the staging at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+    }
+  }
+});
+
+
+test("the staging builds without a water map too, along its feature's own frame, with no bad numbers", async () => {
+  const river = await data('reading');
+  const course = courseFromFile({ ...river, water: [] });
+  const { vertices } = buildWorld(course, 1, 'river');
+  assert.ok(vertices.every(Number.isFinite), 'every vertex a number');
+  const feature = river.features.find((f) => f.style === 'staging');
+  let deck = 0;
+  for (let i = 0; i < vertices.length; i += 9) {
+    if (Math.hypot(vertices[i] - feature.at[0], vertices[i + 2] - feature.at[1]) < 40 && same([vertices[i + 6], vertices[i + 7], vertices[i + 8]], STAGING.wood)) deck++;
+  }
+  assert.ok(deck > 20, `${deck} timber vertices`);
+});
 // The restaurant on the Caversham bank by Caversham Bridge, from recording
 // 0104 (which went up the north channel 10 m off it) and the lidar: it was a
 // feature whose glass and terrace stood 10 m out over the channel's water.
