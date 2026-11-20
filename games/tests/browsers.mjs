@@ -675,6 +675,7 @@ async function play(c, page, errors) {
     const { race, course, boat } = window.kayak;
     // This checks the game runs and answers the keys, not balance: the test never leans.
     boat.hull = { ...boat.hull, capsize: 10 };
+    // On the line, as the starter waits for everyone to be (12 m back, it never called them).
     const i = Math.round((race.start.line - 4) / 2);
     const [a, n] = [course.samples[i], course.samples[i + 1]];
     if (race.format === 'interval') {
@@ -682,8 +683,27 @@ async function play(c, page, errors) {
       const by = race.player.release - race.time - 1;
       for (const r of race.racers) r.release -= by;
     }
-    // Out of the start queue by the bank, onto the line, mid-river (the test doesn't steer).
-    if (race.racers.length > 1) Object.assign(boat, { x: a.x, z: a.z, heading: Math.atan2(n.x - a.x, -(n.z - a.z)), speed: 0, roll: 0, rollRate: 0 });
+    // Out of the start queue by the bank, into the middle half of the river (the
+    // test doesn't steer), where it's clearest of the rivals alongside: dropped
+    // mid-river it landed 2 m from one, and now and then got stuck on it (small
+    // iphone, Hasler Div 7-9: 'the rhythm bar never said "building"', 'boat still
+    // on the start line', and 'Stuck? Swipe down' showing).
+    if (race.racers.length > 1) {
+      const len = Math.hypot(n.x - a.x, n.z - a.z);
+      const t = [(n.x - a.x) / len, (n.z - a.z) / len];
+      const near = race.racers.filter((r) => r !== race.player).map((r) => {
+        const [dx, dz] = [r.boat.x - a.x, r.boat.z - a.z];
+        return { along: dx * t[0] + dz * t[1], across: -dx * t[1] + dz * t[0] };
+      }).filter((r) => Math.abs(r.along) < 12);
+      let best = { across: 0, clear: -1 };
+      for (let across = -a.left / 2; across <= a.right / 2; across += 0.25) {
+        const clear = Math.min(99, ...near.map((r) => Math.abs(r.across - across)));
+        if (clear > best.clear) best = { across, clear };
+      }
+      // (Across the river line to its right is (-tz, tx), as course.js places a boat.)
+      const [x, z] = [a.x - t[1] * best.across, a.z + t[0] * best.across];
+      Object.assign(boat, { x, z, heading: Math.atan2(t[0], -t[1]), speed: 0, roll: 0, rollRate: 0 });
+    }
   });
   // The horn comes after a few seconds of race time: minutes, on CI's software graphics.
   await page.waitForFunction(() => window.kayak.state === 'racing', null, { timeout: 240_000 });
