@@ -315,7 +315,8 @@ test("Caversham Bridge with its bay, balustrade and lamps stays inside its own s
   const course = await loop();
   const bridge = course.scenery.bridges.find((b) => b.name === 'Caversham Bridge');
   // Built as the game builds it, over its mapped water: both arches and the
-  // abutment (without the map it had one arch, 7784 against the game's 8612).
+  // abutment. Without the map it drew one arch over the whole river and no
+  // abutment (on main before the arches' rebuild: 7784 counted, 8612 drawn).
   buildWorld(course, 1, 'river');
   const n = bridgeTriangles(course.scenery.river, bridge);
   assert.ok(n > 8500 && n < 9000, `${n} triangles`);

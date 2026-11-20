@@ -3541,9 +3541,12 @@ export function archUnder(a, b, x) {
   const h = ARCH.crown - r + Math.sqrt(Math.max(0, r * r - (x - (a + b) / 2) ** 2));
   return Math.min(h, deckAt(x) - ARCH_DEPTH);
 }
-// Its arch ring, a band of stone round the arch a shade darker than its face;
-// the recessed panels in a pier's face and the abutment's windows, dark.
-const ARCH_RING = [0.82, 0.8, 0.74];
+// Its arch ring, a band of stone round the arch darker than its face (a shade
+// darker didn't show once lit: design review); the recessed panels in a pier's
+// face a shade darker than the stone (window-dark, they read as a building);
+// the abutment's windows dark.
+const ARCH_RING = [0.68, 0.66, 0.6];
+const PANEL = [0.7, 0.69, 0.64];
 const RECESS = [0.34, 0.35, 0.34];
 // Caversham Bridge's abutment on its Caversham bank: a stone block at the bank
 // end of each face, standing about 2 m over the road (the lidar: 6.1 to 6.7 m
@@ -3611,7 +3614,7 @@ function concreteBridge(m, course, bridge) {
       const [y0, y1] = [deckAt(x) - 2.6, deckAt(x) - 0.8];
       for (const e of [-1, 1]) {
         const z = e * (W + 0.02);
-        face([f.at(x - 0.45, y0, z), f.at(x + 0.45, y0, z), f.at(x + 0.45, y1, z), f.at(x - 0.45, y1, z)], RECESS, side(e));
+        face([f.at(x - 0.45, y0, z), f.at(x + 0.45, y0, z), f.at(x + 0.45, y1, z), f.at(x - 0.45, y1, z)], PANEL, side(e));
       }
     }
   }
@@ -3633,7 +3636,9 @@ function concreteBridge(m, course, bridge) {
   // the end of each face, from ABUTMENT.back metres over the bank to ABUTMENT.out
   // over the water where that face's water begins (the bridge crosses the bank
   // at a slant, so each face's is its own), level on top.
-  if (bridge.name === 'Caversham Bridge' && arches.length) {
+  const blocks = [];
+  // (Not in the piers' pictures in the water, `m.facade`: see mirrorFacades.)
+  if (bridge.name === 'Caversham Bridge' && arches.length && !m.facade) {
     const { back, out, over, proud, inset } = ABUTMENT;
     for (const e of [-1, 1]) {
       const zo = e * (W + proud);
@@ -3642,16 +3647,19 @@ function concreteBridge(m, course, bridge) {
       while (w < arches[0][1] && !wetAt(w)) w += 0.5;
       const [x0, x1] = [w - back, w + out];
       const top = deckAt(w) + over;
+      blocks.push({ e, x0, x1, top });
       const zs = e < 0 ? [zo, -W + inset] : [W - inset, zo];
       orientedBox(m, origin, right, fwd, [x0, x1], [-0.5, top], zs, COLORS.cream);
-      // The cornice: a flat cap a little wider all round.
+      // The cornice: a flat cap a little wider all round, darker.
       orientedBox(m, origin, right, fwd, [x0 - 0.2, x1 + 0.2], [top, top + 0.3], e < 0 ? [zo - 0.2, zs[1]] : [zs[0], zo + 0.2], ARCH_RING);
-      // Two tall windows in its face, and one in its end towards the water.
+      // Two tall windows in its face, and one in its end towards the water (their
+      // tops 1.2 m under the cornice: higher, they peeked over the glass house).
+      const [w0, w1] = [top - 3.4, top - 1.2];
       const zw = zo + e * 0.02;
-      for (const x of [x0 + back * 0.35, x0 + back * 0.7]) face([f.at(x - 0.5, top - 3.2, zw), f.at(x + 0.5, top - 3.2, zw), f.at(x + 0.5, top - 0.8, zw), f.at(x - 0.5, top - 0.8, zw)], RECESS, side(e));
+      for (const x of [x0 + back * 0.35, x0 + back * 0.7]) face([f.at(x - 0.5, w0, zw), f.at(x + 0.5, w0, zw), f.at(x + 0.5, w1, zw), f.at(x - 0.5, w1, zw)], RECESS, side(e));
       const ze = (zs[0] + zs[1]) / 2;
       const xe = x1 + 0.02;
-      face([f.at(xe, top - 3.2, ze - 0.5), f.at(xe, top - 3.2, ze + 0.5), f.at(xe, top - 0.8, ze + 0.5), f.at(xe, top - 0.8, ze - 0.5)], RECESS, [right[0], 0, right[1]]);
+      face([f.at(xe, w0, ze - 0.5), f.at(xe, w0, ze + 0.5), f.at(xe, w1, ze + 0.5), f.at(xe, w1, ze - 0.5)], RECESS, [right[0], 0, right[1]]);
     }
   }
   const bay = bridgeBay(course, bridge);
@@ -3687,8 +3695,12 @@ function concreteBridge(m, course, bridge) {
     const z = e * H;
     const cuts = e === bay.e ? [[xa, bay.t - near, false], [bay.t - near, bay.t - B - 0.75, true], [bay.t + B + 0.75, bay.t + near, true], [bay.t + near, xb, false]] : [[xa, xb, false]];
     for (const [x0, x1, open] of cuts) if (x1 > x0) balustrade(m, f, [x0, z], [x1, z], open, deckAt);
-    // Lamp standards along it, every 24 m, clear of the bay.
-    for (let x = lo; x <= hi; x += 24) if (e !== bay.e || Math.abs(x - bay.t) > 12) lamp(m, f, x, z, right, deckAt(x));
+    // Lamp standards along it, every 24 m, clear of the bay and of the abutment,
+    // which carries its own on its top (as in the footage), its pedestal in the block.
+    const block = blocks.find((k) => k.e === e);
+    const clear = (x) => !block || x < block.x0 - 1.5 || x > block.x1 + 1.5;
+    for (let x = lo; x <= hi; x += 24) if ((e !== bay.e || Math.abs(x - bay.t) > 12) && clear(x)) lamp(m, f, x, z, right, deckAt(x));
+    if (block) lamp(m, f, (block.x0 + block.x1) / 2, z, right, block.top + 0.3 - 1.6);
   }
   // The bay: paved and level, out over the water, with its own balustrade round three sides.
   const deck = bay.deck;
@@ -3917,6 +3929,13 @@ export function mirrorFacades(course, sun, sky) {
     const piers = bridgeArches(river, b).arches.flatMap(([a, z]) => [[a - 1, 1], [z + 1, -1]]);
     const tris = m.build().vertices;
     const box = bounds(tris, origin, right, fwd);
+    // The piers' pictures without the abutment: past the face it stood in the
+    // Caversham pier's picture, a grey post in the water under it (design review;
+    // cut to the face's width instead, the gap beside showed the sky as a hairline).
+    const pm = new MeshBuilder();
+    pm.facade = true;
+    concreteBridge(pm, river, b);
+    const pierTris = pm.build().vertices;
     // Its two sides, each seen from its own side of the bridge.
     const name = b.name ?? b.style;
     out.push({ name: `${name} side`, ...facade(tris, origin, right, fwd, box.x, [0, box.y[1]], box.z[1], sun, sky) });
@@ -3928,7 +3947,7 @@ export function mirrorFacades(course, sun, sky) {
     for (const [x, e] of piers) {
       // (No sun under the deck: lit by the sky alone, so a pier facing the sun
       // isn't the bright one. Straight overhead, it lights no wall or underside.)
-      const pic = facade(tris, origin, fwd, [right[0] * e, right[1] * e], box.z, [0, top], x * e, [0, 1, 0], sky);
+      const pic = facade(pierTris, origin, fwd, [right[0] * e, right[1] * e], box.z, [0, top], x * e, [0, 1, 0], sky);
       for (let i = 0; i < pic.pixels.length; i += 4) for (let k = 0; k < 3; k++) pic.pixels[i + k] = Math.round(pic.pixels[i + k] * UNDER_DECK);
       out.push({ name: `${name} pier`, ...pic });
     }
