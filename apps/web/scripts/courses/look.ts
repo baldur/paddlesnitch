@@ -4,7 +4,7 @@
 // again and it carries on where it left off.
 //
 //   pnpm --filter web course:look [folders…]   find *.360 (default ~/Movies), then look until stopped
-//       --model qwen2.5vl:32b   a local Ollama model (PADDLESNITCH_OLLAMA, default localhost:11434)
+//       --model qwen3.8:27b-q4_K_M   a local Ollama model (PADDLESNITCH_OLLAMA, default localhost:11434)
 //       --levels 4              a look every 100 m, then 50, 25, 12.5 m (--base sets 100 for a new store)
 //       --minutes 60            stop after this long
 //       --scan                  only find and index the footage
