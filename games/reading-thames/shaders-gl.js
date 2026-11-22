@@ -341,7 +341,8 @@ void main() {
   vec3 leaves = mix(TREES * (0.75 + 0.7 * tl.y), UNDER, clamp(tl.z / max(tl.x, 0.001), 0.0, 1.0) * LOW.z);
   vec3 sky = mix(skyColor(vec3(refl.x, abs(refl.y), refl.z), 0.0), leaves, tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
-  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.45 * max(tl.x, fa.a)), 0.0, 1.0));
+  // Never a whole mirror (owner, 2026-11-22: "a bit too silvery"): the Thames is green and murky, its own colour shows through even calm.
+  vec3 c = mix(frame.water.rgb, sky, clamp(fresnel + calm * (0.2 + 0.4 * max(tl.x, fa.a)), 0.0, 0.8));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
   c += vec3(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   float foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2(13.0, 9.0)) + t * 6.0));

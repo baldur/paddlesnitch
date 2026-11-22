@@ -338,7 +338,8 @@ fn facades(o: vec3f, d: vec3f) -> vec4f {
   let leaves = mix(TREES * (0.75 + 0.7 * tl.y), UNDER, clamp(tl.z / max(tl.x, 0.001), 0.0, 1.0) * LOW.z);
   let sky = mix(skyColor(vec3f(refl.x, abs(refl.y), refl.z), 0.0), leaves, tl.x) * (1.0 - fa.a) + fa.rgb; // (premultiplied: the clear texels round a picture are black)
   // Still water mirrors the trees and buildings even looking down into it, and the sky a little less (the footage: blue right up to the bow).
-  var c = mix(frame.water.rgb, sky, clamp(fresnel * 1.15 + calm * (0.25 + 0.45 * max(tl.x, fa.a)), 0.0, 1.0));
+  // Never a whole mirror (owner, 2026-11-22: "a bit too silvery"): the Thames is green and murky, its own colour shows through even calm.
+  var c = mix(frame.water.rgb, sky, clamp(fresnel + calm * (0.2 + 0.4 * max(tl.x, fa.a)), 0.0, 0.8));
   // Sun glitter: a tight highlight that the ripples break up into sparkles (none where a bridge or a building is in the way).
   c += vec3f(1.0, 0.9, 0.7) * pow(max(dot(refl, frame.sunDir.xyz), 0.0), 1200.0) * 2.0 * (1.0 - fa.a);
   let foam = clamp(w.y, 0.0, 1.0) * (0.6 + 0.4 * sin(dot(p, vec2f(13.0, 9.0)) + t * 6.0));
