@@ -540,12 +540,18 @@ summary { cursor: pointer; }
   #clubCards .card .name, #clubCards .signin-box .signin { font-size: 0.85rem; }
   #clubCards .signin-box .signin { padding: 0 0.8rem; }
   #clubCards .signin-box .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Four cards in the box since the drone (2026-11-22): they shrink and a long name wraps, so it stays one row. */
+  #clubCards .signin-box { flex-wrap: nowrap; }
+  #clubCards .signin-box .card { flex: 0 1 auto; min-width: 0; }
+  #clubCards .signin-box .card .name { white-space: normal; line-height: 1.1; }
 }
 /* An upright phone: a guest's cards two by two, so the stack stays low, under the scene's pins. */
 @media (orientation: portrait) and (max-width: 600px) {
   /* Two to a row in any font: a long name wraps rather than taking the row. */
   #clubCards .signin-box .card { flex: 1 1 calc(50% - 0.25rem); min-width: 0; }
   #clubCards .signin-box .card .name { white-space: normal; }
+  /* Its heading for screen readers only (Sign in says it), as on a phone on its side: four cards since the drone, and the stack stays as low as with three. */
+  #clubCards .signin-box .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 /* An upright phone with Back showing: the cards sit above Back and Start over. */
 @media (orientation: portrait) and (max-width: 600px) {
@@ -559,6 +565,8 @@ summary { cursor: pointer; }
 #clubDoors .pin { position: absolute; left: 0; top: 0; width: 16px; height: 16px; }
 @media (max-width: 860px) { #clubCards .card { padding: 0.35rem 0.6rem 0.35rem 0.35rem; column-gap: 0.45rem; } #clubCards .long { display: none; } #clubCards .card small { font-size: 0.68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; } #clubCards .card svg { width: 50px; height: 34px; } }
 @media (max-width: 640px) { #clubCards .card svg { display: none; } #clubCards .card { grid-template-columns: 1fr; } }
+/* Five cards on the bridge (the drone, 2026-11-22): on a laptop, the clubs without "Reading" keep them in one row. */
+@media (max-width: 1360px) { #clubCards .long { display: none; } }
 @media (max-width: 860px) { #clubCards .card.go small { white-space: normal; max-width: 10rem; } } /* Race again's line in full, on two lines */
 #clubNote { position: absolute; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 56px); transform: translateX(-50%); margin: 0; width: max-content; max-width: min(34rem, calc(100vw - 32px)); padding: 0.6rem 1rem; border-radius: 10px; background: rgba(10, 18, 18, 0.8); color: #fff; text-align: center; }
 #clubFade { position: absolute; inset: 0; background: #000; opacity: 0; }
@@ -595,6 +603,10 @@ body.walking #pause { display: none; }
 #outingBar button { min-height: 44px; padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
 #outingBar span { opacity: 0.85; }
 #outingBar[hidden] { display: none; }
+/* The drone's thumb sticks (main.js showSticks): a ring where the thumb came down, a knob where it is. */
+.stick { position: fixed; width: 100px; height: 100px; margin: -50px 0 0 -50px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.55); background: rgba(0, 0, 0, 0.15); pointer-events: none; display: grid; place-items: center; }
+.stick i { width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.7); }
+.stick[hidden] { display: none; }
 
 /* Rowing (scull.js): the stroke coach's numbers on its screen at your feet, a Look button on phones; no rudder. */
 #coach { position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; gap: 0.1rem 0.6rem; padding: 0.4rem 0.6rem; border-radius: 6px;

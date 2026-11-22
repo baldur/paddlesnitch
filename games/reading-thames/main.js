@@ -15,7 +15,7 @@ import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.j
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt, bankWoodsAlong, mirrorFacades, nearFacades } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
-import { OUTINGS, HIRE_BOATS, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
+import { OUTINGS, HIRE_BOATS, DRONE, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
 import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, strokeTwist, shouldersAt, legPush, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
 import { TRAFFIC, overturned } from './traffic.js';
 import { createRenderer } from './render.js';
@@ -271,7 +271,8 @@ function start() {
     outingLever = 0;
     state = 'racing';
     showOutingBar();
-    show(mode.outing === 'hire' ? HIRE_BOATS[hireBoat].label : OUTINGS[mode.outing].label, { small: true, hold: 2.5 });
+    if (mode.outing === 'drone') show(phone.matches ? DRONE_HELP.touch : DRONE_HELP.keys, { small: true, hold: 7 });
+    else show(mode.outing === 'hire' ? HIRE_BOATS[hireBoat].label : OUTINGS[mode.outing].label, { small: true, hold: 2.5 });
   }
   if (race.format === 'interval') {
     show(`Time trial: boats go one at a time, 30 seconds apart. You're ${ordinal(race.racers.indexOf(race.player) + 1)} off`, { small: true, hold: 5 });
@@ -724,15 +725,53 @@ const outingTouches = new Map(); // pointer id -> -1 (left half) or 1 (right hal
 addEventListener('keydown', (e) => {
   if (!race?.outing || state !== 'racing') return;
   outingKeys.add(e.code);
+  // (Flying the drone, these keys are its sticks: held, not stepped.)
+  if (race.outing.kind === 'drone') return e.code.startsWith('Arrow') && e.preventDefault();
   if (!e.repeat && (e.code === 'ArrowUp' || e.code === 'KeyW')) lever(1);
   if (!e.repeat && (e.code === 'ArrowDown' || e.code === 'KeyS')) lever(-1);
 });
 addEventListener('keyup', (e) => outingKeys.delete(e.code));
 addEventListener('blur', () => outingKeys.clear());
 canvas.addEventListener('pointerdown', (e) => {
-  if (race?.outing) outingTouches.set(e.pointerId, e.clientX < canvas.clientWidth / 2 ? -1 : 1);
+  if (race?.outing?.kind === 'drone') {
+    droneSticks.set(e.pointerId, { left: e.clientX < canvas.clientWidth / 2, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+    showSticks();
+  } else if (race?.outing) outingTouches.set(e.pointerId, e.clientX < canvas.clientWidth / 2 ? -1 : 1);
 });
-for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => outingTouches.delete(e.pointerId));
+canvas.addEventListener('pointermove', (e) => {
+  const stick = droneSticks.get(e.pointerId);
+  if (!stick) return;
+  [stick.x, stick.y] = [e.clientX, e.clientY];
+  showSticks();
+});
+for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => {
+  outingTouches.delete(e.pointerId);
+  droneSticks.delete(e.pointerId);
+  showSticks();
+});
+// The drone on a touch screen: two thumb sticks, each where its thumb comes
+// down (the left half's climbs and turns, the right half's flies), as a drone's
+// phone app has them. STICK: how far (px) a thumb goes to push a stick all the way.
+const droneSticks = new Map(); // pointer id -> { left, x0, y0, x, y }
+const STICK = 50;
+const stickAxes = (left) => {
+  const t = [...droneSticks.values()].find((v) => v.left === left);
+  if (!t) return [0, 0];
+  const c = (v) => Math.max(-1, Math.min(1, v / STICK));
+  return [c(t.x - t.x0), c(t.y0 - t.y)];
+};
+function showSticks() {
+  for (const left of [true, false]) {
+    const el = document.getElementById(left ? 'stickLeft' : 'stickRight');
+    const t = [...droneSticks.values()].find((v) => v.left === left);
+    el.hidden = !t;
+    if (!t) continue;
+    const [ax, ay] = stickAxes(left);
+    el.style.left = `${t.x0}px`;
+    el.style.top = `${t.y0}px`;
+    el.firstElementChild.style.transform = `translate(${ax * STICK}px, ${-ay * STICK}px)`;
+  }
+}
 // The boat picked by the hire bank for a hired-boat outing (outing.js HIRE_BOATS),
 // and its mooring, where the outing starts (club.js moorings).
 let hireBoat = 'launch';
@@ -743,7 +782,8 @@ function pushOffHire(id) {
   choose('hire');
 }
 // Which of the outing's boats you're on: the trip boat, or the one you hired.
-const outingBoat = () => (race.outing.kind === 'hire' ? race.outing.boat : 'cruise');
+// (Flying the drone, none: you're the camera.)
+const outingBoat = () => (race.outing.kind === 'hire' ? race.outing.boat : race.outing.kind === 'drone' ? null : 'cruise');
 // How far a sinking boat has gone down (metres), and how far over.
 const sunk = () => {
   if (race.outing?.sinking == null) return 0;
@@ -751,6 +791,12 @@ const sunk = () => {
   return k * k; // it settles, then goes
 };
 function lever(by) {
+  // The drone's buttons tilt its camera, a step at a time.
+  if (race?.outing?.kind === 'drone') {
+    const d = race.outing.drone;
+    d.gimbal = Math.max(-Math.PI / 2, Math.min(DRONE.up, d.gimbal + by * Math.PI / 12));
+    return;
+  }
   if (race?.outing?.kind !== 'hire') return;
   outingLever = Math.max(-1, Math.min(1, outingLever + by * 0.25));
   showOutingBar();
@@ -762,13 +808,59 @@ function showOutingBar() {
   if (!kind) return;
   document.getElementById('outingName').textContent = kind === 'hire' ? HIRE_BOATS[race.outing.boat].label : OUTINGS[kind].label;
   const hire = kind === 'hire';
+  const drone = kind === 'drone';
   const sinking = race.outing.sinking != null;
-  for (const id of ['outingFaster', 'outingSlower']) document.getElementById(id).hidden = !hire || sinking;
+  for (const id of ['outingFaster', 'outingSlower']) document.getElementById(id).hidden = !(hire || drone) || sinking;
+  document.getElementById('outingFaster').textContent = drone ? 'Camera up' : 'Faster';
+  document.getElementById('outingSlower').textContent = drone ? 'Camera down' : 'Slower';
+  if (drone) return showDroneHint();
   document.getElementById('outingHint').textContent = sinking ? 'Sinking…' : hire
     ? (outingLever === 0 ? 'Stopped' : outingLever > 0 ? `Ahead ${outingLever * 4} of 4` : `Astern ${-outingLever * 4} of 4`) + (phone.matches ? ' · hold either side to steer' : ' · ← → steer, ↑ ↓ throttle') + ' · give packs and eights room'
     : phone.matches ? 'Hold either side to look about' : '← → look about';
 }
+// Height and speed (twice a second is enough to read). How to fly it is said
+// once as you take off (DRONE_HELP): in the bar, it covered the game's name.
+let droneHintAt = 0;
+function showDroneHint() {
+  const d = race.outing.drone;
+  droneHintAt = race.time;
+  document.getElementById('outingHint').textContent = `${Math.round(d.y)} m up · ${Math.round(race.player.boat.speed * 3.6)} km/h`;
+}
+const DRONE_HELP = {
+  touch: 'Left thumb: up, down and turn. Right thumb: fly. Let go and it hovers',
+  keys: 'W and S: up and down · A and D: turn · the arrows: fly · R and F: tilt the camera (a pad: its two sticks). Let go and it hovers',
+};
+// The drone's sticks, in mode 2 as most are flown: from the keyboard (W S A D
+// the left stick, the arrows the right), a pad's two sticks (and its bumpers
+// for the camera), or the thumbs on a touch screen.
+function droneInput() {
+  const key = (a, b) => (outingKeys.has(a) ? 1 : 0) - (outingKeys.has(b) ? 1 : 0);
+  const input = { climb: key('KeyW', 'KeyS'), yaw: key('KeyD', 'KeyA'), forward: key('ArrowUp', 'ArrowDown'), sideways: key('ArrowRight', 'ArrowLeft'), tilt: key('KeyR', 'KeyF') };
+  const pad = navigator.getGamepads?.()?.find?.((p) => p);
+  if (pad) {
+    const axis = (i) => (Math.abs(pad.axes[i] ?? 0) > 0.15 ? pad.axes[i] : 0);
+    input.yaw += axis(0);
+    input.climb -= axis(1);
+    input.sideways += axis(2);
+    input.forward -= axis(3);
+    input.tilt += (pad.buttons[5]?.pressed ? 1 : 0) - (pad.buttons[4]?.pressed ? 1 : 0);
+  }
+  const [yaw, climb] = stickAxes(true);
+  const [sideways, forward] = stickAxes(false);
+  input.yaw += yaw;
+  input.climb += climb;
+  input.sideways += sideways;
+  input.forward += forward;
+  return input;
+}
 function outingStep(dt) {
+  if (race.outing.kind === 'drone') {
+    const was = [race.player.boat.x, race.player.boat.z];
+    stepOuting(race, dt, droneInput());
+    if (play) play.metres += Math.hypot(race.player.boat.x - was[0], race.player.boat.z - was[1]);
+    if (race.time - droneHintAt > 0.5) showDroneHint();
+    return;
+  }
   let turn = 0;
   if (outingKeys.has('ArrowLeft') || outingKeys.has('KeyA')) turn -= 1;
   if (outingKeys.has('ArrowRight') || outingKeys.has('KeyD')) turn += 1;
@@ -950,6 +1042,8 @@ function arrive(place) {
       { card: { picture: clubSvg('canoe'), name: '<span class="long">Reading </span>Canoe Club', line: 'Kayak races, practice and an erg', pin: 'canoe' }, act: () => go('club') },
       // From Caversham Pier, just below the bridge: a river cruise, or a boat to drive yourself.
       { card: { picture: clubSvg('boathouse'), name: OUTINGS.hire.label, line: OUTINGS.hire.line }, act: () => go('hire'), hire: true },
+      // Up from the pier: a drone to fly anywhere over the river (owner, 2026-11-22).
+      { card: { picture: clubSvg('drone'), name: OUTINGS.drone.label, line: OUTINGS.drone.line }, act: () => choose('drone'), play: true, mode: 'drone' },
       // The river cruise on the far right (owner, 2026-11-07): last for everyone, after a guest's sign-in box.
       { card: { picture: clubSvg('cruise'), name: OUTINGS.cruise.label, line: OUTINGS.cruise.line }, act: () => choose('cruise'), play: true, mode: 'cruise' },
       { pin: 'canoe', at: shots.doors.path.club },
@@ -2448,6 +2542,7 @@ function placeRacers() {
     const hullAt = lift ? [fr.pos[0] + fr.right[0] * 0.55, lift.boat, fr.pos[2] + fr.right[2] * 0.55] : fr.pos;
     // On an outing you're on the trip boat or the launch, not in a kayak.
     if (r === race.player && race.outing) {
+      if (!outingBoat()) continue;
       // Going down: lower, and listing over.
       const down = sunk();
       const list = rotationZ(0.35 * down);
@@ -2530,7 +2625,15 @@ function render(time) {
     up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
   }
   // On an outing: standing at the trip boat's bow, or at the launch's helm, looking about.
-  if (race.outing && state !== 'menu') {
+  if (race.outing?.drone && state !== 'menu') {
+    // Flying the drone: the camera on its gimbal, facing the way the drone does.
+    const yaw = boat.heading;
+    const p = race.outing.drone.gimbal;
+    eye = [boat.x, race.outing.drone.y, boat.z];
+    fwd = [Math.sin(yaw) * Math.cos(p), Math.sin(p), -Math.cos(yaw) * Math.cos(p)];
+    right = [Math.cos(yaw), 0, Math.sin(yaw)]; // (from the heading: looking straight down, fwd has none across)
+    up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+  } else if (race.outing && state !== 'menu') {
     const o = race.outing.kind === 'hire' ? HIRE_BOATS[race.outing.boat] : OUTINGS[race.outing.kind];
     eye = fr.pos.map((p, i) => p + fr.f[i] * o.forward + [0, 1, 0][i] * (o.eye - (o.eye + 0.2) * sunk())); // (every boat's view ends just under the water)
     const yaw = boat.heading + race.outing.look;
@@ -2569,7 +2672,7 @@ function render(time) {
   frameData.set(race.course.scenery ? THAMES : WATER, 44);
   // Wakes, for the racers and then the nearest other boats (placed so their bow
   // is where a kayak's would be, which is what the water shader expects).
-  const wakes = race.racers.filter((r) => !r.portage).map((r) => r.boat).filter((b) => b.swim <= 0).map((b) => [b.x, b.z, b.heading, b.speed]);
+  const wakes = race.racers.filter((r) => !r.portage && !(r === race.player && race.outing?.drone)).map((r) => r.boat).filter((b) => b.swim <= 0).map((b) => [b.x, b.z, b.heading, b.speed]);
   const near = (race.traffic?.boats ?? []).filter((b) => b.on)
     .sort((a, c) => Math.hypot(a.x - boat.x, a.z - boat.z) - Math.hypot(c.x - boat.x, c.z - boat.z));
   for (const b of near) {
@@ -2602,7 +2705,8 @@ function render(time) {
   for (const r of race.racers) {
     if (r.boat.hull.scull) list.push(...myRowing.list);
     else if (mode.row) continue; // a head race's rivals: drawn as the river's sculls
-    else list.push(r === race.player && race.outing ? meshes.outing[outingBoat()] : kayakFor(r));
+    else if (r === race.player && race.outing) { if (outingBoat()) list.push(meshes.outing[outingBoat()]); }
+    else list.push(kayakFor(r));
     if (r !== race.player && !mode.row) list.push(paddlerFor(r).body, paddlerFor(r).arms);
   }
   list.push(...meshes.paddles.values(), meshes.swan, meshes.duck, ...Object.values(meshes.traffic), meshes.oar, meshes.trafficPaddle, meshes.swimmer);

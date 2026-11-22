@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { courseFromFile, locate } from '../reading-thames/course.js';
 import { waterMap } from '../reading-thames/water.js';
 import { createRace } from '../reading-thames/race.js';
-import { OUTINGS, CRUISE, HIRE, HIRE_BOATS, HIRE_MIX, SINK, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from '../reading-thames/outing.js';
+import { OUTINGS, CRUISE, DRONE, HIRE, HIRE_BOATS, HIRE_MIX, SINK, BUSY, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from '../reading-thames/outing.js';
 import { SWIM, TRAFFIC, PACKS, createTraffic, moveTraffic, overturned } from '../reading-thames/traffic.js';
 import { swimmerMesh } from '../reading-thames/meshes.js';
 
@@ -386,4 +386,60 @@ test('a hired boat starts from its mooring by the Thames Path, pointing where it
   assert.equal(o.boat, 'narrowboat');
   assert.ok(Math.abs(o.s - locate(course.scenery.river ?? course, m.x, m.z).s) < 1e-9, 'its place along the river is the mooring, not the pier');
   assert.ok(!course.shore.dry(b.x, b.z), 'afloat');
+});
+
+// The drone (owner, 2026-11-22): mode-2 sticks, a hover when let go, real limits.
+test('the drone takes off from the pier, climbs, and stops at 120 m, never below its floor', async () => {
+  const { race } = await outing('drone');
+  const d = race.outing.drone;
+  assert.equal(d.y, DRONE.start, 'hovering just over the pier');
+  for (let t = 0; t < 10; t += DT) stepOuting(race, DT, { climb: 1 });
+  assert.ok(Math.abs(d.y - (DRONE.start + DRONE.climb * 10)) < 2, `climbed at about ${DRONE.climb} m/s: ${d.y.toFixed(1)} m`);
+  for (let t = 0; t < 60; t += DT) stepOuting(race, DT, { climb: 1 });
+  assert.equal(d.y, DRONE.ceiling, 'held at the limit');
+  for (let t = 0; t < 60; t += DT) stepOuting(race, DT, { climb: -1 });
+  assert.equal(d.y, DRONE.floor, 'and not into the water');
+});
+
+test('the drone flies the way it faces, turns on the spot, slides sideways, and hovers when let go', async () => {
+  const { race } = await outing('drone');
+  const b = race.player.boat;
+  const h = b.heading;
+  const [x0, z0] = [b.x, b.z];
+  for (let t = 0; t < 5; t += DT) stepOuting(race, DT, { forward: 1 });
+  assert.ok(Math.abs(b.speed - DRONE.top) < 0.01, 'at its top speed');
+  const ahead = (b.x - x0) * Math.sin(h) - (b.z - z0) * Math.cos(h);
+  const across = (b.x - x0) * Math.cos(h) + (b.z - z0) * Math.sin(h);
+  assert.ok(ahead > 40 && Math.abs(across) < 0.01, `forward along its heading: ${ahead.toFixed(0)} m`);
+  for (let t = 0; t < 3; t += DT) stepOuting(race, DT, {});
+  assert.equal(b.speed, 0, 'let go: stopped');
+  const [x1, z1] = [b.x, b.z];
+  for (let t = 0; t < 1; t += DT) stepOuting(race, DT, { yaw: 1 });
+  assert.ok(Math.abs(b.heading - h - DRONE.yaw) < 0.02, 'turned right');
+  assert.ok(Math.hypot(b.x - x1, b.z - z1) < 1e-9, 'on the spot');
+  const h2 = b.heading;
+  for (let t = 0; t < 3; t += DT) stepOuting(race, DT, { sideways: 1 });
+  const right = (b.x - x1) * Math.cos(h2) + (b.z - z1) * Math.sin(h2);
+  assert.ok(right > 10, `slid to its right: ${right.toFixed(0)} m`);
+  assert.ok(Math.abs(b.heading - h2) < 1e-9, 'still facing the same way');
+});
+
+test("the drone's camera tilts from a little above level to straight down", async () => {
+  const { race } = await outing('drone');
+  const d = race.outing.drone;
+  assert.equal(d.gimbal, -DRONE.gimbal, 'a little down to start');
+  for (let t = 0; t < 5; t += DT) stepOuting(race, DT, { tilt: -1 });
+  assert.equal(d.gimbal, -Math.PI / 2, 'straight down');
+  for (let t = 0; t < 5; t += DT) stepOuting(race, DT, { tilt: 1 });
+  assert.equal(d.gimbal, DRONE.up, 'and up only so far');
+});
+
+test('the drone goes no further than its range from the river', async () => {
+  const { race } = await outing('drone');
+  const b = race.player.boat;
+  b.heading += Math.PI / 2; // across the river
+  for (let t = 0; t < 120; t += DT) stepOuting(race, DT, { forward: 1 });
+  const at = locate(race.course.scenery.river, b.x, b.z);
+  assert.ok(Math.hypot(b.x - at.x, b.z - at.z) <= DRONE.range + 1e-6, 'held at its range');
+  assert.equal(race.player.boat.swim, 0);
 });

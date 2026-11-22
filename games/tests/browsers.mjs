@@ -88,6 +88,8 @@ const CASES = [
   // Signed out on the site: only the river cruise; the bridge says so, and the rest goes to sign in.
   { name: 'webkit, desktop, a guest on the bridge', engine: webkit, ctx: desktop, club: true, guest: true, site: true, signedOut: true, slowMe: true },
   { name: 'iphone se, a guest on the bridge', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true },
+  // On its side with wider letters too (CI's Linux fonts are wider than a Mac's): a fourth card in the box once pushed it to two rows, over the pins.
+  { name: 'iphone se, a guest on the bridge, wider letters', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true, wide: true },
   { name: 'iphone se upright, a guest on the bridge', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, guest: true, site: true, signedOut: true },
   // …and from the menu, picked before the site has answered who's signed in: only the cruise starts.
   // Wider letters than the iPhone's, as CI's Linux fonts or a phone's larger text: still two by two, under the pins.
@@ -104,6 +106,9 @@ const CASES = [
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat', boat: 'Electric launch' },
+  // The drone: up with W and ahead with the arrow (the keys), or with a thumb on each stick (the touch screen).
+  { name: 'chromium, desktop, fly a drone', engine: chromium, ctx: desktop, club: true, outing: 'Fly a drone' },
+  { name: 'android chrome, fly a drone', engine: chromium, ctx: landscape('Pixel 7'), touch: true, club: true, outing: 'Fly a drone' },
   { name: 'iphone safari, hire a speedboat', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, outing: 'Hire a boat', boat: 'Speedboat' },
   { name: 'iphone se, hire a narrowboat', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, outing: 'Hire a boat', boat: 'Narrowboat' },
   // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
@@ -271,7 +276,7 @@ async function play(c, page, errors) {
     });
     if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
     if (got.head !== 'Sign in to play' || got.group !== 'group Sign in to play' || !got.href?.startsWith('/signin?next=/games/reading-thames/')) errors.push(`the guest's box: ${JSON.stringify(got)}`);
-    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Rowing Club,Reading Canoe Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
+    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Rowing Club,Reading Canoe Club,Hire a boat,Fly a drone' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
     // The cruise marked as the thing to play; each card in the box says it needs sign in to a screen reader.
     if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
     if (got.last !== 'River cruise' || !got.rightmost) errors.push(`the river cruise isn't last on the right: last ${got.last}, right-most ${got.rightmost}`);
@@ -755,11 +760,36 @@ async function play(c, page, errors) {
   const { width, height } = page.viewportSize();
   // The hired launch: throttle full ahead first (then the arrow presses below steer it).
   if (c.outing === 'Hire a boat') for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
+  // The drone: both sticks held, up and ahead, through what would be the strokes below.
+  const drone = c.outing === 'Fly a drone';
+  const view = page.locator('#view');
+  const thumb = (pointerId, x, y, type) => view.dispatchEvent(type, { pointerId, clientX: x, clientY: y, pointerType: 'touch', isPrimary: pointerId === 1, bubbles: true });
+  if (drone && c.touch) {
+    await thumb(1, width * 0.2, height * 0.7, 'pointerdown');
+    await thumb(1, width * 0.2, height * 0.7 - 80, 'pointermove');
+    await thumb(2, width * 0.8, height * 0.7, 'pointerdown');
+    await thumb(2, width * 0.8, height * 0.7 - 80, 'pointermove');
+    if (await page.locator('#stickLeft').isHidden() || await page.locator('#stickRight').isHidden()) errors.push("the drone's thumb sticks didn't show");
+  } else if (drone) {
+    await page.keyboard.down('KeyW');
+    await page.keyboard.down('ArrowUp');
+  }
   for (let i = 0; i < 12; i++) {
+    if (drone) {
+      const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
+      await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
+      continue;
+    }
     if (c.touch) await page.touchscreen.tap(i % 2 ? width * 0.8 : width * 0.2, height * 0.6);
     else await page.keyboard.press(i % 2 ? 'ArrowRight' : 'ArrowLeft');
     const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
     await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
+  }
+  if (drone) {
+    const up = await page.evaluate(() => window.kayak.race.outing.drone.y);
+    if (!(up > 10)) errors.push(`the drone only climbed to ${up.toFixed(1)} m`);
+    if (c.touch) for (const id of [1, 2]) await thumb(id, 0, 0, 'pointerup');
+    else for (const key of ['KeyW', 'ArrowUp']) await page.keyboard.up(key);
   }
   const { speed, ms, s, start, why } = await page.evaluate(() => {
     const { race, boat } = window.kayak;
