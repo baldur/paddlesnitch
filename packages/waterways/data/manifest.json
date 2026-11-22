@@ -1,31 +1,31 @@
 {
-  "version": "20261115-4735b729",
-  "builtAt": "2026-11-15T10:44:21.883Z",
+  "version": "20261122-60d2eb99",
+  "builtAt": "2026-11-22T11:53:00.171Z",
   "counts": {
-    "links": 354086,
-    "km": 329581,
-    "features": 143657,
-    "osmLocks": 4305,
-    "osmAccess": 7500,
-    "osmFacilities": 20740,
-    "shareAlike": 3958,
-    "osm": 729773,
-    "osmPortages": 1569,
-    "places": 305347
+    "links": 354457,
+    "km": 329781,
+    "features": 143750,
+    "osmLocks": 4306,
+    "osmAccess": 7533,
+    "osmFacilities": 20753,
+    "shareAlike": 3961,
+    "osm": 731206,
+    "osmPortages": 1652,
+    "places": 305460
   },
   "sources": {
-    "amber-eu": 69950,
+    "amber-eu": 69957,
     "amber": 12279,
     "crt": 11638,
     "ea-aims": 2179,
     "ea-thames": 45,
-    "ea-umap": 199,
+    "ea-umap": 203,
     "ifi": 2069,
-    "nl-waterboards": 51861,
-    "roe": 43577,
+    "nl-waterboards": 51879,
+    "roe": 43656,
     "rws-fis": 865,
     "scottish-canals": 212,
-    "sepa": 2164,
+    "sepa": 2166,
     "waterways-ireland": 684
   }
 }
