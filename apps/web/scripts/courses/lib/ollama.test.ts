@@ -63,4 +63,15 @@ describe('checkOllama and chat', () => {
     const notFound = (async () => new Response('model not found', { status: 404 })) as unknown as typeof fetch
     await expect(chat('http://localhost:11434', {}, notFound)).rejects.toBeInstanceOf(OllamaDown)
   })
+  it('asks without thinking unless the caller says otherwise (a thinking look takes minutes)', async () => {
+    const sent: Record<string, unknown>[] = []
+    const f = (async (_u: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)))
+      return new Response(stream(line('ok')))
+    }) as unknown as typeof fetch
+    expect(await chat('http://localhost:11434', { model: 'm' }, f)).toBe('ok')
+    await chat('http://localhost:11434', { model: 'm', think: true }, f)
+    expect(sent.map((b) => b.think)).toEqual([false, true])
+    expect(sent[0].stream).toBe(true)
+  })
 })

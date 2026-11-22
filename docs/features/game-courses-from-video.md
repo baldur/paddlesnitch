@@ -90,7 +90,7 @@ Serves `games/`, plays the course in Chrome with `#debug`, puts the boat at each
 
 ### Looking with a local model (`look.ts`, pure parts in `lib/look.ts`, `lib/stations.ts`, `lib/eac.ts`, tested)
 
-Started 2026-11-12 (owner: "lots and lots of details", stop and resume, data always available). A vision model on this laptop (Ollama, `qwen2.5vl:32b` by default) looks at **all** the 360 footage it can find and writes down what's along the river, place by place. It's independent of any course: it works per clip, and everything it records has a place, so any course (or the river planner) can use it later.
+Started 2026-11-12 (owner: "lots and lots of details", stop and resume, data always available). A vision model on this laptop (Ollama, `qwen3.8:27b-q4_K_M` by default; looks before 2026-11-19 were made by `qwen2.5vl:32b`, still viewable with `course:explore --model qwen2.5vl:32b`) looks at **all** the 360 footage it can find and writes down what's along the river, place by place. It's independent of any course: it works per clip, and everything it records has a place, so any course (or the river planner) can use it later.
 
 ```
 pnpm --filter web course:look [folders…]   # find *.360 under the folders (default ~/Movies), then look until stopped
@@ -121,7 +121,7 @@ pnpm --filter web course:look --export     # everything seen, placed, as GeoJSON
 Added 2026-11-12 so the owner can judge the model before anything it saw goes into the game.
 
 ```
-pnpm --filter web course:explore [--port 3201] [--model qwen2.5vl:32b]   # then open http://localhost:3201
+pnpm --filter web course:explore [--port 3201] [--model qwen3.8:27b-q4_K_M]   # then open http://localhost:3201
 ```
 
 River Explorer is a small local web page over the store. It can run while course:look is looking.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // What the Reading river's plain buildings are made of, from the owner's footage.
 //
-//   pnpm --filter web course:materials [--within 80] [--views 2] [--model qwen2.5vl:32b]
+//   pnpm --filter web course:materials [--within 80] [--views 2] [--model qwen3.8:27b-q4_K_M]
 //   pnpm --filter web course:materials --write    only write the game's file from what's been asked
 //
 // For each plain building (not a landmark, which is modelled from the footage)
@@ -25,7 +25,7 @@ import { courseFromFile, locate, widthAt } from '../../../../games/reading-thame
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined }
 const WITHIN = Number(arg('within') ?? 80)
 const VIEWS = Number(arg('views') ?? 2)
-const MODEL = arg('model') ?? 'qwen2.5vl:32b'
+const MODEL = arg('model') ?? 'qwen3.8:27b-q4_K_M'
 const DIR = path.join(os.homedir(), '.paddlesnitch', 'materials')
 const ANSWERS = path.join(DIR, 'answers.json')
 const GAMES = path.join(process.cwd(), '../../games/reading-thames')
