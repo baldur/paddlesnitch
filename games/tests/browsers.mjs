@@ -104,6 +104,9 @@ const CASES = [
   { name: 'firefox, features missing, the walk', engine: firefox, ctx: desktop, strip: true, club: true, expect: 'webgl2' },
   { name: 'webkit, desktop, river cruise', engine: webkit, ctx: desktop, club: true, outing: 'River cruise' },
   { name: 'webkit, desktop, hire a boat', engine: webkit, ctx: desktop, club: true, outing: 'Hire a boat', boat: 'Electric launch' },
+  // The drone: up with W and ahead with the arrow (the keys), or with a thumb on each stick (the touch screen).
+  { name: 'chromium, desktop, fly a drone', engine: chromium, ctx: desktop, club: true, outing: 'Fly a drone' },
+  { name: 'android chrome, fly a drone', engine: chromium, ctx: landscape('Pixel 7'), touch: true, club: true, outing: 'Fly a drone' },
   { name: 'iphone safari, hire a speedboat', engine: webkit, ctx: landscape('iPhone 15'), touch: true, club: true, outing: 'Hire a boat', boat: 'Speedboat' },
   { name: 'iphone se, hire a narrowboat', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, outing: 'Hire a boat', boat: 'Narrowboat' },
   // The rowing club: a practice row in a single scull, and a 500 m on the ergs.
@@ -755,11 +758,36 @@ async function play(c, page, errors) {
   const { width, height } = page.viewportSize();
   // The hired launch: throttle full ahead first (then the arrow presses below steer it).
   if (c.outing === 'Hire a boat') for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
+  // The drone: both sticks held, up and ahead, through what would be the strokes below.
+  const drone = c.outing === 'Fly a drone';
+  const view = page.locator('#view');
+  const thumb = (pointerId, x, y, type) => view.dispatchEvent(type, { pointerId, clientX: x, clientY: y, pointerType: 'touch', isPrimary: pointerId === 1, bubbles: true });
+  if (drone && c.touch) {
+    await thumb(1, width * 0.2, height * 0.7, 'pointerdown');
+    await thumb(1, width * 0.2, height * 0.7 - 80, 'pointermove');
+    await thumb(2, width * 0.8, height * 0.7, 'pointerdown');
+    await thumb(2, width * 0.8, height * 0.7 - 80, 'pointermove');
+    if (await page.locator('#stickLeft').isHidden() || await page.locator('#stickRight').isHidden()) errors.push("the drone's thumb sticks didn't show");
+  } else if (drone) {
+    await page.keyboard.down('KeyW');
+    await page.keyboard.down('ArrowUp');
+  }
   for (let i = 0; i < 12; i++) {
+    if (drone) {
+      const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
+      await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
+      continue;
+    }
     if (c.touch) await page.touchscreen.tap(i % 2 ? width * 0.8 : width * 0.2, height * 0.6);
     else await page.keyboard.press(i % 2 ? 'ArrowRight' : 'ArrowLeft');
     const next = (await page.evaluate(() => window.kayak.race.time)) + 0.7;
     await page.waitForFunction((t) => window.kayak.race.time >= t, next, { timeout: 30_000 });
+  }
+  if (drone) {
+    const up = await page.evaluate(() => window.kayak.race.outing.drone.y);
+    if (!(up > 10)) errors.push(`the drone only climbed to ${up.toFixed(1)} m`);
+    if (c.touch) for (const id of [1, 2]) await thumb(id, 0, 0, 'pointerup');
+    else for (const key of ['KeyW', 'ArrowUp']) await page.keyboard.up(key);
   }
   const { speed, ms, s, start, why } = await page.evaluate(() => {
     const { race, boat } = window.kayak;

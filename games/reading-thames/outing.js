@@ -16,6 +16,7 @@ import { MeshBuilder } from './meshes.js';
 export const OUTINGS = {
   cruise: { label: 'River cruise', line: 'Up the Thames to Mapledurham', eye: 2.9, forward: 4.6 },
   hire: { label: 'Hire a boat', line: 'A speedboat, a launch or a narrowboat', eye: 1.35, forward: -1.4 },
+  drone: { label: 'Fly a drone', line: 'Over the river, up to 120 m', eye: 0, forward: 0 },
 };
 // Speeds are real (m/s) and, like a race, go `speedup` times as fast through
 // the true-size world: the Thames's 8 km/h limit is about 2.2 m/s.
@@ -25,6 +26,18 @@ export const CRUISE = { speed: 2.2, keepRight: 0.3, ahead: 30, look: 1.4, lookRa
 // which goes anywhere, has boats up and down the whole river, a new one about
 // every `ambient` seconds (some 20 on the water at once).
 export const BUSY = { gap: 35, ambient: 5, hours: 2 };
+// The drone (owner, 2026-11-22: "explore more angles and heights of the world"):
+// flown as a real one is, in mode 2. The left stick climbs (up, down) and turns
+// (left, right); the right stick flies forward, back and sideways. Let go and it
+// stops and hovers. Real speeds in the true-size world (no `speedup`: it isn't
+// racing anyone), about a small camera drone's normal mode: `top` across (m/s),
+// `climb` up and down, `yaw` (rad/s), `accel` (m/s², how quickly it gets there
+// and stops). It takes off from the pier at `start` metres, keeps `floor` over
+// the water, goes no higher than 120 m (the UK's limit for drones) and no
+// further than `range` from the river. The camera hangs on a gimbal: `gimbal`
+// radians below level to start, from `up` above it to straight down, turned at `tiltRate`.
+export const DRONE = { top: 10, climb: 4, yaw: 1.6, accel: 6, start: 1.5, floor: 1, ceiling: 120, range: 400, gimbal: 0.25, up: 0.35, tiltRate: 0.9 };
+
 // The boats for hire at the pier (owner, 2026-10-31: a choice of three):
 // a speedboat, very quick and nimble; the electric launch; a narrowboat, long
 // and slow. Each: top speed and astern (m/s, real), how quickly it gets there
@@ -61,6 +74,7 @@ export function startOuting(race, kind, s, seed = 1, { boat = 'launch', from = n
     ? createTraffic(race.course, seed, { gap: BUSY.gap, route: { at: (t) => pointAt(river, Math.min(river.length, s + CRUISE.speed * k * t)), seconds: (river.length - s) / (CRUISE.speed * k) } })
     : createTraffic(race.course, seed, { gap: BUSY.ambient * 0.8, ambient: BUSY.hours * 3600, mix: HIRE_MIX });
   const o = { kind, river, s, look: 0, done: false, lat: rightOf(river, s, race.course.shore), boat: HIRE_BOATS[boat] ? boat : 'launch', sinking: null };
+  if (kind === 'drone') o.drone = { y: DRONE.start, vx: 0, vy: 0, vz: 0, gimbal: -DRONE.gimbal };
   race.outing = o;
   const b = race.player.boat;
   const at = from ? [from.x, from.z] : keepRight(river, s, race.course.shore);
@@ -109,7 +123,10 @@ export function stepOuting(race, dt, input = {}) {
   b.time += dt;
   if (race.traffic) moveTraffic(race.traffic, race.time);
   const turn = Math.max(-1, Math.min(1, input.turn ?? 0));
-  if (o.kind === 'cruise') {
+  if (o.kind === 'drone') {
+    flyDrone(race, dt, input);
+    stepBirds(race.birds, [], race.course, dt);
+  } else if (o.kind === 'cruise') {
     // Along the right of the river, the bow eased towards a point ahead.
     const end = o.river.length - 40;
     if (!o.done) o.s = Math.min(end, o.s + CRUISE.speed * k * dt);
@@ -189,6 +206,45 @@ export function stepOuting(race, dt, input = {}) {
   b.swim = 0;
   me.loc = locate(race.course, b.x, b.z, me.loc?.i);
   return events;
+}
+
+// One step of the drone. `input`: `climb` and `yaw` (the left stick), `forward`
+// and `sideways` (the right stick), each -1 to 1, and `tilt` (-1 down, 1 up) for the camera.
+function flyDrone(race, dt, input) {
+  const d = race.outing.drone;
+  const b = race.player.boat;
+  const axis = (v) => Math.max(-1, Math.min(1, v ?? 0));
+  b.heading = wrap(b.heading + axis(input.yaw) * DRONE.yaw * dt);
+  d.gimbal = Math.max(-Math.PI / 2, Math.min(DRONE.up, d.gimbal + axis(input.tilt) * DRONE.tiltRate * dt));
+  // The sticks ask for a velocity (the forward stick along the heading, the
+  // other across it), which the drone eases to; on its own it brakes to a hover.
+  const [f, r] = [axis(input.forward), axis(input.sideways)];
+  const k = Math.hypot(f, r) > 1 ? 1 / Math.hypot(f, r) : 1;
+  const want = [
+    (Math.sin(b.heading) * f + Math.cos(b.heading) * r) * DRONE.top * k,
+    axis(input.climb) * DRONE.climb,
+    (-Math.cos(b.heading) * f + Math.sin(b.heading) * r) * DRONE.top * k,
+  ];
+  // (Across as one: eased a component at a time, it would set off at 45° to where it's going.)
+  const step = DRONE.accel * dt;
+  const [dx, dz] = [want[0] - d.vx, want[2] - d.vz];
+  const ease = Math.min(1, step / (Math.hypot(dx, dz) || 1));
+  d.vx += dx * ease;
+  d.vz += dz * ease;
+  d.vy += Math.max(-step, Math.min(step, want[1] - d.vy));
+  b.x += d.vx * dt;
+  b.z += d.vz * dt;
+  d.y += d.vy * dt;
+  if (d.y < DRONE.floor || d.y > DRONE.ceiling) {
+    d.y = Math.max(DRONE.floor, Math.min(DRONE.ceiling, d.y));
+    d.vy = 0;
+  }
+  // Out of range of the river: held at its edge.
+  const at = locate(race.outing.river, b.x, b.z);
+  const off = Math.hypot(b.x - at.x, b.z - at.z);
+  if (off > DRONE.range) [b.x, b.z] = [at.x + (b.x - at.x) * DRONE.range / off, at.z + (b.z - at.z) * DRONE.range / off];
+  b.speed = Math.hypot(d.vx, d.vz);
+  b.slip = 0;
 }
 
 // Moves a boat by its way through the water: ahead (`speed`, along its heading) and sideways (`slip`, to its right).

@@ -145,6 +145,16 @@ export function clubSvg(which) {
       <path d="M6 60q12 -3 24 0q12 3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
     </svg>`;
   }
+  // A camera drone over the river: four rotors on their arms, the camera underneath.
+  if (which === 'drone') {
+    return `<svg viewBox="0 0 120 80" aria-hidden="true" data-picture="drone">${sky}
+      <circle cx="12" cy="58" r="12" fill="#4d7a3a"/><circle cx="108" cy="56" r="14" fill="#3f6b33"/>
+      <rect y="62" width="120" height="18" fill="#4f7f86"/><path d="M14 70q12 -3 24 0q12 3 24 0M70 75q12 -3 24 0" fill="none" stroke="#e8f2f4" stroke-width="1.2"/>
+      <path d="M36 24L84 40M84 24L36 40" stroke="#3a3f45" stroke-width="3" stroke-linecap="round"/>
+      ${[[36, 24], [84, 24], [36, 40], [84, 40]].map(([x, y]) => `<ellipse cx="${x}" cy="${y - 3}" rx="12" ry="2" fill="rgb(40 45 50 / 0.35)"/><rect x="${x - 2}" y="${y - 3}" width="4" height="4" fill="#2a2e33"/>`).join('')}
+      <rect x="50" y="27" width="20" height="10" rx="3" fill="#d9dde1"/><rect x="56" y="37" width="8" height="5" rx="1.5" fill="#2a2e33"/><circle cx="60" cy="41" r="1.6" fill="#7fb3d5"/>
+    </svg>`;
+  }
   // Caversham Boat Services from the river: the white boathouse with its
   // black-and-white timbered gable and balcony, the sign, the two white lions
   // on the bank and the Union flag (drawn from a photo, owner 2026-11-07).
