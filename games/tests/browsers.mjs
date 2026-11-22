@@ -88,6 +88,8 @@ const CASES = [
   // Signed out on the site: only the river cruise; the bridge says so, and the rest goes to sign in.
   { name: 'webkit, desktop, a guest on the bridge', engine: webkit, ctx: desktop, club: true, guest: true, site: true, signedOut: true, slowMe: true },
   { name: 'iphone se, a guest on the bridge', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true },
+  // On its side with wider letters too (CI's Linux fonts are wider than a Mac's): a fourth card in the box once pushed it to two rows, over the pins.
+  { name: 'iphone se, a guest on the bridge, wider letters', engine: webkit, ctx: landscape('iPhone SE'), touch: true, club: true, guest: true, site: true, signedOut: true, wide: true },
   { name: 'iphone se upright, a guest on the bridge', engine: webkit, ctx: devices['iPhone SE'], touch: true, club: true, guest: true, site: true, signedOut: true },
   // …and from the menu, picked before the site has answered who's signed in: only the cruise starts.
   // Wider letters than the iPhone's, as CI's Linux fonts or a phone's larger text: still two by two, under the pins.
@@ -274,7 +276,7 @@ async function play(c, page, errors) {
     });
     if (got.place !== 'path') errors.push(`a guest who was at the canoe club last time started at ${got.place}, not the bridge`);
     if (got.head !== 'Sign in to play' || got.group !== 'group Sign in to play' || !got.href?.startsWith('/signin?next=/games/reading-thames/')) errors.push(`the guest's box: ${JSON.stringify(got)}`);
-    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Rowing Club,Reading Canoe Club,Hire a boat' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
+    if (got.outside.join() !== 'River cruise' || got.inside.join() !== 'Reading Rowing Club,Reading Canoe Club,Hire a boat,Fly a drone' || got.friends) errors.push(`a guest's bridge shows ${JSON.stringify(got)}`);
     // The cruise marked as the thing to play; each card in the box says it needs sign in to a screen reader.
     if (got.open !== 1 || !got.described) errors.push(`the guest's cards: ${got.open} marked open, each in the box described by its heading: ${got.described}`);
     if (got.last !== 'River cruise' || !got.rightmost) errors.push(`the river cruise isn't last on the right: last ${got.last}, right-most ${got.rightmost}`);

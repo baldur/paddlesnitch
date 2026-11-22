@@ -540,12 +540,18 @@ summary { cursor: pointer; }
   #clubCards .card .name, #clubCards .signin-box .signin { font-size: 0.85rem; }
   #clubCards .signin-box .signin { padding: 0 0.8rem; }
   #clubCards .signin-box .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Four cards in the box since the drone (2026-11-22): they shrink and a long name wraps, so it stays one row. */
+  #clubCards .signin-box { flex-wrap: nowrap; }
+  #clubCards .signin-box .card { flex: 0 1 auto; min-width: 0; }
+  #clubCards .signin-box .card .name { white-space: normal; line-height: 1.1; }
 }
 /* An upright phone: a guest's cards two by two, so the stack stays low, under the scene's pins. */
 @media (orientation: portrait) and (max-width: 600px) {
   /* Two to a row in any font: a long name wraps rather than taking the row. */
   #clubCards .signin-box .card { flex: 1 1 calc(50% - 0.25rem); min-width: 0; }
   #clubCards .signin-box .card .name { white-space: normal; }
+  /* Its heading for screen readers only (Sign in says it), as on a phone on its side: four cards since the drone, and the stack stays as low as with three. */
+  #clubCards .signin-box .head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 /* An upright phone with Back showing: the cards sit above Back and Start over. */
 @media (orientation: portrait) and (max-width: 600px) {
