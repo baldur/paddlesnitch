@@ -164,6 +164,24 @@ actor ScriptedSource: PaddlesSource {
         #expect(model.state == .failed("Couldn't reach paddlesnitch. Check your connection and try again."))
     }
 
+    /// The server's own words (codes, vendor names) never reach the screen (#897).
+    @Test func aRejectedListLoadShowsNoServerText() async {
+        let refused = PaddleAPIError.rejected(message: "invalid_token: Cognito said no", status: 403, session: nil)
+        let model = PaddleListModel(source: ScriptedSource(failure: refused))
+        await model.load()
+        #expect(model.state == .failed("Please try again in a moment."))
+    }
+
+    @Test func aRejectedRefreshShowsNoServerText() async {
+        let source = ScriptedSource()
+        let model = PaddleListModel(source: source)
+        await model.load()
+        await source.fail(with: PaddleAPIError.rejected(message: "invalid_token", status: 403, session: nil))
+        await model.load()
+        #expect(model.state.value?.count == 3)
+        #expect(model.refreshFailure == "Please try again in a moment.")
+    }
+
     @Test func aFailedRefreshKeepsTheList() async {
         let source = ScriptedSource()
         let model = PaddleListModel(source: source)
@@ -274,6 +292,7 @@ actor ScriptedSource: PaddlesSource {
         (PaddleAPIError.badResponse(status: 502) as any Error, "Please try again in a moment."),
         (URLError(.notConnectedToInternet), "Couldn't reach paddlesnitch. Check your connection and try again."),
         (PaddleAPIError.signedOut, "Sign in again to see your paddles."),
+        (PaddleAPIError.rejected(message: "invalid_token", status: 403, session: nil), "Please try again in a moment."),
     ])
     func failuresSayWhatToDo(error: any Error, words: String) {
         #expect(FailureMessage.of(error) == words)
