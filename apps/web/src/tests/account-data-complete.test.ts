@@ -25,7 +25,7 @@ import { putGroup, getGroup, addUserToGroupIndex, putJoinRequest, putInvitation 
 import type { GroupMetadata } from '@/lib/types'
 import { GAME_COURSES } from '@paddlesnitch/core/games'
 import { sweepJobs } from '@/lib/jobs'
-import { addPortage, flagPortage } from '@paddlesnitch/waterways/portage-store'
+import { addPortage, flagIndexKey, flagPortage, listPublicPortages } from '@paddlesnitch/waterways/portage-store'
 import { backfillFlagIndex } from '../../scripts/backfill-portage-flag-index'
 
 const PORTAGE = { featureId: 'crt:locks:x', at: [51.4, -1] as [number, number], landings: [[51.4004, -1.0004], [51.4004, -0.9996]] as [[number, number], [number, number]] }
@@ -327,6 +327,58 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(await flagPortage((await makeUser('F4')).id, p.id)).toBe('hidden')
   })
 
+  it('the backfill deletes an old flag whose flagger has no account, and writes no index for it (#915)', async () => {
+    const b = await makeUser('Owner')
+    const p = await addPortage({ id: b.id, name: 'B' }, PORTAGE)
+    const goneId = '00000000-0000-4000-8000-00000000dead'
+    await putJson(`portages/flags/${p.id}/${goneId}.json`, { at: '2026-11-01T00:00:00.000Z' })
+
+    expect(await backfillFlagIndex(false)).toEqual({ flags: 1, indexed: 0, orphans: 1 })
+    expect(await listKeys(`portages/flags/${p.id}/`)).toHaveLength(1)
+    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, indexed: 0, orphans: 1 })
+    expect(await listKeys(`portages/flags/${p.id}/`)).toEqual([])
+    expect(await listKeys(`users/${goneId}/`)).toEqual([])
+  })
+
+  it('a flag written between erasing their flags and the users/ wipe keeps its index, and the second pass removes both (#915)', async () => {
+    const a = await makeUser('Racing flagger')
+    const b = await makeUser('Owner')
+    const p = await addPortage({ id: b.id, name: 'B' }, PORTAGE)
+    const storage = await import('@paddlesnitch/core/storage')
+    const realGet = storage.getJson
+    let raced = false
+    // users/{id}/profile.json is read just before the users/ wipe: a leftover token flags then.
+    const gets = vi.spyOn(storage, 'getJson').mockImplementation(async (key: string) => {
+      if (!raced && key === `users/${a.id}/profile.json`) { raced = true; await flagPortage(a.id, p.id) }
+      return realGet(key)
+    })
+
+    signInAs(a.idToken)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
+    gets.mockRestore()
+    expect(raced).toBe(true)
+    expect(await getJson(flagIndexKey(a.id, p.id))).not.toBeNull()
+
+    await sweepJobs(Date.now() + 10 * 60_000)
+    expect(await listKeys(`portages/flags/${p.id}/`)).toEqual([])
+    expect(await listKeys(`users/${a.id}/`)).toEqual([])
+  })
+
+  it("erasure removes the public copy of a portage they added, and every flag on it, other people's included (#915)", async () => {
+    const a = await makeUser('Author')
+    const p = await addPortage({ id: a.id, name: 'A' }, PORTAGE)
+    await flagPortage((await makeUser('B')).id, p.id)
+    await flagPortage((await makeUser('C')).id, p.id)
+    expect((await listPublicPortages()).map(x => x.id)).toContain(p.id)
+
+    signInAs(a.idToken)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
+
+    expect(await getJson(`portages/public/${p.id}.json`)).toBeNull()
+    expect(await listKeys(`portages/flags/${p.id}/`)).toEqual([])
+    expect((await listPublicPortages()).map(x => x.id)).not.toContain(p.id)
+  })
+
   it('a flag placed before the index existed is found once the backfill has run (#915)', async () => {
     const a = await makeUser('Old flagger')
     const b = await makeUser('Owner')
@@ -334,9 +386,10 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     // As flagPortage wrote it before #915: no entry under users/{id}/.
     await putJson(`portages/flags/${p.id}/${a.id}.json`, { at: '2026-11-01T00:00:00.000Z' })
 
-    expect(await backfillFlagIndex(false)).toEqual({ flags: 1, missing: 1 })
-    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, missing: 1 })
-    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, missing: 0 })
+    expect(await backfillFlagIndex(false)).toEqual({ flags: 1, indexed: 1, orphans: 0 })
+    expect(await getJson(flagIndexKey(a.id, p.id))).toBeNull()
+    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, indexed: 1, orphans: 0 })
+    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, indexed: 0, orphans: 0 })
 
     signInAs(a.idToken)
     await deleteAccount(new Request('http://x'))
@@ -446,8 +499,16 @@ describe('GET /api/account/export includes every kind of personal data', () => {
     signInAs(me.idToken)
     const text = await (await exportData(new Request('http://x'))).text()
     const body = JSON.parse(text)
-    expect(body.account.portageFlags).toEqual([{ portageId: p.id, at: expect.any(String) }])
+    expect(body.account.portageFlags).toEqual([{ portageId: p.id, at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) }])
+    expect(new Date(body.account.portageFlags[0].at).toISOString()).toBe(body.account.portageFlags[0].at)
     expect(text).not.toContain(other.id)
+  })
+
+  it('export shows portageFlags as [] for a user who never flagged', async () => {
+    const me = await makeUser('Me')
+    signInAs(me.idToken)
+    const body = await (await exportData(new Request('http://x'))).json()
+    expect(body.account.portageFlags).toEqual([])
   })
 
   it("does not include another user's paddles or trackers", async () => {

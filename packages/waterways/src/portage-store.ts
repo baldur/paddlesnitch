@@ -258,10 +258,15 @@ export async function listMyFlags(userId: string): Promise<{ portageId: string; 
   return flags.sort((a, b) => a.at.localeCompare(b.at))
 }
 
+/** Where erasure's users/ wipe must not reach: erasePortages owns these entries (#915). */
+export const portageFlagIndexPrefix = myFlagPrefix
+
 /**
  * Account deletion: the public copies and flags on their portages, and their
- * flags on everyone else's (found by their index, so the time doesn't grow
- * with the number of portages). Their own copies and the index go with users/{id}/.
+ * flags on everyone else's with their index entries (found by the index, so
+ * the time doesn't grow with the number of portages). The users/ wipe leaves
+ * the index alone, so an entry written after this lists it survives until the
+ * second pass (#814) runs this again. Their own copies go with users/{id}/.
  */
 export async function erasePortages(userId: string): Promise<void> {
   const [mine, flagged] = await Promise.all([
@@ -275,5 +280,7 @@ export async function erasePortages(userId: string): Promise<void> {
     ...flagsOnMine.flat(),
     ...flagged.map(k => flagKey(k.slice(prefix.length, -'.json'.length), userId)),
   ])
+  // After their flags, so a failure above leaves the index to find them by.
+  await deleteObjects(flagged)
   cache = null
 }

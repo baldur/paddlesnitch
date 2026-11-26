@@ -23,7 +23,7 @@ import { eraseDerived } from '@paddlesnitch/core/derived'
 import { listTrials, listCourses } from '@/lib/catalogue'
 import { eraseBuddies } from '@paddlesnitch/core/buddies'
 import { erasePlanDemand, erasePlanShares } from '@paddlesnitch/waterways/plan-store'
-import { erasePortages } from '@paddlesnitch/waterways/portage-store'
+import { erasePortages, portageFlagIndexPrefix } from '@paddlesnitch/waterways/portage-store'
 import { eraseGameTimes } from '@paddlesnitch/core/games'
 import { erasureState, CACHE_MS } from '@paddlesnitch/core/erased'
 
@@ -131,7 +131,10 @@ export async function eraseAccountData(userId: string, { athleteIds = [] }: { at
     const index = await getJson<{ userId?: string }>(`usernames/${profile.handle}.json`)
     if (index?.userId === userId) await deleteObject(`usernames/${profile.handle}.json`)
   }
-  await deletePrefix(`users/${userId}/`)
+  // Not their portage-flag index: erasePortages deletes it with the flags, and
+  // an entry written since must last until the second pass finds its flag (#915).
+  const keep = portageFlagIndexPrefix(userId)
+  await deleteObjects((await listKeys(`users/${userId}/`)).filter(k => !k.startsWith(keep)))
 }
 
 /** A server request is cut off after this. */
