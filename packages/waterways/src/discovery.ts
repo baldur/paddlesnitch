@@ -28,6 +28,7 @@ export const KNOWN: { match: string; status: 'used' | 'rejected'; note: string }
   { match: 'water-recreation', status: 'rejected', note: 'EA water recreation zones: centroids, part CC BY-NC-SA' },
   { match: 'national-barriers-programme', status: 'used', note: 'IFI barriers (the dashboard and its data)' },
   { match: 'Marine Institute', status: 'rejected', note: 'Ocean and coastal monitoring, not inland water' },
+  { match: 'a644c1968df14812b2ed1439feb165b6', status: 'rejected', note: 'Shannon and Shannon-Erne Blueway map: trail lines only, from a personal ArcGIS account, no licence; Waterways Ireland already covers both' },
   // The Netherlands. The register re-harvests datasets, so they look new each time.
   { match: 'FIS_VNDS', status: 'used', note: 'Rijkswaterstaat fairway information: locks and trailer slipways (rws-fis)' },
   { match: 'Waterschappen Kunstwerken', status: 'used', note: 'The water boards\' structures via PDOK (nl-waterboards)' },
