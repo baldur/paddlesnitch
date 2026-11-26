@@ -29,6 +29,7 @@
     "course:look": "tsx scripts/courses/look.ts",
     "course:explore": "tsx scripts/courses/explore.ts",
     "course:lidar": "tsx scripts/courses/lidar.ts",
+    "course:surroundings": "tsx scripts/courses/surroundings.ts",
     "course:views": "tsx scripts/courses/views.ts",
     "course:view-score": "tsx scripts/courses/view-score.ts",
     "course:materials": "tsx scripts/courses/materials.ts",

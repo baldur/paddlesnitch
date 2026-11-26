@@ -108,8 +108,10 @@ test('everything outside the stretch is as it was without lidar: the made-up tre
     }
     return out;
   };
-  const measured = vertices(buildWorld(courseFromFile(course), 1, 'river').vertices);
-  const madeUp = await without(() => vertices(buildWorld(courseFromFile(course), 1, 'river').vertices));
+  // (Out there it's mostly the river's ends and the hills, drawn apart: `beyond`.)
+  const both = (w) => [...vertices(w.vertices), ...vertices(w.beyond.vertices)];
+  const measured = both(buildWorld(courseFromFile(course), 1, 'river'));
+  const madeUp = await without(() => both(buildWorld(courseFromFile(course), 1, 'river')));
   assert.ok(measured.length > 100, `${measured.length} triangles outside`);
   assert.equal(measured.length, madeUp.length);
   assert.ok(measured.every((t, k) => t === madeUp[k]), 'the same triangles, in the same order');

@@ -438,8 +438,10 @@ test('the drone goes no further than its range from the river', async () => {
   const { race } = await outing('drone');
   const b = race.player.boat;
   b.heading += Math.PI / 2; // across the river
-  for (let t = 0; t < 120; t += DT) stepOuting(race, DT, { forward: 1 });
+  for (let t = 0; t < 150; t += DT) stepOuting(race, DT, { forward: 1 }); // (1.5 km at 10 m/s)
   const at = locate(race.course.scenery.river, b.x, b.z);
   assert.ok(Math.hypot(b.x - at.x, b.z - at.z) <= DRONE.range + 1e-6, 'held at its range');
+  assert.ok(Math.hypot(b.x - at.x, b.z - at.z) > DRONE.range - 1, 'and out as far as it');
+  assert.equal(DRONE.range, 1000, 'as far as the land goes (surroundings.js: 1 km)');
   assert.equal(race.player.boat.swim, 0);
 });

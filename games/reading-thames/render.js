@@ -141,6 +141,13 @@ async function createRendererGPU(canvas) {
       };
     },
 
+    // Lets go of a mesh's buffers (surroundings.js, for blocks gone far).
+    destroyMesh(m) {
+      m.vertices.destroy();
+      m.instances.destroy();
+      m.instanceCount = 0;
+    },
+
     // Sets a mesh's model matrices for the next frames (an array of Float32Array(16)).
     place(m, matrices) {
       m.scratch ??= new Float32Array(m.instances.size / 4);
