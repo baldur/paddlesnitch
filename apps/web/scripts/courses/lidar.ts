@@ -16,7 +16,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { projection, type XZ } from './lib/river'
-import { BLOCK, GROUND_CELL, bankCanopy, bankEdge, bankSkyline, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
+import { BLOCK, GROUND_CELL, bankCanopy, bankEdge, bankSkyline, canopyAt, toBank, deriveBuildings, deriveGround, deriveRoofs, ROOF, deriveTrees, groundBlocks, groundIn, inBlocks, inside, lidarModule, mosaic, readTile, sampleGrid, wgs84ToBng, type Building, type Grid, type Patch } from './lib/lidar'
 import { courseFromFile, locate, pointAt, widthAt } from '../../../../games/reading-thames/course.js'
 import { waterMap } from '../../../../games/reading-thames/water.js'
 
@@ -93,6 +93,11 @@ const ground = deriveGround(heights, patch, inKept)
 const blocks = groundBlocks(ground, patch, (i, j) => kept.has(`${Math.round(patch[0] / BLOCK) + i},${Math.round(patch[1] / BLOCK) + j}`))
 const buildings = data.buildings as Building[]
 const heightsOut = deriveBuildings(heights, buildings.filter((b) => inKept(...(b.shape[0] as XZ))), patch, (x, z) => groundIn(ground, patch, x, z))
+// Their roofs' shapes, fitted to the first surface (lib/lidar.ts fitRoof).
+const fit = deriveRoofs(heights, buildings.filter((b) => inKept(...(b.shape[0] as XZ))), patch, (x, z) => groundIn(ground, patch, x, z))
+const forms = fit.roofs.reduce<Record<string, number>>((a, r) => { const k = Array.isArray(r[3]) ? (r.length > 5 ? 'parts' : (r[4] as string[])[0]) : (r[2] as string); a[k] = (a[k] ?? 0) + 1; return a }, {})
+const rms = fit.errors.flatMap((e) => (e ? [e.rms] : [])).sort((a, b) => a - b)
+console.log(`roofs: ${JSON.stringify(forms)}; within ${ROOF.TAU} m, RMS median ${rms[rms.length >> 1]?.toFixed(2)} m, 90% under ${rms[Math.floor(rms.length * 0.9)]?.toFixed(2)} m`)
 
 // Trees stay off buildings and bridges; a trunk goes at least 2 m up the
 // game's bank (its mapped edge), or isn't planted if well out over the water.
@@ -119,5 +124,5 @@ const woods = bankCanopy(river.length, 10, atBank)
 const edge = vom ? { step: 8, sides: bankEdge(river.length, 8, atBank) } : undefined
 // And how high the trees stand as the water mirrors them, set-back ones too.
 const skyline = { step: 10, sides: bankSkyline(river.length, 10, atBank) }
-fs.writeFileSync(out, lidarModule(blocks, heightsOut, trees, where, { step: 10, sides: woods }, edge, skyline))
+fs.writeFileSync(out, lidarModule(blocks, heightsOut, trees, where, { step: 10, sides: woods }, edge, skyline, fit.roofs))
 console.log(`${out}: ${Object.keys(blocks).length} blocks of ${GROUND_CELL} m ground, ${heightsOut.length} buildings, ${trees.length} trees, ${(fs.statSync(out).size / 1024).toFixed(0)} KB`)

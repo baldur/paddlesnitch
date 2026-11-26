@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { BLOCK, bankCanopy, bankEdge, bankSkyline, blockValues, canopyAt, toBank, deriveBuildings, deriveGround, deriveTrees, groundBlocks, groundIn, inBlocks, lidarModule, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch } from './lidar'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { projection } from './river'
+import { BLOCK, bankCanopy, bankEdge, bankSkyline, blockValues, canopyAt, toBank, deriveBuildings, deriveGround, deriveRoofs, deriveTrees, fitRoof, groundBlocks, groundIn, inBlocks, inside, lidarModule, registerFootprint, roofError, mosaic, osgb36ToBng, readTile, sampleGrid, wgs84ToBng, wgs84ToOsgb36, type Heights, type Patch, type Roof, type RoofPart } from './lidar'
+import { roofHeight } from '../../../../../games/reading-thames/roofs.js'
 
 describe('wgs84ToBng', () => {
   it("projects as the OS's worked example (Caister Water Tower, OSGB36) to the millimetre", () => {
@@ -287,4 +292,186 @@ describe('lidarModule', () => {
     expect(LIDAR.woods).toEqual({ step: 10, sides: [[0.5, null], [1, 0]] })
     expect(LIDAR.edge).toEqual({ step: 8, sides: [[null, 9.5], [12, null]] })
   })
+})
+
+// Roofs from the first surface: synthetic lidar over a footprint, each form
+// with known eaves, ridge and ridge direction, plus 0.1 m of noise.
+describe('fitRoof', () => {
+  // A rectangle `len` along `deg` degrees by `wid` across, centred on (cx, cz).
+  const rect = (cx: number, cz: number, deg: number, len: number, wid: number): Array<[number, number]> => {
+    const [ux, uz] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)]
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [cx + ux * (a * len) / 2 - uz * (b * wid) / 2, cz + uz * (a * len) / 2 + ux * (b * wid) / 2])
+  }
+  // (Deterministic noise, so the tests don't flake.)
+  const noise = (x: number, z: number) => (Math.sin(x * 12.9898 + z * 78.233) * 43758.5453 % 1) * 0.1
+  const local = (cx: number, cz: number, deg: number) => (x: number, z: number) => {
+    const [ux, uz] = [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)]
+    return [(x - cx) * ux + (z - cz) * uz, -(x - cx) * uz + (z - cz) * ux]
+  }
+  const cellsOf = (ring: Array<[number, number]>, h: (x: number, z: number) => number): Array<[number, number, number]> => {
+    const out: Array<[number, number, number]> = []
+    for (let x = -30; x < 30; x++) for (let z = -30; z < 30; z++) out.push([x + 0.5, z + 0.5, inside(ring, x + 0.5, z + 0.5) ? h(x + 0.5, z + 0.5) + noise(x, z) : noise(x, z)])
+    return out
+  }
+  // The ridge's direction in degrees (mod 180) of a fitted single part.
+  const ridgeDeg = (rec: Roof) => (((rec[2] as number) + 90 * (((rec[4] as RoofPart)[1] as number) ?? 0)) % 180 + 180) % 180
+  const near = (a: number, b: number, tol: number) => expect(Math.abs(a - b)).toBeLessThan(tol)
+  const angleNear = (a: number, b: number, tol: number) => expect(Math.min(Math.abs(a - b) % 180, 180 - (Math.abs(a - b) % 180))).toBeLessThan(tol)
+
+  it('finds a flat roof at its height', () => {
+    const ring = rect(0, 0, 20, 14, 9)
+    const rec = fitRoof(ring, cellsOf(ring, () => 9), 'other')
+    expect(rec[4]).toEqual(['flat', expect.any(Number)])
+    near((rec[4] as RoofPart)[1] as number, 9, 0.15)
+  })
+  it('finds a gable: its ridge along the long side, the ridge and eaves heights', () => {
+    const ring = rect(1, -2, 30, 12, 8)
+    const at = local(1, -2, 30)
+    const rec = fitRoof(ring, cellsOf(ring, (x, z) => 8 - (3 * Math.abs(at(x, z)[1])) / 4), 'house')
+    const part = rec[4] as RoofPart
+    expect(part[0]).toBe('gable')
+    angleNear(ridgeDeg(rec), 30, 3)
+    near(part[3] as number, 8, 0.25)
+    near(part[2] as number, 5, 0.3)
+    near(part[4] as number, 0.5, 0.1)
+  })
+  it('finds a gable whose ridge runs across a short, deep house (gable to the street)', () => {
+    const ring = rect(0, 0, -15, 7, 11)
+    const at = local(0, 0, -15)
+    const rec = fitRoof(ring, cellsOf(ring, (x, z) => 7.5 - (3 * Math.abs(at(x, z)[0])) / 3.5), 'house')
+    expect((rec[4] as RoofPart)[0]).toBe('gable')
+    angleNear(ridgeDeg(rec), 75, 3)
+    near((rec[4] as RoofPart)[3] as number, 7.5, 0.25)
+  })
+  it('finds a hip: the ridge shortened by the hips at its ends', () => {
+    const ring = rect(0, 0, 50, 14, 9)
+    const at = local(0, 0, 50)
+    // Every face at the same pitch, 3 m up over 4.5 m: the ridge 5 m long, 4.5 m in from each end.
+    const rec = fitRoof(ring, cellsOf(ring, (x, z) => { const [u, v] = at(x, z); return 5.5 + (3 / 4.5) * Math.min(4.5 - Math.abs(v), 7 - Math.abs(u)) }), 'house')
+    const part = rec[4] as RoofPart
+    expect(part[0]).toBe('hip')
+    angleNear(ridgeDeg(rec), 50, 3)
+    near(part[3] as number, 8.5, 0.25)
+    near(part[2] as number, 5.5, 0.3)
+    near(part[5] as number, 4.5, 1)
+  })
+  it('finds a mono-pitch (lean-to) roof and which way it rises', () => {
+    const ring = rect(0, 0, 0, 10, 6)
+    const rec = fitRoof(ring, cellsOf(ring, (x, z) => 3 + ((z + 3) / 6) * 1.5), 'other')
+    const part = rec[4] as RoofPart
+    expect(part[0]).toBe('shed')
+    // Rising towards +z: the part's +v is +z.
+    expect(((rec[2] as number) + 90 * (part[1] as number)) % 360).toBeCloseTo(0, 0)
+    near(part[2] as number, 3, 0.3)
+    near(part[3] as number, 4.5, 0.3)
+  })
+  it('splits a terrace stepping down a hill into parts at their own heights', () => {
+    const ring = rect(0, 0, 10, 24, 8)
+    const at = local(0, 0, 10)
+    const rec = fitRoof(ring, cellsOf(ring, (x, z) => { const [u, v] = at(x, z); return (u < 0 ? 9 : 7) - (2.5 * Math.abs(v)) / 4 }), 'house')
+    expect((rec[3] as number[]).length).toBe(1)
+    near((rec[3] as number[])[0], 0, 1.5)
+    const [a, b] = rec.slice(4) as RoofPart[]
+    expect([a[0], b[0]]).toEqual(['gable', 'gable'])
+    near(a[3] as number, 9, 0.3)
+    near(b[3] as number, 7, 0.3)
+  })
+  it('gives an L its two ridges, square to each other', () => {
+    // An L: a 16 x 7 range along x and a 7-wide wing down from its east end, 9 more metres.
+    const ring: Array<[number, number]> = [[-8, -3.5], [8, -3.5], [8, 12.5], [1, 12.5], [1, 3.5], [-8, 3.5]]
+    const range = (z: number) => 7 - (2.5 * Math.abs(z)) / 3.5
+    const wing = (x: number) => 7 - (2.5 * Math.abs(x - 4.5)) / 3.5
+    const h = (x: number, z: number) => (x <= 1 ? range(z) : z > 3.5 ? wing(x) : Math.max(range(z), wing(x)))
+    const cells = cellsOf(ring, h)
+    const rec = fitRoof(ring, cells, 'house')
+    const parts = rec.slice(4) as RoofPart[]
+    expect(parts.length).toBe(2)
+    expect(parts.every((p) => p[0] === 'gable')).toBe(true)
+    const dirs = parts.map((p) => (((rec[2] as number) + 90 * (p[1] as number)) % 180 + 180) % 180)
+    angleNear(Math.abs(dirs[0] - dirs[1]), 90, 3)
+    const err = roofError(ring, rec, cells.filter(([x, z]) => inside(ring, x, z)))
+    expect(err.inliers).toBeGreaterThan(0.9)
+  })
+  it('sees past a tree over part of the roof', () => {
+    const ring = rect(0, 0, 0, 12, 8)
+    const rec = fitRoof(ring, cellsOf(ring, (x, z) => (Math.hypot(x - 4, z - 2) < 2.5 ? 13 : 8 - (3 * Math.abs(z)) / 4)), 'house')
+    expect((rec[4] as RoofPart)[0]).toBe('gable')
+    near((rec[4] as RoofPart)[3] as number, 8, 0.3)
+  })
+  it("refuses to guess where there's too little lidar, or it's noise", () => {
+    const small = rect(0, 0, 0, 3, 3)
+    expect(fitRoof(small, cellsOf(small, () => 4), 'other')[2]).toBe('few')
+    const ring = rect(0, 0, 0, 12, 8)
+    const rough = (x: number, z: number) => 4 + (Math.sin(x * 91.7 + z * 13.1) * 9e3 % 1 + 1) * 4
+    expect(fitRoof(ring, cellsOf(ring, rough), 'house')[2]).toBe('noisy')
+  })
+  it('takes a house over three storeys for a tree over it', () => {
+    const ring = rect(0, 0, 0, 12, 8)
+    expect(fitRoof(ring, cellsOf(ring, () => 14), 'house')[2]).toBe('tall')
+  })
+  it("draws the surface it fitted: roofs.js's height there is the lidar's", () => {
+    const ring = rect(3, 4, 12, 12, 8)
+    const at = local(3, 4, 12)
+    const truth = (x: number, z: number) => 8 - (3 * Math.abs(at(x, z)[1])) / 4
+    const rec = fitRoof(ring, cellsOf(ring, truth), 'house')
+    for (const [x, z] of [[3, 4], [5, 5], [1, 2.5]] as Array<[number, number]>) near(roofHeight(ring, rec, x, z), truth(x, z), 0.3)
+  })
+})
+
+describe('registerFootprint', () => {
+  it("finds how far the lidar's building stands from the map's footprint", () => {
+    const ring: Array<[number, number]> = [[0, 0], [10, 0], [10, 7], [0, 7]]
+    // The lidar's building is 2.5 m east and 1.5 m north (-z) of the map's.
+    const high = (x: number, z: number) => x > 2.5 && x < 12.5 && z > -1.5 && z < 5.5
+    const { shift } = registerFootprint([ring], high)
+    expect(shift).toEqual([2.5, -1.5])
+  })
+})
+
+// On the real lidar, where it's on this computer (it never goes in the repo,
+// so CI skips this): the roofs fitted round Caversham Bridge against the first
+// surface they were fitted to. Measured 2026-11-26: see games/CLAUDE.md.
+const TILES = path.join(os.homedir(), '.paddlesnitch/lidar/reading-thames/tiles')
+describe.skipIf(!fs.existsSync(TILES))('fitRoof on the real lidar', () => {
+  it("fits most of the houses by Caversham Bridge, to about 0.3 m", async () => {
+    const reading = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../../../games/reading-thames/courses/reading.json'), 'utf8'))
+    const { toLatLng } = projection([51.46175, -0.96945])
+    const bng = (x: number, z: number) => wgs84ToBng(...toLatLng([x, z]))
+    const [X0, Z0, X1, Z1] = [-700, -700, 200, 200]
+    const corners = [bng(X0, Z0), bng(X1, Z1), bng(X0, Z1), bng(X1, Z0)]
+    const [E0, E1] = [Math.min(...corners.map((c) => c[0])) - 260, Math.max(...corners.map((c) => c[0])) + 10]
+    const [N0, N1] = [Math.min(...corners.map((c) => c[1])) - 260, Math.max(...corners.map((c) => c[1])) + 10]
+    const grid = (kind: string) => mosaic(fs.readdirSync(TILES).flatMap((name) => {
+      const m = name.match(new RegExp(`^${kind}-(\\d+)-(\\d+)\\.tif$`))
+      if (!m || +m[1] < E0 || +m[1] > E1 || +m[2] < N0 || +m[2] > N1) return []
+      return [{ west: +m[1], south: +m[2], ...readTile(fs.readFileSync(path.join(TILES, name))) }]
+    }))
+    const [dtm, dsm] = [grid('dtm'), grid('dsm')]
+    const h: Heights = {
+      ground: (x, z) => sampleGrid(dtm, ...bng(x, z)),
+      above: (x, z) => { const [E, N] = bng(x, z); const [s, g] = [sampleGrid(dsm, E, N), sampleGrid(dtm, E, N)]; return s === null || g === null ? null : s - g },
+    }
+    const groundAt = (x: number, z: number) => { const v: number[] = []; for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const g = h.ground(x + a, z + b); if (g !== null) v.push(g) } return v.sort((p, q) => p - q)[v.length >> 1] ?? 0 }
+    const { roofs, errors, cells } = deriveRoofs(h, reading.buildings, [X0, Z0, X1, Z1], groundAt)
+    const fittedOnes = roofs.flatMap((r, i) => (Array.isArray(r[3]) ? [i] : []))
+    expect(roofs.length).toBeGreaterThan(60)
+    expect(fittedOnes.length).toBeGreaterThan(roofs.length * 0.6)
+    // Per building: the RMS of the cells within TAU of the roof, and the median miss over all of them (trees and all).
+    const rms = fittedOnes.map((i) => errors[i]!.rms).sort((a, b) => a - b)
+    const miss = fittedOnes.map((i) => errors[i]!.median).sort((a, b) => a - b)
+    const at = (a: number[], q: number) => a[Math.floor(a.length * q)]
+    expect(at(rms, 0.5)).toBeLessThan(0.3)
+    expect(at(rms, 0.9)).toBeLessThan(0.4)
+    expect(at(miss, 0.5)).toBeLessThan(0.35)
+    expect(at(miss, 0.9)).toBeLessThan(0.65)
+    // And the ridge: the roof's highest point against the lidar's (its 95th percentile) over the footprint.
+    const ridge = fittedOnes.map((i) => {
+      const rec = roofs[i] as Roof
+      const top = Math.max(...(rec.slice(4) as RoofPart[]).map((p) => (p[0] === 'flat' ? p[1] : p[3])))
+      const hs = cells[i].map((c) => c[2]).sort((a, b) => a - b)
+      return Math.abs(top - hs[Math.floor(hs.length * 0.95)])
+    }).sort((a, b) => a - b)
+    console.log(`real roofs: ${fittedOnes.length} of ${roofs.length} fitted; RMS median ${at(rms, 0.5).toFixed(2)} m, 90% ${at(rms, 0.9).toFixed(2)}; median miss ${at(miss, 0.5).toFixed(2)}, 90% ${at(miss, 0.9).toFixed(2)}; ridge off by median ${at(ridge, 0.5).toFixed(2)}, 90% ${at(ridge, 0.9).toFixed(2)} m`)
+    expect(at(ridge, 0.5)).toBeLessThan(0.5)
+  }, 300_000)
 })

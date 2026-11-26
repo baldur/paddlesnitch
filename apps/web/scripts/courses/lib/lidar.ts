@@ -2,6 +2,7 @@
 // the bare ground every 5 m, plain buildings' heights, trees' crowns. Pure; the
 // grids come in as arrays. Tested in lidar.test.ts. See course:lidar.
 import type { XZ } from './river'
+import { partAt, roofParts, surfaceAt } from '../../../../../games/reading-thames/roofs.js'
 
 /** WGS84 latitude/longitude → British National Grid (EPSG:27700) easting/northing, to a few metres (Helmert, then the grid's Transverse Mercator). */
 export function wgs84ToBng(lat: number, lon: number): [number, number] {
@@ -414,8 +415,342 @@ export function canopyAt(
   }
 }
 
+/** A roof part as games/reading-thames/roofs.js reads it (heights above the building's ground). */
+export type RoofPart = ['flat', number] | ['shed', number, number, number] | ['gable', number, number, number, number] | ['hip', number, number, number, number, number]
+/** A fitted roof [cx, cz, angle, cuts, ...parts], or why none was: [cx, cz, reason]. See roofs.js. */
+export type Roof = [number, number, number, number[], ...RoofPart[]] | [number, number, 'few' | 'noisy' | 'tall']
+
+/**
+ * The roof fit's settings. A cell is the lidar's first surface over a 1 m
+ * square inside the footprint, as height above the building's ground.
+ * TAU: a cell further than this off the roof is something else (a tree over
+ * it, a chimney, the garden where the map's footprint is a metre off), and
+ * counts no more than TAU would. Each form costs a little (PENALTY, in m² of
+ * mean squared error), so a flat roof isn't called a gable for a few
+ * centimetres. A fit is refused as noisy when fewer than INLIERS of the cells
+ * are within TAU of it, or those that are miss by more than NOISY (RMS).
+ */
+export const ROOF = {
+  MIN_CELLS: 12, EDGE: 0.6, TAU: 0.7, MIN_RISE: 0.6, MAX_SLOPE: 1.5, MAX_SHED: 0.45, SHED_RISE: 3.5, MIN_EAVES: 1.2,
+  PENALTY: { flat: 0, shed: 0.01, gable: 0.015, hip: 0.025 } as Record<string, number>, PART: 0.05, MAX_PARTS: 3, MIN_PART: 4,
+  FIT_CELLS: 250, SPLIT_RMS: 0.35, SPLIT_INLIERS: 0.85, INLIERS: 0.55, NOISY: 0.45,
+}
+
+type Fit = { part: RoofPart; cost: number; n: number }
+type Cell = [number, number, number]
+
+// h = e + k t, fitted to the cells' t with the far ones (|residual| > TAU) left out, iterated in from a wide TAU.
+function robustLine(t: Float64Array, h: Float64Array, flat: boolean): { e: number; k: number; cost: number } {
+  let [e, k] = [0, 0]
+  const n = h.length
+  for (const tau of [Infinity, 3, 1.5, ROOF.TAU, ROOF.TAU, ROOF.TAU]) {
+    let [c, st, sh] = [0, 0, 0]
+    for (let i = 0; i < n; i++) if (Math.abs(h[i] - e - k * t[i]) < tau) { c++; st += t[i]; sh += h[i] }
+    if (c < 3) break
+    const [mt, mh] = [st / c, sh / c]
+    if (flat) { e = mh; continue }
+    let [stt, sth] = [0, 0]
+    for (let i = 0; i < n; i++) if (Math.abs(h[i] - e - k * t[i]) < tau) { stt += (t[i] - mt) ** 2; sth += (t[i] - mt) * (h[i] - mh) }
+    k = stt > 1e-9 ? sth / stt : 0
+    e = mh - k * mt
+  }
+  let cost = 0
+  for (let i = 0; i < n; i++) cost += Math.min((h[i] - e - k * t[i]) ** 2, ROOF.TAU ** 2)
+  return { e, k, cost: cost / n }
+}
+
+// The shapes a part can take (eaves 0, ridge 1), for the fit to try.
+function shapes(ext: [number, number, number, number], extq: [number, number, number, number], coarse = false): RoofPart[] {
+  const out: RoofPart[] = [['flat', 1]]
+  for (let q = 0; q < 4; q++) out.push(['shed', q, 0, 1])
+  for (let q = 0; q < 2; q++) {
+    for (let a = 0.3; a < 0.71; a += coarse ? 0.1 : 0.05) out.push(['gable', q, 0, 1, Math.round(a * 100) / 100])
+    const [u0, u1] = q ? extq : ext
+    const half = (u1 - u0) / 2
+    for (let a = 0.3; a < 0.71; a += 0.1) for (let b = 1; b < half + 0.49; b += coarse ? 1 : 0.5) out.push(['hip', q, 0, 1, Math.round(a * 100) / 100, Math.round(Math.min(b, half) * 10) / 10])
+  }
+  return out
+}
+
+// The best shape for part k of a roof with these cuts, from the cells in it.
+function fitPart(ring: XZ[], cells: Cell[], head: [number, number, number, number[]], k: number, coarse = false): Fit | null {
+  const n = head[3].length + 1
+  const rec = (p: RoofPart) => [...head, ...Array.from({ length: n }, (_, i) => (i === k ? p : ['flat', 1]))] as Roof
+  const all = cells.filter(([x, z]) => partAt(rec(['flat', 1]), x, z) === k)
+  if (all.length < ROOF.MIN_CELLS) return null
+  // (At most FIT_CELLS of them, evenly through: a big block's roof is no clearer for its thousands.)
+  const stride = Math.max(1, all.length / ROOF.FIT_CELLS)
+  const mine = Array.from({ length: Math.min(all.length, ROOF.FIT_CELLS) }, (_, i) => all[Math.floor(i * stride)])
+  const h = Float64Array.from(mine, (c) => c[2])
+  const ext0 = roofParts(ring, rec(['gable', 0, 0, 1, 0.5]), true)[k].extent as [number, number, number, number]
+  const ext1 = roofParts(ring, rec(['gable', 1, 0, 1, 0.5]), true)[k].extent as [number, number, number, number]
+  let best: Fit | null = null
+  const t = new Float64Array(mine.length)
+  for (const shape of shapes(ext0, ext1, coarse)) {
+    const { planes } = roofParts(ring, rec(shape), true)[k]
+    for (let i = 0; i < mine.length; i++) {
+      let v = Infinity
+      for (const [A, B, C] of planes) v = Math.min(v, A + B * mine[i][0] + C * mine[i][1])
+      t[i] = v
+    }
+    const flat = shape[0] === 'flat'
+    const { e, k: rise, cost } = robustLine(t, h, flat)
+    if (e < ROOF.MIN_EAVES) continue // (the garden, or the ground through a gap)
+    if (!flat) {
+      if (rise < ROOF.MIN_RISE) continue
+      // The steepest run from eaves to ridge.
+      const [, , v0, v1] = shape[1] % 2 ? ext1 : ext0
+      const w = v1 - v0
+      const run = shape[0] === 'shed' ? w : Math.min(w * shape[4], w * (1 - shape[4]), shape[0] === 'hip' ? shape[5] : Infinity)
+      if (rise / run > (shape[0] === 'shed' ? ROOF.MAX_SHED : ROOF.MAX_SLOPE)) continue
+    }
+    const score = cost + ROOF.PENALTY[shape[0]]
+    if (best && score >= best.cost + ROOF.PENALTY[best.part[0]]) continue
+    const [r1, e1] = [Math.round((e + rise) * 10) / 10, Math.round(e * 10) / 10]
+    const part2: RoofPart = shape[0] === 'flat' ? ['flat', Math.round(e * 10) / 10] : shape[0] === 'shed' ? ['shed', shape[1], e1, r1] : shape[0] === 'gable' ? ['gable', shape[1], e1, r1, shape[4]] : ['hip', shape[1], e1, r1, shape[4], shape[5]]
+    best = { part: part2, cost, n: all.length }
+  }
+  return best
+}
+
+/** How a roof record sits on the cells: the share within TAU of it, and their RMS. */
+export function roofError(ring: XZ[], rec: Roof, cells: Cell[]): { inliers: number; rms: number; median: number } {
+  const parts = roofParts(ring, rec)
+  const res = cells.map(([x, z, h]) => h - surfaceAt(parts[partAt(rec, x, z)].planes, x, z))
+  const near = res.filter((r) => Math.abs(r) < ROOF.TAU)
+  const abs = res.map(Math.abs).sort((a, b) => a - b)
+  return { inliers: near.length / res.length, rms: Math.sqrt(near.reduce((a, r) => a + r * r, 0) / (near.length || 1)), median: abs[Math.floor(abs.length / 2)] ?? 0 }
+}
+
+// The footprint's main directions (degrees, mod 90): its edges' by length, the first and any other with a third of its weight.
+function directions(ring: XZ[]): number[] {
+  const bins = new Array(90).fill(0)
+  for (let i = 0; i < ring.length; i++) {
+    const [p, q] = [ring[i], ring[(i + 1) % ring.length]]
+    const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+    const deg = ((((Math.atan2(q[1] - p[1], q[0] - p[0]) * 180) / Math.PI) % 90) + 90) % 90
+    for (let d = -2; d <= 2; d++) bins[(Math.round(deg) + d + 90) % 90] += len * (3 - Math.abs(d))
+  }
+  const peak = (skip: number[]) => {
+    let best = -1
+    for (let i = 0; i < 90; i++) if (!skip.some((s) => Math.min(Math.abs(i - s), 90 - Math.abs(i - s)) < 10) && (best < 0 || bins[i] > bins[best])) best = i
+    return best
+  }
+  const first = peak([])
+  // The exact angle: the length-weighted mean of the edges near the peak.
+  const exact = (deg: number) => {
+    let [sx, sz] = [0, 0]
+    for (let i = 0; i < ring.length; i++) {
+      const [p, q] = [ring[i], ring[(i + 1) % ring.length]]
+      const a = Math.atan2(q[1] - p[1], q[0] - p[0]) * 4 // (mod 90: four times the angle)
+      const d = ((((a / 4) * 180) / Math.PI - deg) % 90 + 135) % 90 - 45
+      if (Math.abs(d) > 5) continue
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+      sx += Math.cos(a) * len
+      sz += Math.sin(a) * len
+    }
+    return Math.round(((((Math.atan2(sz, sx) / 4) * 180) / Math.PI + 90) % 90) * 10) / 10
+  }
+  const second = peak([first])
+  return second >= 0 && bins[second] * 3 >= bins[first] ? [exact(first), exact(second)] : [exact(first)]
+}
+
+/**
+ * A plain building's roof from the lidar over it: flat, shed, gable or hip,
+ * in up to MAX_PARTS parts split across its length where one shape doesn't fit
+ * (a terrace stepping down a hill, an L of two ridges). `cells` are [x, z,
+ * height above the building's ground] about every metre over it; those within
+ * EDGE of its walls are left out (where the map's footprint is a metre off,
+ * they're garden). Refused, as [cx, cz, reason], where there are too few
+ * cells, the best fit is noisy, or a house's eaves stand over three storeys
+ * (a tree over it). Heights to the decimetre.
+ */
+export function fitRoof(ring: XZ[], cells: Cell[], kind: string): Roof {
+  const cx = Math.round((ring.reduce((a, p) => a + p[0], 0) / ring.length) * 10) / 10
+  const cz = Math.round((ring.reduce((a, p) => a + p[1], 0) / ring.length) * 10) / 10
+  const edgeDist = (x: number, z: number) => edgeDistance(ring, x, z)
+  const within = cells.filter(([x, z]) => inside(ring, x, z))
+  const inner = within.filter(([x, z]) => edgeDist(x, z) >= ROOF.EDGE)
+  const use = inner.length >= ROOF.MIN_CELLS ? inner : within
+  if (use.length < ROOF.MIN_CELLS) return [cx, cz, 'few']
+  type Cand = { rec: Roof; score: number; err: ReturnType<typeof roofError> }
+  const judge = (rec: Roof, fits: Fit[]): Cand => {
+    const n = fits.reduce((a, f) => a + f.n, 0)
+    const cost = fits.reduce((a, f) => a + f.cost * f.n, 0) / n
+    return { rec, score: cost + fits.reduce((a, f) => a + ROOF.PENALTY[f.part[0]], 0) + ROOF.PART * (fits.length - 1), err: roofError(ring, rec, use) }
+  }
+  let best: Cand | null = null
+  const angles = directions(ring)
+  for (const angle of angles) {
+    const f = fitPart(ring, use, [cx, cz, angle, []], 0)
+    if (!f) continue
+    const c = judge([cx, cz, angle, [], f.part], [f])
+    if (!best || c.score < best.score) best = c
+  }
+  if (!best) return [cx, cz, 'few']
+  // Split where one shape doesn't fit: greedily, a cut at a time.
+  const poor = (c: Cand) => c.err.rms > ROOF.SPLIT_RMS || c.err.inliers < ROOF.SPLIT_INLIERS
+  for (let parts = 2; parts <= ROOF.MAX_PARTS && poor(best); parts++) {
+    let next: Cand | null = null
+    const angleList = best.rec.length > 3 && (best.rec[3] as number[]).length ? [best.rec[2] as number] : angles
+    for (const angle of angleList) {
+      const t = (Math.PI / 180) * angle
+      const us = ring.map(([x, z]) => (x - cx) * Math.cos(t) + (z - cz) * Math.sin(t))
+      const old = best.rec[2] === angle ? (best.rec[3] as number[]) : []
+      if (old.length !== parts - 2) continue
+      const step = Math.max(1, (Math.max(...us) - Math.min(...us)) / 24)
+      for (let c = Math.min(...us) + ROOF.MIN_PART; c <= Math.max(...us) - ROOF.MIN_PART; c += step) {
+        const cuts = [...old, Math.round(c * 10) / 10].sort((a, b) => a - b)
+        if (cuts.some((v, i) => i > 0 && v - cuts[i - 1] < ROOF.MIN_PART)) continue
+        const fits = cuts.concat([0]).map((_, k) => fitPart(ring, use, [cx, cz, angle, cuts], k, true))
+        if (fits.some((f) => !f)) continue
+        const cand = judge([cx, cz, angle, cuts, ...fits.map((f) => f!.part)] as Roof, fits as Fit[])
+        if (!next || cand.score < next.score) next = cand
+      }
+    }
+    if (!next || next.score >= best.score) break
+    best = next
+  }
+  // The parts' shapes tried finely at the cuts found.
+  if ((best.rec[3] as number[]).length) {
+    const [, , angle, cuts] = best.rec as [number, number, number, number[]]
+    const fits = cuts.concat([0]).map((_, k) => fitPart(ring, use, [cx, cz, angle, cuts], k))
+    if (fits.every((f) => f)) {
+      const fine = judge([cx, cz, angle, cuts, ...fits.map((f) => f!.part)] as Roof, fits as Fit[])
+      if (fine.score <= best.score) best = fine
+    }
+  }
+  const rec = best.rec as [number, number, number, number[], ...RoofPart[]]
+  const parts = rec.slice(4) as RoofPart[]
+  if (best.err.inliers < ROOF.INLIERS || best.err.rms > ROOF.NOISY) return [cx, cz, 'noisy']
+  const eaves = Math.min(...parts.map((p) => (p[0] === 'flat' ? p[1] : p[2])))
+  if (kind === 'house' && eaves > HOUSE_EAVES) return [cx, cz, 'tall']
+  return rec
+}
+
+/**
+ * How far the lidar's buildings stand from the map's footprints (a group of
+ * them touching, as a terrace, which only shows its offset as a whole): the shift
+ * (dx, dz), within REGISTER metres every half metre, that puts the most of
+ * the footprint over something HIGH (m) and the least of a 2 m band round it.
+ * The footprints are often 2-3 m off the lidar's roofs (the map traced off
+ * offset imagery, and the datum shift is good to a few metres), enough to put
+ * a terraced house's ridge on its wall. `high(x, z)` is whether the first
+ * surface there is over HIGH, null off the lidar. Returns the best shift and
+ * the score of every shift tried (key "dx,dz").
+ */
+export function registerFootprint(rings: XZ[][], high: (x: number, z: number) => boolean | null): { shift: XZ; score: Map<string, number> } {
+  const xs = rings.flat().map((p) => p[0])
+  const zs = rings.flat().map((p) => p[1])
+  const [inPts, outPts]: [XZ[], XZ[]] = [[], []]
+  for (let x = Math.floor(Math.min(...xs)) - 2; x <= Math.max(...xs) + 2; x++) for (let z = Math.floor(Math.min(...zs)) - 2; z <= Math.max(...zs) + 2; z++) {
+    const p: XZ = [x + 0.5, z + 0.5]
+    if (rings.some((ring) => inside(ring, ...p))) inPts.push(p)
+    else if (rings.some((ring) => edgeDistance(ring, ...p) < 2)) outPts.push(p)
+  }
+  const score = new Map<string, number>()
+  let shift: XZ = [0, 0]
+  let best = -Infinity
+  const share = (pts: XZ[], dx: number, dz: number) => {
+    let [n, hit] = [0, 0]
+    for (const [x, z] of pts) { const v = high(x + dx, z + dz); if (v === null) continue; n++; if (v) hit++ }
+    return n * 2 < pts.length ? null : hit / n
+  }
+  for (let dx = -REGISTER; dx <= REGISTER; dx += 0.5) for (let dz = -REGISTER; dz <= REGISTER; dz += 0.5) {
+    const [a, b] = [share(inPts, dx, dz), share(outPts, dx, dz)]
+    if (a === null || b === null) continue
+    // (A little for the distance, so a footprint inside a bigger roof stays put.)
+    const s = a - b - 0.005 * Math.hypot(dx, dz)
+    score.set(`${dx},${dz}`, s)
+    if (s > best) { best = s; shift = [dx, dz] }
+  }
+  return { shift, score }
+}
+export const REGISTER = 4
+export const HIGH = 1.8
+
+function edgeDistance(ring: XZ[], x: number, z: number): number {
+  let d = Infinity
+  for (let i = 0; i < ring.length; i++) {
+    const [p, q] = [ring[i], ring[(i + 1) % ring.length]]
+    const [dx, dz] = [q[0] - p[0], q[1] - p[1]]
+    const t = Math.max(0, Math.min(1, ((x - p[0]) * dx + (z - p[1]) * dz) / (dx * dx + dz * dz || 1)))
+    d = Math.min(d, Math.hypot(x - p[0] - dx * t, z - p[1] - dz * t))
+  }
+  return d
+}
+
+/**
+ * Every plain building's roof in the patch (not landmarks or styled
+ * buildings): fitRoof over the first surface every metre inside it, as height
+ * above the ground at its middle (as the game stands it), read where the
+ * lidar's building is (registerFootprint). A building takes its neighbours'
+ * shift (the median of those within NEIGHBOURS m) where that fits it nearly
+ * as well as its own best: a row of houses traced off the same imagery is off
+ * by the same, and a small roof's own best is often one of several as good.
+ */
+export const NEIGHBOURS = 80
+export function deriveRoofs(h: Heights, buildings: Building[], [x0, z0, x1, z1]: Patch, groundAt: (x: number, z: number) => number): { roofs: Roof[]; shifts: XZ[]; errors: Array<ReturnType<typeof roofError> | null>; cells: Cell[][] } {
+  const high = (x: number, z: number) => { const a = h.above(x, z); return a === null ? null : a > HIGH }
+  const todo = buildings.flatMap((b) => {
+    if (b.style) return []
+    const closed = b.shape[0][0] === b.shape.at(-1)![0] && b.shape[0][1] === b.shape.at(-1)![1]
+    const ring = closed ? b.shape.slice(0, -1) : b.shape
+    if (ring.length < 3) return []
+    const cx = ring.reduce((a, p) => a + p[0], 0) / ring.length
+    const cz = ring.reduce((a, p) => a + p[1], 0) / ring.length
+    if (cx < x0 || cx > x1 || cz < z0 || cz > z1) return []
+    return [{ b, ring, cx, cz, reg: { shift: [0, 0] as XZ, score: new Map<string, number>() } }]
+  })
+  // Footprints touching (within a metre) are registered together: a terrace's houses are alike, so each alone could slide along the row.
+  const group = todo.map((_, i) => i)
+  const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])))
+  const boxes = todo.map((t) => [Math.min(...t.ring.map((p) => p[0])), Math.min(...t.ring.map((p) => p[1])), Math.max(...t.ring.map((p) => p[0])), Math.max(...t.ring.map((p) => p[1]))])
+  for (let i = 0; i < todo.length; i++) for (let j = i + 1; j < todo.length; j++) {
+    const [a, b] = [boxes[i], boxes[j]]
+    if (a[0] > b[2] + 1 || b[0] > a[2] + 1 || a[1] > b[3] + 1 || b[1] > a[3] + 1) continue
+    if (todo[i].ring.some((p) => edgeDistance(todo[j].ring, ...p) < 1) || todo[j].ring.some((p) => edgeDistance(todo[i].ring, ...p) < 1)) group[root(i)] = root(j)
+  }
+  const groups = new Map<number, number[]>()
+  todo.forEach((_, i) => groups.set(root(i), [...(groups.get(root(i)) ?? []), i]))
+  for (const members of groups.values()) {
+    const reg = registerFootprint(members.map((i) => todo[i].ring), high)
+    for (const i of members) todo[i].reg = reg
+  }
+  const roofs: Roof[] = []
+  const shifts: XZ[] = []
+  const errors: Array<ReturnType<typeof roofError> | null> = []
+  const all: Cell[][] = []
+  for (const t of todo) {
+    const near = todo.filter((o) => Math.hypot(o.cx - t.cx, o.cz - t.cz) < NEIGHBOURS && o.reg.score.size)
+    const med = (k: 0 | 1) => Math.round(median(near.map((o) => o.reg.shift[k])) * 2) / 2
+    let shift = t.reg.shift
+    if (near.length >= 3) {
+      const theirs: XZ = [med(0), med(1)]
+      const [own, other] = [t.reg.score.get(`${shift[0]},${shift[1]}`), t.reg.score.get(`${theirs[0]},${theirs[1]}`)]
+      if (own !== undefined && other !== undefined && other >= own - 0.05) shift = theirs
+    }
+    shifts.push(shift)
+    const base = groundAt(t.cx, t.cz)
+    const xs = t.ring.map((p) => p[0])
+    const zs = t.ring.map((p) => p[1])
+    const cells: Cell[] = []
+    for (let x = Math.floor(Math.min(...xs)); x <= Math.max(...xs); x++) for (let z = Math.floor(Math.min(...zs)); z <= Math.max(...zs); z++) {
+      const [px, pz] = [x + 0.5 + shift[0], z + 0.5 + shift[1]]
+      const [g, a] = [h.ground(px, pz), h.above(px, pz)]
+      if (g !== null && a !== null) cells.push([x + 0.5, z + 0.5, g + a - base])
+    }
+    const roof = fitRoof(t.ring, cells, t.b.kind)
+    const within = cells.filter(([x, z]) => inside(t.ring, x, z))
+    roofs.push(roof)
+    all.push(within)
+    errors.push(Array.isArray(roof[3]) ? roofError(t.ring, roof, within) : null)
+  }
+  return { roofs, shifts, errors, cells: all }
+}
+
 /** games/reading-thames/lidar.js. */
-export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }, edge?: { step: number; sides: Array<Array<number | null>> }, skyline?: { step: number; sides: Array<Array<number | null>> }): string {
+export function lidarModule(blocks: Record<string, string>, buildings: Array<[number, number, number]>, trees: Array<[number, number, number]>, where: string, woods?: { step: number; sides: Array<Array<number | null>> }, edge?: { step: number; sides: Array<Array<number | null>> }, skyline?: { step: number; sides: Array<Array<number | null>> }, roofs?: Roof[]): string {
   const keys = Object.keys(blocks).sort((a, b) => { const [p, q] = [a, b].map((k) => k.split(',').map(Number)); return p[1] - q[1] || p[0] - q[0] })
   return `// The ground, buildings and trees ${where}, from Environment Agency lidar (the
 // 1 m composite: bare ground, and the first surface the laser met). © Environment
@@ -435,7 +770,12 @@ ${keys.map((k) => `      '${k}': '${blocks[k]}',`).join('\n')}
   },
   // Plain buildings' heights to the eaves, by the middle of their footprint
   // (x, z, height): the height that puts the game's roof where lidar's is.
-  buildings: ${JSON.stringify(buildings)},
+  buildings: ${JSON.stringify(buildings)},${roofs ? `
+  // Plain buildings' roofs as the lidar shapes them, by the middle of their
+  // footprint: [x, z, angle, cuts, ...parts] (roofs.js reads them: flat, shed,
+  // gable or hip, heights above the ground there), or [x, z, why not] where
+  // the lidar was too thin ('few'), too noisy ('noisy') or a tree ('tall').
+  roofs: ${JSON.stringify(roofs)},` : ''}
   // The trees' crowns (x, z, height above the ground): the highest points of the
   // canopy, clear of buildings, spaced by their size.
   trees: ${JSON.stringify(trees)},${woods ? `
