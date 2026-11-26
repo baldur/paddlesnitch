@@ -1,6 +1,6 @@
 import { BOAT, HULLS, strokeRate } from './sim.js';
 import { loadCourse, riverView, mirrorLine, locate } from './course.js';
-import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, DIVISION_9, DIVISION_3 } from './race.js';
+import { createRace, stepRace, standings, elapsed, projected, applyCall, released, washMarks, touching, DIVISION_9, DIVISION_3 } from './race.js';
 import { call, whoAmI, SIGN_IN } from './account.js';
 import { joinLive } from './live.js';
 import { courseMap, headingDegrees, closeUp, follow } from './map.js';
@@ -3205,6 +3205,7 @@ if (HASH.has('debug')) {
     finish, // the finish dialog (tests check it fits a phone)
     submitResult, // the finish's leaderboard line (tests check it signed out)
     show, // a message, as the race would show it (tests check where it lands)
+    touching, // the boats touching a racer now (tests count bumps)
   };
 }
 

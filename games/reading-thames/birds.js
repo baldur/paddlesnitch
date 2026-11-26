@@ -65,6 +65,8 @@ export function createBirds(course, rand, hotspots = []) {
 // Seconds after getting back in from a swan capsize when no swan tips you:
 // paddling off through a crowd of them, rivals went in five times running.
 export const SWAN_GRACE = 3;
+// A boat slower than this (m/s) only nudges a swan: it doesn't tip you in.
+export const SWAN_SPEED = 1;
 
 export function stepBirds(birds, racers, course, dt) {
   const k = course.speedup ?? 1;
@@ -128,7 +130,7 @@ export function stepBirds(birds, racers, course, dt) {
 
     if (b.kind !== 'swan' || b.huff > 0) continue;
     for (const r of racers) {
-      if (r.boat.swim > 0 || r.boat.speed < 1 || (b.x - r.boat.x) ** 2 + (b.z - r.boat.z) ** 2 > 36) continue;
+      if (r.boat.swim > 0 || r.boat.speed < SWAN_SPEED || (b.x - r.boat.x) ** 2 + (b.z - r.boat.z) ** 2 > 36) continue;
       if (r.boat.time < (r.swanSafe ?? -Infinity)) continue;
       if (distanceToHull(r.boat, b) < BIRDS.swan.r + HULL) {
         hits.push(r);
