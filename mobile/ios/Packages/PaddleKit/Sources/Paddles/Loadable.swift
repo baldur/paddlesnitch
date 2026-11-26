@@ -14,7 +14,10 @@ public enum Loadable<Value> {
 
 extension Loadable: Equatable where Value: Equatable {}
 
-/// What to tell someone when loading failed.
+/// What to tell someone when loading failed. Never the server's own
+/// `{"error": …}` text: it can carry codes or vendor names (#897). Screens
+/// whose server sentences are written for people (sign-in, handle taken)
+/// map `.rejected` themselves.
 public enum FailureMessage {
     public static func of(_ error: any Error) -> String {
         switch error {
@@ -22,8 +25,6 @@ public enum FailureMessage {
             "Sign in again to see your paddles."
         case PaddleAPIError.notFound:
             "We can't find this paddle."
-        case PaddleAPIError.rejected(let message, _, _):
-            message
         case is URLError:
             "Couldn't reach paddlesnitch. Check your connection and try again."
         default:
