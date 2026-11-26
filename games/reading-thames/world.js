@@ -10,6 +10,7 @@ import { createAnglers, SNAG } from './anglers.js';
 import { LIDAR } from './lidar.js';
 import { MATERIALS } from './materials.js';
 import { SHEDS } from './sheds.js';
+import { fitted, roofMesh } from './roofs.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
@@ -1250,6 +1251,9 @@ function building(m, course, b, rand) {
   // Its measured height (lidar.js), where it was measured.
   const measuredHeight = course.lidar?.buildings.find(([x, z]) => Math.abs(x - cx) < 0.1 && Math.abs(z - cz) < 0.1);
   if (measuredHeight) b = { ...b, height: measuredHeight[2] };
+  // Its roof as the lidar shapes it (roofs.js), where one was fitted: the walls up to it, windows below its eaves.
+  const shaped = b.style ? null : fittedRoof(course.lidar, cx, cz);
+  if (shaped) b = { ...b, height: Math.min(...shaped.slice(4).map((p) => (p[0] === 'flat' ? p[1] : p[2]))) };
   // Down to the lowest corner's ground (a house on Caversham hill stood clear of
   // its downhill side), up to its height over the middle's.
   const y0 = Math.min(g.y, ...ring.map(([x, z]) => ground(course, x, z).y)) - 1;
@@ -1262,7 +1266,7 @@ function building(m, course, b, rand) {
   const picked = clap ? CLAP.walls[Math.floor(rand() * CLAP.walls.length)]
     : b.kind === 'boathouse' ? (rand() < 0.5 ? COLORS.white : [0.3, 0.42, 0.33]) : WALLS[Math.floor(rand() * WALLS.length)];
   const wall = (!clap && seen?.wall) || picked; // (clapboard is its own style, from the footage already)
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length && !shaped; i++) {
     const [ax, az] = ring[i];
     const [bx, bz] = ring[(i + 1) % ring.length];
     const out = [(ax + bx) / 2 - cx, 0, (az + bz) / 2 - cz];
@@ -1307,12 +1311,32 @@ function building(m, course, b, rand) {
   // (A measured block of four floors or more: a dark roof, as the hotel by Caversham Bridge has.)
   const roofPick = clap ? CLAP.roof : pitched ? ROOFS[Math.floor(rand() * ROOFS.length)] : measuredHeight && b.height >= 12 ? ROOFS[1] : COLORS.coping;
   const roof = (pitched && seen?.roof) || roofPick;
+  if (shaped) return roofMesh(m, ring, shaped, g.y, y0, wall, shapedRoofColour(shaped, b, roofPick, pitched, seen, measuredHeight));
   const peak = [cx, top + (pitched ? Math.min(4, 1.5 + Math.sqrt(area(ring)) * 0.18) : 0), cz];
   for (let i = 0; i < ring.length; i++) {
     const [ax, az] = ring[i];
     const [bx, bz] = ring[(i + 1) % ring.length];
     m.tri([ax, top, az], [bx, top, bz], peak, roof);
   }
+}
+
+// A building's fitted roof in lidar.js (`roofs`, by the middle of its
+// footprint), or null where there's none or the fit was refused.
+function fittedRoof(lidar, cx, cz) {
+  if (!lidar?.roofs) return null;
+  if (!lidar.roofIndex) lidar.roofIndex = new Map(lidar.roofs.map((r) => [`${r[0]},${r[1]}`, r]));
+  const rec = lidar.roofIndex.get(`${Math.round(cx * 10) / 10},${Math.round(cz * 10) / 10}`);
+  return fitted(rec) ? rec : null;
+}
+
+// A fitted roof's colour: a pitched one on a house as before (the footage's
+// where two views agreed, else its pick), on anything else one chosen by where
+// it stands (no random draw, so nothing else moves); a flat one as a flat roof
+// is, but for a house's roof the footage agreed on.
+function shapedRoofColour(rec, b, roofPick, pitched, seen, measuredHeight) {
+  if (!rec.slice(4).some((p) => p[0] !== 'flat')) return (pitched && seen?.roof) || (measuredHeight && b.height >= 12 ? ROOFS[1] : COLORS.coping);
+  if (pitched) return seen?.roof || roofPick;
+  return ROOFS[Math.abs(Math.round(rec[0] * 7 + rec[1] * 13)) % ROOFS.length];
 }
 
 // --- landmarks, modelled from the frames ---------------------------------------
