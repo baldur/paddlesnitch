@@ -742,13 +742,12 @@ async function play(c, page, errors) {
     window.__best = 0;
     // What a stalled boat ran into, for the failures below: each new touch with
     // a rival, a swim, and its heading from now.
-    const { race, boat } = window.kayak;
-    const me = String(race.racers.indexOf(race.player));
+    const { race, boat, touching: touchingNow } = window.kayak;
     let touching = new Set();
     window.__stall = { bumps: 0, swam: false, heading: boat.heading };
     const tick = () => {
       window.__best = Math.max(window.__best, window.kayak.boat.speed);
-      const now = new Set([...race.contacts].filter((k) => k.split('-').includes(me)));
+      const now = new Set(touchingNow(race, race.player, 0.1));
       for (const k of now) if (!touching.has(k)) window.__stall.bumps++;
       touching = now;
       window.__stall.swam ||= boat.swim > 0;

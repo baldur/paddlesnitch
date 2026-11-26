@@ -980,6 +980,19 @@ function inSight(shore, boat, x, z) {
   return true;
 }
 
+// The racers touching racer `r` this moment (in the last `within` seconds of
+// its boat's clock). `race.contacts` maps each pair ('i-j', by index) to when
+// they last touched, and keeps pairs that have since drifted apart.
+export function touching(race, r, within = 0.05) {
+  const me = String(race.racers.indexOf(r));
+  const out = [];
+  for (const [key, at] of race.contacts) {
+    const pair = key.split('-');
+    if (pair.includes(me) && r.boat.time - at < within) out.push(race.racers[+pair[pair[0] === me ? 1 : 0]]);
+  }
+  return out;
+}
+
 // Hulls as line segments from stern to bow. Overlapping boats are pushed
 // apart; the first moment of contact costs both some speed and a wobble.
 function collide(race, i, j) {

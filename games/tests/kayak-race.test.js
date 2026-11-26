@@ -4,7 +4,7 @@ import { createBoat, step } from '../reading-thames/sim.js';
 import { readFile } from 'node:fs/promises';
 import { raceRiver, courseFromFile, pointAt, locate, headingAt, widthAt } from '../reading-thames/course.js';
 import { wrap } from '../reading-thames/sim.js';
-import { createRace, stepRace, standings, started, wash, elapsed, applyCall, washSlots, washMarks, placeFits, SLOTS, DIVISION_9 } from '../reading-thames/race.js';
+import { createRace, stepRace, standings, started, wash, elapsed, applyCall, washSlots, washMarks, placeFits, touching, SLOTS, DIVISION_9 } from '../reading-thames/race.js';
 
 const DT = 1 / 120;
 const balance = (b) => Math.max(-1, Math.min(1, -(b.roll * 2 + b.rollRate * 0.6)));
@@ -103,6 +103,37 @@ test('boats knocking on and off each other count one bump, until they have been 
   place(0.3);
   steps(1);
   assert.equal(bumps, 2, 'apart for a while, the next touch is a new bump');
+});
+
+test('touching lists the boats touching a racer now, not ones it touched a while ago', () => {
+  const course = raceRiver();
+  const race = createRace(course, { rivals: DIVISION_9.slice(0, 1) });
+  const [you, rival] = race.racers;
+  const [a, b] = [you.boat, rival.boat];
+  const step = () => stepRace(race, DT, { strokes: [], lean: balance(a) });
+  assert.deepEqual(touching(race, you), []);
+  Object.assign(b, { x: a.x + Math.cos(a.heading) * 0.3, z: a.z + Math.sin(a.heading) * 0.3, heading: a.heading });
+  step();
+  assert.deepEqual(touching(race, you), [rival]);
+  assert.deepEqual(touching(race, rival), [you]);
+  Object.assign(b, { x: a.x + Math.cos(a.heading) * 3, z: a.z + Math.sin(a.heading) * 3 });
+  for (let i = 0; i < 60; i++) step();
+  assert.deepEqual(touching(race, you), [], 'apart now (the pair stays in race.contacts)');
+});
+
+// race.contacts was a Set of 'i-j' keys and is a Map now (#986): the browser
+// test still iterated it as keys and threw in every race case. Read it
+// through touching(), here and in the tests, never directly.
+test('nothing outside race.js reads race.contacts directly', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const dirs = ['../reading-thames/', './'];
+  for (const dir of dirs) {
+    for (const f of await readdir(new URL(dir, import.meta.url))) {
+      if (!/\.(m?js)$/.test(f) || (dir.startsWith('../') && f === 'race.js') || f === 'kayak-race.test.js') continue;
+      const src = await readFile(new URL(dir + f, import.meta.url), 'utf8');
+      assert.ok(!/\.contacts\b/.test(src), `${dir}${f} reads .contacts: use touching() from race.js`);
+    }
+  }
 });
 
 // A rival in a time trial on the race river, long since started, at
