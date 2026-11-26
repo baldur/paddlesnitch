@@ -61,6 +61,14 @@ describe('the buildings', () => {
 })
 
 describe('the blocks', () => {
+  it("keeps each building's fitted roof by its number, and none that was refused", () => {
+    const n = SURROUND_BLOCK / SURROUND_CELL + 1
+    const sq = (x: number): XZ[] => [[x, 0], [x + 10, 0], [x + 10, 10], [x, 10]]
+    const b = { kind: 'house' as const, ground: 1, base: 1, height: 6 }
+    const f = JSON.parse(blockFile({ i: 0, j: 0 }, new Array(n * n).fill(0), new Array((n - 1) ** 2).fill(0),
+      [{ ...b, shape: sq(0), roof: [5, 5, 'noisy'] }, { ...b, shape: sq(20), roof: [25, 5, 0, [], ['gable', 0, 5, 8, 0.5]] }, { ...b, shape: sq(40) }], []))
+    expect(f.roofs).toEqual([[1, 25, 5, 0, [], ['gable', 0, 5, 8, 0.5]]])
+  })
   it('keys a point by the 500 m block it is in', () => {
     expect([blockKey(0, 0), blockKey(-1, 499.9), blockKey(500, -500)]).toEqual(['0,0', '-1,0', '1,-1'])
   })
@@ -95,6 +103,7 @@ describe('the blocks', () => {
     expect(f.buildings).toEqual([[100, 100, 200, 100, 200, 200, 12, 9, 125, 1]])
     expect(f.trees).toEqual([[1000, 4000, 113]])
     expect(f.cells).toBe(`0${(n - 1) ** 2}`)
+    expect(f.roofs).toEqual([])
     expect(Array.from(fromRowSteps(f.ground, n)).every((v) => v === 3)).toBe(true)
   })
 })

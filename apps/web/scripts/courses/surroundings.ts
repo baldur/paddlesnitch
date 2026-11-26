@@ -16,7 +16,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { projection, type XZ } from './lib/river'
-import { mosaic, readTile, sampleGrid, wgs84ToBng, deriveTrees, inside, LAND, type Grid } from './lib/lidar'
+import { mosaic, readTile, sampleGrid, wgs84ToBng, deriveTrees, deriveRoofs, ROOF, inside, LAND, type Grid, type Roof } from './lib/lidar'
 import { BAND, INNER, SURROUND_BLOCK, SURROUND_CELL, CELL, COVERAGES, blockFile, blockKey, buildingsQuery, cellKind, coverageUrl, footprints, measureFootprint, middle, newFootprints, seamSink, tileName, tilesFor, type Footprint, type Kind } from './lib/surroundings'
 import { courseFromFile, locate, pointAt, widthAt } from '../../../../games/reading-thames/course.js'
 import { LIDAR } from '../../../../games/reading-thames/lidar.js'
@@ -153,6 +153,16 @@ function build() {
     if (!byBlock.has(k)) byBlock.set(k, [])
     byBlock.get(k)!.push({ ...f, ...m })
   }
+  // Their roofs, fitted to the lidar as lidar.js's are (lib/lidar.ts deriveRoofs:
+  // each footprint slid onto the lidar's building first, then the roof shaped).
+  const measured = [...byBlock.values()].flat()
+  const fit = deriveRoofs({ ground, above: (x, z) => { const [s, g] = [surface(x, z), ground(x, z)]; return s === null || g === null ? null : s - g } },
+    measured, [box[0], box[1], box[2], box[3]], (x, z) => ground(x, z) ?? 0)
+  const roofOf = new Map(fit.roofs.map((r) => [`${r[0]},${r[1]}`, r]))
+  for (const b of measured) { const [cx, cz] = middle(b.shape); (b as { roof?: Roof }).roof = roofOf.get(`${Math.round(cx * 10) / 10},${Math.round(cz * 10) / 10}`) }
+  const forms = fit.roofs.reduce<Record<string, number>>((a, r) => { const k = Array.isArray(r[3]) ? (r.length > 5 ? 'parts' : (r[4] as string[])[0]) : (r[2] as string); a[k] = (a[k] ?? 0) + 1; return a }, {})
+  const rms = fit.errors.flatMap((e) => (e ? [e.rms] : [])).sort((a, b) => a - b)
+  console.log(`roofs: ${JSON.stringify(forms)}; within ${ROOF.TAU} m, RMS median ${rms[rms.length >> 1]?.toFixed(2)} m, 90% under ${rms[Math.floor(rms.length * 0.9)]?.toFixed(2)} m`)
   // Where lidar.js already plants the trees (course:lidar's rule: by height,
   // so far from the water), and its trees, to keep clear of.
   const feet = [...fresh, ...known].map(({ shape }) => ({ shape, box: [Math.min(...shape.map((p) => p[0])), Math.min(...shape.map((p) => p[1])), Math.max(...shape.map((p) => p[0])), Math.max(...shape.map((p) => p[1]))] }))

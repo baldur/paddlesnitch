@@ -91,6 +91,21 @@ test("buildings stand on their ground to their height, roofs over them; far off,
   for (const d of b.buildings) assert.ok(d.height >= 2.5 && d.height < 80, `${d.kind} ${d.height} m`);
 });
 
+test("near, a building the lidar fitted a roof to is drawn with that roof (roofs.js), up to its ridge", async () => {
+  const all = await blocks();
+  const gabled = (d) => Array.isArray(d.roof?.[3]) && d.roof.slice(4).every((p) => p[0] === 'gable');
+  const withRoofs = all.filter((b) => b.buildings.some(gabled));
+  assert.ok(withRoofs.length > 10, `${withRoofs.length} blocks with fitted gables`);
+  const b = withRoofs[0];
+  const d = b.buildings.find(gabled);
+  const only = { ...b, buildings: [d], trees: [], cells: new Uint8Array(b.cells.length).fill(4) };
+  const { vertices } = blockMesh(only);
+  let top = -Infinity;
+  for (let k = 1; k < vertices.length; k += 9) top = Math.max(top, vertices[k]);
+  const ridge = Math.max(...d.roof.slice(4).map((p) => p[3]));
+  assert.ok(Math.abs(top - (d.ground + ridge)) < 0.05, `drawn to ${top.toFixed(2)}, ridge ${(d.ground + ridge).toFixed(2)}`);
+});
+
 test("a footprint's box far off lies along its longest side and holds it", () => {
   const ring = [[0, 0], [10, 0], [10, 4], [6, 6], [0, 4]];
   const box = boxAround(ring);

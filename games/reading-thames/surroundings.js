@@ -10,6 +10,7 @@
 // within NEAR and with less detail further off, and drawn when in view.
 import { MeshBuilder } from './meshes.js';
 import { PALETTE } from './world.js';
+import { fitted, roofMesh } from './roofs.js';
 
 export const NEAR = 700; // metres to a block: nearer, drawn in full
 export const LOAD = 1800; // fetched within this
@@ -39,8 +40,9 @@ export function decodeBlock(f) {
     const [ground, base, height, kind] = b.slice(-4);
     return { ring, ground: ground / 10, base: base / 10, height: height / 10, kind: KINDS[kind] };
   });
+  for (const [k, ...rec] of f.roofs ?? []) buildings[k].roof = rec;
   const trees = f.trees.map(([x, z, h]) => [x0 + x / 10, z0 + z / 10, h / 10]);
-  const ys = [...heights, ...buildings.map((b) => b.ground + b.height + 4), ...trees.map(([x, z, h]) => heightIn({ x0, z0, n, cell, heights }, x, z) + h)];
+  const ys = [...heights, ...buildings.map((b) => b.ground + Math.max(b.height + 4, ...(b.roof ?? []).slice(4).flat().filter((v) => typeof v === 'number'))), ...trees.map(([x, z, h]) => heightIn({ x0, z0, n, cell, heights }, x, z) + h)];
   return { i, j, x0, z0, n, cell, heights, cells, buildings, trees, low: Math.min(...ys), high: Math.max(...ys) };
 }
 
@@ -111,9 +113,16 @@ export function blockMesh(b, far = false) {
 
 // A plain building, as world.js's `building` draws one (walls from its lowest
 // corner's ground, less a metre, to its height over its middle's; a hipped roof
-// on a house or boathouse), with its own draws; no windows (they're drawn only
-// within 80 m of the water). Far off, its footprint's box along its longest side.
+// on a house or boathouse; where the lidar fitted its roof, that roof: roofs.js),
+// with its own draws; no windows (they're drawn only within 80 m of the water).
+// Far off, its footprint's box along its longest side, roofed as before.
 function building(m, b, rand, far) {
+  if (!far && fitted(b.roof)) {
+    const wall = shade(PALETTE.walls[Math.floor(rand() * PALETTE.walls.length)], rand, 0.05);
+    const pick = PALETTE.roofs[Math.floor(rand() * PALETTE.roofs.length)];
+    const flat = !b.roof.slice(4).some((p) => p[0] !== 'flat');
+    return roofMesh(m, b.ring, b.roof, b.ground, b.base - 1, wall, flat ? PALETTE.coping : pick);
+  }
   let ring = b.ring;
   if (far && ring.length > 4) ring = boxAround(ring);
   const cx = ring.reduce((a, p) => a + p[0], 0) / ring.length;

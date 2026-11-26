@@ -211,9 +211,10 @@ export function runs(cells: ArrayLike<number>): string {
  * every SURROUND_CELL m in decimetres above the river (rowSteps), each cell's
  * kind (runs), and its buildings and trees relative to the block's corner in
  * decimetres: [x, z, ..., ground, base, height, kind] per building (kind 0
- * house, 1 flats, 2 boathouse, 3 other) and [x, z, height] per tree.
+ * house, 1 flats, 2 boathouse, 3 other) and [x, z, height] per tree; and the
+ * buildings' roofs the lidar fitted, by their number (game metres, as lidar.js).
  */
-export function blockFile(at: { i: number; j: number }, ground: ArrayLike<number>, cells: ArrayLike<number>, buildings: Array<{ shape: XZ[]; kind: Footprint['kind']; ground: number; base: number; height: number }>, trees: Array<[number, number, number]>): string {
+export function blockFile(at: { i: number; j: number }, ground: ArrayLike<number>, cells: ArrayLike<number>, buildings: Array<{ shape: XZ[]; kind: Footprint['kind']; ground: number; base: number; height: number; roof?: unknown[] }>, trees: Array<[number, number, number]>): string {
   const [x0, z0] = [at.i * SURROUND_BLOCK, at.j * SURROUND_BLOCK]
   const dm = (v: number) => Math.round(v * 10)
   const kinds = ['house', 'flats', 'boathouse', 'other']
@@ -223,5 +224,7 @@ export function blockFile(at: { i: number; j: number }, ground: ArrayLike<number
     cells: runs(cells),
     buildings: buildings.map((b) => [...ringOf(b.shape).flatMap(([x, z]) => [dm(x - x0), dm(z - z0)]), dm(b.ground), dm(b.base), dm(b.height), kinds.indexOf(b.kind)]),
     trees: trees.map(([x, z, h]) => [dm(x - x0), dm(z - z0), dm(h)]),
+    // Each fitted roof (lib/lidar.ts fitRoof, as lidar.js's `roofs`): [the building's number, ...its record].
+    roofs: buildings.flatMap((b, k) => (Array.isArray(b.roof?.[3]) ? [[k, ...b.roof!]] : [])),
   })
 }
