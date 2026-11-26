@@ -8,13 +8,14 @@
 import { createBoat, step, bounceOffBank, bounceOffShore, wrap, steadyBeat, BOAT } from './sim.js';
 import { stepScull } from './scull.js';
 import { locate, pointAt, headingAt, widthAt, roomAhead } from './course.js';
-import { createBirds, stepBirds, swansAhead } from './birds.js';
+import { createBirds, stepBirds, swansAhead, SWAN_SPEED } from './birds.js';
 import { createAnglers, snagLines, linesAhead } from './anglers.js';
 import { createTraffic, moveTraffic, trafficHits, trafficWash, trafficWarnings, trafficNear } from './traffic.js';
 
 const BOW = 3.3; // hull ends, metres from the boat's origin (see meshes.kayakMesh)
 const STERN = 1.9;
 const BEAM = 0.48; // closest two hulls can get
+const CONTACT_CLEAR = 1; // s apart before two boats touching again is a new hit
 const LANE = 1.75; // spacing on the start line: blades all but touching
 const GAPS = 2; // open places the rivals leave on the line
 const BEHIND = 14; // how far back from the line you start, metres
@@ -306,7 +307,7 @@ function massRace(course, { rivals, seed, you, birds, easy }) {
   });
   racers.unshift(player);
   return {
-    course, racers, player, time: 0, rand, contacts: new Set(),
+    course, racers, player, time: 0, rand, contacts: new Map(),
     birds: birds ? createBirds(course, rand, course.scenery?.birds) : [],
     gaps, easy,
     start: { phase: 'line-up', timer: LINE_UP, wait: NUDGE, line: course.start, holds: 0, calls: ['line-up'] },
@@ -334,7 +335,7 @@ function liveRace(course, { seed, you, birds, live }) {
     return { name: mine ? 'You' : p.name, id: p.id, boat, loc: locate(course, at.x, at.z, Math.round(onLine / 2)), finish: null, draft: 0, ai: null, remote: !mine };
   });
   return {
-    course, racers, player: racers.find((r) => !r.remote), time: 0, rand, contacts: new Set(),
+    course, racers, player: racers.find((r) => !r.remote), time: 0, rand, contacts: new Map(),
     birds: birds ? createBirds(course, rand, course.scenery?.birds) : [],
     gaps: [], live,
     start: { phase: 'line-up', timer: LINE_UP, wait: NUDGE, line: course.start, holds: 0, calls: ['line-up'], follow: live.you !== live.host },
@@ -385,7 +386,7 @@ function intervalRace(course, { rivals, seed, you, birds }) {
   });
   const player = racers[slot];
   return {
-    course, racers, player, time: 0, rand, contacts: new Set(),
+    course, racers, player, time: 0, rand, contacts: new Map(),
     birds: birds ? createBirds(course, rand, course.scenery?.birds) : [],
     gaps: [], format: 'interval',
     start: { phase: 'interval', line, calls: [], counted: new Set() },
@@ -582,6 +583,11 @@ export function stepRace(race, dt, input) {
   return { events, splashes };
 }
 
+// The race clock when racer `r` finished.
+function finishedAt(race, r) {
+  return race.format === 'interval' ? r.crossed + r.finish : r.finish;
+}
+
 // Finished racers in order, then everyone else by how far along they are (in a
 // time trial, by the time they're on track for).
 export function standings(race) {
@@ -759,7 +765,10 @@ function think(r, race) {
   // more boats clipping them (measured over 12 and 16 races).
   let cadence = ai.cadence;
   const sprint = (f) => Math.min(ai.cadence * 0.85, steadyBeat(boat) * f);
-  if (r.finish !== null) cadence = race.time - r.finish < 8 ? 0.9 : 0; // paddle off, then drift
+  // Paddle off, then drift. (In a time trial `finish` is the time taken, not
+  // the clock: finished rivals stopped dead on the line, and the next ones in
+  // ran into them, #986.)
+  if (r.finish !== null) cadence = race.time - finishedAt(race, r) < 8 ? 0.9 : 0;
   else if (togo < ai.kick * k && boat.stamina > 0) cadence = sprint(0.92);
   else if (loc.s < race.start.line + 100 * k) cadence = boat.stamina > 0.5 ? sprint(0.9) : cadence * 0.93; // for a place on a wash
 
@@ -824,8 +833,9 @@ function think(r, race) {
   // Other boats on the river are passed the same way (and an eight coming up
   // behind is let by), each as wide as its oars or hull reach; and an angler's
   // line, from the float in to the bank.
+  const birds = swansAhead(race.birds, r, course, 30 * k);
   const swans = [
-    ...swansAhead(race.birds, r, course, 30 * k).map((b) => ({ ...b, half: 2.6 })),
+    ...birds.map((b) => ({ ...b, half: 2.6 })),
     ...boatsNear.map((b) => ({ ...b, half: b.out + 1.5 })),
     ...linesAhead(race.anglers ?? [], r, course, 30 * k),
   ];
@@ -836,17 +846,26 @@ function think(r, race) {
     if (last && b.lateral - b.half < last.hi) Object.assign(last, { hi: Math.max(last.hi, b.lateral + b.half), near: Math.min(last.near, b.s - loc.s), pass: last.pass ?? b.pass });
     else blocks.push({ lo: b.lateral - b.half, hi: b.lateral + b.half, near: b.s - loc.s, pass: b.pass });
   }
-  // (Where it's heading, or where it is with the swan or boat close: a boat
-  // steering for its place in a pack can be in the way while the place isn't.)
+  // (Where it's heading, or, with the swan or boat close, where it is or on
+  // its way across to where it's heading: a boat steering for its place in a
+  // pack can be in the way while the place isn't, and a rival crossing to its
+  // lane ran over a swan between the two, #986.)
+  const [from, to] = [Math.min(lateral, loc.lateral), Math.max(lateral, loc.lateral)];
   const block = blocks.find((b) => lateral > b.lo && lateral < b.hi)
-    ?? (leader ? blocks.find((b) => loc.lateral > b.lo && loc.lateral < b.hi && b.near < 15 * k) : undefined);
+    ?? blocks.find((b) => b.near < 15 * k && b.lo < to && b.hi > from);
   if (block?.pass) {
     // A boat: by the rule of the river, unless there's no room that side.
     const [mine, other] = block.pass > 0 ? [block.hi, block.lo] : [block.lo, block.hi];
     lateral = fits(mine) || !fits(other) ? mine : other;
   } else if (block) {
     const [mine, other] = loc.lateral < (block.lo + block.hi) / 2 ? [block.lo, block.hi] : [block.hi, block.lo];
-    lateral = fits(mine) || block.near < 15 * k ? mine : other;
+    const edge = fits(mine) || block.near < 15 * k ? mine : other;
+    // Already clear of them that side: hold its line, not swing in to the
+    // group's edge. Swinging in at speed it ran past the edge into the swans,
+    // and the next rivals up did the same at the same swans (#986).
+    const clear = (edge === block.hi ? loc.lateral > edge : loc.lateral < edge)
+      && !blocks.some((b) => loc.lateral > b.lo && loc.lateral < b.hi);
+    lateral = clear ? limit(loc.lateral, -(room.left - 2.2), room.right - 2.2) : edge;
   }
 
   // Look nearer ahead to swerve round a swan, or to get out of a boat's way.
@@ -857,8 +876,14 @@ function think(r, race) {
   // standstill, and paddling on only drove it into the bank again: rivals sat
   // there for minutes).
   const off = cornered(r, course, lateral, ahead, race.time);
+  // Setting off slowly (back in after a swim, say) with a swan close ahead
+  // in the way: no stroke that would take it past the speed a swan tips a
+  // boat in at, while the rudder starts to bite and it steers round. Paddling off hard from a standstill, a rival back
+  // in swam again on the same swan, still sitting in front of it (#986).
+  const creep = boat.speed < SWAN_SPEED && boat.speed + boat.hull.impulse * boat.power > SWAN_SPEED
+    && birds.some((b) => b.s - loc.s < 15 * k && Math.abs(b.lateral - loc.lateral) < 2.6);
   const strokes = [];
-  if (cadence && race.time >= ai.next) {
+  if (cadence && race.time >= ai.next && !(creep && !off)) {
     strokes.push(off ? `back-${off}` : boat.lastSide === 'left' ? 'right' : 'left');
     ai.next = race.time + ai.interval * (1 + (race.rand() - 0.5) * 0.05);
   }
@@ -972,10 +997,7 @@ function collide(race, i, j) {
       if (!best || d < best.d) best = { d, n: [(p[0] - q[0]) * sign, (p[1] - q[1]) * sign] };
     }
   }
-  if (best.d >= BEAM) {
-    if (best.d > BEAM + 0.4) race.contacts.delete(key); // clear of each other: the next touch is a new hit
-    return false;
-  }
+  if (best.d >= BEAM) return false;
   const len = best.d || 1;
   const n = best.d ? [best.n[0] / len, best.n[1] / len] : [Math.cos(a.heading), Math.sin(a.heading)];
   const push = (BEAM - best.d) / 2;
@@ -983,8 +1005,11 @@ function collide(race, i, j) {
   a.z += n[1] * push;
   b.x -= n[0] * push;
   b.z -= n[1] * push;
-  const fresh = !race.contacts.has(key);
-  race.contacts.add(key);
+  // A new hit only after a moment apart (CONTACT_CLEAR): two boats pinned
+  // against a bank chattered in and out of touch, each touch a fresh knock
+  // the same way, and rolled each other over at the finish (#986).
+  const fresh = !(a.time - (race.contacts.get(key) ?? -Infinity) < CONTACT_CLEAR);
+  race.contacts.set(key, a.time);
   for (const [boat, dir] of [[a, 1], [b, -1]]) {
     // Which way this boat is being shoved: +1 to its right.
     const side = Math.sign((n[0] * Math.cos(boat.heading) + n[1] * Math.sin(boat.heading)) * dir);

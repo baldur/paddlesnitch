@@ -268,36 +268,43 @@ test('Hasler Div 7-9 as a time trial: the pack goes round Appletree Eyot and Fry
   assert.ok(km > 7.7 && km < 8.1, `${km} km`);
   // Three seeds: what each race does is the same in all (everyone finishes, the
   // route, the times), how many swim isn't. It passes the crowd of swans by
-  // Reading Rowing Club twice (SWAN_GRACE in birds.js), and where the swims fall
-  // moves from race to race with the smallest change to the river: with the
-  // traffic eased all along it (#984) seed 1 went from 2 swims to 7 and seed 10
-  // from 7 to 2, none of the difference by traffic. Over 12 seeds before and
-  // after (24 races, measured 2026-11-20) a race averages 1.9 swims, standard
-  // deviation 2.1: three races 5.6, give or take 3.6, so at most 13 (two
-  // standard deviations over), a loose bound (a doubling of every race's swims
-  // would still pass two times in three: tester), so what this course's changes
-  // move is bounded tight: the swims traffic tips in (2 in 12 races, before and
-  // after). Swimming twice in a race is #986's (the 6-7 swim races are pile-ups
-  // on main too); three times is SWAN_GRACE broken.
-  let [swims, byTraffic] = [0, 0];
+  // Reading Rowing Club twice (SWAN_GRACE in birds.js). These three piled up
+  // on main (#986: 7, 6 and 13 swims, a rival four times), most of it past
+  // the finish: finished rivals stopped dead on the line (a time trial's
+  // `finish` read as the clock), the next ones in ran into them, and boats
+  // pinned against the bank there knocked each other over again and again.
+  // Measured over 60 seeds (2026-11-26): main 101 swims, up to 16 in a race;
+  // after, 37, at most 5 (swans and traffic), nobody twice in a row. So: at
+  // most 5 a race, and no rival swimming again within a minute of the last (on
+  // main, back in and straight over, on the pile or the same swan).
+  let byTraffic = 0;
   const each = [];
-  for (const seed of [1, 2, 3]) {
+  for (const seed of [1, 8, 19]) {
     const race = createRace(course, { rivals: DIVISION_9, seed, format: 'interval' });
-    while (race.time < 900 && race.racers.some((r) => r.ai && r.finish === null)) stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+    const ais = race.racers.filter((r) => r.ai);
+    const last = new Map(ais.map((r) => [r, { n: 0, at: -Infinity }]));
+    const again = [];
+    while (race.time < 900 && ais.some((r) => r.finish === null)) {
+      stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+      for (const r of ais) {
+        const l = last.get(r);
+        if (r.boat.capsizes === l.n) continue;
+        if (race.time - l.at < 60) again.push(`${r.name} at ${Math.round(r.loc.s)} m, ${Math.round(race.time - l.at)} s after the last`);
+        Object.assign(l, { n: r.boat.capsizes, at: race.time });
+      }
+    }
     const rivals = standings(race).filter((r) => r.ai);
     assert.ok(rivals.every((r) => r.finish !== null), `seed ${seed}: everyone finished`);
     assert.ok(rivals.every((r) => r.gate === race.gates.length), `seed ${seed}: through every gate`);
     const minutes = rivals.map((r) => (r.finish * course.warp) / 60);
     assert.ok(minutes[0] > 36 && minutes.at(-1) < 48, `seed ${seed}: ${minutes[0]}-${minutes.at(-1)} minutes`);
     const n = rivals.reduce((a, r) => a + r.boat.capsizes, 0);
-    swims += n;
     const tipped = (r) => race.traffic.boats.filter((b) => b.hit.includes(r)).length;
     byTraffic += rivals.reduce((a, r) => a + tipped(r), 0);
     each.push(`seed ${seed}: ${n}, ${rivals.reduce((a, r) => a + tipped(r), 0)} by traffic`);
-    // (Not twice, as before, but not again and again: SWAN_GRACE still holds.)
-    assert.ok(rivals.every((r) => r.boat.capsizes <= 2), `seed ${seed}: ${rivals.filter((r) => r.boat.capsizes > 2).map((r) => `${r.name} ${r.boat.capsizes}`)}`);
+    assert.ok(n <= 5, `seed ${seed}: ${n} swims`);
+    assert.deepEqual(again, [], `seed ${seed}: swam again straight after`);
   }
-  assert.ok(swims <= 13, `${swims} swims in three races (${each.join('; ')})`);
   // What the river's traffic tips in, it does on its own: 2 in 12 races before and after #984.
   assert.ok(byTraffic <= 2, `${byTraffic} tipped in by traffic in three races (${each.join('; ')})`);
 });

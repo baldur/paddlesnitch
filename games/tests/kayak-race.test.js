@@ -80,6 +80,119 @@ test('touching hulls are pushed apart and count as one bump', () => {
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) >= 0.47);
 });
 
+// #986: two boats pinned together against the bank past the finish came in
+// and out of touch every tenth of a second, each touch a fresh knock the same
+// way, and rolled each other over (13 swims in one race, a rival 4 times).
+test('boats knocking on and off each other count one bump, until they have been apart a second', () => {
+  const course = raceRiver();
+  const race = createRace(course, { rivals: DIVISION_9.slice(0, 1) });
+  const [a, b] = race.racers.map((r) => r.boat);
+  const place = (apart) => Object.assign(b, { x: a.x + Math.cos(a.heading) * apart, z: a.z + Math.sin(a.heading) * apart, heading: a.heading });
+  let bumps = 0;
+  const steps = (n) => {
+    for (let i = 0; i < n; i++) bumps += stepRace(race, DT, { strokes: [], lean: balance(a) }).events.filter((e) => e === 'bump').length;
+  };
+  for (let k = 0; k < 5; k++) {
+    place(0.3); // touching
+    steps(1);
+    place(1.5); // a metre clear, for a tenth of a second
+    steps(12);
+  }
+  assert.equal(bumps, 1, 'one knock, not one a touch');
+  steps(150);
+  place(0.3);
+  steps(1);
+  assert.equal(bumps, 2, 'apart for a while, the next touch is a new bump');
+});
+
+// A rival in a time trial on the race river, long since started, at
+// (`s`, `lateral`) with `speed`, and no birds but those `swan` adds.
+function midRace(s, lateral, speed) {
+  const course = raceRiver();
+  const race = createRace(course, { rivals: DIVISION_9.slice(0, 1), seed: 1, format: 'interval', birds: false, traffic: false });
+  const r = race.racers.find((x) => x.ai);
+  race.time = r.release + 400;
+  const p = pointAt(course, s);
+  Object.assign(r.boat, { x: p.x - p.tz * lateral, z: p.z + p.tx * lateral, heading: Math.atan2(p.tx, -p.tz), speed });
+  r.loc = locate(course, r.boat.x, r.boat.z);
+  r.crossed = r.release + 5;
+  r.gate = race.gates.length;
+  race.birds = [];
+  const swan = (ds, lat) => {
+    const q = pointAt(course, s + ds);
+    const [x, z] = [q.x - q.tz * lat, q.z + q.tx * lat];
+    race.birds.push({ kind: 'swan', x, z, heading: 0, speed: 0, phase: 0, loc: locate(course, x, z), fly: 0, gone: false, huff: 0 });
+  };
+  const run = (seconds, each = () => {}) => {
+    for (let t = 0; t < seconds; t += DT) {
+      stepRace(race, DT, { strokes: [], lean: balance(race.player.boat) });
+      each();
+    }
+  };
+  return { course, race, r, swan, run };
+}
+
+// #986: in a time trial `finish` is the time taken, not the race clock, and
+// a finished rival read it as the clock: it stopped dead on the line, the next
+// ones in ran into it, and the pile past the finish swam again and again.
+test('a rival finishing a time trial paddles on off the line, then drifts', () => {
+  const { course, r, run } = midRace(raceRiver().finish - 15, 0, 3.5);
+  run(10);
+  assert.ok(r.finish !== null, 'finished');
+  // (It finished about 4 s in: still paddling off for some of the last 5 s.)
+  const strokes = r.boat.strokeTimes.filter((t) => t > r.boat.time - 5).length;
+  assert.ok(strokes >= 3, `${strokes} strokes in the last 5 s`);
+  assert.ok(r.loc.s > course.finish + 10, `${(r.loc.s - course.finish).toFixed(1)} m past the line`);
+});
+
+// #986: back in after a swan tipped it in, a rival paddled off hard from a
+// standstill, before the rudder bit, and swam again on the same swan still in
+// front of it. Now it eases past slower than a swan tips a boat in.
+test('a rival setting off with a swan just ahead eases past it, never tipped in', () => {
+  let swims = 0;
+  for (const ds of [3.6, 3.8, 4, 4.2, 4.4, 4.6, 5]) {
+    for (const lat of [-0.3, 0, 0.3]) {
+      const { r, swan, run } = midRace(1150, 0, 0);
+      swan(ds, lat);
+      run(30);
+      swims += r.boat.capsizes;
+      assert.ok(r.loc.s > 1150 + 40, `got past it (${ds} m ahead, ${lat} across): ${(r.loc.s - 1150).toFixed(0)} m on`);
+    }
+  }
+  assert.equal(swims, 0);
+});
+
+// #986: a rival already clear of a group of swans swung in to the group's
+// edge to pass it, ran past the edge at speed, and the rivals behind did the
+// same at the same swans (three swims at one spot in a race).
+test('a rival already clear of a group of swans holds its line past them', () => {
+  const { r, swan, run } = midRace(1100, 4, 3);
+  r.ai.lane = -3; // where it would go, through the swans
+  swan(30, -0.5);
+  swan(30, -3.5);
+  let closest = Infinity;
+  run(15, () => {
+    if (r.loc.s < 1132) closest = Math.min(closest, r.loc.lateral);
+  });
+  assert.ok(closest > 3, `came in to ${closest.toFixed(2)} m out (the swans at -0.5 and -3.5, the group's edge at 2.1)`);
+  assert.equal(r.boat.capsizes, 0);
+});
+
+// #986: crossing to its lane, a rival steered over a swan between where it
+// was and where it was going (only the lane itself was checked for swans).
+test('a rival crossing the river to its lane goes round a swan in the way', () => {
+  for (const [ahead, from, at] of [[10, 1, 0], [12, 1.5, 0.5], [12, 2, 0.5]]) {
+    const { r, swan, run } = midRace(1100, from, 3);
+    r.ai.lane = -3;
+    swan(ahead, at);
+    let nearest = Infinity;
+    run(10, () => {
+      if (Math.abs(r.loc.s + 1 - (1100 + ahead)) < 3) nearest = Math.min(nearest, Math.abs(r.loc.lateral - at));
+    });
+    assert.ok(nearest > 1.5, `from ${from} m out, passed ${nearest.toFixed(2)} m from the swan ${ahead} m on at ${at}`);
+  }
+});
+
 test('a pack of rivals races a full 6 km without capsizing, finishing in about 31 minutes', () => {
   const course = raceRiver();
   const race = createRace(course, { rivals: DIVISION_9, seed: 3 });
