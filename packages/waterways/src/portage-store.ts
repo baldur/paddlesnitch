@@ -1,17 +1,23 @@
 // OpenPortage contributions in storage (server only). The owner's copy lives
 // under users/{userId}/portages/ (so account deletion's users/ wipe removes it)
 // and a public copy under portages/public/ for everyone's routes; flags under
-// portages/flags/{id}/{flagger}. A note waiting on its check has no public
+// portages/flags/{id}/{flagger}, with users/{flagger}/portage-flags/{id} as
+// the flagger's own index, so erasure finds their flags without listing every
+// portage (#915). A note waiting on its check has no public
 // copy at all: its second copy is under portages/pending/, which nothing public
 // reads. See portage.ts.
 import { customAlphabet, nanoid } from 'nanoid'
-import { deleteObject, deletePrefix, getJson, listKeys, putJson } from '@paddlesnitch/core/storage'
+import { deleteObject, deleteObjects, deletePrefix, getJson, listKeys, putJson } from '@paddlesnitch/core/storage'
 import { FLAGS_TO_HIDE, toPublic, type PortageContribution, type PortageVerdict, type PublicPortage } from './portage'
 import { mergeSurvey, surveyPortages } from './portage-survey'
 
 const ownKey = (userId: string, id: string) => `users/${userId}/portages/${id}.json`
 const publicKey = (id: string) => `portages/public/${id}.json`
 const flagPrefix = (id: string) => `portages/flags/${id}/`
+const flagKey = (id: string, flaggerId: string) => `${flagPrefix(id)}${flaggerId}.json`
+const myFlagPrefix = (userId: string) => `users/${userId}/portage-flags/`
+/** The flagger's index of what they flagged. An entry can outlive its flag (cleared on restore): harmless. */
+export const flagIndexKey = (userId: string, id: string) => `${myFlagPrefix(userId)}${id}.json`
 const pendingKey = (id: string) => `portages/pending/${id}.json`
 const validId = (id: string) => /^[\w-]{1,64}$/.test(id)
 const reviewKey = (ref: string) => `portages/reviews/${ref}.json`
@@ -200,7 +206,10 @@ export async function flagPortage(flaggerId: string, id: string): Promise<'flagg
   if (!validId(id)) return null
   const c = await findPublic(id)
   if (!c) return null
-  await putJson(`${flagPrefix(id)}${flaggerId}.json`, { at: new Date().toISOString() })
+  const flag = { at: new Date().toISOString() }
+  // The index first: a flag must never exist that erasure can't find.
+  await putJson(flagIndexKey(flaggerId, id), flag)
+  await putJson(flagKey(id, flaggerId), flag)
   if ((await listKeys(flagPrefix(id))).length < FLAGS_TO_HIDE || c.hidden) return 'flagged'
   await setHidden(c, true)
   return 'hidden'
@@ -241,12 +250,30 @@ export async function listPublicPortages(): Promise<PublicPortage[]> {
   return list
 }
 
-/** Account deletion: the public copies and flags (the owner's copies go with users/{id}/). */
+/** The portages they flagged, from their own index (account export). */
+export async function listMyFlags(userId: string): Promise<{ portageId: string; at: string }[]> {
+  const prefix = myFlagPrefix(userId)
+  const keys = await listKeys(prefix)
+  const flags = await Promise.all(keys.map(async k => ({ portageId: k.slice(prefix.length, -'.json'.length), at: (await getJson<{ at: string }>(k))?.at ?? '' })))
+  return flags.sort((a, b) => a.at.localeCompare(b.at))
+}
+
+/**
+ * Account deletion: the public copies and flags on their portages, and their
+ * flags on everyone else's (found by their index, so the time doesn't grow
+ * with the number of portages). Their own copies and the index go with users/{id}/.
+ */
 export async function erasePortages(userId: string): Promise<void> {
-  for (const c of await listMyPortages(userId)) {
-    await deleteObject(publicKey(c.id))
-    await deleteObject(pendingKey(c.id))
-    await deletePrefix(flagPrefix(c.id))
-  }
+  const [mine, flagged] = await Promise.all([
+    listMyPortages(userId),
+    listKeys(myFlagPrefix(userId)),
+  ])
+  const flagsOnMine = await Promise.all(mine.map(c => listKeys(flagPrefix(c.id))))
+  const prefix = myFlagPrefix(userId)
+  await deleteObjects([
+    ...mine.flatMap(c => [publicKey(c.id), pendingKey(c.id)]),
+    ...flagsOnMine.flat(),
+    ...flagged.map(k => flagKey(k.slice(prefix.length, -'.json'.length), userId)),
+  ])
   cache = null
 }

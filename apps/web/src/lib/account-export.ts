@@ -13,7 +13,7 @@ import type { AuthUser } from '@paddlesnitch/core/types'
 import { listTrials, listCourses, listUserEntryResultKeys, listUserFailedUploadKeys } from '@/lib/catalogue'
 import { listSavedSections } from '@paddlesnitch/analysis/saved-sections'
 import { listPlans } from '@paddlesnitch/waterways/plan-store'
-import { listMyPortages } from '@paddlesnitch/waterways/portage-store'
+import { listMyFlags, listMyPortages } from '@paddlesnitch/waterways/portage-store'
 import { myGameTimes } from '@paddlesnitch/core/games'
 
 export async function buildAccountExport(user: AuthUser) {
@@ -62,6 +62,8 @@ export async function buildAccountExport(user: AuthUser) {
     plans: await listPlans(user.id),
     // Portage details added to Plan (published under CC0 with the display name).
     portages: await listMyPortages(user.id),
+    // Portages they flagged as wrong (#915): which and when, never who else did.
+    portageFlags: await listMyFlags(user.id),
   }
 
   const groups = (await Promise.all((await getUserGroupIds(user.id)).map(id => getGroup(id))))

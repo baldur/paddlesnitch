@@ -25,6 +25,10 @@ import { putGroup, getGroup, addUserToGroupIndex, putJoinRequest, putInvitation 
 import type { GroupMetadata } from '@/lib/types'
 import { GAME_COURSES } from '@paddlesnitch/core/games'
 import { sweepJobs } from '@/lib/jobs'
+import { addPortage, flagPortage } from '@paddlesnitch/waterways/portage-store'
+import { backfillFlagIndex } from '../../scripts/backfill-portage-flag-index'
+
+const PORTAGE = { featureId: 'crt:locks:x', at: [51.4, -1] as [number, number], landings: [[51.4004, -1.0004], [51.4004, -0.9996]] as [[number, number], [number, number]] }
 
 let dataDir: string
 beforeEach(async () => {
@@ -284,6 +288,60 @@ describe('DELETE /api/account removes every kind of personal data', () => {
     expect(b!.memberUserIds).toEqual([])
     expect(await getGroup('just-me')).toBeNull()
   })
+
+  // #915: a flag is stored under the portage, not the flagger, so erasure used
+  // to clear only the flags on portages the deleted user owned.
+  it("removes their flags on other people's portages, and keeps the portage and others' flags (#915)", async () => {
+    const a = await makeUser('Flagger A')
+    const b = await makeUser('Owner B')
+    const c = await makeUser('Flagger C')
+    const theirs = await addPortage({ id: b.id, name: 'B' }, PORTAGE)
+    expect(await flagPortage(a.id, theirs.id)).toBe('flagged')
+    expect(await flagPortage(c.id, theirs.id)).toBe('flagged')
+    const lists = vi.spyOn(await import('@paddlesnitch/core/storage'), 'listKeys')
+
+    signInAs(a.idToken)
+    expect((await deleteAccount(new Request('http://x'))).status).toBe(200)
+
+    // Flat in time: erasure never lists every portage's flags to find theirs.
+    expect(lists.mock.calls.filter(([prefix]) => /^portages\/(flags\/)?$/.test(prefix) || prefix === 'portages')).toEqual([])
+    lists.mockRestore()
+    expect((await listKeys('portages/flags/')).filter(k => k.includes(a.id))).toEqual([])
+    expect(await getJson(`portages/public/${theirs.id}.json`)).not.toBeNull()
+    expect(await listKeys(`portages/flags/${theirs.id}/`)).toEqual([`portages/flags/${theirs.id}/${c.id}.json`])
+    expect(await keysMentioning(a.id)).toEqual([])
+  })
+
+  it('the hide threshold counts only the flaggers left after one is erased (#915)', async () => {
+    const owner = await makeUser('Owner')
+    const gone = await makeUser('Gone')
+    const p = await addPortage({ id: owner.id, name: 'O' }, PORTAGE)
+    await flagPortage(gone.id, p.id)
+    await flagPortage((await makeUser('F2')).id, p.id)
+
+    signInAs(gone.idToken)
+    await deleteAccount(new Request('http://x'))
+
+    // Two flags were placed but one flagger is gone: a third flag is the second.
+    expect(await flagPortage((await makeUser('F3')).id, p.id)).toBe('flagged')
+    expect(await flagPortage((await makeUser('F4')).id, p.id)).toBe('hidden')
+  })
+
+  it('a flag placed before the index existed is found once the backfill has run (#915)', async () => {
+    const a = await makeUser('Old flagger')
+    const b = await makeUser('Owner')
+    const p = await addPortage({ id: b.id, name: 'B' }, PORTAGE)
+    // As flagPortage wrote it before #915: no entry under users/{id}/.
+    await putJson(`portages/flags/${p.id}/${a.id}.json`, { at: '2026-11-01T00:00:00.000Z' })
+
+    expect(await backfillFlagIndex(false)).toEqual({ flags: 1, missing: 1 })
+    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, missing: 1 })
+    expect(await backfillFlagIndex(true)).toEqual({ flags: 1, missing: 0 })
+
+    signInAs(a.idToken)
+    await deleteAccount(new Request('http://x'))
+    expect(await listKeys(`portages/flags/${p.id}/`)).toEqual([])
+  })
 })
 
 describe('GET /api/account/export includes every kind of personal data', () => {
@@ -375,6 +433,21 @@ describe('GET /api/account/export includes every kind of personal data', () => {
 
     expect(body.account.gameTimes).toEqual(courses.map((course, i) => ({ course, time: 3100 + i, hull: 'nelo-viper-51', at: '2026-10-31T00:00:00Z' })))
     expect(JSON.stringify(body)).not.toContain('Olga T.')
+  })
+
+  it("lists the portages they flagged, and not who else flagged them (#915)", async () => {
+    const me = await makeUser('Me')
+    const owner = await makeUser('Owner')
+    const other = await makeUser('Other flagger')
+    const p = await addPortage({ id: owner.id, name: 'O' }, PORTAGE)
+    await flagPortage(me.id, p.id)
+    await flagPortage(other.id, p.id)
+
+    signInAs(me.idToken)
+    const text = await (await exportData(new Request('http://x'))).text()
+    const body = JSON.parse(text)
+    expect(body.account.portageFlags).toEqual([{ portageId: p.id, at: expect.any(String) }])
+    expect(text).not.toContain(other.id)
   })
 
   it("does not include another user's paddles or trackers", async () => {
