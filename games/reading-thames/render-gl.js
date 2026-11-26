@@ -104,7 +104,8 @@ export function createRendererGL(canvas) {
     createMesh({ vertices, count }, maxInstances = 1) {
       const vao = gl.createVertexArray();
       gl.bindVertexArray(vao);
-      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
       for (let i = 0; i < 3; i++) {
         gl.enableVertexAttribArray(i);
@@ -119,7 +120,15 @@ export function createRendererGL(canvas) {
         gl.vertexAttribDivisor(3 + i, 1);
       }
       gl.bindVertexArray(null);
-      return { vao, count, instances, scratch: new Float32Array(16 * maxInstances), instanceCount: 0 };
+      return { vao, buffer, count, instances, scratch: new Float32Array(16 * maxInstances), instanceCount: 0 };
+    },
+
+    // Lets go of a mesh's buffers (surroundings.js, for blocks gone far).
+    destroyMesh(m) {
+      gl.deleteVertexArray(m.vao);
+      gl.deleteBuffer(m.buffer);
+      gl.deleteBuffer(m.instances);
+      m.instanceCount = 0;
     },
 
     // Sets a mesh's model matrices for the next frames (an array of Float32Array(16)).

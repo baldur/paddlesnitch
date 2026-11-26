@@ -88,6 +88,10 @@ The file carries `credit` and `licence`. **It's derived from OSM, so it is an OD
 
 Serves `games/`, plays the course in Chrome with `#debug`, puts the boat at each spot, and screenshots it next to the real frame. This is how the tree density and size were tuned: the first version's banks were thin and low, while the real Thames is lined with 10–20 m trees and scrub over the water.
 
+### 7. The surroundings out to 1 km (`surroundings.ts`, pure `lib/surroundings.ts`, tested)
+
+The drone (up to 120 m, within 1 km of the river line) sees past the game's own land, which ends 320 m from the water. `course:surroundings fetch` takes the Environment Agency's 1 m lidar squares (DTM, first-return DSM, vegetation model; OGL v3, official WCS endpoints, no key) and OpenStreetMap's buildings (ODbL) for everything within 1 km of the water; `course:surroundings build` turns them into `games/reading-thames/surroundings/`, a file per 500 m block (ground every 10 m, what each cell is, buildings with their lidar heights, tree crowns), which the game fetches only while the drone flies, nearest first, with less detail far off. Raw tiles stay in `~/.paddlesnitch/lidar/`. Details and numbers in `games/CLAUDE.md` ("The surroundings out to 1 km").
+
 ### Looking with a local model (`look.ts`, pure parts in `lib/look.ts`, `lib/stations.ts`, `lib/eac.ts`, tested)
 
 Started 2026-11-12 (owner: "lots and lots of details", stop and resume, data always available). A vision model on this laptop (Ollama, `qwen3.8:27b-q4_K_M` by default; looks before 2026-11-19 were made by `qwen2.5vl:32b`, still viewable with `course:explore --model qwen2.5vl:32b`) looks at **all** the 360 footage it can find and writes down what's along the river, place by place. It's independent of any course: it works per clip, and everything it records has a place, so any course (or the river planner) can use it later.

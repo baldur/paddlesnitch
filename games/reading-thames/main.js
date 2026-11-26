@@ -2702,6 +2702,11 @@ function render(time) {
   const spots = state === 'racing' ? washMarks(race, race.player) : [];
   for (let i = 0; i < 3; i++) frameData.set(spots[i] ?? [0, 0, 0, 0], 120 + i * 4);
   const list = [meshes.worlds.get(worldOf(mode)), meshes.marks.get(mode)];
+  // Flying the drone over a real river: the land round it out to 1 km
+  // (surroundings.js, loaded then), where the stand-ins would poke through.
+  const flying = !!race.outing?.drone && state !== 'menu' && !!race.course.scenery;
+  if (flying) list.push(...surroundingsIn(eye, viewProj));
+  else if (meshes.beyond.has(worldOf(mode))) list.push(meshes.beyond.get(worldOf(mode)));
   for (const r of race.racers) {
     if (r.boat.hull.scull) list.push(...myRowing.list);
     else if (mode.row) continue; // a head race's rivals: drawn as the river's sculls
@@ -2718,6 +2723,17 @@ function render(time) {
   }
   if (shot && club) placeDoors(); // (as placeClub: a shot held mid-race has no club, and threw here)
   placeCoach();
+}
+
+// The surroundings (surroundings.js): fetched only once the drone flies, so
+// the boat's game loads and draws just as before.
+let surroundings = null;
+function surroundingsIn(eye, viewProj) {
+  if (!surroundings) {
+    surroundings = { update: () => [] };
+    import('./surroundings.js').then((m) => { surroundings = m.createSurroundings(renderer); }, () => {});
+  }
+  return surroundings.update(eye, viewProj);
 }
 
 // The stroke coach on your foot stretcher: its numbers, on its screen.
@@ -3163,9 +3179,16 @@ const mirrors = new Map();
 let facadesShown = null;
 function useWorld() {
   if (!meshes.worlds.has(worldOf(mode))) {
-    const world = renderer.createMesh(buildWorld(mode.course, 1, 'river'));
+    const built = buildWorld(mode.course, 1, 'river');
+    const world = renderer.createMesh(built);
     renderer.place(world, [translation(0, 0, 0)]);
     meshes.worlds.set(worldOf(mode), world);
+    // A real river's stand-ins for the land past its own (its ends, the hills).
+    if (built.beyond) {
+      const beyond = renderer.createMesh(built.beyond);
+      renderer.place(beyond, [translation(0, 0, 0)]);
+      meshes.beyond.set(worldOf(mode), beyond);
+    }
     mirrors.set(worldOf(mode), mirrorFacades(mode.course, SUN, SKY_TOP));
   }
   // What its water mirrors besides trees: the landmarks and bridges, drawn once.
@@ -3192,6 +3215,7 @@ if (HASH.has('debug')) {
     get course() { return race.course; },
     get state() { return state; },
     get gpu() { return renderer?.stats; },
+    get surroundings() { return surroundings?.stats; }, // what the drone has fetched and draws
     get look() { return lookBack; }, // in a scull: -1 over the left shoulder, 1 over the right
     get tilt() { return controls.tiltLean; },
     get live() { return liveRace; },
@@ -3242,6 +3266,7 @@ try {
   renderer = await createRenderer(canvas);
   meshes = {
     worlds: new Map(),
+    beyond: new Map(),
     marks: new Map(),
     paddles: new Map(),
     // Room for the outings' busier river (outing.js BUSY): some 20 boats on the water at once.

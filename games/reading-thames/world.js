@@ -161,7 +161,11 @@ export function buildWorld(course, seed = 1, parts = 'all') {
 
   // Close the river off just before the start and after the end. A real river's
   // banks reach much further, so its ends are closed further back too (at the
-  // far end of the Reading Thames, just behind a lock's gates).
+  // far end of the Reading Thames, just behind a lock's gates). On a real river
+  // these and the hills below stand in for the land beyond its own: they're
+  // drawn apart (`beyond`), and not while the drone flies over the real land
+  // there (surroundings.js).
+  const beyond = real ? new MeshBuilder() : m;
   for (const s of [0, river.length]) {
     const c = pointAt(river, s);
     const dir = s === 0 ? -1 : 1;
@@ -169,7 +173,7 @@ export function buildWorld(course, seed = 1, parts = 'all') {
     const back = [c.x + c.tx * dir * depth, c.z + c.tz * dir * depth];
     const r = [-c.tz, c.tx];
     const w = half + (real ? 330 : 10);
-    m.quad(
+    beyond.quad(
       [c.x - r[0] * w, 1, c.z - r[1] * w], [c.x + r[0] * w, 1, c.z + r[1] * w],
       [back[0] + r[0] * w, real ? 5 : 1.4, back[1] + r[1] * w], [back[0] - r[0] * w, real ? 5 : 1.4, back[1] - r[1] * w],
       COLORS.grass,
@@ -220,13 +224,16 @@ export function buildWorld(course, seed = 1, parts = 'all') {
     const radius = 120 + rand() * 160;
     if (Math.abs(locate(river, x, z).lateral) < radius + 450) continue;
     // Low wooded downs on the horizon, not peaks: Reading's hills are gentle.
-    m.cone([x, 0, z], radius, (50 + rand() * 90) * (real ? 0.4 : 1), real ? 10 : 7, shade(real ? HILLS : COLORS.hill, rand, 0.1));
+    beyond.cone([x, 0, z], radius, (50 + rand() * 90) * (real ? 0.4 : 1), real ? 10 : 7, shade(real ? HILLS : COLORS.hill, rand, 0.1));
     placed++;
   }
 
   if (parts !== 'river') courseParts(m, course);
-  return m.build();
+  return real ? { ...m.build(), beyond: beyond.build() } : m.build();
 }
+
+// The colours surroundings.js draws the land beyond with (the same as here).
+export const PALETTE = { grass: COLORS.grass, meadow: COLORS.meadow, shaded: SHADED, trunk: COLORS.trunk, coping: COLORS.coping, leaves: LEAVES, walls: WALLS, roofs: ROOFS };
 
 function courseParts(m, course) {
   for (const b of course.scenery?.marks ?? []) buoy(m, b);

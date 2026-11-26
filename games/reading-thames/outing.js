@@ -36,7 +36,7 @@ export const BUSY = { gap: 35, ambient: 5, hours: 2 };
 // the water, goes no higher than 120 m (the UK's limit for drones) and no
 // further than `range` from the river. The camera hangs on a gimbal: `gimbal`
 // radians below level to start, from `up` above it to straight down, turned at `tiltRate`.
-export const DRONE = { top: 10, climb: 4, yaw: 1.6, accel: 6, start: 1.5, floor: 1, ceiling: 120, range: 400, gimbal: 0.25, up: 0.35, tiltRate: 0.9 };
+export const DRONE = { top: 10, climb: 4, yaw: 1.6, accel: 6, start: 1.5, floor: 1, ceiling: 120, range: 1000, gimbal: 0.25, up: 0.35, tiltRate: 0.9 };
 
 // The boats for hire at the pier (owner, 2026-10-31: a choice of three):
 // a speedboat, very quick and nimble; the electric launch; a narrowboat, long
