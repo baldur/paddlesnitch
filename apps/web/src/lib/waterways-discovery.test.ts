@@ -52,6 +52,11 @@ describe('discovery', () => {
     ], since).map(x => x.id).sort()).toEqual(['a', 'b', 'c'])
   })
 
+  it('turned-down items stay out by their ArcGIS item id (#989)', () => {
+    const id = 'a644c1968df14812b2ed1439feb165b6'
+    expect(newCandidates([{ catalogue: 'ArcGIS Online', id, title: 'Shannon _ Shannon_Erne Blueway Map_WFL1', url: `https://www.arcgis.com/home/item.html?id=${id}`, created: '2026-10-05T00:00:00Z' }], since)).toEqual([])
+  })
+
   it('writes the digest as a checklist', () => {
     const body = digest([{ catalogue: 'OpenDataNI', id: 'x', title: 'Lough Erne canoe trail', url: 'https://u', publisher: 'DAERA', created: '2026-10-05T00:00:00Z', licence: 'OGL' }], since)
     expect(body).toContain('since 2026-10-01')
