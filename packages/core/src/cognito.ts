@@ -469,6 +469,16 @@ export async function findUserByEmail(email: string): Promise<UserSummary | null
   return userSummaryFromAttributes(users[0])
 }
 
+/** Whether an account with this sub exists. Unlike findUserBySub, throws on a Cognito error, so a caller never takes a failed lookup for a deleted account. */
+export async function accountExists(sub: string): Promise<boolean> {
+  const res = await makeClient().send(new ListUsersCommand({
+    UserPoolId: USER_POOL_ID,
+    Filter: `sub = "${sub.replace(/"/g, '\\"')}"`,
+    Limit: 1,
+  }))
+  return (res.Users?.length ?? 0) > 0
+}
+
 // Look up a user by their Cognito sub. Used by the trial-invitation UI
 // to enrich a list of invitedUserIds with friendly email + display name.
 // Skips the Cognito round-trip entirely on the dev path if cognito-local
