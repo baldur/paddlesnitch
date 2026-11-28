@@ -75,3 +75,24 @@ describe('checkOllama and chat', () => {
     expect(sent[0].stream).toBe(true)
   })
 })
+
+describe("chat's default transport", () => {
+  it('waits for headers that come late (Ollama busy with another client) and streams the reply', async () => {
+    const http = await import('http')
+    const server = http.createServer((req, res) => {
+      let got = ''
+      req.on('data', (b) => { got += b })
+      req.on('end', () => setTimeout(() => {
+        res.writeHead(200)
+        res.write(JSON.stringify({ message: { content: JSON.parse(got).model } }) + '\n')
+        res.end(JSON.stringify({ message: { content: '!' }, done: true }) + '\n')
+      }, 50))
+    })
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+    const { port } = server.address() as { port: number }
+    try {
+      expect(await chat(`http://127.0.0.1:${port}`, { model: 'late' })).toBe('late!')
+    } finally { server.close() }
+  })
+})
+

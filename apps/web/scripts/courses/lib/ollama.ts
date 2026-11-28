@@ -63,9 +63,34 @@ export async function checkOllama(endpoint: string, model: string, fetchFn = fet
   if (details.remote_host || details.remote_model) throw new Error(`refusing ${model}: it runs on ${String(details.remote_host ?? 'a remote host')}, and frames must stay on this machine`)
 }
 
+/**
+ * A POST with no wait limit on the reply's headers. Node's fetch gives up when
+ * they take over 5 minutes, which they do while Ollama finishes another
+ * client's request first (the night shift shares the model): the look then
+ * failed with "fetch failed" though nothing was wrong. The caller's signal
+ * (10 minutes) still bounds the whole reply.
+ */
+export const patientFetch = (async (url: string, init: { method?: string; body?: string; signal?: AbortSignal } = {}) => {
+  const { request } = await import('http')
+  return new Promise<Response>((resolve, reject) => {
+    const req = request(url, { method: init.method ?? 'GET', signal: init.signal, headers: { 'content-type': 'application/json' } }, (res) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          res.on('data', (b: Buffer) => c.enqueue(new Uint8Array(b)))
+          res.on('end', () => c.close())
+          res.on('error', (e) => c.error(e))
+        },
+      })
+      resolve(new Response(body, { status: res.statusCode ?? 500 }))
+    })
+    req.on('error', reject)
+    req.end(init.body)
+  })
+}) as unknown as typeof fetch
+
 /** One streamed chat with an image. Anything other than a model reply throws OllamaDown.
  *  Thinking is off unless the caller asks: qwen3.8 thinks by default and a look then takes minutes, not seconds. */
-export async function chat(endpoint: string, body: Record<string, unknown>, fetchFn = fetch): Promise<string> {
+export async function chat(endpoint: string, body: Record<string, unknown>, fetchFn: typeof fetch = patientFetch): Promise<string> {
   let res: Response
   try {
     res = await fetchFn(`${endpoint}/api/chat`, { method: 'POST', signal: AbortSignal.timeout(10 * 60_000), body: JSON.stringify({ think: false, ...body, stream: true }) })
