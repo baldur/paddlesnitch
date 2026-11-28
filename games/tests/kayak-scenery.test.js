@@ -433,6 +433,62 @@ test('each club stands square to its mapped bank, its pontoon on the water', asy
   }
 });
 
+test("the rowing club as the drone footage adds to it: a narrower blue dock upstream of the landing stage along the water's edge, a rack of white shells on the lawn, boat doors under the balcony", async () => {
+  const { ROWING, ROWING_DRONE, rowingDockPieces, rowingEdge, landmarkFrame } = await import('../reading-thames/world.js');
+  const file = await data('reading');
+  const course = courseFromFile(file);
+  const land = waterMap(file.water);
+  const f = landmarkFrame(course, 'rowing-club');
+  const west = Math.max(f.along[0], -19);
+  const pieces = rowingDockPieces(course, f, west - 2);
+  assert.ok(pieces.length >= 4, `${pieces.length} pieces`);
+  // From the landing stage's upstream end to where the drone saw the dock end, about 10 m.
+  assert.ok(pieces[0][1] < west - 2 && pieces.at(-1)[0] >= ROWING_DRONE.dock.to - 0.01 && pieces.at(-1)[0] < ROWING_DRONE.dock.to + 1);
+  for (const [x0, x1, z0, z1] of pieces) {
+    // Each piece just off the water's edge where it lies (the bank slants 1.2 m over its length), all of it on the water.
+    assert.ok(Math.abs(z0 - 0.15 - rowingEdge(course, f, (x0 + x1) / 2)) < 1e-9);
+    for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
+      const p = f.at(x, 0, z);
+      assert.ok(land.inside(p[0], p[2]), `the dock's corner at ${x.toFixed(1)}, ${z.toFixed(1)} is on the water`);
+    }
+    // No further out than the landing stage reaches (edge + 4.6), well out of the racing line.
+    assert.ok(z1 < f.edge + 4.6, `${z1} out`);
+  }
+  const tris = await world();
+  const has = (rgb) => tris.filter(({ color }) => color.every((c, i) => Math.abs(c - rgb[i]) < 1e-3));
+  const inFrame = (q) => { const dx = q[0] - f.origin[0], dz = q[2] - f.origin[2]; return [dx * f.right[0] + dz * f.right[1], dx * f.fwd[0] + dz * f.fwd[1]]; };
+  const deck = has(ROWING_DRONE.dock.deck);
+  assert.ok(deck.length >= pieces.length * 10, 'the dock is built');
+  // Floating, like the landing stage: its deck a little over the water, nowhere under the ground.
+  for (const { p } of deck) for (const q of p) assert.ok(q[1] > -0.5 && q[1] < 0.5, `deck at ${q[1]}`);
+  assert.ok(has(ROWING_DRONE.dock.fender).length >= pieces.length * 6, 'white fenders');
+  // The shells on the lawn: on the ground's side of the water, upstream of the club, nothing else standing where they are.
+  const R = ROWING_DRONE.rack;
+  const shells = has(R.shell).flatMap(({ p }) => p);
+  assert.ok(shells.length > 0, 'the shells are built');
+  for (const q of shells) {
+    assert.ok(!land.inside(q[0], q[2]), 'on land');
+    const [x, z] = inFrame(q);
+    assert.ok(x < f.along[0] - 4, `upstream of the club's footprint (${x.toFixed(1)})`);
+    assert.ok(z < f.edge - 15, 'back from the water');
+  }
+  const [rx0, rx1] = R.x;
+  const tall = tris.filter(({ p, color }) => {
+    const [x, z] = inFrame(p.reduce((a, q) => a.map((v, i) => v + q[i] / 3), [0, 0, 0]));
+    const top = Math.max(...p.map((q) => q[1]));
+    return x > rx0 - 1 && x < rx1 + 1 && Math.abs(z - R.z) < 2 && top > 1.2 && ![R.shell, R.stand, R.shell.map((v) => v * 0.85)].some((c) => c.every((v, i) => Math.abs(v - color[i]) < 1e-3));
+  });
+  assert.equal(tall.length, 0, 'no tree, wall or roof in the rack');
+  // The boat doors under the balcony: white with a blue band, on the river face.
+  const east = Math.min(f.along[1], 19);
+  const stair = east - (east - west) * 0.38;
+  for (const [a, b] of ROWING_DRONE.bays) {
+    const doors = has(ROWING.render).filter(({ p, n }) => Math.abs(n[0] * f.fwd[0] + n[2] * f.fwd[1] - 1) < 1e-3
+      && p.every((q) => { const [x] = inFrame(q); return x > stair + a - 0.01 && x < stair + b + 0.01; }));
+    assert.ok(doors.length >= 2, `a door from ${a} to ${b}`);
+  }
+});
+
 test("both renderers light the world and mirror the banks the same way (fill light, lit sum, the tree line in the water, how calm the water lies)", async () => {
   const read = async (f) => readFile(new URL(`../reading-thames/${f}`, import.meta.url), 'utf8');
   const lines = (src) => src.split('\n').map((l) => l.trim()).filter((l) => /^(let|var|float|vec[234]) ((fill|lit|still|tl|fa|sky|calm|r|dx|dz) =|c = mix\(frame\.water)|^c \+= vec3f?\(1\.0, 0\.9/.test(l))
@@ -1239,8 +1295,53 @@ test("a building the footage saw is drawn in its material (materials.js): brick,
   assert.ok(whites.length >= 10 && new Set(whites.map((c) => c.map((v) => v.toFixed(2)).join())).size >= whites.length * 0.8, `${whites.length} whites`);
   assert.ok(whites.every((c) => c.every((v) => v > 0.8 && v <= 1)), 'still white');
   assert.equal(buildingMaterial(0.123, 0.456), null, 'a building it never saw');
-  // Roofs: only the rows with an agreed roof have one.
-  for (const r of MATERIALS) assert.equal(buildingMaterial(r[0], r[1]).roof === null, r[5] === null || !['tile', 'slate', 'metal'].includes(r[5]), `${r}`);
+  // Roofs: only the rows with an agreed roof have one (from the water, or the drone's where that left it open).
+  const { DRONE_MATERIALS } = await import('../reading-thames/drone.js');
+  const roofOf = (r) => r[5] ?? DRONE_MATERIALS.find((d) => d[0] === r[0] && d[1] === r[1])?.[5] ?? null;
+  for (const r of MATERIALS) assert.equal(buildingMaterial(r[0], r[1]).roof === null, !['tile', 'slate', 'metal'].includes(roofOf(r)), `${r}`);
+});
+
+test("the drone's looks (drone.js) only fill in what the footage from the water left open, on buildings in the file, and change nothing but those buildings' colours", async () => {
+  const { MATERIALS } = await import('../reading-thames/materials.js');
+  const { DRONE_MATERIALS } = await import('../reading-thames/drone.js');
+  const { useMaterials, buildingMaterial, MATERIAL_ROOFS } = await import('../reading-thames/world.js');
+  const reading = await data('reading');
+  const centres = reading.buildings.filter((b) => !b.style).map((b) => {
+    const ring = b.shape[0][0] === b.shape.at(-1)[0] && b.shape[0][1] === b.shape.at(-1)[1] ? b.shape.slice(0, -1) : b.shape;
+    return [ring.reduce((a, p) => a + p[0], 0) / ring.length, ring.reduce((a, p) => a + p[1], 0) / ring.length, ring];
+  });
+  assert.ok(DRONE_MATERIALS.length >= 1);
+  for (const d of DRONE_MATERIALS) {
+    const b = centres.find(([x, z]) => x.toFixed(1) === d[0].toFixed(1) && z.toFixed(1) === d[1].toFixed(1));
+    assert.ok(b, `${d}: a plain building in the file`);
+    const row = MATERIALS.find((r) => r[0] === d[0] && r[1] === d[1]);
+    // Where the water's footage named something, the drone's row leaves it alone.
+    if (row) for (let i = 2; i < 6; i++) assert.ok(row[i] === null || d[i] === null, `${d}: ${i} was seen from the water already`);
+    const seen = buildingMaterial(d[0], d[1]);
+    if (d[5]) assert.deepEqual(seen.roof, MATERIAL_ROOFS[d[5]], `${d}: its roof`);
+    if (row?.[3]) assert.ok(seen.wall, `${d}: still the water's wall`);
+  }
+  // White render under a red tile roof, by the canoe club's stretch: the one the drone's views agree on.
+  assert.deepEqual(buildingMaterial(-1010.9, -742.6).roof, MATERIAL_ROOFS.tile);
+  // Built with and without them: only those buildings' colours change.
+  const build = () => buildWorld(courseFromFile(reading), 1, 'river').vertices;
+  let without;
+  try { useMaterials(MATERIALS, []); without = build(); } finally { useMaterials(MATERIALS); }
+  const withThem = build();
+  assert.equal(withThem.length, without.length);
+  const boxes = DRONE_MATERIALS.map((d) => centres.find(([x, z]) => x.toFixed(1) === d[0].toFixed(1) && z.toFixed(1) === d[1].toFixed(1))[2])
+    .map((ring) => [Math.min(...ring.map((p) => p[0])) - 0.5, Math.max(...ring.map((p) => p[0])) + 0.5, Math.min(...ring.map((p) => p[1])) - 0.5, Math.max(...ring.map((p) => p[1])) + 0.5]);
+  let moved = 0, recoloured = 0, stray = 0;
+  for (let i = 0; i < withThem.length; i += 9) {
+    for (let k = 0; k < 6; k++) if (withThem[i + k] !== without[i + k]) moved++;
+    if ([6, 7, 8].some((k) => withThem[i + k] !== without[i + k])) {
+      recoloured++;
+      if (!boxes.some(([x0, x1, z0, z1]) => withThem[i] >= x0 && withThem[i] <= x1 && withThem[i + 2] >= z0 && withThem[i + 2] <= z1)) stray++;
+    }
+  }
+  assert.equal(moved, 0, 'positions and normals');
+  assert.equal(stray, 0, 'recoloured vertices off the named buildings');
+  assert.ok(recoloured > 0, 'its roof is a different colour from its random pick');
 });
 
 test("the materials change only the colours of the buildings they name: every position, normal and other colour is as without them (the random pick is still drawn)", async () => {
