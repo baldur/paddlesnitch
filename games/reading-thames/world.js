@@ -9,6 +9,7 @@ import { locate, pointAt, widthAt, POST } from './course.js';
 import { createAnglers, SNAG } from './anglers.js';
 import { LIDAR } from './lidar.js';
 import { MATERIALS } from './materials.js';
+import { DRONE_MATERIALS } from './drone.js';
 import { SHEDS } from './sheds.js';
 import { fitted, roofMesh } from './roofs.js';
 import { RIVERSIDE_ROADS } from './riverside-roads.js';
@@ -99,8 +100,14 @@ export const MATERIAL_WALLS = {
 export const MATERIAL_ROOFS = { tile: [0.45, 0.25, 0.18], slate: [0.28, 0.28, 0.3], metal: [0.5, 0.52, 0.54] };
 let materialAt;
 // (Tests swap the rows, to show that nothing but those buildings' colours depends on them.)
-export function useMaterials(rows) {
+// The drone's rows (drone.js) fill in what a row left open, or add a building.
+export function useMaterials(rows, drone = DRONE_MATERIALS) {
   materialAt = new Map(rows.map(([x, z, ...rest]) => [`${x.toFixed(1)},${z.toFixed(1)}`, rest]));
+  for (const [x, z, ...rest] of drone) {
+    const key = `${x.toFixed(1)},${z.toFixed(1)}`;
+    const had = materialAt.get(key);
+    materialAt.set(key, had ? had.map((v, i) => v ?? rest[i]) : rest);
+  }
 }
 useMaterials(MATERIALS);
 // Light or dark, from the model's colour (its colour names do tell white from brown).
@@ -1597,6 +1604,14 @@ function rowingClub(m, course, f) {
     beam(m, f.at(x, g1, out - 0.1), f.at(x + 1.6, g1 + 1, out - 0.1), 0.05, C.timber);
     beam(m, f.at(x, g1 + 1, out - 0.1), f.at(x + 1.6, g1, out - 0.1), 0.05, C.timber);
   }
+  // Two wide boat doors in the brick under the balcony, facing the water (the
+  // footage's boat bays; from drone footage too, five views), white with a blue
+  // band as the end wall's are.
+  for (const [a, b] of ROWING_DRONE.bays.map(([a, b]) => [stair + a, stair + b])) {
+    f.box(m, [a, b], [floor, floor + ROWING_DRONE.bayHeight], [wall, wall + 0.06], C.render);
+    f.box(m, [a + 0.02, b - 0.02], [floor + 1.6, floor + 1.8], [wall + 0.06, wall + 0.08], C.trim);
+    f.box(m, [a, b], [floor + ROWING_DRONE.bayHeight - 0.12, floor + ROWING_DRONE.bayHeight], [wall + 0.06, wall + 0.08], C.trim);
+  }
   // The stair down the front, upstream from the balcony's end: stringers,
   // treads, and a braced side.
   const [foot, sz0, sz1] = [stair - 4.6, out - 1.3, out];
@@ -1665,6 +1680,8 @@ function rowingClub(m, course, f) {
   for (let x = p0 + 1.2, k = 0; x < p1 - 0.5; x += 2.3, k++) {
     disc(m, f.at(x, sea + 0.415, edge + 1.6 + (k % 2) * 1.8), 0.22, C.pontoon.map((v) => v * 0.55));
   }
+  rowingDock(m, course, f, p0, sea);
+  rowingRack(m, course, f);
   // A low blue railing of hoops along the edge downstream of the pontoon.
   for (let x = p1 + 0.5; x < p1 + 14; x += 0.9) f.box(m, [x, x + 0.05], [top + 0.2, top + 0.85], [edge - 0.7, edge - 0.66], C.rail);
   f.box(m, [p1 + 0.5, p1 + 14], [top + 0.82, top + 0.88], [edge - 0.72, edge - 0.64], C.rail);
@@ -1680,6 +1697,73 @@ function rowingClub(m, course, f) {
   sign(m, f, 'READING ROWING CLUB', east - 4.3, g1 + 0.55, out + 0.05, null, C.navy, 0.075);
   f.box(m, [east - 6.8, east - 1.8], [g1 + 0.3, g1 + 0.38], [out + 0.05, out + 0.07], C.red);
   f.box(m, [east - 6.8, east - 1.8], [g1 + 0.15, g1 + 0.22], [out + 0.05, out + 0.07], C.red);
+}
+
+// What the drone footage adds at the rowing club (course:look --drone; things
+// seen from 15-55 m and placed on the lidar's ground, in the club's frame, x
+// downstream, z towards the water): a second floating dock upstream of the
+// landing stage, narrower, blue decked, a rail on its bank side and white
+// fenders on its river face (seven views from six flights, its upstream end at
+// x -27 to -28); and on the lawn upstream of the club a rack of white shells on
+// angled stands (one view, 55 m, with another's "boats stored on racks
+// outside"). `bays`: the boat doors under the balcony, from the stair's top.
+export const ROWING_DRONE = {
+  dock: { to: -28, width: 2.2, piece: 2, deck: [0.3, 0.38, 0.5], float: [0.2, 0.21, 0.23], fender: [0.95, 0.95, 0.93] },
+  rack: { x: [-29.5, -21.5], z: -2.6, tiers: [0.85, 1.45], gap: 0.75, stand: [0.32, 0.32, 0.34], shell: [0.95, 0.94, 0.9] },
+  bays: [[0.7, 3.8], [4.4, 7.5]], bayHeight: 2.5,
+};
+// How far out the water starts at x along the club's frame (its bank isn't
+// straight: 1.2 m nearer over the dock's 11 m), coming in from the land.
+export function rowingEdge(course, f, x) {
+  const river = course.scenery?.river ?? course;
+  river.land ??= waterMap(course.scenery?.water ?? []);
+  let z = 0;
+  while (z < 60 && !river.land.inside(...xz(f.at(x, 0, z)))) z += 0.1;
+  return z;
+}
+// The dock in pieces, each along the water's edge where it lies: [x0, x1, z0, z1].
+export function rowingDockPieces(course, f, from) {
+  const D = ROWING_DRONE.dock;
+  const out = [];
+  for (let x1 = from - 0.3; x1 - D.piece >= D.to - 0.01; x1 -= D.piece) {
+    const x0 = x1 - D.piece + 0.06;
+    const z0 = rowingEdge(course, f, (x0 + x1) / 2) + 0.15;
+    out.push([x0, x1, z0, z0 + D.width]);
+  }
+  return out;
+}
+function rowingDock(m, course, f, from, sea) {
+  const D = ROWING_DRONE.dock;
+  for (const [x0, x1, z0, z1] of rowingDockPieces(course, f, from)) {
+    f.box(m, [x0, x1], [sea - 0.25, sea + 0.15], [z0 + 0.1, z1 - 0.1], D.float);
+    f.box(m, [x0, x1], [sea + 0.15, sea + 0.32], [z0, z1], D.deck);
+    // The rail on its bank side: a post at each piece and a top bar.
+    f.box(m, [x1 - 0.12, x1 - 0.04], [sea + 0.32, sea + 1.3], [z0 + 0.05, z0 + 0.13], ROWING.rail);
+    f.box(m, [x0, x1], [sea + 1.22, sea + 1.3], [z0 + 0.05, z0 + 0.13], ROWING.rail);
+    // A white fender hung on its river face.
+    const fx = (x0 + x1) / 2;
+    f.box(m, [fx - 0.13, fx + 0.13], [sea - 0.1, sea + 0.3], [z1, z1 + 0.22], D.fender);
+  }
+}
+// The rack: two angled stands along the lawn, the shells upside down on them two to a tier.
+function rowingRack(m, course, f) {
+  const R = ROWING_DRONE.rack;
+  const gy = (x) => ground(course, ...xz(f.at(x, 0, R.z))).y - f.origin[1];
+  const half = R.gap * 1.3;
+  for (const x of [R.x[0] + 1.6, R.x[1] - 1.6]) {
+    const y = gy(x);
+    const top = y + R.tiers.at(-1) + 0.1;
+    for (const e of [-1, 1]) beam(m, f.at(x, y, R.z + e * half), f.at(x, top, R.z + e * 0.1), 0.05, R.stand);
+    for (const h of R.tiers) f.box(m, [x - 0.05, x + 0.05], [y + h - 0.06, y + h], [R.z - half, R.z + half], R.stand);
+  }
+  for (const h of R.tiers) {
+    for (const e of [-1, 1]) {
+      const z = R.z + e * R.gap / 2;
+      const y = gy((R.x[0] + R.x[1]) / 2) + h;
+      f.box(m, [R.x[0], R.x[1]], [y, y + 0.2], [z - 0.15, z + 0.15], R.shell);
+      f.box(m, [R.x[0] + 0.6, R.x[1] - 0.6], [y + 0.2, y + 0.24], [z - 0.05, z + 0.05], R.shell.map((v) => v * 0.85)); // the keel line
+    }
+  }
 }
 
 // The rowing club's downstream end, as the owner's photo shows it from the car
