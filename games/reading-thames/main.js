@@ -15,7 +15,7 @@ import { paddlerSvg, boatSvg, sectionSvg, paddleSvg, clubSvg } from './picture.j
 import { encodeState, decodeState, createTrack, receive, sample, applyState, SEND_HZ } from './net.js';
 import { buildWorld, groundAt, bankWoodsAlong, mirrorFacades, nearFacades } from './world.js';
 import { DRILLS, setupDrill, trackDrill } from './drills.js';
-import { OUTINGS, HIRE_BOATS, DRONE, SINK, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
+import { OUTINGS, HIRE_BOATS, DRONE, SINK, NEAR_PLANE, droneNear, startOuting, stepOuting, tripBoatMesh, launchMesh, speedboatMesh, narrowboatMesh } from './outing.js';
 import { kayakMesh, kayakerMesh, paddleMesh, paddlerMesh, limbMesh, swanMesh, duckMesh, scullerMesh, eightMesh, cruiserMesh, motorboatMesh, swimmerMesh, oarMesh, ROWLOCKS, SEAT, shoulderOf, strokeTwist, shouldersAt, legPush, scullHullMesh, ergMesh, ergSeatMesh, ergHandleMesh, kayakErgMesh, kayakErgShaftMesh, cordMesh, KAYAK_ERG_SIZE, SCULL_SEAT, SCULL_FEET, SCULL_COACH, SCULL_ROWLOCK, ERG_SIZE } from './meshes.js';
 import { TRAFFIC, overturned } from './traffic.js';
 import { createRenderer } from './render.js';
@@ -2658,7 +2658,7 @@ function render(time) {
   let tanY = Math.max(Math.tan(FOV_Y / 2), Math.tan(minX / 2) / aspect);
   // A wide shot on a phone held upright would be mostly the deck under you: cap its height.
   if (shot?.wide) tanY = Math.min(tanY, Math.tan((105 * Math.PI) / 360));
-  const proj = perspective(2 * Math.atan(tanY), aspect, 0.05, 2500);
+  const proj = perspective(2 * Math.atan(tanY), aspect, nearPlane(eye), 2500);
 
   viewProj = multiply(proj, view(eye, right, up, fwd));
   frameData.set(viewProj, 0);
@@ -2723,6 +2723,12 @@ function render(time) {
   }
   if (shot && club) placeDoors(); // (as placeClub: a shot held mid-race has no club, and threw here)
   placeCoach();
+}
+
+// The camera's near plane: 5 cm, but flying the drone further out (outing.js droneNear).
+function nearPlane(eye) {
+  if (!race.outing?.drone || state === 'menu' || !race.course.scenery) return NEAR_PLANE;
+  return droneNear(eye[1] - groundAt(race.course, eye[0], eye[2]));
 }
 
 // The surroundings (surroundings.js): fetched only once the drone flies, so

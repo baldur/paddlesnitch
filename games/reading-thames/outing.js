@@ -38,6 +38,16 @@ export const BUSY = { gap: 35, ambient: 5, hours: 2 };
 // radians below level to start, from `up` above it to straight down, turned at `tiltRate`.
 export const DRONE = { top: 10, climb: 4, yaw: 1.6, accel: 6, start: 1.5, floor: 1, ceiling: 120, range: 1000, gimbal: 0.25, up: 0.35, tiltRate: 0.9 };
 
+// The camera's near plane (metres): 5 cm, as the bow and paddle are close. The
+// drone's is a fiftieth of its height over the ground, at most 2 m: the depth
+// buffer's precision goes by near plane over distance squared, and at 5 cm from
+// 120 m up the roads (10-15 cm over the ground, roads.js LIFT) flickered through
+// it a few hundred metres off. Nothing comes within a fiftieth of its height.
+export const NEAR_PLANE = 0.05;
+export function droneNear(above) {
+  return Math.max(NEAR_PLANE, Math.min(2, above * 0.02));
+}
+
 // The boats for hire at the pier (owner, 2026-10-31: a choice of three):
 // a speedboat, very quick and nimble; the electric launch; a narrowboat, long
 // and slow. Each: top speed and astern (m/s, real), how quickly it gets there

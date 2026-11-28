@@ -9,6 +9,10 @@ import { buildWorld, groundAt, bankWoods, landmarkFrame, lidarTop, CANOE, FADE }
 import { MeshBuilder } from '../reading-thames/meshes.js';
 import { LIDAR } from '../reading-thames/lidar.js';
 import { waterMap } from '../reading-thames/water.js';
+import { ROAD_COLOURS } from '../reading-thames/roads.js';
+// A road's triangle (roads.js): laid on the land's triangles, which reach 100 m into the easing.
+const roadColours = new Set(ROAD_COLOURS.map((c) => c.map(Math.fround).join()));
+const onRoad = (v, i) => roadColours.has([v[i + 6], v[i + 7], v[i + 8]].join());
 
 const data = async (id) => JSON.parse(await readFile(new URL(`../reading-thames/courses/${id}.json`, import.meta.url), 'utf8'));
 const { cell, block, blocks } = LIDAR.ground;
@@ -124,7 +128,7 @@ test('with one block of lidar, everything beyond its easing is as it was without
   const key = '-4,-3';
   const inIt = ([x, z]) => x >= -1000 && x < -750 && z >= -750 && z < -500;
   const one = (x, z) => Math.hypot(Math.max(0, -1000 - x, x + 750), Math.max(0, -750 - z, z + 500));
-  const far = (v) => { const out = []; for (let i = 0; i < v.length; i += 27) if ([0, 9, 18].every((k) => one(v[i + k], v[i + k + 2]) > FADE + 20)) out.push(Array.from(v.subarray(i, i + 27)).join(',')); return out; };
+  const far = (v) => { const out = []; for (let i = 0; i < v.length; i += 27) if (!onRoad(v, i) && [0, 9, 18].every((k) => one(v[i + k], v[i + k + 2]) > FADE + 20)) out.push(Array.from(v.subarray(i, i + 27)).join(',')); return out; };
   // (Its trees and buildings only; the bank's leaves and reflections are the whole river's, so left out.)
   Object.assign(LIDAR, { ground: { cell, block, blocks: { [key]: blocks[key] } }, buildings: kept.buildings.filter(inIt), trees: kept.trees.filter(inIt), woods: undefined, edge: undefined, skyline: undefined });
   let measured;

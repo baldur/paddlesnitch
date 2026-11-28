@@ -11,6 +11,8 @@ import { LIDAR } from './lidar.js';
 import { MATERIALS } from './materials.js';
 import { SHEDS } from './sheds.js';
 import { fitted, roofMesh } from './roofs.js';
+import { RIVERSIDE_ROADS } from './riverside-roads.js';
+import { decodeRoads, groundOf, cellsUnder, drawRoad, layArea, areaTris, onRoads } from './roads.js';
 
 const COLORS = {
   mud: [0.42, 0.36, 0.27],
@@ -140,6 +142,7 @@ export function buildWorld(course, seed = 1, parts = 'all') {
     river.lidar = undefined;
     carPark(course);
     realLand(m, river, real, rand);
+    riversideRoads(m, river, m.count);
   } else {
     // The towpath runs along the left bank.
     for (const side of [-1, 1]) {
@@ -229,7 +232,25 @@ export function buildWorld(course, seed = 1, parts = 'all') {
   }
 
   if (parts !== 'river') courseParts(m, course);
-  return real ? { ...m.build(), beyond: beyond.build() } : m.build();
+  return real ? { ...m.build(), beyond: beyond.build(), land: river.landVertices } : m.build();
+}
+
+// The roads and paved areas near a real river (riverside-roads.js, from
+// OpenStreetMap; course:surroundings keeps them off the water, the houses and
+// what the footage models), laid on the land just drawn: the first `count`
+// vertices of `m` (groundOf, only where the roads are). No random draws.
+function riversideRoads(m, river, count) {
+  river.landVertices = count;
+  const { roads, areas } = riversideRoadsOf(river);
+  if (!roads.length && !areas.length) return;
+  const height = groundOf(m.data, 0, count, cellsUnder(roads, areas));
+  for (const a of areas) areaTris(m, layArea(a.ring, height), a.look);
+  for (const r of roads) drawRoad(m, r, height);
+}
+// (Decoded once a river.)
+function riversideRoadsOf(river) {
+  river.roads ??= decodeRoads(RIVERSIDE_ROADS);
+  return river.roads;
 }
 
 // The colours surroundings.js draws the land beyond with (the same as here).
@@ -725,6 +746,53 @@ export function groundAt(course, x, z) {
   return Math.max(0, ground(river, x, z).y);
 }
 
+// How far (x, z) is from the water beside a real river (negative in it): from
+// the mapped water's outlines, as the ground is shaped.
+export function shoreDistance(course, x, z) {
+  const river = course.scenery.river;
+  river.land ??= waterMap(course.scenery.water ?? []);
+  carPark(course);
+  return ground(river, x, z).d;
+}
+
+// What the riverside's roads keep off, beside what the game models from the
+// footage: a landmark (its footprint and 6 m round it), a feature's clearing
+// (as the trees keep off it), a portage path, a flattened yard or car park,
+// a small shed, and a modelled bridge (its deck and abutments). A test for
+// (x, z) and a margin (metres) more.
+export function riversideKeepOut(course) {
+  const real = course.scenery;
+  const river = real.river;
+  carPark(course);
+  const boxes = real.buildings.filter((b) => LANDMARKS[b.style]).map((b) => [...box2(b.shape), 6]);
+  for (const { ring } of shedsOf(real)) boxes.push([...box2(ring), 1]);
+  const circles = (real.features ?? []).filter((f) => CLEAR[f.style]).map((f) => [...f.at, CLEAR[f.style]]);
+  for (const f of real.features ?? []) if (f.style === 'staging') circles.push(...stagingClearings(river, spot(river, f.at)));
+  const lines = (real.paths ?? []).map((line) => [line, 3]);
+  for (const b of river.bridges) {
+    const bridge = typeof b === 'number' ? { s: b } : b;
+    const { c, right } = bridgeFrame(river, bridge);
+    const reach = bridge.ends ? null : widthAt(river, bridge.s).half + 12;
+    const [a, z] = bridge.ends ?? [[c.x - right[0] * reach, c.z - right[1] * reach], [c.x + right[0] * reach, c.z + right[1] * reach]];
+    // Its line out past its ends (the deck runs on to meet the ground: DECK_PROFILE), its deck's half width beside it.
+    const ext = (p, q, k) => [p[0] + (p[0] - q[0]) * k, p[1] + (p[1] - q[1]) * k];
+    const len = Math.hypot(z[0] - a[0], z[1] - a[1]) || 1;
+    lines.push([[ext(a, z, 30 / len), ext(z, a, 30 / len)], bridge.style === 'concrete-arch' ? BRIDGE.width / 2 + 2 : 8]);
+  }
+  const pads = river.pads ?? [];
+  return (x, z, margin = 0) =>
+    boxes.some(([x0, z0, x1, z1, m]) => x >= x0 - m - margin && x <= x1 + m + margin && z >= z0 - m - margin && z <= z1 + m + margin) ||
+    circles.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r + margin) ||
+    lines.some(([line, r]) => line.some((p, i) => i > 0 && toSegment(x, z, line[i - 1], p) < r + margin)) ||
+    pads.some((p) => {
+      const [dx, dz] = [x - p.origin[0], z - p.origin[1]];
+      const u = dx * p.right[0] + dz * p.right[1];
+      const v = dx * p.fwd[0] + dz * p.fwd[1];
+      const m = 2 + margin;
+      return u >= p.x[0] - m && u <= p.x[1] + m && v >= p.z[0] - m && v <= p.z[1] + m;
+    });
+}
+
 // A turning buoy off an island's end (a course file's `marks`): a big yellow
 // inflatable, a red band and a flag on top, to be seen from well back.
 function buoy(m, { x, z }) {
@@ -964,6 +1032,10 @@ function realScenery(m, course, real, rand) {
     for (let d = -b.length / 2; d <= b.length / 2; d += 3) clearings.push([origin[0] + fwd[0] * d, origin[2] + fwd[1] * d, 5]);
   }
   const cleared = (x, z) => clearings.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r);
+  // And the roads and car parks (riverside-roads.js): a tree or bush on one is
+  // drawn nowhere, its draws kept, so nothing else moves.
+  const { roads, areas } = riversideRoadsOf(course);
+  const road = onRoads(roads, areas);
   // The small waterside sheds OpenStreetMap lacks (sheds.js): no tree or bush in
   // them, the draws of any that would be kept (drawn nowhere), so nothing else moves.
   // (A tree by its crown, 4 m round; a bush or leaves only in its footprint, so the green edge in front stays.)
@@ -977,7 +1049,7 @@ function realScenery(m, course, real, rand) {
   const plant = (x, z, willow, hidden = false) => {
     const g = ground(course, x, z);
     if (g.d < 1.5 || built(x, z)) return;
-    const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) || inShed(x, z, 4) || measuredTrees(course.lidar, x, z) ? nowhere : m;
+    const into = hidden || onPath(x, z, willow ? 7 : 4.5) || cleared(x, z) || inShed(x, z, 4) || road(x, z, willow ? 3 : 1) || measuredTrees(course.lidar, x, z) ? nowhere : m;
     if (willow) willowTree(into, x, g.y, z, rand);
     else tree(into, x, g.y, z, rand, true, fromRiver(course, x, z) > FAR_TREE);
   };
@@ -996,7 +1068,7 @@ function realScenery(m, course, real, rand) {
       if (rand() < p.bushes * 0.7 && !walled(real, side, s)) {
         const [x, z] = at(0.5 + rand() * 1.5);
         if (built(x, z)) continue;
-        (onPath(x, z, 4) || cleared(x, z) || inShed(x, z) ? nowhere : m).sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
+        (onPath(x, z, 4) || cleared(x, z) || inShed(x, z) || road(x, z, 0.5) ? nowhere : m).sphere([x, 0.4, z], 2 + rand() * 1.8, shade(LEAVES[Math.floor(rand() * LEAVES.length)], rand, 0.15), 3, 6);
       }
       if (p.stages && rand() < p.stages) landingStage(m, c, side, w);
     }
@@ -1033,7 +1105,7 @@ function realScenery(m, course, real, rand) {
     const g = ground(course, x, z);
     if (onPath(x, z, 4.5) || cleared(x, z) || byLandmark(x, z)) continue;
     const d = fromRiver(course, x, z);
-    tree(inShed(x, z, 4) ? nowhere : m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
+    tree(inShed(x, z, 4) || road(x, z, 1) ? nowhere : m, x, Math.max(0, g.y), z, measuredRand, true, h < 12 || d > 40, h, d < 15); // (one ball of crown but for the big ones back from the water: the budget)
   }
 
   // The leaves at the water's edge (lidar.js `edge`, from the vegetation model):
@@ -1053,7 +1125,7 @@ function realScenery(m, course, real, rand) {
       // (A touch lighter than the trees behind: lit leaves at the water, not a black band.)
       const leaf = shade(LEAVES[Math.floor(edgeRand() * LEAVES.length)], edgeRand, 0.12).map((v) => Math.min(1, v * 1.15));
       const g = ground(course, x, z);
-      if (g.d < 0 || walled(real, side, s) || built(x, z) || onPath(x, z, 3) || cleared(x, z) || inShed(x, z) || byLandmark(x, z)) continue;
+      if (g.d < 0 || walled(real, side, s) || built(x, z) || onPath(x, z, 3) || cleared(x, z) || inShed(x, z) || byLandmark(x, z) || road(x, z, 0.5)) continue;
       // In front of a house (within 15 m behind it), garden shrubs: hedge-sized, so the house shows.
       const out = [-c.tz * side, c.tx * side];
       const house = [5, 10, 15].some((k) => built(x + out[0] * k, z + out[1] * k));

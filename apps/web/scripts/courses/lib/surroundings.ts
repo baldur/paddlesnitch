@@ -214,7 +214,7 @@ export function runs(cells: ArrayLike<number>): string {
  * house, 1 flats, 2 boathouse, 3 other) and [x, z, height] per tree; and the
  * buildings' roofs the lidar fitted, by their number (game metres, as lidar.js).
  */
-export function blockFile(at: { i: number; j: number }, ground: ArrayLike<number>, cells: ArrayLike<number>, buildings: Array<{ shape: XZ[]; kind: Footprint['kind']; ground: number; base: number; height: number; roof?: unknown[] }>, trees: Array<[number, number, number]>): string {
+export function blockFile(at: { i: number; j: number }, ground: ArrayLike<number>, cells: ArrayLike<number>, buildings: Array<{ shape: XZ[]; kind: Footprint['kind']; ground: number; base: number; height: number; roof?: unknown[] }>, trees: Array<[number, number, number]>, roads?: BlockRoads): string {
   const [x0, z0] = [at.i * SURROUND_BLOCK, at.j * SURROUND_BLOCK]
   const dm = (v: number) => Math.round(v * 10)
   const kinds = ['house', 'flats', 'boathouse', 'other']
@@ -226,5 +226,36 @@ export function blockFile(at: { i: number; j: number }, ground: ArrayLike<number
     trees: trees.map(([x, z, h]) => [dm(x - x0), dm(z - z0), dm(h)]),
     // Each fitted roof (lib/lidar.ts fitRoof, as lidar.js's `roofs`): [the building's number, ...its record].
     roofs: buildings.flatMap((b, k) => (Array.isArray(b.roof?.[3]) ? [[k, ...b.roof!]] : [])),
+    // Its roads and paved areas (lib/roads.ts encodeRoads, from the block's
+    // corner), and those on the game's own land, laid on it already (blockRoads).
+    ...(roads && (roads.roads.length || roads.areas.length || roads.landRoads.length || roads.landAreas.length) ? roads : {}),
   })
+}
+
+/** A block's roads as its file holds them (see blockFile, blockRoads). */
+export type BlockRoads = { roads: number[][]; areas: number[][]; landRoads: number[][]; landAreas: number[][] }
+
+/**
+ * The roads on the game's own land past the riverside's (only the drone sees
+ * them), laid on that land offline (games/reading-thames/roads.js layRoad,
+ * layArea): per road [look, width in decimetres, bridge 0/1, then each section's
+ * x, z (decimetres from the block's corner), left and right ground height
+ * (centimetres), each after the first as steps]; per area [look, then its
+ * triangles' corners as x, y, z the same way].
+ */
+export function landRoadsFile(at: { i: number; j: number }, roads: Array<{ look: number; width: number; bridge: boolean; sections: Array<{ x: number; z: number; yl: number; yr: number }> }>, areas: Array<{ look: number; tris: number[][][] }>): { landRoads: number[][]; landAreas: number[][] } {
+  const [x0, z0] = [at.i * SURROUND_BLOCK, at.j * SURROUND_BLOCK]
+  const steps = (rows: number[][]) => {
+    const out: number[] = []
+    let prev: number[] = rows[0].map(() => 0)
+    for (const row of rows) { out.push(...row.map((v, k) => v - prev[k])); prev = row }
+    return out
+  }
+  const dm = (v: number) => Math.round(v * 10)
+  // (Heights in centimetres, rounded up: a road drawn 10 cm over the land, laid to 5 cm in decimetres, could meet it.)
+  const cm = (v: number) => Math.ceil(v * 100)
+  return {
+    landRoads: roads.map((r) => [r.look, dm(r.width), r.bridge ? 1 : 0, ...steps(r.sections.map((s) => [dm(s.x - x0), dm(s.z - z0), cm(s.yl), cm(s.yr)]))]),
+    landAreas: areas.map((a) => [a.look, ...steps(a.tris.flat().map(([x, y, z]) => [dm(x - x0), cm(y), dm(z - z0)]))]),
+  }
 }
