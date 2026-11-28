@@ -10,8 +10,9 @@
 //       --scan                  only find and index the footage
 //       --areas                 look carefully, only inside the areas drawn on River Explorer's map
 //                               (every 25 m on every pass, 8 closer views, only things that identify the place)
-//   pnpm --filter web course:look --status [--areas]   how far it has got
-//   pnpm --filter web course:look --export [f]   everything seen, placed, as GeoJSON (outside any repo)
+//   pnpm --filter web course:look --drone [folders…]   DJI drone clips and photos instead (look-drone.ts)
+//   pnpm --filter web course:look --status [--areas | --drone]   how far it has got
+//   pnpm --filter web course:look --export [f]   everything seen (360 and drone), placed, as GeoJSON (outside any repo)
 //
 // Ctrl+C finishes the spot it's on and stops; twice stops at once (that spot is
 // redone next time). The store (lib/footage-db.ts) is outside the repo and holds
@@ -29,6 +30,7 @@ import { parseLookArgs } from './lib/look-args'
 import { assertLocalModel, chat, checkOllama, ollamaEndpoint, OllamaDown } from './lib/ollama'
 import { killRunning, runDetached } from './lib/proc'
 import { probeVideo, readChapterFixes } from './lib/telemetry'
+import { droneFeatures, droneStatus, lookDrone, scanDrone, type Hooks } from './look-drone'
 
 /** A refusal or a setup problem: one line, not a stack trace. */
 function fail(e: unknown): never {
@@ -286,18 +288,23 @@ function exportGeoJson(file: string) {
       { x: r.x as number, distance: r.distance as 'near' | 'mid' | 'far' })
     return {
       type: 'Feature', geometry: { type: 'Point', coordinates: [+p.lng.toFixed(6), +p.lat.toFixed(6)] },
-      properties: { kind: r.kind as string, detail: r.detail, count: r.count, distance: r.distance, bearing: Math.round(p.bearing),
+      properties: { source: '360', kind: r.kind as string, detail: r.detail, count: r.count, distance: r.distance, bearing: Math.round(p.bearing),
         clip: path.basename(r.path as string), ft: r.ft, level: r.level, camera: r.yaw_source ?? 'assumed' },
     }
   })
-  fs.writeFileSync(file, JSON.stringify({ type: 'FeatureCollection', features }))
+  const drone = droneFeatures(db, args.model)
+  fs.writeFileSync(file, JSON.stringify({ type: 'FeatureCollection', features: [...features, ...drone] }))
   const counts = new Map<string, number>()
   for (const f of features) counts.set(f.properties.kind, (counts.get(f.properties.kind) ?? 0) + 1)
-  console.log(`${features.length} things → ${file}  (personal data: it traces the paddles; keep it on this machine)`)
+  console.log(`${features.length + drone.length} things → ${file}  (personal data: it traces the paddles and flights; keep it on this machine)`)
   for (const k of KINDS) if (counts.get(k)) console.log(`  ${k}: ${counts.get(k)}`)
+  if (drone.length) console.log(`  from the drone: ${drone.length}`)
 }
 
+const hooks: Hooks = { stopping: () => stopping, setFrameDir: (d) => { frameDir = d } }
+
 async function main() {
+  if (args.mode === 'status' && args.drone) return droneStatus(db, args.model)
   if (args.mode === 'status') return args.areas ? areaStatus(storedSpacing(db)) : status(storedSpacing(db))
   if (args.mode === 'export') return exportGeoJson(args.exportPath ?? path.join(STORE, 'export.geojson'))
   // Check Ollama before scanning, so a look run that can't look fails at once.
@@ -309,6 +316,11 @@ async function main() {
   }
   releaseLock = takeLock()
   try {
+    if (args.drone) {
+      await scanDrone(db, args.folders.length ? args.folders : [path.join(os.homedir(), 'Movies')], hooks)
+      if (args.mode === 'look' && !stopping) await lookDrone(db, endpoint, args.model, args.minutes > 0 ? Date.now() + args.minutes * 60_000 : Infinity, hooks)
+      return
+    }
     const base = spotSpacing(db, args.base)
     await scan(args.folders.length ? args.folders : [path.join(os.homedir(), 'Movies')], base)
     if (args.mode === 'look' && !stopping) await lookLoop(endpoint)
