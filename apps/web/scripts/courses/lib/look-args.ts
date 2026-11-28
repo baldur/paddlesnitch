@@ -9,16 +9,17 @@ export type LookArgs = {
   levels: number
   levelsGiven: boolean   // --areas looks every 25 m unless --levels says otherwise
   areas: boolean         // look carefully, only inside the areas drawn on River Explorer's map
+  drone: boolean         // DJI drone clips and photos instead of 360 footage (look-drone.ts)
   minutes: number        // 0: until stopped
   exportPath: string | null
   allowRemote: boolean
 }
 
 const VALUE_FLAGS = new Set(['model', 'base', 'levels', 'minutes'])
-const BARE_FLAGS = new Set(['scan', 'status', 'export', 'allow-remote', 'areas'])
+const BARE_FLAGS = new Set(['scan', 'status', 'export', 'allow-remote', 'areas', 'drone'])
 
 export function parseLookArgs(argv: string[], resolve: (p: string) => string): LookArgs {
-  const out: LookArgs = { mode: 'look', folders: [], model: 'qwen3.8:27b-q4_K_M', levels: 4, levelsGiven: false, areas: false, minutes: 0, exportPath: null, allowRemote: false }
+  const out: LookArgs = { mode: 'look', folders: [], model: 'qwen3.8:27b-q4_K_M', levels: 4, levelsGiven: false, areas: false, drone: false, minutes: 0, exportPath: null, allowRemote: false }
   const num = (name: string, v: string, ok: (n: number) => boolean) => {
     const n = Number(v)
     if (!Number.isFinite(n) || !ok(n)) throw new Error(`--${name} ${v}: not a valid value`)
@@ -40,6 +41,7 @@ export function parseLookArgs(argv: string[], resolve: (p: string) => string): L
     } else if (BARE_FLAGS.has(name) && eq < 0) {
       if (name === 'allow-remote') out.allowRemote = true
       else if (name === 'areas') out.areas = true
+      else if (name === 'drone') out.drone = true
       else if (out.mode !== 'look') throw new Error(`--${name} and --${out.mode} can't be used together`)
       else out.mode = name as LookArgs['mode']
       if (name === 'export' && argv[i + 1] && !argv[i + 1].startsWith('--')) out.exportPath = resolve(argv[++i])
@@ -49,5 +51,8 @@ export function parseLookArgs(argv: string[], resolve: (p: string) => string): L
   }
   if (out.folders.length && (out.mode === 'status' || out.mode === 'export')) throw new Error(`--${out.mode} doesn't take folders`)
   if (out.areas && (out.mode === 'scan' || out.mode === 'export')) throw new Error(`--areas and --${out.mode} can't be used together`)
+  if (out.drone && out.areas) throw new Error("--drone and --areas can't be used together")
+  if (out.drone && out.mode === 'export') throw new Error('--export already includes the drone footage; leave out --drone')
+  if (out.drone && (out.base !== undefined || out.levelsGiven)) throw new Error('--drone picks its own frames: --base and --levels are for 360 footage')
   return out
 }

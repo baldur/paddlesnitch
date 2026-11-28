@@ -95,6 +95,38 @@ export function openStore(dir = STORE): DatabaseSync {
       look_id INTEGER NOT NULL REFERENCES looks(id),
       name TEXT, kind TEXT, detail TEXT, x0 REAL, y0 REAL, x1 REAL, y1 REAL, distance TEXT, sure INTEGER
     );
+    -- course:look --drone (lib/dji.ts, lib/drone.ts): drone clips and photos, the
+    -- frames picked from them with where the camera was and pointed, and what the model saw.
+    CREATE TABLE IF NOT EXISTS drone_clips (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,          -- first frame's time # length (photos: time # size)
+      path TEXT NOT NULL,                -- the video looked at (MP4, or the LRF proxy when there's no MP4) or the photo
+      size INTEGER, mtime INTEGER, kind TEXT NOT NULL, -- video | proxy | photo
+      day TEXT, duration REAL, width INTEGER, height INTEGER,
+      status TEXT NOT NULL,              -- ok | no-pose | missing
+      pose_source TEXT,                  -- djmd | xmp | track (a guess from the drone's motion)
+      poses TEXT,                        -- JSON [[t, lat, lng, alt, pitch, yaw, focal], …] every half second
+      median_alt REAL, scanned_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS drone_shots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      clip_id INTEGER NOT NULL REFERENCES drone_clips(id),
+      level INTEGER NOT NULL, n INTEGER NOT NULL,
+      t REAL, lat REAL, lng REAL, alt REAL, pitch REAL, yaw REAL, focal REAL,
+      UNIQUE (clip_id, level, n)
+    );
+    CREATE TABLE IF NOT EXISTS drone_looks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shot_id INTEGER NOT NULL REFERENCES drone_shots(id),
+      model TEXT NOT NULL, prompt_version INTEGER NOT NULL,
+      ok INTEGER NOT NULL, scene TEXT, raw TEXT, ms INTEGER, created_at TEXT,
+      UNIQUE (shot_id, model, prompt_version)
+    );
+    CREATE TABLE IF NOT EXISTS drone_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      look_id INTEGER NOT NULL REFERENCES drone_looks(id),
+      kind TEXT, detail TEXT, walls TEXT, roof TEXT, storeys INTEGER, features TEXT, x REAL, y REAL, sure INTEGER
+    );
   `)
   // Stores made before missed kept y.
   try { db.exec('ALTER TABLE missed ADD COLUMN y REAL') } catch { /* already there */ }
@@ -104,6 +136,8 @@ export function openStore(dir = STORE): DatabaseSync {
     CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
     CREATE INDEX IF NOT EXISTS looks_station ON looks(station_id);
     CREATE INDEX IF NOT EXISTS landmarks_look ON landmarks(look_id);
+    CREATE INDEX IF NOT EXISTS drone_items_look ON drone_items(look_id);
+    CREATE INDEX IF NOT EXISTS drone_looks_shot ON drone_looks(shot_id);
   `)
   return db
 }
@@ -337,4 +371,94 @@ export function takeLock(dir = STORE, pid = process.pid, alive = (p: number) => 
     if (fs.readFileSync(file, 'utf8') === String(pid)) return release
   }
   throw new Error('could not take the store lock')
+}
+
+// ---------- drone clips (course:look --drone) ----------
+
+export type DronePose = [t: number, lat: number, lng: number, alt: number, pitch: number, yaw: number, focal: number]
+export type DroneClip = {
+  key: string; path: string; size: number; mtime: number; kind: 'video' | 'proxy' | 'photo'; day: string | null
+  duration: number; width: number; height: number; poseSource: 'djmd' | 'xmp' | 'track' | null; poses: DronePose[]
+}
+export type DroneShot = { level: number; n: number; t: number; lat: number; lng: number; alt: number; pitch: number; yaw: number; focal: number }
+
+export const knownDroneByPath = (db: DatabaseSync) =>
+  new Map((db.prepare('SELECT id, path, size, mtime FROM drone_clips').all() as Known[]).map((r) => [r.path, r]))
+
+/**
+ * Add or refresh a drone clip and its frames to look at. Known by its key, so a
+ * moved clip keeps its looks and a second copy is skipped; a clip whose poses
+ * or frames changed loses its old frames and looks. An MP4 replaces its LRF
+ * proxy (same key): the proxy's looks go, as they were at a lower resolution.
+ */
+export function saveDroneClip(db: DatabaseSync, clip: DroneClip, shots: DroneShot[]): { id: number; skipped?: 'copy' } {
+  const poses = JSON.stringify(clip.poses)
+  const alts = clip.poses.map((p) => p[3]).sort((a, b) => a - b)
+  const median = alts.length ? alts[Math.floor(alts.length / 2)] : null
+  return tx(db, () => {
+    const old = db.prepare('SELECT id, path, kind, poses FROM drone_clips WHERE key = ?').get(clip.key) as { id: number; path: string; kind: string; poses: string } | undefined
+    const better = old && old.kind === 'proxy' && clip.kind === 'video'
+    if (old && old.path !== clip.path && fs.existsSync(old.path) && !better) return { id: old.id, skipped: 'copy' as const }
+    const was = db.prepare('SELECT id FROM drone_clips WHERE path = ? AND key != ?').get(clip.path, clip.key) as { id: number } | undefined
+    if (was) { dropDroneShots(db, was.id); db.prepare('DELETE FROM drone_clips WHERE id = ?').run(was.id) }
+    const status = clip.poses.length ? 'ok' : 'no-pose'
+    db.prepare(`INSERT INTO drone_clips (key, path, size, mtime, kind, day, duration, width, height, status, pose_source, poses, median_alt, scanned_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET path = excluded.path, size = excluded.size, mtime = excluded.mtime, kind = excluded.kind, day = excluded.day,
+        duration = excluded.duration, width = excluded.width, height = excluded.height, status = excluded.status, pose_source = excluded.pose_source,
+        poses = excluded.poses, median_alt = excluded.median_alt, scanned_at = excluded.scanned_at`)
+      .run(clip.key, clip.path, clip.size, clip.mtime, clip.kind, clip.day, clip.duration, clip.width, clip.height, status, clip.poseSource, poses, median,
+        new Date().toISOString())
+    const { id } = db.prepare('SELECT id FROM drone_clips WHERE key = ?').get(clip.key) as { id: number }
+    const stored = db.prepare('SELECT level, n, t FROM drone_shots WHERE clip_id = ? ORDER BY level, n').all(id) as Array<{ level: number; n: number; t: number }>
+    const same = stored.length === shots.length && stored.every((s, i) => s.level === shots[i].level && s.n === shots[i].n && Math.abs(s.t - shots[i].t) < 1e-6)
+    if (better || (old && old.poses !== poses) || !same) dropDroneShots(db, id)
+    const ins = db.prepare('INSERT OR IGNORE INTO drone_shots (clip_id, level, n, t, lat, lng, alt, pitch, yaw, focal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    for (const s of shots) ins.run(id, s.level, s.n, s.t, s.lat, s.lng, s.alt, s.pitch, s.yaw, s.focal)
+    return { id }
+  })
+}
+
+function dropDroneShots(db: DatabaseSync, clipId: number) {
+  const looks = 'SELECT l.id FROM drone_looks l JOIN drone_shots s ON s.id = l.shot_id WHERE s.clip_id = ?'
+  db.prepare(`DELETE FROM drone_items WHERE look_id IN (${looks})`).run(clipId)
+  db.prepare('DELETE FROM drone_looks WHERE shot_id IN (SELECT id FROM drone_shots WHERE clip_id = ?)').run(clipId)
+  db.prepare('DELETE FROM drone_shots WHERE clip_id = ?').run(clipId)
+}
+
+/** Drone clips whose file has gone are 'missing' (their looks stay); back again, they're 'ok' if they have poses. */
+export function refreshDronePresence(db: DatabaseSync, exists = fs.existsSync) {
+  for (const r of db.prepare('SELECT id, path, poses FROM drone_clips').all() as Array<{ id: number; path: string; poses: string | null }>) {
+    const status = !exists(r.path) ? 'missing' : (r.poses && (JSON.parse(r.poses) as unknown[]).length ? 'ok' : 'no-pose')
+    db.prepare('UPDATE drone_clips SET status = ? WHERE id = ?').run(status, r.id)
+  }
+}
+
+export type NextShot = DroneShot & { id: number; clip_id: number; path: string; kind: string; width: number; height: number }
+
+/** The next drone frame to look at: level by level; within a level the lowest flights first (closest to the banks), then in time order. */
+export function nextDroneShot(db: DatabaseSync, model: string, version: number, skip: number[] = []): NextShot | undefined {
+  return db.prepare(`
+    SELECT s.*, c.path, c.kind, c.width, c.height FROM drone_shots s JOIN drone_clips c ON c.id = s.clip_id
+    WHERE c.status = 'ok' AND s.id NOT IN (SELECT value FROM json_each(?))
+      AND NOT EXISTS (SELECT 1 FROM drone_looks l WHERE l.shot_id = s.id AND l.model = ? AND l.prompt_version = ?)
+    ORDER BY s.level, c.median_alt, c.path, s.t LIMIT 1`).get(JSON.stringify(skip), model, version) as NextShot | undefined
+}
+
+export type SavedDroneLook = {
+  ok: boolean; scene?: string; raw: string; ms: number
+  items?: Array<{ kind: string; detail: string; walls: string; roof: string; storeys: number; features: string; x: number; y: number; sure: boolean }>
+}
+
+/** One drone frame's answer with its items, in one transaction; a redone look replaces the old one. */
+export function saveDroneLook(db: DatabaseSync, shotId: number, model: string, version: number, look: SavedDroneLook) {
+  tx(db, () => {
+    const old = 'SELECT id FROM drone_looks WHERE shot_id = ? AND model = ? AND prompt_version = ?'
+    db.prepare(`DELETE FROM drone_items WHERE look_id IN (${old})`).run(shotId, model, version)
+    db.prepare(`DELETE FROM drone_looks WHERE shot_id = ? AND model = ? AND prompt_version = ?`).run(shotId, model, version)
+    const r = db.prepare('INSERT INTO drone_looks (shot_id, model, prompt_version, ok, scene, raw, ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(shotId, model, version, look.ok ? 1 : 0, look.scene ?? null, look.raw, look.ms, new Date().toISOString())
+    const ins = db.prepare('INSERT INTO drone_items (look_id, kind, detail, walls, roof, storeys, features, x, y, sure) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    for (const i of look.items ?? []) ins.run(r.lastInsertRowid, i.kind, i.detail, i.walls, i.roof, i.storeys, i.features, i.x, i.y, i.sure ? 1 : 0)
+  })
 }
