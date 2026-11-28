@@ -11,6 +11,7 @@
 import { MeshBuilder } from './meshes.js';
 import { PALETTE } from './world.js';
 import { fitted, roofMesh } from './roofs.js';
+import { LIFT, AREA_LIFT, decodeRoads, drawRoad, layArea, areaTris, roadQuads } from './roads.js';
 
 export const NEAR = 700; // metres to a block: nearer, drawn in full
 export const LOAD = 1800; // fetched within this
@@ -42,8 +43,26 @@ export function decodeBlock(f) {
   });
   for (const [k, ...rec] of f.roofs ?? []) buildings[k].roof = rec;
   const trees = f.trees.map(([x, z, h]) => [x0 + x / 10, z0 + z / 10, h / 10]);
+  // Its roads (laid on its ground when its mesh is built), and those on the
+  // game's land, laid already (lib/surroundings.ts landRoadsFile).
+  const { roads, areas } = decodeRoads(f, [x0, z0]);
+  const steps = (v, from, width) => {
+    const rows = [];
+    const at = Array(width).fill(0);
+    for (let k = from; k + width <= v.length; k += width) { for (let w = 0; w < width; w++) at[w] += v[k + w]; rows.push([...at]); }
+    return rows;
+  };
+  // (x, z in decimetres, heights in centimetres.)
+  const landRoads = (f.landRoads ?? []).map((r) => ({ look: r[0], width: r[1] / 10, bridge: r[2] === 1, sections: steps(r, 3, 4).map(([x, z, yl, yr]) => ({ x: x0 + x / 10, z: z0 + z / 10, yl: yl / 100, yr: yr / 100 })) }));
+  const landAreas = (f.landAreas ?? []).map((a) => {
+    const corners = steps(a, 1, 3).map(([x, y, z]) => [x0 + x / 10, y / 100, z0 + z / 10]);
+    const tris = [];
+    for (let k = 0; k + 2 < corners.length; k += 3) tris.push(corners.slice(k, k + 3));
+    return { look: a[0], tris };
+  });
   const ys = [...heights, ...buildings.map((b) => b.ground + Math.max(b.height + 4, ...(b.roof ?? []).slice(4).flat().filter((v) => typeof v === 'number'))), ...trees.map(([x, z, h]) => heightIn({ x0, z0, n, cell, heights }, x, z) + h)];
-  return { i, j, x0, z0, n, cell, heights, cells, buildings, trees, low: Math.min(...ys), high: Math.max(...ys) };
+  for (const r of landRoads) for (const { yl, yr } of r.sections) ys.push(yl + 1, yr + 1);
+  return { i, j, x0, z0, n, cell, heights, cells, buildings, trees, roads, areas, landRoads, landAreas, low: Math.min(...ys), high: Math.max(...ys) };
 }
 
 /** The block's ground at (x, z), straight between its points. */
@@ -68,6 +87,39 @@ function draws(i, j, k) {
 }
 const shade = (color, rand, amount) => { const k = 1 + (rand() - 0.5) * 2 * amount; return color.map((c) => Math.min(1, c * k)); };
 const GROUND = [PALETTE.grass, PALETTE.shaded, [0.5, 0.5, 0.44], [0.2, 0.26, 0.27]];
+
+/**
+ * The block's ground at (x, z) as its mesh draws it (blockMesh: each cell's
+ * quad as two triangles split from its first corner to its opposite one; far
+ * off, four cells as one where all four are drawn), or null where no ground
+ * is drawn; past its edge, the edge's. What its roads are laid on.
+ */
+export function drawnHeight(b, x, z, far = false) {
+  const { n, cell, x0, z0, heights, cells } = b;
+  // (A road cut at the block's edge reaches half its width past it: there, the edge's ground.)
+  const u = Math.max(0, Math.min(n - 1, (x - x0) / cell));
+  const v = Math.max(0, Math.min(n - 1, (z - z0) / cell));
+  const c = Math.min(n - 2, Math.floor(u));
+  const r = Math.min(n - 2, Math.floor(v));
+  const kindAt = (cc, rr) => cells[rr * (n - 1) + cc];
+  let [c0, r0, w] = [c, r, 1];
+  if (far) {
+    const [gc, gr] = [c - (c % 2), r - (r % 2)];
+    if (gc + 1 < n - 1 && gr + 1 < n - 1 && [[0, 0], [1, 0], [0, 1], [1, 1]].every(([dc, dr]) => kindAt(gc + dc, gr + dr) !== CELL.none)) [c0, r0, w] = [gc, gr, 2];
+  }
+  if (w === 1 && kindAt(c, r) === CELL.none) return null;
+  const q = (cc, rr) => heights[rr * n + cc];
+  const [a, bb, cc, d] = [q(c0, r0), q(c0 + w, r0), q(c0 + w, r0 + w), q(c0, r0 + w)];
+  const [fu, fv] = [(u - c0) / w, (v - r0) / w];
+  // (a b c, then a c d: the diagonal from a to c.)
+  return fu >= fv ? a + (bb - a) * fu + (cc - bb) * fv : a + (cc - d) * fu + (d - a) * fv;
+}
+
+// How the roads are laid on a block's ground: near, a little higher than on the
+// game's land (the drone looks at them from further off) and to within 8 cm;
+// far, only the carriageways, half a metre up, to within 15 cm, no shorter than 4 m.
+const NEAR_ROADS = { up: 0.05, tol: 0.08, min: 1 };
+const FAR_ROADS = { up: 0.4, tol: 0.15, min: 4, width: 3 };
 
 /**
  * A block as one mesh: its ground cells (every 10 m, or 20 m where `far`), its
@@ -99,6 +151,13 @@ export function blockMesh(b, far = false) {
       }
     }
   }
+  // Its roads and car parks, on its ground as drawn; those on the game's land as laid.
+  const lay = far ? FAR_ROADS : NEAR_ROADS;
+  const height = (x, z) => drawnHeight(b, x, z, far);
+  for (const a of b.areas ?? []) areaTris(m, layArea(a.ring, height, { tol: lay.tol, min: 4 }), a.look, AREA_LIFT + lay.up);
+  for (const r of b.roads ?? []) if (!far || r.width >= FAR_ROADS.width) drawRoad(m, r, height, { tol: lay.tol, min: lay.min, lift: LIFT[r.look] + lay.up });
+  for (const a of b.landAreas ?? []) areaTris(m, a.tris, a.look, AREA_LIFT + (far ? lay.up : 0));
+  for (const r of b.landRoads ?? []) if (!far || r.width >= FAR_ROADS.width) roadQuads(m, r.sections, r, LIFT[r.look] + (far ? lay.up : 0));
   b.buildings.forEach((bd, k) => building(m, bd, draws(b.i, b.j, k), far));
   b.trees.forEach(([x, z, h], k) => {
     const rand = draws(b.i, b.j, 100000 + k);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The Reading game's surroundings: the ground, buildings and trees out to 1 km
 // from the river (what the drone sees past the game's own land), from
-// Environment Agency lidar (OGL v3) and OpenStreetMap's buildings (ODbL).
+// Environment Agency lidar (OGL v3) and OpenStreetMap's buildings and roads (ODbL).
 //
 //   pnpm --filter web course:surroundings fetch [--dry]   the tiles and buildings it needs
 //   pnpm --filter web course:surroundings build           games/reading-thames/surroundings/
@@ -9,18 +9,24 @@
 // `fetch` downloads the EA's 250 m squares (DTM, first-return DSM, VOM) the 1 km
 // band needs and doesn't have yet into ~/.paddlesnitch/lidar/reading-thames/tiles/
 // (named as course:lidar reads them; they stay there, never commit them), and the
-// band's buildings from Overpass (cached in .cache/courses/reading-thames/).
+// band's buildings and roads from Overpass (cached in .cache/courses/reading-thames/).
 // `--dry` only counts. `build` writes one file per 500 m block (numbers worked
-// out from them only) and an index. Pure parts in lib/surroundings.ts.
+// out from them only) and an index, and the riverside's roads
+// (games/reading-thames/riverside-roads.js). Pure parts in lib/surroundings.ts
+// and lib/roads.ts.
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { projection, type XZ } from './lib/river'
 import { mosaic, readTile, sampleGrid, wgs84ToBng, deriveTrees, deriveRoofs, ROOF, inside, LAND, type Grid, type Roof } from './lib/lidar'
-import { BAND, INNER, SURROUND_BLOCK, SURROUND_CELL, CELL, COVERAGES, blockFile, blockKey, buildingsQuery, cellKind, coverageUrl, footprints, measureFootprint, middle, newFootprints, seamSink, tileName, tilesFor, type Footprint, type Kind } from './lib/surroundings'
+import { roadsQuery, roadsFrom, keepRuns, length, simplify, encodeRoads, registerRoad, withBox, inAny, LOOK, type Road, type Area } from './lib/roads'
+import { BAND, INNER, SURROUND_BLOCK, SURROUND_CELL, CELL, COVERAGES, blockFile, blockKey, landRoadsFile, buildingsQuery, cellKind, coverageUrl, footprints, measureFootprint, middle, newFootprints, seamSink, tileName, tilesFor, type Footprint, type Kind } from './lib/surroundings'
 import { courseFromFile, locate, pointAt, widthAt } from '../../../../games/reading-thames/course.js'
 import { LIDAR } from '../../../../games/reading-thames/lidar.js'
-import { groundAt } from '../../../../games/reading-thames/world.js'
+import { groundAt, shoreDistance, riversideKeepOut, buildWorld } from '../../../../games/reading-thames/world.js'
+import { SHEDS } from '../../../../games/reading-thames/sheds.js'
+import { clipHalf } from '../../../../games/reading-thames/roofs.js'
+import { cellsUnder, groundOf, layArea, layRoad, onRoads } from '../../../../games/reading-thames/roads.js'
 
 const command = process.argv[2]
 const dry = process.argv.includes('--dry')
@@ -89,15 +95,17 @@ async function fetchAll() {
   }
   // The buildings: everything within the band of the river line (Overpass's
   // `around` a polyline), points every 100 m.
-  const file = path.join(CACHE, 'osm-surroundings.json')
-  if (fs.existsSync(file)) return console.log(`${file}: cached`)
-  if (dry) return console.log('buildings: not fetched (--dry)')
   const line = []
   for (let s = 0; s <= river.length; s += 100) { const p = pointAt(river, s); line.push(toLatLng([p.x, p.z])) }
-  const body = await overpass(buildingsQuery(line, BAND + 60))
   fs.mkdirSync(CACHE, { recursive: true })
-  fs.writeFileSync(file, body)
-  console.log(`${file}: ${JSON.parse(body).elements.length} buildings`)
+  for (const [name, what, query] of [['osm-surroundings.json', 'buildings', buildingsQuery(line, BAND + 60)], ['osm-roads.json', 'roads and paved areas', roadsQuery(line, BAND + 60)]]) {
+    const file = path.join(CACHE, name)
+    if (fs.existsSync(file)) { console.log(`${file}: cached`); continue }
+    if (dry) { console.log(`${what}: not fetched (--dry)`); continue }
+    const body = await overpass(query)
+    fs.writeFileSync(file, body)
+    console.log(`${file}: ${JSON.parse(body).elements.length} ${what}`)
+  }
 }
 
 // One request a second, and when the EA says too many (429), wait as long as
@@ -124,7 +132,7 @@ async function overpass(query: string): Promise<string> {
       if (body.startsWith('{')) return body
     }
   }
-  throw new Error('Overpass refused the buildings query on every mirror; try again later')
+  throw new Error('Overpass refused the query on every mirror; try again later')
 }
 
 function build() {
@@ -176,6 +184,8 @@ function build() {
   }
   // (Outside lidar.js's blocks the game's own land plants made-up trees: none there either.)
   const lidarTree = (x: number, z: number, h: number) => (inLidar(x, z) ? where(x, z).edge <= (h >= 12 ? 120 : h >= 8 ? 70 : 40) : where(x, z).inside > 0)
+
+  const roads = buildRoads(feet, ground, surface, fit.shifts)
 
   const out = path.join(GAME, 'surroundings')
   fs.rmSync(out, { recursive: true, force: true })
@@ -237,9 +247,10 @@ function build() {
     const keepOut = onBuilding
     const dry = (x: number, z: number): XZ | null => ((ground(x, z) ?? 0) > LAND ? [x, z] : null)
     const trees = deriveTrees({ ground, above: canopy }, [x0, z0, x0 + SURROUND_BLOCK - 1, z0 + SURROUND_BLOCK - 1], keepOut, dry, () => 0)
-      .filter(([x, z, h]) => where(x, z).edge <= BAND && !lidarTree(x, z, h) && !nearPlanted(x, z, Math.max(4, h * 0.3)))
-    if (cells.every((k) => k === CELL.none) && !footIn.length && !trees.length) continue
-    const text = blockFile({ i, j }, Array.from(heights, (v) => Math.round(v * 10)), cells, footIn, trees)
+      .filter(([x, z, h]) => where(x, z).edge <= BAND && !lidarTree(x, z, h) && !nearPlanted(x, z, Math.max(4, h * 0.3)) && !roads.onRoad(x, z, 1))
+    const blockRoads = roads.blocks.get(`${i},${j}`)
+    if (cells.every((k) => k === CELL.none) && !footIn.length && !trees.length && !blockRoads) continue
+    const text = blockFile({ i, j }, Array.from(heights, (v) => Math.round(v * 10)), cells, footIn, trees, blockRoads)
     fs.writeFileSync(path.join(out, `${i}_${j}.json`), text)
     index.push([i, j])
     nb += footIn.length
@@ -249,6 +260,151 @@ function build() {
   }
   fs.writeFileSync(path.join(out, 'index.json'), JSON.stringify({ block: SURROUND_BLOCK, blocks: index }))
   console.log(`${out}: ${index.length} blocks, ${nb} buildings, ${nt} trees, ${(bytes / 1024).toFixed(0)} KB`)
+}
+
+// The roads and paved areas (OpenStreetMap highways, car parks, road areas),
+// kept off the water, out of the houses, and off what the game models by the
+// river (world.js riversideKeepOut), in three parts: within RIVERSIDE of the
+// water on the game's land (games/reading-thames/riverside-roads.js, laid by
+// world.js on the land it draws: always loaded), the rest of the game's land
+// (laid on it here, into the block files: only the drone sees it), and past
+// it (into the block files, laid by surroundings.js on their ground).
+const RIVERSIDE = 150 // metres from the water: world.js plants its trees within this (WOOD_REACH 140; lidar.js's within 120)
+const BANK = 6 // a road's edge no nearer the water than this on the game's land: the bank and the towpath are the game's
+function buildRoads(feet: Array<{ shape: XZ[]; box: number[] }>, ground: (x: number, z: number) => number | null, surface: (x: number, z: number) => number | null, buildingShifts: XZ[]) {
+  const osm = JSON.parse(fs.readFileSync(path.join(CACHE, 'osm-roads.json'), 'utf8')).elements
+  const { roads, areas } = roadsFrom(osm, toXZ)
+  const keepOut = riversideKeepOut(course)
+  const shore = (x: number, z: number) => shoreDistance(course, x, z) as number
+  // The houses (every footprint drawn: the course file's, the surroundings' and the sheds), binned every 50 m.
+  const houses = new Map<string, Array<ReturnType<typeof withBox>>>()
+  for (const ring of [...feet.map((f) => f.shape), ...(SHEDS as Array<[number[], number]>).map(([flat]) => Array.from({ length: flat.length / 2 }, (_, k): XZ => [flat[2 * k], flat[2 * k + 1]]))]) {
+    const b = withBox(ring)
+    for (let i = Math.floor(b.box[0] / 50); i <= Math.floor(b.box[2] / 50); i++) for (let j = Math.floor(b.box[1] / 50); j <= Math.floor(b.box[3] / 50); j++) {
+      const k = `${i},${j}`
+      if (!houses.has(k)) houses.set(k, [])
+      houses.get(k)!.push(b)
+    }
+  }
+  const inHouse = (x: number, z: number, margin: number) => inAny(houses.get(`${Math.floor(x / 50)},${Math.floor(z / 50)}`) ?? [], x, z, margin)
+  // The lidar's water, as the blocks draw it: a point in it, or in a cell drawn as water (cellKind: most of its 25 samples).
+  const cellWet = new Map<string, boolean>()
+  const wet = (x: number, z: number) => {
+    if ((ground(x, z) ?? 1) <= LAND) return true
+    const [c, r] = [Math.floor(x / SURROUND_CELL), Math.floor(z / SURROUND_CELL)]
+    const k = `${c},${r}`
+    if (!cellWet.has(k)) {
+      let [n, w] = [0, 0]
+      for (let a = 1; a < 10; a += 2) for (let b = 1; b < 10; b += 2) { const g = ground(c * SURROUND_CELL + a, r * SURROUND_CELL + b); if (g === null) continue; n++; if (g <= LAND) w++ }
+      cellWet.set(k, n > 0 && w * 2 > n)
+    }
+    return cellWet.get(k)!
+  }
+  const zone = (x: number, z: number) => { const w = where(x, z); return w.inside > 0 ? (w.edge <= RIVERSIDE ? 0 : 1) : 2 }
+  const allowed = (r: Road) => (x: number, z: number) => {
+    const w = where(x, z)
+    if (w.edge > BAND) return false
+    if (inHouse(x, z, Math.min(1, r.width / 4))) return false
+    if (w.inside > 0) return !keepOut(x, z, r.width / 2) && shore(x, z) >= r.width / 2 + BANK
+    return r.bridge || !wet(x, z)
+  }
+  const parts: [Road[], Road[], Road[]] = [[], [], []]
+  let dropped = 0
+  for (const r of roads) {
+    if (r.bridge) {
+      // A bridge whole (its deck runs straight between its ends): none over the game's water (the game models those).
+      const pts = keepRuns(r.line, () => true, 2)[0] ?? []
+      if (pts.some(([x, z]) => where(x, z).inside > 0 && shore(x, z) < 1)) { dropped++; continue }
+      for (const run of keepRuns(r.line, allowed(r))) { const m = run[run.length >> 1]; parts[zone(...m)].push({ ...r, line: run }) }
+      continue
+    }
+    for (const run of keepRuns(r.line, allowed(r))) for (const k of [0, 1, 2] as const) for (const piece of keepRuns(run, (x, z) => zone(x, z) === k)) parts[k].push({ ...r, line: piece })
+  }
+  const areaParts: [Area[], Area[], Area[]] = [[], [], []]
+  for (const a of areas) {
+    const [cx, cz] = middle(a.ring)
+    const k = zone(cx, cz)
+    if (where(cx, cz).edge > BAND) continue
+    if (k < 2 && a.ring.some(([x, z]) => shore(x, z) < 1 || keepOut(x, z))) continue
+    if (k === 2 && wet(cx, cz)) continue
+    areaParts[k].push(a)
+  }
+  const km = (rs: Road[]) => (rs.reduce((t, r) => t + length(r.line), 0) / 1000).toFixed(1)
+  console.log(`roads: ${roads.length} ways (${km(roads)} km), ${areas.length} paved areas; ${dropped} bridges over the river left to the game`)
+  console.log(`  riverside: ${parts[0].length} roads, ${km(parts[0])} km, ${areaParts[0].length} areas; the rest of the game's land: ${parts[1].length}, ${km(parts[1])} km, ${areaParts[1].length}; beyond: ${parts[2].length}, ${km(parts[2])} km, ${areaParts[2].length}`)
+
+  // How far OpenStreetMap's roads are off the lidar's open ground (first surface
+  // within 0.5 m of the ground), carriageways 4 m wide or more: measured, not
+  // applied (the houses are drawn where OpenStreetMap has them, and the roads
+  // must stay between them).
+  const open = (x: number, z: number) => { const [s, g] = [surface(x, z), ground(x, z)]; return s === null || g === null ? null : s - g < 0.5 }
+  const regs = roads.filter((r) => r.look === LOOK.tarmac && r.width >= 4 && !r.bridge && length(r.line) >= 40).filter((_, k) => k % 3 === 0).map((r) => registerRoad(r.line, r.width, open)).filter((v) => v !== null)
+  const med = (v: number[]) => { const s = [...v].sort((a, b) => a - b); return s[s.length >> 1] ?? 0 }
+  const mags = regs.map((r) => Math.hypot(...r.shift))
+  console.log(`  offset from the lidar's open ground (${regs.length} carriageways): median ${med(mags).toFixed(1)} m (90% under ${[...mags].sort((a, b) => a - b)[Math.floor(mags.length * 0.9)]?.toFixed(1)} m), median shift [${med(regs.map((r) => r.shift[0]))}, ${med(regs.map((r) => r.shift[1]))}]; on open ground ${(med(regs.map((r) => r.before)) * 100).toFixed(0)}% as mapped, ${(med(regs.map((r) => r.after)) * 100).toFixed(0)}% shifted; the buildings' median shift [${med(buildingShifts.map((s) => s[0]))}, ${med(buildingShifts.map((s) => s[1]))}]`)
+
+  // The riverside's, for world.js.
+  const near = parts[0].map((r) => ({ ...r, line: simplify(r.line, 0.5) }))
+  const enc = encodeRoads(near, areaParts[0])
+  fs.writeFileSync(path.join(GAME, 'riverside-roads.js'), `// The roads and paved areas within ${RIVERSIDE} m of the water on the Reading game's
+// land, from OpenStreetMap (© OpenStreetMap contributors, ODbL), kept off the
+// water, the houses and what the game models from the footage. world.js lays
+// them on the land it draws (roads.js). Per road [look (0 tarmac, 1 paving,
+// 2 path, 3 gravel), width in decimetres, bridge 0/1, then x, z in decimetres,
+// each after the first the step from the one before]; per area [look, its
+// ring the same way]. Game metres. Made by \`pnpm --filter web course:surroundings build\`.
+export const RIVERSIDE_ROADS = {
+  roads: [
+${enc.roads.map((r) => `    ${JSON.stringify(r)},`).join('\n')}
+  ],
+  areas: [
+${enc.areas.map((a) => `    ${JSON.stringify(a)},`).join('\n')}
+  ],
+};
+`)
+
+  // The rest of the game's land: laid on the land world.js draws (built here, the same code).
+  const world = buildWorld(course, 1, 'river') as { vertices: Float32Array; land: number }
+  const landHeight = groundOf(world.vertices, 0, world.land, cellsUnder(parts[1], areaParts[1]))
+  const blocks = new Map<string, { roads: number[][]; areas: number[][]; landRoads: number[][]; landAreas: number[][] }>()
+  const blockOf = (k: string) => { if (!blocks.has(k)) blocks.set(k, { roads: [], areas: [], landRoads: [], landAreas: [] }); return blocks.get(k)! }
+  const byBlockLand = new Map<string, { roads: Array<{ look: number; width: number; bridge: boolean; sections: Array<{ x: number; z: number; yl: number; yr: number }> }>; areas: Array<{ look: number; tris: number[][][] }> }>()
+  const landOf = (k: string) => { if (!byBlockLand.has(k)) byBlockLand.set(k, { roads: [], areas: [] }); return byBlockLand.get(k)! }
+  for (const r of parts[1]) {
+    const sections = layRoad({ ...r, line: simplify(r.line, 0.3) }, landHeight)
+    // (Split where there's no ground under it.)
+    let run: Array<{ x: number; z: number; yl: number; yr: number }> = []
+    const flush = () => { if (run.length > 1) { const m = run[run.length >> 1]; landOf(blockKey(m.x, m.z)).roads.push({ look: r.look, width: r.width, bridge: r.bridge, sections: run }) } run = [] }
+    for (const s of sections) { if (s) run.push(s); else flush() }
+    flush()
+  }
+  for (const a of areaParts[1]) { const tris = layArea(a.ring, landHeight, { tol: 0.15, min: 4, max: 60 }); if (tris.length) landOf(blockKey(...middle(a.ring))).areas.push({ look: a.look, tris }) }
+  for (const [k, v] of byBlockLand) { const [i, j] = k.split(',').map(Number); Object.assign(blockOf(k), landRoadsFile({ i, j }, v.roads, v.areas)) }
+
+  // Past it: cut at the blocks' edges (each block lays its own on its ground), from each block's corner.
+  for (const r of parts[2]) {
+    const keys = new Set(r.line.map(([x, z]) => blockKey(x, z)))
+    for (let i = 1; i < r.line.length; i++) { const [a, b] = [r.line[i - 1], r.line[i]]; for (let t = 0.1; t < 1; t += 0.1) keys.add(blockKey(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)) }
+    for (const k of keys) {
+      const [i, j] = k.split(',').map(Number)
+      for (const piece of keepRuns(r.line, (x, z) => blockKey(x, z) === k)) {
+        const { roads: enc } = encodeRoads([{ ...r, line: simplify(piece, 0.3) }], [], [i * SURROUND_BLOCK, j * SURROUND_BLOCK])
+        blockOf(k).roads.push(...enc)
+      }
+    }
+  }
+  for (const a of areaParts[2]) {
+    const xs = a.ring.map((p) => p[0]); const zs = a.ring.map((p) => p[1])
+    for (let i = Math.floor(Math.min(...xs) / SURROUND_BLOCK); i <= Math.floor(Math.max(...xs) / SURROUND_BLOCK); i++) for (let j = Math.floor(Math.min(...zs) / SURROUND_BLOCK); j <= Math.floor(Math.max(...zs) / SURROUND_BLOCK); j++) {
+      const [x0, z0] = [i * SURROUND_BLOCK, j * SURROUND_BLOCK]
+      let ring: XZ[] = a.ring
+      for (const [nx, nz, c] of [[-1, 0, -x0], [1, 0, x0 + SURROUND_BLOCK], [0, -1, -z0], [0, 1, z0 + SURROUND_BLOCK]]) ring = clipHalf(ring, nx, nz, c)
+      if (ring.length < 3) continue
+      blockOf(`${i},${j}`).areas.push(...encodeRoads([], [{ ring, look: a.look }], [x0, z0]).areas)
+    }
+  }
+  const drawn = [...parts[1], ...parts[2]]
+  return { blocks, onRoad: onRoads(drawn, [...areaParts[1], ...areaParts[2]]) }
 }
 
 if (command === 'fetch') fetchAll().catch((e) => { console.error(e); process.exit(1) })
